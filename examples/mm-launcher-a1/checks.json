@@ -1,0 +1,320 @@
+{
+ "joints": {
+  "PIV_pan": {
+   "axis": "Z",
+   "lo": -90,
+   "hi": 90,
+   "step": 15
+  },
+  "PIV_tilt": {
+   "axis": "X",
+   "lo": 0,
+   "hi": 45,
+   "step": 2.5
+  },
+  "PIV_flywheel": {
+   "axis": "X",
+   "continuous": true,
+   "step": 60
+  },
+  "PIV_feeder": {
+   "axis": "Z",
+   "continuous": true,
+   "step": 30
+  }
+ },
+ "couplings": {
+  "PIV_pan_pinion": {
+   "to": "PIV_pan",
+   "ratio": -1
+  }
+ },
+ "allow": [
+  {
+   "a": "BUY_battery",
+   "b": "BUY_dewalt_adapter",
+   "why": "battery rail stem slides into the adapter"
+  },
+  {
+   "a": "BUY_servo_*",
+   "b": "BUY_horn_*",
+   "why": "spline inside horn hub"
+  },
+  {
+   "a": "BUY_motor",
+   "b": "PRT_flywheel",
+   "why": "motor shaft is modelled with the stator; it sits in the D-bore"
+  },
+  {
+   "a": "BUY_motor",
+   "b": "BUY_magnet",
+   "why": "magnet glued to the rear shaft end (rotor)"
+  }
+ ],
+ "masses_g": {
+  "BUY_battery": 620,
+  "BUY_dewalt_adapter": 90,
+  "BUY_buck_12v": 180,
+  "BUY_motorgo_axis": 25,
+  "BUY_servo_controller": 30,
+  "BUY_servo_*": 66,
+  "BUY_horn_*": 4,
+  "BUY_motor": 200,
+  "BUY_magnet": 1,
+  "BUY_plink_encoder": 3,
+  "BUY_usbc_plug": 0
+ },
+ "drop_tests": [
+  {
+   "name": "feed_outlet_to_wheel",
+   "emit": {
+    "frame": "PIV_pan",
+    "center": [
+     21,
+     0,
+     239
+    ],
+    "radius": 6.5,
+    "step": 2
+   },
+   "dir": [
+    0,
+    0,
+    -1
+   ],
+   "poses": {
+    "PIV_tilt": [
+     0,
+     22.5,
+     45
+    ]
+   },
+   "expect": {
+    "hit": [
+     "PRT_flywheel"
+    ],
+    "angle": {
+     "center": "PIV_flywheel",
+     "frame": "PIV_tilt",
+     "axis": "X",
+     "zero": "Z",
+     "positive": "-Y",
+     "range": [
+      0,
+      26
+     ]
+    }
+   }
+  }
+ ],
+ "slide_out": [
+  {
+   "object": "BUY_battery",
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": 130,
+   "step": 5,
+   "min_clearance": 1.5
+  }
+ ],
+ "distances": [
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "max": 7.0,
+   "why": "nip must be tighter than a 7 mm M&M (before tape)"
+  }
+ ],
+ "assembly_order": [
+  {
+   "step": "1-9 base (BOM_AND_ASSEMBLY.md steps 1-9)",
+   "objects": [
+    "PRT_base_*",
+    "BUY_dewalt_adapter",
+    "BUY_motorgo_axis",
+    "BUY_usbc_plug",
+    "BUY_servo_pan",
+    "BUY_horn_pan",
+    "PRT_horn_adapter_pan",
+    "PRT_servo_pocket_pan",
+    "PRT_servo_clamp_pan",
+    "PRT_pan_pinion",
+    "PRT_pan_hub",
+    "BUY_buck_12v",
+    "BUY_servo_controller",
+    "FST_floor_*"
+   ]
+  },
+  {
+   "step": "10-12 pan stage",
+   "objects": [
+    "PRT_turntable",
+    "PRT_turntable_spine",
+    "PRT_yoke_arm_*",
+    "FST_foot_*"
+   ]
+  },
+  {
+   "step": "13-15 motor, magnet, encoder (bench)",
+   "bench": "launcher",
+   "objects": [
+    "BUY_magnet",
+    "BUY_motor",
+    "PRT_motor_cradle",
+    "BUY_plink_encoder",
+    "PRT_encoder_cap",
+    "FST_enc_*"
+   ]
+  },
+  {
+   "step": "16 motor to body (bench)",
+   "bench": "launcher",
+   "objects": [
+    "PRT_launcher_body",
+    "FST_motor_*"
+   ]
+  },
+  {
+   "step": "17 trunnion, lead duct (bench)",
+   "bench": "launcher",
+   "objects": [
+    "PRT_trunnion_L",
+    "FST_trunnion_*",
+    "PRT_lead_duct"
+   ]
+  },
+  {
+   "step": "18 flywheel (bench)",
+   "bench": "launcher",
+   "objects": [
+    "PRT_flywheel"
+   ]
+  },
+  {
+   "step": "19 hood, cover (bench)",
+   "bench": "launcher",
+   "objects": [
+    "PRT_hood",
+    "PRT_hood_shim_*",
+    "PRT_launcher_cover",
+    "FST_cover_*",
+    "FST_hood_*"
+   ]
+  },
+  {
+   "step": "20 launcher into yoke, arm caps",
+   "merge": "launcher",
+   "objects": [
+    "PRT_arm_cap_*"
+   ]
+  },
+  {
+   "step": "21 tilt servo",
+   "objects": [
+    "BUY_horn_tilt",
+    "PRT_horn_adapter_tilt",
+    "BUY_servo_tilt",
+    "PRT_servo_pocket_tilt",
+    "PRT_servo_clamp_tilt"
+   ]
+  },
+  {
+   "step": "22-23 feeder servo under plate (bench)",
+   "bench": "plate",
+   "objects": [
+    "BUY_horn_feeder",
+    "PRT_horn_adapter_feeder",
+    "BUY_servo_feeder",
+    "PRT_servo_pocket_feeder",
+    "PRT_servo_clamp_feeder",
+    "PRT_feeder_plate"
+   ]
+  },
+  {
+   "step": "24 plate onto caps, long screws",
+   "merge": "plate",
+   "objects": [
+    "FST_cap_*"
+   ]
+  },
+  {
+   "step": "25 bonnet, right arm cover",
+   "objects": [
+    "PRT_arm_cover_*"
+   ]
+  },
+  {
+   "step": "26 feeder disc, hopper, lid",
+   "objects": [
+    "PRT_feeder_disc",
+    "PRT_hopper",
+    "PRT_hopper_lid"
+   ]
+  },
+  {
+   "step": "battery",
+   "objects": [
+    "BUY_battery"
+   ]
+  }
+ ],
+ "fits": [
+  {
+   "a": "PRT_base_shell",
+   "b": "PRT_turntable",
+   "contact": true,
+   "why": "turntable bearing ring rides on the deck (plain thrust bearing)"
+  },
+  {
+   "a": "PRT_base_shell",
+   "b": "PRT_pan_hub",
+   "min_clearance": 0.2,
+   "why": "hub journal in deck hole, 0.3 radial"
+  },
+  {
+   "a": "PRT_yoke_arm_L",
+   "b": "PRT_trunnion_L",
+   "min_clearance": 0.1,
+   "why": "left tilt journal, 0.2 diametral"
+  },
+  {
+   "a": "PRT_arm_cap_L",
+   "b": "PRT_trunnion_L",
+   "min_clearance": 0.1,
+   "why": "left tilt journal cap"
+  },
+  {
+   "a": "PRT_yoke_arm_R",
+   "b": "PRT_launcher_cover",
+   "min_clearance": 0.1,
+   "why": "right tilt journal on the cover boss"
+  },
+  {
+   "a": "PRT_arm_cap_R",
+   "b": "PRT_launcher_cover",
+   "min_clearance": 0.1,
+   "why": "right tilt journal cap"
+  },
+  {
+   "a": "PRT_servo_pocket_*",
+   "b": "BUY_horn_*",
+   "min_clearance": 0.2,
+   "why": "horn turns inside its pocket"
+  },
+  {
+   "a": "PRT_feeder_plate",
+   "b": "PRT_feeder_disc",
+   "min_clearance": 0.3,
+   "why": "feeder disc runs on the plate"
+  },
+  {
+   "a": "PRT_pan_hub",
+   "b": "PRT_pan_pinion",
+   "min_clearance": 0.1,
+   "why": "1:1 gear mesh with 0.15 backlash"
+  }
+ ]
+}

@@ -1,0 +1,599 @@
+{
+ "blend": "HW/blender/mm_launcher.blend (attempt 1, copy in /tmp/alex3d-a1)",
+ "summary": {
+  "pass": false,
+  "fails": 22,
+  "warns": 44,
+  "fail_list": [
+   "interference: PRT_feeder_disc x FST_cap_R-1 collide on different bodies: 48.6 mm3 at feeder=30",
+   "interference: PRT_flywheel x FST_motor_0 collide on different bodies: 27.0 mm3 at flywheel=0",
+   "interference: PRT_flywheel x FST_motor_1 collide on different bodies: 27.0 mm3 at flywheel=0",
+   "interference: PRT_flywheel x FST_motor_2 collide on different bodies: 27.0 mm3 at flywheel=0",
+   "interference: PRT_flywheel x FST_motor_3 collide on different bodies: 27.0 mm3 at flywheel=0",
+   "interference: PRT_arm_cover_L x PRT_trunnion_L touch with zero clearance across a joint (rubbing) at 19 poses, e.g. tilt=0",
+   "clearance: PRT_hopper to PRT_launcher_body only 0.21 mm across a joint at tilt=45 (min 0.50; declare it under fits if it is a running fit)",
+   "clearance: PRT_feeder_plate to PRT_launcher_cover only 0.37 mm across a joint at tilt=45 (min 0.50; declare it under fits if it is a running fit)",
+   "fasteners: FST_motor_0 head is inside ['PRT_launcher_body'] (reversed, or a missing counterbore)",
+   "fasteners: FST_motor_0 cannot be driven: tool path blocked by PRT_launcher_body at 1.2 mm (all 4 poses tried)",
+   "fasteners: FST_motor_1 head is inside ['PRT_launcher_body'] (reversed, or a missing counterbore)",
+   "fasteners: FST_motor_1 cannot be driven: tool path blocked by PRT_launcher_body at 1.2 mm (all 4 poses tried)",
+   "fasteners: FST_motor_2 head is inside ['PRT_launcher_body'] (reversed, or a missing counterbore)",
+   "fasteners: FST_motor_2 cannot be driven: tool path blocked by PRT_launcher_body at 1.2 mm (all 4 poses tried)",
+   "fasteners: FST_motor_3 head is inside ['PRT_launcher_body'] (reversed, or a missing counterbore)",
+   "fasteners: FST_motor_3 cannot be driven: tool path blocked by PRT_launcher_body at 1.2 mm (all 4 poses tried)",
+   "fasteners: FST_cover_0 cannot be driven: tool path blocked by PRT_launcher_cover at 2.4 mm (all 4 poses tried)",
+   "fasteners: FST_cap_R-1 head is inside ['PRT_feeder_disc'] (reversed, or a missing counterbore)",
+   "drop: feed_outlet_to_wheel at tilt=0: lands 44..80 deg, window 0..26",
+   "drop: feed_outlet_to_wheel at tilt=22.5: 31/31 rays first hit ['PRT_launcher_body'], not ['PRT_flywheel']",
+   "drop: feed_outlet_to_wheel at tilt=45: 31/31 rays first hit ['PRT_launcher_body'], not ['PRT_flywheel']",
+   "distances: PRT_hood to PRT_flywheel = 9.50 mm at home, wanted None..7.0 (nip must be tighter than a 7 mm M&M (before tape))"
+  ],
+  "warn_list": [
+   "parts: PRT_base_shell: 215 mm2 of sloped overhang steeper than 45 deg, supports=no",
+   "parts: PRT_base_shell: ceiling region needs a 30 mm bridge (limit 25)",
+   "parts: PRT_feeder_plate: ceiling region needs a 38 mm bridge (limit 25)",
+   "parts: PRT_flywheel: ceiling region needs a 72 mm bridge (limit 25)",
+   "parts: PRT_lead_duct: 1 wall samples < 1.6 mm (min 0.90)",
+   "parts: PRT_pan_hub: 72 wall samples < 1.6 mm (min 1.54)",
+   "parts: PRT_pan_pinion: 72 wall samples < 1.6 mm (min 1.54)",
+   "interference: PRT_hopper x PRT_launcher_body collide only 2.5 deg past the joint limit (tilt=47.5): no margin",
+   "interference: PRT_feeder_plate x PRT_launcher_body collide only 2.5 deg past the joint limit (tilt=47.5): no margin",
+   "interference: PRT_feeder_plate x PRT_launcher_cover collide only 2.5 deg past the joint limit (tilt=47.5): no margin",
+   "interference: PRT_hopper x PRT_launcher_cover touch just past the joint limit (tilt=47.5)",
+   "interference: cable BUY_servo_controller x CAB_12v_ctrl overlap 1331.9 mm3 (route through solid?)",
+   "interference: cable BUY_motor x CAB_phase_tilt_0 overlap 36.0 mm3 (route through solid?)",
+   "interference: cable BUY_motor x CAB_phase_tilt_1 overlap 36.0 mm3 (route through solid?)",
+   "interference: cable BUY_motor x CAB_phase_tilt_2 overlap 34.4 mm3 (route through solid?)",
+   "interference: cable PRT_servo_pocket_feeder x CAB_bus_feeder overlap 6.0 mm3 (route through solid?)",
+   "interference: cable PRT_arm_cover_L x CAB_bus_feeder overlap 4.9 mm3 (route through solid?)",
+   "interference: cable BUY_buck_12v x CAB_12v_mg overlap 1.7 mm3 (route through solid?)",
+   "interference: cable BUY_servo_controller x CAB_bus_ctrl overlap 0.7 mm3 (route through solid?)",
+   "clearance: PRT_launcher_cover to PRT_servo_pocket_tilt 0.30 mm just past the limit (tilt=47.5)",
+   "clearance: PRT_pan_hub to PRT_servo_pocket_pan 0.50 mm at pan=-92.5",
+   "clearance: PRT_pan_pinion to PRT_servo_pocket_pan 0.50 mm at pan=-92.5",
+   "clearance: PRT_feeder_plate to PRT_horn_adapter_feeder 0.60 mm at feeder=0",
+   "clearance: PRT_feeder_plate to PRT_launcher_body 0.63 mm at tilt=45",
+   "clearance: PRT_servo_pocket_pan to PRT_horn_adapter_pan 0.70 mm at pan=-92.5",
+   "clearance: PRT_servo_pocket_feeder to PRT_horn_adapter_feeder 0.70 mm at feeder=330",
+   "clearance: PRT_servo_pocket_tilt to PRT_horn_adapter_tilt 0.70 mm at tilt=-2.5",
+   "clearance: PRT_horn_adapter_tilt to BUY_servo_tilt 0.81 mm at tilt=10",
+   "clearance: PRT_horn_adapter_pan to BUY_servo_pan 0.81 mm at pan=-75",
+   "clearance: PRT_horn_adapter_feeder to BUY_servo_feeder 0.81 mm at feeder=30",
+   "clearance: PRT_hopper to PRT_launcher_cover 0.96 mm at tilt=45",
+   "fasteners: FST_motor_2: only 3.5 mm of thread in PRT_flywheel",
+   "fasteners: FST_trunnion_0 needs a 124 mm+ bit/extension (head 114 mm below open space)",
+   "fasteners: FST_trunnion_1 needs a 124 mm+ bit/extension (head 114 mm below open space)",
+   "fasteners: FST_trunnion_2 needs a 124 mm+ bit/extension (head 114 mm below open space)",
+   "fasteners: FST_foot_0 needs a 122 mm+ bit/extension (head 112 mm below open space)",
+   "fasteners: FST_foot_1 needs a 122 mm+ bit/extension (head 112 mm below open space)",
+   "fasteners: FST_foot_2 needs a 122 mm+ bit/extension (head 112 mm below open space)",
+   "fasteners: FST_foot_3 needs a 122 mm+ bit/extension (head 112 mm below open space)",
+   "fasteners: FST_foot_4 needs a 124 mm+ bit/extension (head 114 mm below open space)",
+   "fasteners: FST_foot_5 needs a 124 mm+ bit/extension (head 114 mm below open space)",
+   "fasteners: FST_foot_6 needs a 118 mm+ bit/extension (head 108 mm below open space)",
+   "fasteners: FST_foot_7 needs a 118 mm+ bit/extension (head 108 mm below open space)",
+   "slide: BUY_battery slides out but with only 0.29 mm to PRT_base_shell"
+  ],
+  "coverage": [
+   "parts: 35 printed objects (29 unique STLs): manifold, bed fit ['P1S', 'H2D'], overhang, wall probe, bed contact",
+   "interference/clearance: 102 objects in ['Printed', 'Purchased', 'Fasteners', 'Cables'], 2768 pair-pose tests, joints swept ['PIV_feeder', 'PIV_flywheel', 'PIV_pan', 'PIV_tilt'] with 2.5 deg overtravel",
+   "fasteners: 36 screws; head-buried, thread engagement, driver access (\u00d86 bit, 14 mm hand clearance) at 4 poses, parts present per assembly_order (14 steps)",
+   "drop: 1 tests (first-contact straight rays; no bounce/slide dynamics)",
+   "slide: 1 slide-out sweeps",
+   "stability: CG and tip angle over 6 poses, footprint from static parts' lowest faces",
+   "cables: 16 routes, 0 with path length"
+  ],
+  "not_checked": [
+   "fasteners: pilot/clearance hole diameters (use cadlib.features for those)",
+   "stability: dynamic loads (recoil, pan acceleration), friction/sliding",
+   "cables: bend radius, slack across joints, connector positions (review by section render)",
+   "not geometric: service/teardown steps, alignment jigs, aesthetics, BOM correctness"
+  ],
+  "runtime_s": 35.3
+ },
+ "fasteners": [
+  {
+   "object": "FST_motor_0",
+   "thread_host": "PRT_flywheel",
+   "engagement_mm": 4.0,
+   "head_buried_in": [
+    "PRT_launcher_body"
+   ],
+   "access_best": null
+  },
+  {
+   "object": "FST_motor_1",
+   "thread_host": "PRT_flywheel",
+   "engagement_mm": 4.0,
+   "head_buried_in": [
+    "PRT_launcher_body"
+   ],
+   "access_best": null
+  },
+  {
+   "object": "FST_motor_2",
+   "thread_host": "PRT_flywheel",
+   "engagement_mm": 3.5,
+   "head_buried_in": [
+    "PRT_launcher_body"
+   ],
+   "access_best": null
+  },
+  {
+   "object": "FST_motor_3",
+   "thread_host": "PRT_flywheel",
+   "engagement_mm": 4.0,
+   "head_buried_in": [
+    "PRT_launcher_body"
+   ],
+   "access_best": null
+  },
+  {
+   "object": "FST_cover_0",
+   "thread_host": "PRT_launcher_body",
+   "engagement_mm": 8.0,
+   "head_buried_in": [],
+   "access_best": null
+  },
+  {
+   "object": "FST_cover_1",
+   "thread_host": "PRT_launcher_body",
+   "engagement_mm": 8.0,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 14.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_cover_2",
+   "thread_host": "PRT_launcher_body",
+   "engagement_mm": 8.0,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 14.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_cover_3",
+   "thread_host": "PRT_launcher_body",
+   "engagement_mm": 7.5,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 14.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_cover_4",
+   "thread_host": "PRT_launcher_body",
+   "engagement_mm": 8.0,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 14.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_hood_l0",
+   "thread_host": "PRT_hood",
+   "engagement_mm": 5.0,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 14.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_hood_r0",
+   "thread_host": "PRT_hood",
+   "engagement_mm": 5.5,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 14.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_hood_l1",
+   "thread_host": "PRT_hood",
+   "engagement_mm": 5.0,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 14.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_hood_r1",
+   "thread_host": "PRT_hood",
+   "engagement_mm": 5.5,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 14.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_trunnion_0",
+   "thread_host": "PRT_launcher_body",
+   "engagement_mm": 7.5,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 114.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_trunnion_1",
+   "thread_host": "PRT_launcher_body",
+   "engagement_mm": 8.0,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 114.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_trunnion_2",
+   "thread_host": "PRT_launcher_body",
+   "engagement_mm": 7.5,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 114.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_enc_-1",
+   "thread_host": "PRT_motor_cradle",
+   "engagement_mm": 5.5,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 12.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_enc_1",
+   "thread_host": "PRT_motor_cradle",
+   "engagement_mm": 5.5,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 12.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_cap_L-1",
+   "thread_host": "PRT_yoke_arm_L",
+   "engagement_mm": 12.0,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 12.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_cap_L1",
+   "thread_host": "PRT_yoke_arm_L",
+   "engagement_mm": 12.0,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 12.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_cap_R-1",
+   "thread_host": "PRT_yoke_arm_R",
+   "engagement_mm": 11.5,
+   "head_buried_in": [
+    "PRT_feeder_disc"
+   ],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 12.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_cap_R1",
+   "thread_host": "PRT_yoke_arm_R",
+   "engagement_mm": 12.0,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 12.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_foot_0",
+   "thread_host": "PRT_turntable",
+   "engagement_mm": 6.0,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 112.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_foot_1",
+   "thread_host": "PRT_turntable",
+   "engagement_mm": 5.5,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 112.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_foot_2",
+   "thread_host": "PRT_turntable",
+   "engagement_mm": 5.5,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 112.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_foot_3",
+   "thread_host": "PRT_turntable",
+   "engagement_mm": 5.5,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 112.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_foot_4",
+   "thread_host": "PRT_turntable",
+   "engagement_mm": 6.0,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 114.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_foot_5",
+   "thread_host": "PRT_turntable",
+   "engagement_mm": 5.5,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 114.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_foot_6",
+   "thread_host": "PRT_turntable",
+   "engagement_mm": 5.5,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 108.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_foot_7",
+   "thread_host": "PRT_turntable",
+   "engagement_mm": 6.0,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 108.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_floor_0",
+   "thread_host": "PRT_base_shell",
+   "engagement_mm": 8.5,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 14.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_floor_1",
+   "thread_host": "PRT_base_shell",
+   "engagement_mm": 8.5,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 14.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_floor_2",
+   "thread_host": "PRT_base_shell",
+   "engagement_mm": 8.5,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 14.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_floor_3",
+   "thread_host": "PRT_base_shell",
+   "engagement_mm": 8.5,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 14.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_floor_4",
+   "thread_host": "PRT_base_shell",
+   "engagement_mm": 8.5,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 14.0,
+    "blocked": false
+   }
+  },
+  {
+   "object": "FST_floor_5",
+   "thread_host": "PRT_base_shell",
+   "engagement_mm": 8.5,
+   "head_buried_in": [],
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 14.0,
+    "blocked": false
+   }
+  }
+ ],
+ "drop": [
+  {
+   "name": "feed_outlet_to_wheel",
+   "rows": [
+    {
+     "pose": "tilt=0",
+     "rays": 31,
+     "first_hit": {
+      "PRT_flywheel": 31
+     },
+     "angle_deg": [
+      44.4,
+      80.4
+     ]
+    },
+    {
+     "pose": "tilt=22.5",
+     "rays": 31,
+     "first_hit": {
+      "PRT_launcher_body": 31
+     }
+    },
+    {
+     "pose": "tilt=45",
+     "rays": 31,
+     "first_hit": {
+      "PRT_launcher_body": 31
+     }
+    }
+   ]
+  }
+ ],
+ "interference_groups": [
+  {
+   "joints": [],
+   "poses": 1,
+   "pairs": 933
+  },
+  {
+   "joints": [
+    "PIV_pan"
+   ],
+   "poses": 15,
+   "pairs": 969
+  },
+  {
+   "joints": [
+    "PIV_feeder"
+   ],
+   "poses": 12,
+   "pairs": 108
+  },
+  {
+   "joints": [
+    "PIV_tilt"
+   ],
+   "poses": 21,
+   "pairs": 1236
+  },
+  {
+   "joints": [
+    "PIV_flywheel"
+   ],
+   "poses": 6,
+   "pairs": 70
+  },
+  {
+   "joints": [
+    "PIV_feeder",
+    "PIV_pan"
+   ],
+   "poses": 42,
+   "pairs": 78
+  },
+  {
+   "joints": [
+    "PIV_pan",
+    "PIV_tilt"
+   ],
+   "poses": 35,
+   "pairs": 886
+  },
+  {
+   "joints": [
+    "PIV_flywheel",
+    "PIV_tilt"
+   ],
+   "poses": 42,
+   "pairs": 72
+  },
+  {
+   "joints": [
+    "PIV_feeder",
+    "PIV_tilt"
+   ],
+   "poses": 42,
+   "pairs": 105
+  },
+  {
+   "joints": [
+    "PIV_flywheel",
+    "PIV_pan",
+    "PIV_tilt"
+   ],
+   "poses": 36,
+   "pairs": 52
+  },
+  {
+   "joints": [
+    "PIV_feeder",
+    "PIV_flywheel",
+    "PIV_tilt"
+   ],
+   "poses": 48,
+   "pairs": 6
+  }
+ ]
+}
