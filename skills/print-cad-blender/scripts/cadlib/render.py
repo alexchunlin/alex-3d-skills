@@ -6,7 +6,8 @@ per process) stops runaway re-render loops. The model sees a 2 MB render as ~100
 (FINDINGS A1-T6), so higher resolution buys nothing for agent review.
 
 Look: white background, thin ink outlines, cavity shading, flat materials (alex-style light mode:
-bg #ffffff, ink #0b0b0b). Section faces take the cut colour (terracotta #c4532a).
+bg #ffffff, ink #0b0b0b). Section faces take a saturated yellow so they read against both PLA colours
+(the attempt-1 reviewer read these sections without trouble).
 """
 import bpy, math, os
 from mathutils import Vector, Matrix
@@ -15,7 +16,7 @@ from . import asm, geom
 BUDGET = int(os.environ.get("CAD_RENDER_BUDGET", "40"))
 COUNT = [0]
 INK = (0.043, 0.043, 0.043)
-CUT = (0.77, 0.33, 0.16, 1.0)
+CUT = (0.98, 0.83, 0.25, 1.0)
 
 
 def setup(final=None, res=None):
@@ -140,7 +141,7 @@ def section(outdir, fname, axis, val, cam_loc, cam_tgt, ortho, keep_side="-", sc
     cutter.data.materials.append(asm.mat(CUT))
     hidden, mods = [], []
     for ob in bpy.data.objects:
-        if ob.type != 'MESH' or ob is cutter or ob.hide_render:
+        if ob.type != 'MESH' or ob is cutter or ob.hide_render or ob.get("marker"):
             continue
         cname = ob.users_collection[0].name if ob.users_collection else ""
         in_scope = scope is None or (_ancestors(ob) & scope) or ("static" in scope and not _ancestors(ob))
@@ -257,8 +258,12 @@ def contact_sheet(stl_dir, out_png, cols=6, gap=30.0, bed=(256, 256)):
     to.location = (0, y - rowh - gap + 4, 0)
     setup(res=(1800, 1350))
     ymin = y - rowh - gap - bed[1]
-    cx, cy = xmax / 2, ymin / 2
-    camera((cx, cy - 1, 3000), (cx, cy, 0), ortho=max(xmax, -ymin) * 1.08)
+    ymax = 20.0
+    cx, cy = xmax / 2, (ymin + ymax) / 2
+    tilt = math.radians(35)     # oblique so part heights read
+    H = (ymax - ymin) * math.cos(tilt) + 60
+    D = 4000
+    camera((cx, cy - D * math.sin(tilt), D * math.cos(tilt)), (cx, cy, 0), ortho=max(xmax + 40, H * 4 / 3) * 1.05)
     return shot(out_png)
 
 
@@ -277,6 +282,7 @@ def marker_lentil(name, center, normal, d=13.0, t=7.0, color=(0.12, 0.31, 0.85, 
     q = Vector((0, 0, 1)).rotation_difference(Vector(normal).normalized())
     ob.matrix_world = Matrix.Translation(center) @ q.to_matrix().to_4x4() @ Matrix.Diagonal((d / 2, d / 2, t / 2, 1))
     me.materials.append(asm.mat(color))
+    ob["marker"] = True
     if parent:
         p = bpy.data.objects[parent]
         mw = ob.matrix_world.copy()
@@ -295,4 +301,5 @@ def marker_rod(name, a, b, r=0.6, color=(0.83, 0.16, 0.11, 1)):
         c.objects.unlink(ob)
     bpy.context.scene.collection.objects.link(ob)
     ob.data.materials.append(asm.mat(color))
+    ob["marker"] = True
     return ob

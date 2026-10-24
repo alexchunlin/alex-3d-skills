@@ -1,0 +1,20 @@
+#!/bin/sh
+# cad: thin wrapper around headless Blender for the print-cad-blender skill.
+#   cad build  build_assembly.py [-- script args]     run a cadlib build script
+#   cad check  model.blend [checks.json] [out.json]  run cadcheck (prints a short summary, writes JSON)
+#   cad q      model.blend <cadq command ...>        one-shot measurement (see cadq.py)
+#   cad sheet  stl_dir out.png                       STL contact sheet in print orientation
+# BLENDER overrides the Blender binary. Runs at nice 10 so a parallel CAD loop keeps its CPU.
+set -e
+HERE="$(cd "$(dirname "$0")" && pwd)"
+BL="${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}"
+run() { nice -n 10 "$BL" -b --factory-startup "$@" 2>&1 | grep -v -E '^(Blender quit|Blender [0-9]|Fra:|Read blend|$)| blend +\|' || true; }
+cmd="$1"; shift || true
+case "$cmd" in
+  build) s="$1"; shift; run --python "$s" -- "$@" ;;
+  check) b="$1"; c="${2:-}"; o="${3:-$(dirname "$b")/cadcheck.json}"
+         if [ -n "$c" ]; then run "$b" --python "$HERE/cadcheck.py" -- --config "$c" --out "$o"; else run "$b" --python "$HERE/cadcheck.py" -- --out "$o"; fi ;;
+  q) b="$1"; shift; run "$b" --python "$HERE/cadq.py" -- "$@" | grep -E '^CADQ|Error|cadq:' ;;
+  sheet) run --python-expr "import sys; sys.path.insert(0, '$HERE'); from cadlib import render; render.contact_sheet('$1', '$2')" ;;
+  *) sed -n '2,7p' "$0"; exit 2 ;;
+esac

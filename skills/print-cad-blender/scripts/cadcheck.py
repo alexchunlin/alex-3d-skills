@@ -1144,4 +1144,5 @@ def main():
     print("  not checked:", "; ".join(REPORT["not_checked"]))
 
 
-main()
+if __name__ == "__main__" and not os.environ.get("CADCHECK_NO_MAIN"):
+    main()
