@@ -1,0 +1,20 @@
+{
+ "fits": [
+  {"a": "PRT_arm_*", "b": "PRT_barrel", "min_clearance": 0.1, "why": "printed axle in Ø6.4 arm bores, 0.2 radial (0.14 after faceting)"}
+ ],
+ "assembly_order": [
+  {"step": "base", "objects": ["PRT_base", "BUY_servo_pan", "FST_floor_*"]},
+  {"step": "pan disc + arms (bench, screws from below)", "bench": "pan", "objects": ["PRT_pan", "PRT_arm_*", "FST_arm_*", "FST_proud"]},
+  {"step": "barrel between arms", "bench": "pan", "objects": ["PRT_barrel"]},
+  {"step": "pan stage onto base", "merge": "pan", "objects": ["CAB_*"]}
+ ],
+ "allow": [
+  {"a": "CAB_servo_bus", "b": "BUY_servo_pan", "why": "cable ends in the servo connector"}
+ ],
+ "drop_tests": [
+  {"name": "muzzle_line_of_fire", "emit": {"frame": "PIV_tilt", "center": [0, 50, 70], "normal": [0, 1, 0], "radius": 3, "step": 1.5},
+   "dir": [0, 1, 0], "sweep": ["PIV_tilt"], "expect": {"hit": [null]}}
+ ],
+ "slide_out": [],
+ "distances": []
+}

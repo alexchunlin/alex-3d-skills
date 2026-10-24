@@ -1,0 +1,1234 @@
+{
+ "tool": "cadcheck",
+ "blend": "/tmp/alex3d-demo-clean/demo.blend",
+ "generated": "2026-10-24 19:53:31",
+ "config": {
+  "collections": {
+   "printed": "Printed",
+   "purchased": "Purchased",
+   "fasteners": "Fasteners",
+   "cables": "Cables"
+  },
+  "printers": {
+   "P1S": [
+    256,
+    256,
+    256
+   ],
+   "H2D": [
+    325,
+    320,
+    325
+   ]
+  },
+  "prefer_printer": "P1S",
+  "min_wall": 1.6,
+  "overhang_deg": 45.0,
+  "joints": {},
+  "couplings": {},
+  "overtravel_deg": 2.5,
+  "max_poses_per_group": 48,
+  "allow": [
+   {
+    "a": "CAB_servo_bus",
+    "b": "BUY_servo_pan",
+    "why": "cable ends in the servo connector"
+   }
+  ],
+  "vol_tol": 0.5,
+  "moving_min_clearance": 0.5,
+  "moving_warn_clearance": 1.0,
+  "fasteners": {
+   "driver_r": 3.0,
+   "hand_r": 14.0,
+   "max_reach": 60.0,
+   "max_reach_ext": 150.0
+  },
+  "slide_out": [],
+  "distances": [],
+  "masses_g": {},
+  "pla_density": 0.00124,
+  "flow_mm3_s": 12.0,
+  "cable_leads": {},
+  "fits": [
+   {
+    "a": "PRT_arm_*",
+    "b": "PRT_barrel",
+    "min_clearance": 0.1,
+    "why": "printed axle in \u00d86.4 arm bores, 0.2 radial (0.14 after faceting)"
+   }
+  ],
+  "assembly_order": [
+   {
+    "step": "base",
+    "objects": [
+     "PRT_base",
+     "BUY_servo_pan",
+     "FST_floor_*"
+    ]
+   },
+   {
+    "step": "pan disc + arms (bench, screws from below)",
+    "bench": "pan",
+    "objects": [
+     "PRT_pan",
+     "PRT_arm_*",
+     "FST_arm_*",
+     "FST_proud"
+    ]
+   },
+   {
+    "step": "barrel between arms",
+    "bench": "pan",
+    "objects": [
+     "PRT_barrel"
+    ]
+   },
+   {
+    "step": "pan stage onto base",
+    "merge": "pan",
+    "objects": [
+     "CAB_*"
+    ]
+   }
+  ]
+ },
+ "checks": {
+  "parts": {
+   "findings": [
+    {
+     "status": "warn",
+     "msg": "PRT_arm_L: 8 wall samples < 1.6 mm (min 1.31)",
+     "object": "PRT_arm_L",
+     "where": [
+      [
+       1.31,
+       [
+        -18.7,
+        -0.2,
+        38.4
+       ]
+      ],
+      [
+       1.31,
+       [
+        -18.7,
+        0.2,
+        41.4
+       ]
+      ],
+      [
+       1.31,
+       [
+        -16.3,
+        -0.2,
+        41.4
+       ]
+      ],
+      [
+       1.31,
+       [
+        -16.3,
+        0.2,
+        38.4
+       ]
+      ],
+      [
+       1.34,
+       [
+        -18.7,
+        -0.3,
+        41.4
+       ]
+      ]
+     ]
+    },
+    {
+     "status": "warn",
+     "msg": "PRT_arm_R: 8 wall samples < 1.6 mm (min 1.31)",
+     "object": "PRT_arm_R",
+     "where": [
+      [
+       1.31,
+       [
+        16.3,
+        -0.2,
+        38.4
+       ]
+      ],
+      [
+       1.31,
+       [
+        16.3,
+        0.2,
+        41.4
+       ]
+      ],
+      [
+       1.31,
+       [
+        18.7,
+        -0.2,
+        41.4
+       ]
+      ],
+      [
+       1.31,
+       [
+        18.7,
+        0.2,
+        38.4
+       ]
+      ],
+      [
+       1.34,
+       [
+        16.3,
+        -0.3,
+        41.4
+       ]
+      ]
+     ]
+    },
+    {
+     "status": "warn",
+     "msg": "PRT_barrel: 296 mm2 of sloped overhang steeper than 45 deg, supports=no",
+     "object": "PRT_barrel"
+    },
+    {
+     "status": "warn",
+     "msg": "PRT_base: 32 wall samples < 1.6 mm (min 1.01)",
+     "object": "PRT_base",
+     "where": [
+      [
+       1.01,
+       [
+        -34.2,
+        -33.0,
+        12.0
+       ]
+      ],
+      [
+       1.01,
+       [
+        -33.9,
+        33.4,
+        11.0
+       ]
+      ],
+      [
+       1.01,
+       [
+        -33.7,
+        -33.7,
+        11.0
+       ]
+      ],
+      [
+       1.01,
+       [
+        -33.7,
+        -32.3,
+        11.0
+       ]
+      ],
+      [
+       1.01,
+       [
+        -33.4,
+        32.1,
+        11.0
+       ]
+      ]
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "object": "PRT_arm_L",
+     "stl": "arm",
+     "non_manifold_edges": 0,
+     "volume_mm3": 4477.2,
+     "print_bbox_mm": [
+      43.4,
+      28.0,
+      5.0
+     ],
+     "fits": {
+      "P1S": true,
+      "H2D": true
+     },
+     "has_print_rot": true,
+     "bed_contact_mm2": 903.9,
+     "overhang_gt_45_mm2": 17.2,
+     "ceiling_mm2": 0.0,
+     "max_bridge_span_mm": null,
+     "supports": "no",
+     "min_wall_mm": 1.31,
+     "thin_wall_samples": 8,
+     "thin_wall_where": [
+      [
+       1.31,
+       [
+        -18.7,
+        -0.2,
+        38.4
+       ]
+      ],
+      [
+       1.31,
+       [
+        -18.7,
+        0.2,
+        41.4
+       ]
+      ],
+      [
+       1.31,
+       [
+        -16.3,
+        -0.2,
+        41.4
+       ]
+      ],
+      [
+       1.31,
+       [
+        -16.3,
+        0.2,
+        38.4
+       ]
+      ],
+      [
+       1.34,
+       [
+        -18.7,
+        -0.3,
+        41.4
+       ]
+      ]
+     ],
+     "est_g": 3.4,
+     "est_h": 0.16
+    },
+    {
+     "object": "PRT_arm_R",
+     "stl": "arm",
+     "non_manifold_edges": 0,
+     "volume_mm3": 4477.2,
+     "print_bbox_mm": [
+      43.4,
+      28.0,
+      5.0
+     ],
+     "fits": {
+      "P1S": true,
+      "H2D": true
+     },
+     "has_print_rot": true,
+     "bed_contact_mm2": 903.9,
+     "overhang_gt_45_mm2": 17.2,
+     "ceiling_mm2": 0.0,
+     "max_bridge_span_mm": null,
+     "supports": "no",
+     "min_wall_mm": 1.31,
+     "thin_wall_samples": 8,
+     "thin_wall_where": [
+      [
+       1.31,
+       [
+        16.3,
+        -0.2,
+        38.4
+       ]
+      ],
+      [
+       1.31,
+       [
+        16.3,
+        0.2,
+        41.4
+       ]
+      ],
+      [
+       1.31,
+       [
+        18.7,
+        -0.2,
+        41.4
+       ]
+      ],
+      [
+       1.31,
+       [
+        18.7,
+        0.2,
+        38.4
+       ]
+      ],
+      [
+       1.34,
+       [
+        16.3,
+        -0.3,
+        41.4
+       ]
+      ]
+     ],
+     "est_g": 3.4,
+     "est_h": 0.16
+    },
+    {
+     "object": "PRT_barrel",
+     "stl": "barrel",
+     "non_manifold_edges": 0,
+     "volume_mm3": 12647.2,
+     "print_bbox_mm": [
+      20.0,
+      55.0,
+      42.0
+     ],
+     "fits": {
+      "P1S": true,
+      "H2D": true
+     },
+     "has_print_rot": true,
+     "bed_contact_mm2": 27.6,
+     "overhang_gt_45_mm2": 295.7,
+     "ceiling_mm2": 603.3,
+     "max_bridge_span_mm": 20.0,
+     "supports": "no",
+     "min_wall_mm": 2.09,
+     "thin_wall_samples": 0,
+     "thin_wall_where": [],
+     "est_g": 7.4,
+     "est_h": 0.24
+    },
+    {
+     "object": "PRT_base",
+     "stl": "base",
+     "non_manifold_edges": 0,
+     "volume_mm3": 36626.6,
+     "print_bbox_mm": [
+      80.0,
+      80.0,
+      30.0
+     ],
+     "fits": {
+      "P1S": true,
+      "H2D": true
+     },
+     "has_print_rot": true,
+     "bed_contact_mm2": 6073.2,
+     "overhang_gt_45_mm2": 0.0,
+     "ceiling_mm2": 150.0,
+     "max_bridge_span_mm": 7.0,
+     "supports": "no",
+     "min_wall_mm": 1.01,
+     "thin_wall_samples": 32,
+     "thin_wall_where": [
+      [
+       1.01,
+       [
+        -34.2,
+        -33.0,
+        12.0
+       ]
+      ],
+      [
+       1.01,
+       [
+        -33.9,
+        33.4,
+        11.0
+       ]
+      ],
+      [
+       1.01,
+       [
+        -33.7,
+        -33.7,
+        11.0
+       ]
+      ],
+      [
+       1.01,
+       [
+        -33.7,
+        -32.3,
+        11.0
+       ]
+      ],
+      [
+       1.01,
+       [
+        -33.4,
+        32.1,
+        11.0
+       ]
+      ]
+     ],
+     "est_g": 34.7,
+     "est_h": 0.75
+    },
+    {
+     "object": "PRT_pan",
+     "stl": "pan",
+     "non_manifold_edges": 0,
+     "volume_mm3": 13528.7,
+     "print_bbox_mm": [
+      60.0,
+      60.0,
+      5.0
+     ],
+     "fits": {
+      "P1S": true,
+      "H2D": true
+     },
+     "has_print_rot": true,
+     "bed_contact_mm2": 2559.4,
+     "overhang_gt_45_mm2": 0.0,
+     "ceiling_mm2": 49.0,
+     "max_bridge_span_mm": 6.6,
+     "supports": "no",
+     "min_wall_mm": 2.19,
+     "thin_wall_samples": 0,
+     "thin_wall_where": [],
+     "est_g": 9.3,
+     "est_h": 0.27
+    }
+   ],
+   "unique_stls": 4,
+   "est_total_g": 55,
+   "est_total_h": 1.4,
+   "runtime_s": 0.0
+  },
+  "clearance": {
+   "findings": [
+    {
+     "status": "warn",
+     "msg": "PRT_base to PRT_pan 0.50 mm at pan=-92.5",
+     "a": "PRT_base",
+     "b": "PRT_pan",
+     "mm": 0.5,
+     "pose": "pan=-92.5",
+     "overtravel": true,
+     "at": [
+      -2.8,
+      -2.8,
+      30.0
+     ],
+     "fit": null,
+     "min": 0.5
+    },
+    {
+     "status": "warn",
+     "msg": "PRT_base to FST_arm_0 0.90 mm at pan=92.5",
+     "a": "PRT_base",
+     "b": "FST_arm_0",
+     "mm": 0.9,
+     "pose": "pan=92.5",
+     "overtravel": true,
+     "at": [
+      -2.2,
+      -17.6,
+      30.9
+     ],
+     "fit": null,
+     "min": 0.5
+    },
+    {
+     "status": "warn",
+     "msg": "PRT_base to FST_arm_1 0.90 mm at pan=92.5",
+     "a": "PRT_base",
+     "b": "FST_arm_1",
+     "mm": 0.9,
+     "pose": "pan=92.5",
+     "overtravel": true,
+     "at": [
+      -3.8,
+      17.4,
+      30.9
+     ],
+     "fit": null,
+     "min": 0.5
+    }
+   ]
+  },
+  "interference": {
+   "findings": [],
+   "groups": [
+    {
+     "joints": [],
+     "poses": 1,
+     "pairs": 17
+    },
+    {
+     "joints": [
+      "PIV_pan"
+     ],
+     "poses": 15,
+     "pairs": 35
+    },
+    {
+     "joints": [
+      "PIV_tilt"
+     ],
+     "poses": 11,
+     "pairs": 5
+    },
+    {
+     "joints": [
+      "PIV_pan",
+      "PIV_tilt"
+     ],
+     "poses": 35,
+     "pairs": 7
+    }
+   ],
+   "collisions": [],
+   "contacts": [],
+   "solid_overlaps": [],
+   "cable_overlaps": [],
+   "min_clearance": [
+    {
+     "a": "PRT_arm_L",
+     "b": "PRT_barrel",
+     "mm": 0.145,
+     "pose": "tilt=15",
+     "overtravel": false,
+     "at": [
+      -16.7,
+      0.8,
+      67.0
+     ],
+     "fit": "printed axle in \u00d86.4 arm bores, 0.2 radial (0.14 after faceting)",
+     "min": 0.1
+    },
+    {
+     "a": "PRT_arm_R",
+     "b": "PRT_barrel",
+     "mm": 0.145,
+     "pose": "tilt=15",
+     "overtravel": false,
+     "at": [
+      18.3,
+      0.8,
+      67.0
+     ],
+     "fit": "printed axle in \u00d86.4 arm bores, 0.2 radial (0.14 after faceting)",
+     "min": 0.1
+    },
+    {
+     "a": "PRT_base",
+     "b": "PRT_pan",
+     "mm": 0.5,
+     "pose": "pan=-92.5",
+     "overtravel": true,
+     "at": [
+      -2.8,
+      -2.8,
+      30.0
+     ],
+     "fit": null,
+     "min": 0.5
+    },
+    {
+     "a": "PRT_base",
+     "b": "FST_arm_0",
+     "mm": 0.9,
+     "pose": "pan=92.5",
+     "overtravel": true,
+     "at": [
+      -2.2,
+      -17.6,
+      30.9
+     ],
+     "fit": null,
+     "min": 0.5
+    },
+    {
+     "a": "PRT_base",
+     "b": "FST_arm_1",
+     "mm": 0.9,
+     "pose": "pan=92.5",
+     "overtravel": true,
+     "at": [
+      -3.8,
+      17.4,
+      30.9
+     ],
+     "fit": null,
+     "min": 0.5
+    },
+    {
+     "a": "PRT_pan",
+     "b": "CAB_servo_bus",
+     "mm": 2.732,
+     "pose": "pan=75",
+     "overtravel": false,
+     "at": [
+      -0.0,
+      3.9,
+      33.8
+     ],
+     "fit": null,
+     "min": 0.5
+    },
+    {
+     "a": "PRT_arm_L",
+     "b": "CAB_servo_bus",
+     "mm": 13.802,
+     "pose": "pan=15",
+     "overtravel": false,
+     "at": [
+      -1.1,
+      -0.4,
+      39.5
+     ],
+     "fit": null,
+     "min": 0.5
+    },
+    {
+     "a": "PRT_arm_R",
+     "b": "CAB_servo_bus",
+     "mm": 13.815,
+     "pose": "pan=45",
+     "overtravel": false,
+     "at": [
+      0.7,
+      1.0,
+      39.5
+     ],
+     "fit": null,
+     "min": 0.5
+    }
+   ],
+   "runtime_s": 0.3
+  },
+  "fasteners": {
+   "findings": [],
+   "rows": [
+    {
+     "object": "FST_floor_0",
+     "head": [
+      -33.0,
+      -33.0,
+      0.0
+     ],
+     "into": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "length_mm": 10.0,
+     "thread_host": "PRT_base",
+     "engagement_mm": 9.0,
+     "head_buried_in": [],
+     "body": "static",
+     "access": {
+      "home": {
+       "reach_mm": 14.0,
+       "blocked": false
+      },
+      "pan=-90": {
+       "reach_mm": 14.0,
+       "blocked": false
+      },
+      "pan=90": {
+       "reach_mm": 14.0,
+       "blocked": false
+      },
+      "tilt=40": {
+       "reach_mm": 14.0,
+       "blocked": false
+      }
+     },
+     "access_best": {
+      "pose": "home",
+      "reach_mm": 14.0,
+      "blocked": false
+     }
+    },
+    {
+     "object": "FST_floor_1",
+     "head": [
+      -33.0,
+      33.0,
+      0.0
+     ],
+     "into": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "length_mm": 10.0,
+     "thread_host": "PRT_base",
+     "engagement_mm": 9.0,
+     "head_buried_in": [],
+     "body": "static",
+     "access": {
+      "home": {
+       "reach_mm": 14.0,
+       "blocked": false
+      },
+      "pan=-90": {
+       "reach_mm": 14.0,
+       "blocked": false
+      },
+      "pan=90": {
+       "reach_mm": 14.0,
+       "blocked": false
+      },
+      "tilt=40": {
+       "reach_mm": 14.0,
+       "blocked": false
+      }
+     },
+     "access_best": {
+      "pose": "home",
+      "reach_mm": 14.0,
+      "blocked": false
+     }
+    },
+    {
+     "object": "FST_floor_2",
+     "head": [
+      33.0,
+      -33.0,
+      0.0
+     ],
+     "into": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "length_mm": 10.0,
+     "thread_host": "PRT_base",
+     "engagement_mm": 9.0,
+     "head_buried_in": [],
+     "body": "static",
+     "access": {
+      "home": {
+       "reach_mm": 14.0,
+       "blocked": false
+      },
+      "pan=-90": {
+       "reach_mm": 14.0,
+       "blocked": false
+      },
+      "pan=90": {
+       "reach_mm": 14.0,
+       "blocked": false
+      },
+      "tilt=40": {
+       "reach_mm": 14.0,
+       "blocked": false
+      }
+     },
+     "access_best": {
+      "pose": "home",
+      "reach_mm": 14.0,
+      "blocked": false
+     }
+    },
+    {
+     "object": "FST_floor_3",
+     "head": [
+      33.0,
+      33.0,
+      0.0
+     ],
+     "into": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "length_mm": 10.0,
+     "thread_host": "PRT_base",
+     "engagement_mm": 9.0,
+     "head_buried_in": [],
+     "body": "static",
+     "access": {
+      "home": {
+       "reach_mm": 14.0,
+       "blocked": false
+      },
+      "pan=-90": {
+       "reach_mm": 14.0,
+       "blocked": false
+      },
+      "pan=90": {
+       "reach_mm": 14.0,
+       "blocked": false
+      },
+      "tilt=40": {
+       "reach_mm": 14.0,
+       "blocked": false
+      }
+     },
+     "access_best": {
+      "pose": "home",
+      "reach_mm": 14.0,
+      "blocked": false
+     }
+    },
+    {
+     "object": "FST_arm_0",
+     "head": [
+      -17.5,
+      0.0,
+      33.3
+     ],
+     "into": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "length_mm": 10.0,
+     "thread_host": "PRT_arm_L",
+     "engagement_mm": 7.5,
+     "head_buried_in": [],
+     "body": "PIV_pan",
+     "access": {
+      "home": {
+       "reach_mm": 18.0,
+       "blocked": false
+      },
+      "pan=-90": {
+       "reach_mm": 18.0,
+       "blocked": false
+      },
+      "pan=90": {
+       "reach_mm": 18.0,
+       "blocked": false
+      },
+      "tilt=40": {
+       "reach_mm": 18.0,
+       "blocked": false
+      }
+     },
+     "access_best": {
+      "pose": "home",
+      "reach_mm": 18.0,
+      "blocked": false
+     }
+    },
+    {
+     "object": "FST_arm_1",
+     "head": [
+      17.5,
+      0.0,
+      33.3
+     ],
+     "into": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "length_mm": 10.0,
+     "thread_host": "PRT_arm_R",
+     "engagement_mm": 7.5,
+     "head_buried_in": [],
+     "body": "PIV_pan",
+     "access": {
+      "home": {
+       "reach_mm": 18.0,
+       "blocked": false
+      },
+      "pan=-90": {
+       "reach_mm": 18.0,
+       "blocked": false
+      },
+      "pan=90": {
+       "reach_mm": 18.0,
+       "blocked": false
+      },
+      "tilt=40": {
+       "reach_mm": 18.0,
+       "blocked": false
+      }
+     },
+     "access_best": {
+      "pose": "home",
+      "reach_mm": 18.0,
+      "blocked": false
+     }
+    }
+   ],
+   "runtime_s": 0.0
+  },
+  "drop": {
+   "findings": [],
+   "tests": [
+    {
+     "name": "muzzle_line_of_fire",
+     "rows": [
+      {
+       "pose": "tilt=-2.5",
+       "rays": 13,
+       "first_hit": {
+        "null": 13
+       }
+      },
+      {
+       "pose": "tilt=0",
+       "rays": 13,
+       "first_hit": {
+        "null": 13
+       }
+      },
+      {
+       "pose": "tilt=5",
+       "rays": 13,
+       "first_hit": {
+        "null": 13
+       }
+      },
+      {
+       "pose": "tilt=10",
+       "rays": 13,
+       "first_hit": {
+        "null": 13
+       }
+      },
+      {
+       "pose": "tilt=15",
+       "rays": 13,
+       "first_hit": {
+        "null": 13
+       }
+      },
+      {
+       "pose": "tilt=20",
+       "rays": 13,
+       "first_hit": {
+        "null": 13
+       }
+      },
+      {
+       "pose": "tilt=25",
+       "rays": 13,
+       "first_hit": {
+        "null": 13
+       }
+      },
+      {
+       "pose": "tilt=30",
+       "rays": 13,
+       "first_hit": {
+        "null": 13
+       }
+      },
+      {
+       "pose": "tilt=35",
+       "rays": 13,
+       "first_hit": {
+        "null": 13
+       }
+      },
+      {
+       "pose": "tilt=40",
+       "rays": 13,
+       "first_hit": {
+        "null": 13
+       }
+      },
+      {
+       "pose": "tilt=42.5",
+       "rays": 13,
+       "first_hit": {
+        "null": 13
+       }
+      }
+     ]
+    }
+   ],
+   "runtime_s": 0.0
+  },
+  "slide": {
+   "findings": [],
+   "runtime_s": 0.0
+  },
+  "distances": {
+   "findings": [],
+   "runtime_s": 0.0
+  },
+  "stability": {
+   "findings": [],
+   "rows": [
+    {
+     "pose": "pan=-30, tilt=10",
+     "mass_g": 115,
+     "cg": [
+      -11.2,
+      0.5,
+      24.0
+     ],
+     "edge_margin_mm": 28.0,
+     "tip_angle_deg": 49.4
+    },
+    {
+     "pose": "pan=-30, tilt=20",
+     "mass_g": 115,
+     "cg": [
+      -11.2,
+      0.4,
+      24.1
+     ],
+     "edge_margin_mm": 28.0,
+     "tip_angle_deg": 49.3
+    },
+    {
+     "pose": "pan=-30, tilt=30",
+     "mass_g": 115,
+     "cg": [
+      -11.2,
+      0.4,
+      24.2
+     ],
+     "edge_margin_mm": 28.0,
+     "tip_angle_deg": 49.2
+    },
+    {
+     "pose": "pan=0, tilt=10",
+     "mass_g": 115,
+     "cg": [
+      -11.4,
+      0.5,
+      24.0
+     ],
+     "edge_margin_mm": 27.8,
+     "tip_angle_deg": 49.1
+    },
+    {
+     "pose": "pan=0, tilt=20",
+     "mass_g": 115,
+     "cg": [
+      -11.4,
+      0.5,
+      24.1
+     ],
+     "edge_margin_mm": 27.8,
+     "tip_angle_deg": 49.0
+    },
+    {
+     "pose": "pan=0, tilt=30",
+     "mass_g": 115,
+     "cg": [
+      -11.4,
+      0.5,
+      24.2
+     ],
+     "edge_margin_mm": 27.8,
+     "tip_angle_deg": 48.9
+    },
+    {
+     "pose": "pan=30, tilt=10",
+     "mass_g": 115,
+     "cg": [
+      -11.7,
+      0.5,
+      24.0
+     ],
+     "edge_margin_mm": 27.5,
+     "tip_angle_deg": 48.9
+    },
+    {
+     "pose": "pan=30, tilt=20",
+     "mass_g": 115,
+     "cg": [
+      -11.7,
+      0.4,
+      24.1
+     ],
+     "edge_margin_mm": 27.5,
+     "tip_angle_deg": 48.8
+    },
+    {
+     "pose": "pan=30, tilt=30",
+     "mass_g": 115,
+     "cg": [
+      -11.7,
+      0.4,
+      24.2
+     ],
+     "edge_margin_mm": 27.5,
+     "tip_angle_deg": 48.7
+    }
+   ],
+   "worst": {
+    "pose": "pan=30, tilt=30",
+    "mass_g": 115,
+    "cg": [
+     -11.7,
+     0.4,
+     24.2
+    ],
+    "edge_margin_mm": 27.5,
+    "tip_angle_deg": 48.7
+   },
+   "footprint_pts": 28,
+   "purchased_without_mass": [],
+   "runtime_s": 0.0
+  },
+  "cables": {
+   "findings": [],
+   "rows": [
+    {
+     "object": "CAB_servo_bus",
+     "path_len": 34.5,
+     "lead_len": 150.0
+    }
+   ],
+   "runtime_s": 0.0
+  }
+ },
+ "coverage": [
+  "parts: 5 printed objects (4 unique STLs): manifold, bed fit ['P1S', 'H2D'], overhang, wall probe, bed contact",
+  "interference/clearance: 13 objects in ['Printed', 'Purchased', 'Fasteners', 'Cables'], 95 pair-pose tests, joints swept ['PIV_pan', 'PIV_tilt'] with 2.5 deg overtravel",
+  "fasteners: 6 screws; head-buried, thread engagement, driver access (\u00d86 bit, 14 mm hand clearance) at 4 poses, parts present per assembly_order (4 steps)",
+  "drop: 1 tests (first-contact straight rays; no bounce/slide dynamics)",
+  "stability: CG and tip angle over 9 poses, footprint from static parts' lowest faces",
+  "cables: 1 routes, 1 with path length"
+ ],
+ "not_checked": [
+  "fasteners: pilot/clearance hole diameters (use cadlib.features for those)",
+  "stability: dynamic loads (recoil, pan acceleration), friction/sliding",
+  "cables: bend radius, slack across joints, connector positions (review by section render)",
+  "not geometric: service/teardown steps, alignment jigs, aesthetics, BOM correctness"
+ ],
+ "assembly": {
+  "unordered_solids_assumed_present": []
+ },
+ "summary": {
+  "pass": true,
+  "fails": 0,
+  "warns": 7,
+  "fail_list": [],
+  "warn_list": [
+   "parts: PRT_arm_L: 8 wall samples < 1.6 mm (min 1.31)",
+   "parts: PRT_arm_R: 8 wall samples < 1.6 mm (min 1.31)",
+   "parts: PRT_barrel: 296 mm2 of sloped overhang steeper than 45 deg, supports=no",
+   "parts: PRT_base: 32 wall samples < 1.6 mm (min 1.01)",
+   "clearance: PRT_base to PRT_pan 0.50 mm at pan=-92.5",
+   "clearance: PRT_base to FST_arm_0 0.90 mm at pan=92.5",
+   "clearance: PRT_base to FST_arm_1 0.90 mm at pan=92.5"
+  ],
+  "coverage": [
+   "parts: 5 printed objects (4 unique STLs): manifold, bed fit ['P1S', 'H2D'], overhang, wall probe, bed contact",
+   "interference/clearance: 13 objects in ['Printed', 'Purchased', 'Fasteners', 'Cables'], 95 pair-pose tests, joints swept ['PIV_pan', 'PIV_tilt'] with 2.5 deg overtravel",
+   "fasteners: 6 screws; head-buried, thread engagement, driver access (\u00d86 bit, 14 mm hand clearance) at 4 poses, parts present per assembly_order (4 steps)",
+   "drop: 1 tests (first-contact straight rays; no bounce/slide dynamics)",
+   "stability: CG and tip angle over 9 poses, footprint from static parts' lowest faces",
+   "cables: 1 routes, 1 with path length"
+  ],
+  "not_checked": [
+   "fasteners: pilot/clearance hole diameters (use cadlib.features for those)",
+   "stability: dynamic loads (recoil, pan acceleration), friction/sliding",
+   "cables: bend radius, slack across joints, connector positions (review by section render)",
+   "not geometric: service/teardown steps, alignment jigs, aesthetics, BOM correctness"
+  ],
+  "runtime_s": 0.4
+ }
+}

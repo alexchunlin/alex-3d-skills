@@ -1,0 +1,39 @@
+{
+ "pass": false,
+ "fails": 7,
+ "warns": 8,
+ "fail_list": [
+  "interference: PRT_pan x PRT_barrel collide on different bodies: 136.8 mm3 at tilt=-50",
+  "interference: PRT_barrel x FST_proud collide on different bodies: 38.5 mm3 at tilt=-45",
+  "clearance: PRT_barrel to FST_proud only 0.29 mm across a joint at tilt=-40 (min 0.50; declare it under fits if it is a running fit)",
+  "fasteners: FST_arm_0 head is inside ['PRT_arm_L'] (reversed, or a missing counterbore)",
+  "fasteners: FST_arm_0 cannot be driven: tool path blocked by PRT_arm_L at 0.5 mm (all 5 poses tried)",
+  "drop: muzzle_line_of_fire at tilt=-52.5: 4/13 rays first hit ['PRT_base'], not [None]",
+  "drop: muzzle_line_of_fire at tilt=-50: 1/13 rays first hit ['PRT_base'], not [None]"
+ ],
+ "warn_list": [
+  "parts: PRT_arm_L: 8 wall samples < 1.6 mm (min 1.31)",
+  "parts: PRT_arm_R: 8 wall samples < 1.6 mm (min 1.31)",
+  "parts: PRT_barrel: 296 mm2 of sloped overhang steeper than 45 deg, supports=no",
+  "parts: PRT_base: 32 wall samples < 1.6 mm (min 1.01)",
+  "clearance: PRT_base to PRT_pan 0.50 mm at pan=-92.5",
+  "clearance: PRT_base to PRT_barrel 0.65 mm at pan=92.5, tilt=-52.5",
+  "clearance: PRT_base to FST_arm_1 0.90 mm at pan=92.5",
+  "fasteners: FST_proud: only 3.0 mm of thread in PRT_pan"
+ ],
+ "coverage": [
+  "parts: 5 printed objects (4 unique STLs): manifold, bed fit ['P1S', 'H2D'], overhang, wall probe, bed contact",
+  "interference/clearance: 14 objects in ['Printed', 'Purchased', 'Fasteners', 'Cables'], 146 pair-pose tests, joints swept ['PIV_pan', 'PIV_tilt'] with 2.5 deg overtravel",
+  "fasteners: 7 screws; head-buried, thread engagement, driver access (\u00d86 bit, 14 mm hand clearance) at 5 poses, parts present per assembly_order (4 steps)",
+  "drop: 1 tests (first-contact straight rays; no bounce/slide dynamics)",
+  "stability: CG and tip angle over 6 poses, footprint from static parts' lowest faces",
+  "cables: 1 routes, 1 with path length"
+ ],
+ "not_checked": [
+  "fasteners: pilot/clearance hole diameters (use cadlib.features for those)",
+  "stability: dynamic loads (recoil, pan acceleration), friction/sliding",
+  "cables: bend radius, slack across joints, connector positions (review by section render)",
+  "not geometric: service/teardown steps, alignment jigs, aesthetics, BOM correctness"
+ ],
+ "runtime_s": 0.5
+}

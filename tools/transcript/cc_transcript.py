@@ -236,6 +236,10 @@ def usage_totals(tr: Transcript) -> dict:
         tot["cache_read"] += u.get("cache_read_input_tokens", 0) or 0
         tot["output"] += u.get("output_tokens", 0) or 0
         tot["thinking"] += (u.get("output_tokens_details") or {}).get("thinking_tokens", 0) or 0
+    misses = [a for a in tr.api_calls[1:] if not (a.usage or {}).get("cache_read_input_tokens")
+              and ((a.usage or {}).get("cache_creation_input_tokens") or 0) > 20000]
+    tot["cache_misses"] = len(misses)
+    tot["cache_miss_rewrite_tokens"] = sum(a.usage.get("cache_creation_input_tokens", 0) for a in misses)
     tot["max_context"] = max(((a.usage or {}).get("input_tokens", 0) + (a.usage or {}).get("cache_read_input_tokens", 0)
                               + (a.usage or {}).get("cache_creation_input_tokens", 0) for a in tr.api_calls), default=0)
     return tot
@@ -370,6 +374,7 @@ def cmd_summary(tr: Transcript, a) -> None:
           f"(blender {d['blender_time_min']}) ; {u['api_calls']} API calls")
     print(f"tokens: out {u['output']:,} (thinking {u['thinking']:,}) ; cache_read {u['cache_read']:,} ; "
           f"cache_write {u['cache_creation']:,} ; uncached in {u['input']:,} ; peak context {u['max_context']:,}")
+    print(f"prompt-cache misses after a long gap: {u['cache_misses']} (re-wrote {u['cache_miss_rewrite_tokens']:,} tokens)")
     print("tools:", ", ".join(f"{k} {v}" for k, v in sorted(d["tool_counts"].items(), key=lambda x: -x[1])))
     print(f"blender runs {d['blender_runs']} (failed {d['blender_failures']}) ; bash failures {len(d['bash_failures'])}")
     print(f"images read {d['images_read']} ({d['image_bytes'] / 1e6:.1f} MB raw) ; re-read: {d['images_reread'] or '-'}")
