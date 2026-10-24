@@ -1,0 +1,120 @@
+{
+ "_about": "Purchased parts already characterised for the mm-launcher project. Dimensions in mm, with source and status. status: confirmed (user or datasheet or measured from the supplied model), measured (by an agent from a reference file), estimated (from a photo or envelope). Placeholders: components/placeholders.py. Reference files live in ~/code-stuff/mmlauncher/mm-launcher/mm-launch-hw/reference/ (REF below) and are not copied here.",
+
+ "motorgo_axis": {
+  "what": "MotorGo Axis ESP32-S3 BLDC driver",
+  "model_file": "REF/mg_axis.stl (from REF/mg_axis.step, user-supplied; import, don't hand-model)",
+  "frame": "STEP origin at the top-left mounting hole centre, +X along the 65 mm edge, board extends to -Y, PCB z 0..1.7, components +Z",
+  "envelope": [65.0, 57.25, 19.47],
+  "stl_bbox_min": [-3.5, -53.75, -7.25], "stl_bbox_max": [61.5, 3.5, 12.216],
+  "holes": {"d": 3.4, "rect": [58.0, 49.0], "first_at": [0, 0]},
+  "pcb_top_z": 1.77,
+  "tallest_top_z": 12.216,
+  "header_pins_below_z": -7.25,
+  "min_standoff": 8.0,
+  "usb_c": {"type": "vertical receptacle, opening faces +Z", "centre": [57.6, -14.0], "opening_z": 7.97, "opening": [8.9, 3.4], "plug_overmold": [12.5, 7.0], "plug_clear": 1.0, "straight_run": 25.0, "min_bend_r": 15.0},
+  "mass_g": 25,
+  "status": "confirmed (brief change notice 4) except tallest_top_z: the brief says header 9.0, the STL bbox says 12.216 (D1 measured 12.2); design to 12.3",
+  "src": ["DESIGN_BRIEF.md MotorGo row", "D1 transcript 0:00:52-0:01:00 (underside map)", "this repo: Blender STL bbox, 2026-10-24"]
+ },
+
+ "plink_mt6701": {
+  "what": "Plink magnetic encoder (MT6701), JST 5-pin",
+  "model_file": "REF/plink_encoder.stl / .step",
+  "pcb": [20.0, 23.0, 1.6], "total_h": 4.6,
+  "stl_bbox_min": [-10.0, -11.5, 0.0], "stl_bbox_max": [10.0, 11.5, 4.6],
+  "holes": {"d": 2.5, "square": 16.0, "centred": true},
+  "ic_centre": [0, 0], "ic_top_above_pcb_back": 3.25,
+  "magnet": {"d": 6.0, "t": 2.5, "type": "diametric", "air_gap": [0.5, 2.0], "coaxial_tol": 0.3},
+  "mass_g": 3,
+  "status": "measured",
+  "src": ["DESIGN_BRIEF.md Plink row", "D1 transcript 0:00:24-0:00:38 (STEP cylinders, z levels)", "R1 review.md measurements (holes 16 x 16 centred, IC on axis)"],
+  "prior_art": "REF/prior_plink*.stl: earlier holders with tapered locating pegs"
+ },
+
+ "xteam_3674": {
+  "what": "XTEAM XTI-3674 1900KV inrunner BLDC",
+  "body": {"d": 35.9, "l": 74.0},
+  "shaft": {"d": 5.0, "l": 21.0, "d_flat_len": 14.0, "flat_to_axis": 1.95, "side": "front only"},
+  "front_holes": {"thread": "M3", "pcd": 25.0, "n": 4},
+  "rear_access_hole_d": 8.0, "rear_shaft_recess": [0.0, 1.0],
+  "leads": {"n": 3, "bullet_d": 4.0, "len": 80.0, "exit": "rear side"},
+  "mass_g": 200,
+  "status": "confirmed (drawing + user); mass estimated",
+  "src": ["REF/bldc_xteam_3674_drawing.png", "DESIGN_BRIEF.md BLDC row and change notice 1"]
+ },
+
+ "hiwonder_bus_servo": {
+  "what": "Hiwonder bus servo, HTS-35H class",
+  "body": [40.0, 20.14, 40.0],
+  "spline": {"protrudes": 3.9, "offset_from_body_centre": 10.0, "boss_d": 6.0},
+  "idler_boss": {"protrudes": 3.9, "coaxial": true},
+  "mounting": "tapped holes on the case faces; use a pocket + clamp",
+  "bus": "daisy-chained 3-pin",
+  "mass_g": 66,
+  "status": "confirmed envelope (drawing); spline boss Ø6 estimated",
+  "src": ["REF/servo_hiwonder_drawing.png", "DESIGN_BRIEF.md servo row", "D1 build_assembly.py SERVO_* parameters"]
+ },
+
+ "servo_horn_disc": {
+  "what": "Round 8-hole RC servo horn",
+  "disc": {"d": 20.0, "t": 2.5}, "hub": {"d": 9.0, "h": 1.4},
+  "holes": {"n": 8, "d": 2.2, "bolt_circle_d": 14.0},
+  "interface": "1.0 mm recess at disc + 0.2, pilot dimples only, drill through using the horn as a template, centre-screw access hole",
+  "mass_g": 4,
+  "status": "confirmed (user, change notice 3)",
+  "src": ["DESIGN_BRIEF.md servo row", "R1 review.md item 4 (centre-screw access)"]
+ },
+
+ "hiwonder_servo_controller": {
+  "what": "Hiwonder bus servo controller board",
+  "pcb": [58.0, 42.0, 1.6], "top_components_h": 14.0, "under_h": 2.0, "port_overhang": 1.5,
+  "holes": {"d": 3.2, "rect": [51.0, 35.0], "status": "UNCONFIRMED: drill-to-fit bosses Ø7 with centre-punch dimples"},
+  "locate": "perimeter lip/pocket +0.4",
+  "layout": "5 bus ports per long edge (cables exit sideways); USB-A + micro-USB top edge; power switch and Program/Run bottom edge; blue 2-pole screw terminal bottom-right",
+  "mass_g": 30,
+  "status": "PCB confirmed; holes estimated from photo",
+  "src": ["REF/servo_controller_board_photo.png", "DESIGN_BRIEF.md change notice 3"],
+  "open_question": "D1 noted the photo shows the bus ports on the 42 mm edges, not the long edges (D1 result 'deferred')."
+ },
+
+ "dewalt_20v_adapter": {
+  "what": "DeWalt 20V battery adapter (battery slides on)",
+  "body": [86.6, 59.0, 23.4], "holes": "4 corner screw holes on top, size unknown",
+  "mass_g": 90,
+  "status": "confirmed envelope; hole size unknown (R1 item 13: prefer through-bolts or a strap)",
+  "src": ["REF/dewalt_adapter_buck_12v_dims.png"]
+ },
+
+ "dewalt_20v_battery": {
+  "what": "DeWalt 20V battery (2Ah and 5Ah packs)",
+  "envelope": [115.0, 76.0, 70.0], "bay_clearance_per_side": 2.0, "lead_in_chamfer": 1.0,
+  "mass_g": 620,
+  "status": "envelope from brief; mass estimated (5Ah ~ 620 g)",
+  "src": ["DESIGN_BRIEF.md battery row", "R1 review.md item 13 (open the bay to 2.0 per side)"]
+ },
+
+ "buck_12v_finned": {
+  "what": "12 V buck converter, finned",
+  "body": [73.8, 73.8, 31.0], "mounting": "flange holes", "wires": "bundle exits one side", "airflow": "needs free fins",
+  "mass_g": 180,
+  "status": "confirmed envelope; flange hole spacing from D1 (Ø3.8 at +/-33.4 on one axis) is measured off the PNG",
+  "src": ["REF/dewalt_adapter_buck_12v_dims.png", "D1 build_assembly.py build_purchased"]
+ },
+
+ "mm_plain": {
+  "what": "Plain M&M (payload)",
+  "lentil": {"d": 13.0, "t": 7.0}, "volume_mm3": 620, "volume_note": "620 = ellipsoid estimate used for hopper capacity; the two-cap lentil placeholder is 507",
+  "packing_fraction": 0.6,
+  "friction_pla_deg": [17, 22],
+  "status": "brief + D2 estimate (friction)",
+  "src": ["DESIGN_BRIEF.md intro", "D2 transcript 0:17:56 thinking (PLA-on-M&M friction 17-22 deg)"]
+ },
+
+ "m3_hardware": {
+  "pilot_selftap_d": 2.5, "clearance_d": 3.4, "nut_af": 5.5, "nut_trap_af": 5.7, "nut_h": 2.4,
+  "cap_head": [5.5, 3.0], "pan_head": [6.0, 2.4], "counterbore_d": 6.5,
+  "heatset_hole": [4.0, 5.7],
+  "src": ["DESIGN_BRIEF.md assembly constraints", "cadlib/features.py RULES"]
+ }
+}
