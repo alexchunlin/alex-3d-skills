@@ -1,14 +1,15 @@
 #!/bin/sh
-# Re-prove every tool in this repo. Writes only under /tmp/alex3d-verify. About 25 minutes, run at nice 10.
+# Re-prove every tool in this repo. Writes only under /tmp/alex3d-verify/run-<pid> (latest: /tmp/alex3d-verify/latest). About 25 minutes, run at nice 10.
 # The attempt regressions use examples/mm-launcher-{a1,a2,a3,v2a1,...,v2a7}/*.blend.gz (the blends the reviewers saw).
 #   sh tools/verify_all.sh            # HW defaults to the mm-launcher project (read-only; copied first)
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CAD="$ROOT/skills/print-cad-blender/scripts/cad"
 HW="${HW:-$HOME/code-stuff/mmlauncher/mm-launcher/mm-launch-hw}"
-V=/tmp/alex3d-verify
+# one directory per run, so parallel runs (feature worktrees) can't wipe each other; /tmp/alex3d-verify/latest -> it
+V="/tmp/alex3d-verify/run-$$"
 BL="${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}"
-rm -rf "$V"; mkdir -p "$V"
+rm -rf "$V"; mkdir -p "$V"; ln -sfn "$V" /tmp/alex3d-verify/latest
 # The attempt regressions below count other checks' rows exactly; the parts layer check (printcheck) has its own
 # section (4m, 4n) and runs with CAD_LAYER_CHECK=1 there and on the demo and template, which must print as declared.
 export CAD_LAYER_CHECK=0
