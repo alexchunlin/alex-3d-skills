@@ -452,5 +452,10 @@ python3 -I "$ROOT/tools/test_workflow_template.py" >/dev/null && ok "workflow te
 T=$(ls "$HOME"/.claude/projects/-Users-alxchunlin-code-stuff-mmlauncher-mm-launcher/*/subagents/workflows/*/agent-*.jsonl 2>/dev/null | head -1)
 if [ -n "$T" ]; then python3 -I "$ROOT/tools/transcript/cc_transcript.py" summary "$T" | grep -q "^wall" && ok "transcript summary" || bad "transcript summary"; fi
 
+# 8 per-feature checks: each tools/verify.d/*.sh is sourced here and calls ok/bad (keeps feature branches from
+# colliding in this file). Each may use $ROOT, $CAD, $V, $BL and $HW.
+mkdir -p "$ROOT/tools/verify.d"
+for f in "$ROOT"/tools/verify.d/*.sh; do [ -f "$f" ] && . "$f"; done
+
 echo "verify_all: $pass passed, $fail failed"
 [ $fail = 0 ]
