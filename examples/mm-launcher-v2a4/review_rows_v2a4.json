@@ -1,0 +1,100 @@
+{
+ "distances": [
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": 8.0,
+   "ray": {
+    "origin": [
+     21.0,
+     4.091,
+     151.0
+    ],
+    "dir": [
+     0,
+     0.866,
+     0.5
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": 0.327,
+     "PIV_nip_lift": -2.19
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": -2.19
+    },
+    {
+     "PIV_hood": -0.558,
+     "PIV_nip_lift": -2.19
+    }
+   ],
+   "why": "review A4 (A2-01): bare gap at FULL leaf lift on the candy's entry arc, psi 60 from BDC toward the rear (wheel plane x 21, radial ray from R38 toward the wheel centre). The hood pivots about HINGE at PSI_TOP 112, so the lift opens psi 60 less than BDC; a 7.5 candy on 0.5 tape needs 8.0 here too"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": 8.0,
+   "ray": {
+    "origin": [
+     21.0,
+     1.292,
+     157.003
+    ],
+    "dir": [
+     0,
+     0.9397,
+     0.342
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": 0.327,
+     "PIV_nip_lift": -2.19
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": -2.19
+    },
+    {
+     "PIV_hood": -0.558,
+     "PIV_nip_lift": -2.19
+    }
+   ],
+   "why": "review A4 (A2-01): bare gap at FULL leaf lift on the candy's entry arc, psi 70 from BDC toward the rear (wheel plane x 21, radial ray from R38 toward the wheel centre). The hood pivots about HINGE at PSI_TOP 112, so the lift opens psi 70 less than BDC; a 7.5 candy on 0.5 tape needs 8.0 here too"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": 8.0,
+   "ray": {
+    "origin": [
+     21.0,
+     -0.423,
+     163.401
+    ],
+    "dir": [
+     0,
+     0.9848,
+     0.1736
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": 0.327,
+     "PIV_nip_lift": -2.19
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": -2.19
+    },
+    {
+     "PIV_hood": -0.558,
+     "PIV_nip_lift": -2.19
+    }
+   ],
+   "why": "review A4 (A2-01): bare gap at FULL leaf lift on the candy's entry arc, psi 80 from BDC toward the rear (wheel plane x 21, radial ray from R38 toward the wheel centre). The hood pivots about HINGE at PSI_TOP 112, so the lift opens psi 80 less than BDC; a 7.5 candy on 0.5 tape needs 8.0 here too"
+  }
+ ]
+}

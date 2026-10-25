@@ -160,7 +160,9 @@ Before returning: update ${HW}/blender/checks.json so every review issue that is
 (drop_tests, distances, payload_fit, sightlines, slide_out with expect "blocked", fits, assembly_order; the reviewer's
 review/review_rows.json, if any, can be merged as is). Every adjuster joint gets drop and distances rows at both ends of
 its travel, with any spring at full deflection (V2A1-F1, V2A2-F1). Write payload sizes and gaps as "=EXPR" over params.py at
-the declared extremes ("min": "=MM_T[1] + TAPE_T"), not as typed nominals (V2A3-F1). Run the new rows on the CURRENT model.blend before
+the declared extremes ("min": "=MM_T[1] + TAPE_T"), not as typed nominals (V2A3-F1). A gap the payload passes through
+along an arc or a chute is a ray row with "sweep" over the whole passage, not one station: v2 A4's nip rows sat at BDC and
+passed while the entry arc was 7.50 (V2A4-F1). Run the new rows on the CURRENT model.blend before
 any geometry changes: each must fail there, or it would not have caught the issue. Record the count in progress.md (v2
 A2's planner did this unprompted: 12 F on the attempt-1 model, 0 F at hand-off). Write the plan to ${dir(n)}/progress.md
 under "## Plan".${CONFIG.parallel_builds ? `

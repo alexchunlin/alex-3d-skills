@@ -1,0 +1,9199 @@
+{
+ "units": "mm",
+ "params": {
+  "ADAPTER": [
+   24.0,
+   110.6,
+   -106.5,
+   -47.5,
+   62.6,
+   86.0
+  ],
+  "ADAPTER_D": 69.0,
+  "ADAPTER_FLANGE_T": 1.6,
+  "ADAPTER_HOLE_INSET": 6.0,
+  "ADAPTER_SCREW_L": 20.0,
+  "ADAPTER_SPOUT_ID": 50.0,
+  "ADAPTER_SPOUT_OD": 55.0,
+  "ADAPTER_SPOUT_Z0": 290.70000000000005,
+  "AGITATOR_H": 6.0,
+  "BAFFLE_EDGE_TOP": 278.0,
+  "BAFFLE_FLAT": 0.8,
+  "BAFFLE_HALF": 28.0,
+  "BAFFLE_R": [
+   10.5,
+   30.4
+  ],
+  "BAFFLE_RAMP": 45.0,
+  "BAFFLE_RAMP_TOP": 276.8,
+  "BAFFLE_ROOF": 35.0,
+  "BAFFLE_TOP": 286.0,
+  "BASE_CORNER_R": 30.0,
+  "BASE_HALF": 120.0,
+  "BATT": [
+   10.0,
+   125.0,
+   -115.0,
+   -39.0,
+   4.6,
+   74.6
+  ],
+  "BATT_STEM_INSET": [
+   10.5,
+   10.0
+  ],
+  "BAYO_ENTRY": [
+   18.5,
+   43.5
+  ],
+  "BAYO_LEG": [
+   -13.0,
+   43.5
+  ],
+  "BAYO_LEG_Z1": 279.4,
+  "BAYO_LUG_HW": 10.0,
+  "BAY_CLR": 2.0,
+  "BAY_OVER": 1.1,
+  "BAY_SCALLOP_D": 30.0,
+  "BAY_WINDOW_Z1": 76.6,
+  "BODY_WALL": 4.0,
+  "BORE_CLR": 0.2,
+  "BP_PSI0": -3.0,
+  "BUCK_BOSS_H": 5.0,
+  "BUCK_C": [
+   -76.0,
+   -19.0
+  ],
+  "BUCK_FLANGE_T": 3.0,
+  "BUCK_HOLE_Y": 33.4,
+  "BUNDLE_R": 3.0,
+  "BUS_R": 1.4,
+  "BUS_TAB": [
+   [
+    -98.0,
+    -16.0
+   ],
+   [
+    -86.0,
+    -16.0
+   ]
+  ],
+  "CH": 4.0,
+  "CHAMBER_R": 31.0,
+  "CHEEK_Y": 28.4,
+  "CH_X0": 13.0,
+  "CLR": 0.5,
+  "COLOUR_B": [
+   "PRT_jar_adapter",
+   "PRT_jar_valve",
+   "PRT_jar_gate",
+   "PRT_feeder_housing",
+   "PRT_feeder_disc",
+   "PRT_launcher_body",
+   "PRT_hood",
+   "PRT_flywheel",
+   "PRT_nip_wheel"
+  ],
+  "COL_MARGIN": 1.0,
+  "COVER_BOX": [
+   -89.6,
+   -42.6,
+   14.0,
+   286.0,
+   322.29999999999995
+  ],
+  "COVER_SCREWS": [
+   [
+    -66.0,
+    18.6
+   ],
+   [
+    -66.0,
+    -18.6
+   ]
+  ],
+  "COVER_T": 4.0,
+  "CR": 6.0,
+  "CROWN_R": [
+   48.0,
+   44.5
+  ],
+  "CROWN_STEP_Z": [
+   270.8,
+   274.5
+  ],
+  "CTRL": [
+   73.0,
+   115.0,
+   20.0,
+   78.0
+  ],
+  "CTRL_BEZEL": [
+   2.5,
+   1.2
+  ],
+  "CTRL_BOSS_D": 7.0,
+  "CTRL_BOSS_H": 5.0,
+  "CTRL_SW": [
+   40.6,
+   58.7,
+   8.0,
+   5.0,
+   4.5,
+   4.0
+  ],
+  "CTRL_TB": [
+   59.6,
+   72.5,
+   8.5,
+   10.0
+  ],
+  "CTRL_WIN_SW": [
+   42.0,
+   57.0
+  ],
+  "CTRL_WIN_TB": [
+   60.0,
+   73.5
+  ],
+  "CTRL_WIN_Z": [
+   15.5,
+   22.0
+  ],
+  "DECK_T": 4.0,
+  "DISC_BAND_H": 4.0,
+  "DISC_CLR": 0.3,
+  "DISC_GEAR_N": 44,
+  "DISC_LAND_R": 31.0,
+  "DISC_T": 8.0,
+  "DISC_Z": [
+   263.3,
+   271.3
+  ],
+  "DRUM_R": 20.0,
+  "EB": 1.0,
+  "ENC_A3_PATHS": [
+   265.4,
+   164.8
+  ],
+  "ENC_GAP": 1.0,
+  "ENC_LEAD": 550,
+  "ENC_SPARE": 5.0,
+  "FAN_A0": -27.0,
+  "FAN_A1": 75.0,
+  "FEED_CAV_R": 35.0,
+  "FEED_FIRE": 60.0,
+  "FEED_FLOOR_T": 3.0,
+  "FEED_FLOOR_Z": 263.0,
+  "FEED_GEAR_M": 1.5,
+  "FEED_LIP_Z": 267.65000000000003,
+  "FEED_PINION_XY": [
+   -55.5,
+   0.0
+  ],
+  "FEED_RP": 21.0,
+  "FEED_SERVO_FACE_Z": 276.2,
+  "FINGER_SCALLOP": [
+   3.0,
+   -15.6,
+   8.5,
+   20.0,
+   1.0
+  ],
+  "FINGER_SLOT": [
+   22.0,
+   8.3
+  ],
+  "FINGER_SLOT_LIFT": 0.3,
+  "FIN_R": 8.8,
+  "FIN_R0": 37.6,
+  "FIN_R1": 39.2,
+  "FIN_T": 2.4,
+  "FLOOR_COL_R": 5.0,
+  "FLOOR_SCREWS": [
+   [
+    -112.0,
+    60.0
+   ],
+   [
+    -112.0,
+    -75.0
+   ],
+   [
+    -30.0,
+    -112.0
+   ],
+   [
+    2.0,
+    -100.0
+   ],
+   [
+    60.0,
+    -30.0
+   ],
+   [
+    112.0,
+    0.0
+   ],
+   [
+    60.0,
+    112.0
+   ],
+   [
+    -60.0,
+    112.0
+   ]
+  ],
+  "FLOOR_T": 3.0,
+  "FW_BOLT_L": 20.0,
+  "FW_BOLT_OFF": 6.5,
+  "FW_BOLT_X": 19.5,
+  "FW_HUB_R": 13.5,
+  "FW_HUB_X1": 25.0,
+  "FW_RIM_T": 3.5,
+  "GATE_BLADE_EB": 0.6,
+  "GATE_CHAMFER": 30.0,
+  "GATE_DETENT_L": 12.5,
+  "GATE_DETENT_LIFT": 0.4,
+  "GATE_DETENT_NOTCH_D": 0.6,
+  "GATE_DETENT_NOTCH_R": 1.1,
+  "GATE_DETENT_NOTCH_X": [
+   29.5,
+   -22.5
+  ],
+  "GATE_DETENT_STRESS": 16.128,
+  "GATE_EB": 1.0,
+  "GATE_FLUSH_TOL": 1.0,
+  "GATE_KNIFE_FLAT": 1.0,
+  "GATE_SLOT_X0": -27.4,
+  "GATE_STOP_CLR": 0.35,
+  "GATE_STOP_LUG": [
+   1.5,
+   3.0,
+   1.2
+  ],
+  "GATE_STOP_X": 25.0,
+  "GATE_T": 2.0,
+  "GATE_TAB": [
+   30.5,
+   34.5,
+   10.0,
+   297.0
+  ],
+  "GATE_TAB_R": 6.0,
+  "GATE_TRAVEL": 52.0,
+  "GATE_W": 56.0,
+  "GATE_X0": -27.0,
+  "GATE_X1": 34.5,
+  "GATE_Z": [
+   288.35,
+   290.35
+  ],
+  "GCAP_DISC_R": 24.0,
+  "GCAP_T": 3.0,
+  "GCAP_Y": [
+   -30.0,
+   -4.0
+  ],
+  "GEAR_BACKLASH": 0.15,
+  "GUARD_WALL": 3.0,
+  "G_IN": 13.0,
+  "HINGE": [
+   -14.922295855740096,
+   -31.022030768708923
+  ],
+  "HINGE_AXLE_L": 35.0,
+  "HINGE_BOSS_R": 4.3,
+  "HINGE_OFF": 2.0,
+  "HOOD_FLANGE_RELIEF": [
+   4.1,
+   3.23,
+   1.5
+  ],
+  "HOOD_GAP": 6.5,
+  "HOOD_GAP_LIFT": 8.180743003414825,
+  "HOOD_GAP_MAX": 8.990947870611826,
+  "HOOD_GAP_MIN": 6.2,
+  "HOOD_HI": 0.3271427281793169,
+  "HOOD_LEAF_LIFT": 2.1897668041422764,
+  "HOOD_LO": -2.747905670876546,
+  "HOOD_LUG": [
+   6.0,
+   2.5
+  ],
+  "HOOD_STATIC_LO": -0.5581388667342698,
+  "HOOD_T": 6.0,
+  "HORN_CAV_R": 11.2,
+  "HORN_LIFT": 1.0,
+  "HORN_RECESS": 1.0,
+  "HUB_GEAR_BORE_R": 13.0,
+  "HUB_JCT_Z": 76.0,
+  "HUB_SCREW_R": 17.0,
+  "HUB_X0": 9.6,
+  "IF_ARM_L_IN": -88.0,
+  "IF_ARM_R_IN": 40.0,
+  "IF_BAND_Z0": 300.5,
+  "IF_BAYO_LUG_R": 37.0,
+  "IF_BAYO_LUG_Z": [
+   275.0,
+   279.0
+  ],
+  "IF_BAYO_N": 3,
+  "IF_BAYO_TWIST": 30.0,
+  "IF_BEAM_HOLE_D": 30.0,
+  "IF_BEAM_T": 8.0,
+  "IF_BEAM_Y": [
+   -30.0,
+   30.0
+  ],
+  "IF_BEAM_Z0": 252.0,
+  "IF_BEAM_Z1": 260.0,
+  "IF_BORE_R": 15.2,
+  "IF_DECK_HOLE_R": 20.3,
+  "IF_DECK_Z": 90.0,
+  "IF_DROP_XY": [
+   21.0,
+   0.0
+  ],
+  "IF_FEED_BOLTS": [
+   [
+    -36.0,
+    -21.0
+   ],
+   [
+    -36.0,
+    21.0
+   ],
+   [
+    34.0,
+    -20.0
+   ],
+   [
+    34.0,
+    20.0
+   ]
+  ],
+  "IF_FEED_BUS_XY": [
+   -98.0,
+   -16.0
+  ],
+  "IF_GATE_Z": [
+   288.0,
+   290.4
+  ],
+  "IF_GEAR_M": 1.5,
+  "IF_GEAR_N": 36,
+  "IF_GEAR_Z": [
+   77.5,
+   85.0
+  ],
+  "IF_GLASS_RIM_Z": 302.6,
+  "IF_HUB_BORE_R": 14.0,
+  "IF_HUB_R": 20.0,
+  "IF_JAR_XY": [
+   0.0,
+   0.0
+  ],
+  "IF_JOURNAL_BORE_R": 6.0,
+  "IF_JOURNAL_L_X1": -95.7,
+  "IF_JOURNAL_R": 15.0,
+  "IF_JOURNAL_R_X1": 51.7,
+  "IF_OUTLET_D": 16.0,
+  "IF_PAN_XY": [
+   0.0,
+   0.0
+  ],
+  "IF_PINION_XY": [
+   0.0,
+   54.0
+  ],
+  "IF_POST_L_CHANNEL": [
+   -104.0,
+   -92.0,
+   -22.0,
+   -12.0
+  ],
+  "IF_POST_R_CHANNEL": [
+   90.0,
+   100.0,
+   -22.0,
+   -12.0
+  ],
+  "IF_POST_Y": [
+   -26.0,
+   22.0
+  ],
+  "IF_RING_H": 2.0,
+  "IF_SOCKET_ID": 68.6,
+  "IF_SOCKET_Z": [
+   274.0,
+   286.0
+  ],
+  "IF_SPOUT_OD": 22.0,
+  "IF_SPOUT_Z0": 245.0,
+  "IF_STOP_JP_A": -120.0,
+  "IF_STOP_JP_HW": 8.0,
+  "IF_STOP_JP_X": [
+   35.5,
+   38.6
+  ],
+  "IF_STOP_POST_X": [
+   36.9,
+   40.0
+  ],
+  "IF_STOP_R": [
+   19.0,
+   23.5
+  ],
+  "IF_TILT_ADAPTER": [
+   13.0,
+   45.7,
+   52.0
+  ],
+  "IF_TILT_KEY_AF": 12.0,
+  "IF_TILT_KEY_HOLE_D": 6.5,
+  "IF_TILT_KEY_X": [
+   38.7,
+   45.7
+  ],
+  "IF_TILT_SPLINE_X": 52.0,
+  "IF_TILT_Y": 0.0,
+  "IF_TILT_Z": 222.0,
+  "IF_TT_R": 108.0,
+  "IF_TT_Z0": 92.0,
+  "IF_TT_Z1": 102.0,
+  "IF_VALVE_Z1": 300.0,
+  "JACK_PSI": 45.0,
+  "JAR_BAND_H": 13.0,
+  "JAR_BAND_LIP_ID": 58.0,
+  "JAR_BAND_LIP_T": 0.5,
+  "JAR_BAND_OD": 73.5,
+  "JAR_D": 77.0,
+  "JAR_GLASS_RGBA": [
+   0.8,
+   0.9,
+   0.95,
+   0.25
+  ],
+  "JAR_GLASS_T": 3.5,
+  "JAR_H": 130.0,
+  "JAR_LID_D": 69.0,
+  "JAR_LID_T": 0.6,
+  "JAR_MASS_BAND": 15.0,
+  "JAR_MASS_FILL": 400.0,
+  "JAR_MASS_GLASS": 350.0,
+  "JAR_MOUTH_ID": 60.0,
+  "JAR_THREAD_H": 12.0,
+  "JAR_THREAD_OD": 70.0,
+  "JAR_TOL": 1.0,
+  "JIG_PLUG_R": 17.8,
+  "JIG_SPIGOT_D": 7.9,
+  "JIG_SPIGOT_L": 1.0,
+  "JP_R": 23.8,
+  "LAND_BORE_R": 31.35,
+  "LAND_U0": -10.0,
+  "LAND_V": [
+   -12.0,
+   49.5
+  ],
+  "LEAF_BLOCK_H": 3.6,
+  "LEAF_BLOCK_L": 6.0,
+  "LEAF_L": 34.0,
+  "LEAF_PAD_H": 2.0,
+  "LEAF_PRE": 1.2,
+  "LEAF_ROOT_R": 2.0,
+  "LEAF_SCREW_V": 37.0,
+  "LEAF_T": 2.3,
+  "LEAF_TIP_CH": 0.5,
+  "LEAF_TRAVEL": 2.2,
+  "LEAF_W": 21.9,
+  "LIP_PSI": 100.0,
+  "MAGNET_D": 6.0,
+  "MAGNET_T": 2.5,
+  "MG_ENC_JST_STEP": [
+   21.8,
+   -50.8
+  ],
+  "MG_HOLE_D": 2.7,
+  "MG_PART_X": [
+   -80.0,
+   0.0
+  ],
+  "MG_PCB_T": 1.77,
+  "MG_PHASE_PAD_STEP": [
+   34.0,
+   -51.0
+  ],
+  "MG_PILOT_D": 2.1,
+  "MG_SCREW": "M2.5_cap",
+  "MG_SCREW_SPEC": [
+   2.5,
+   4.5,
+   2.5
+  ],
+  "MG_STANDOFF": 12.5,
+  "MG_WALL_Y": -87.0,
+  "MG_X0": -10.0,
+  "MG_Z0": 16.5,
+  "MM_D": [
+   12.5,
+   13.5
+  ],
+  "MM_D_NOM": 13.0,
+  "MM_T": [
+   6.3,
+   7.5
+  ],
+  "MM_T_NOM": 7.0,
+  "MOTOR_D": 35.9,
+  "MOTOR_L": 74.0,
+  "MUZZLE_FLARE": 4.0,
+  "MUZZLE_FRONT": 99.0,
+  "MUZZLE_ROOF": -82.0,
+  "NAC_COLLAR_R": 17.0,
+  "NAC_PLATE_T": 4.0,
+  "NAC_RT": 17.0,
+  "NAC_RW": 26.5,
+  "NICHE_DEPTH": 30.0,
+  "NICHE_TOP_Z": 48.5,
+  "NICHE_V_SLOPE": 1.2,
+  "NICHE_W": 30.0,
+  "NIPCOVER_PILOT_OVER": 0.5,
+  "NIPCOVER_SCREW_V": 44.0,
+  "NIP_COVER_V0": -6.5,
+  "NIP_END_T": 2.0,
+  "NIP_PASS": 8.0,
+  "NIP_PASS_MARGIN": 0.1,
+  "NIP_SCREW_X": [
+   10.0,
+   26.0
+  ],
+  "NIP_SET": [
+   6.2,
+   7.0
+  ],
+  "NIP_SHELL_T": 2.0,
+  "NIP_SLIT": 0.8,
+  "NIP_STOP_H": 6.5,
+  "NIP_STOP_SCREW_L": 6.0,
+  "NIP_STOP_T": 7.0,
+  "NIP_STOP_W": 20.0,
+  "NIP_V_TIP": -2.6,
+  "NIP_X": 19.5,
+  "N_POCKETS": 3,
+  "PAN_HI": 90.0,
+  "PAN_LO": -90.0,
+  "PAN_LOOP_ADD": 45.0,
+  "PAN_LOOP_ZC": 48.0,
+  "PAN_PLATE": [
+   -42.0,
+   42.0,
+   30.0,
+   96.0
+  ],
+  "PAN_PLATE_HOLE_R": 13.5,
+  "PAN_PLATE_T": 4.0,
+  "PAN_POSTS": [
+   [
+    -34.0,
+    38.0
+   ],
+   [
+    34.0,
+    38.0
+   ],
+   [
+    -34.0,
+    88.0
+   ],
+   [
+    34.0,
+    88.0
+   ]
+  ],
+  "PAN_SERVO_TOP_Z": 72.0,
+  "PINION_CH_R": 24.35,
+  "PINION_HUB_R": 12.0,
+  "PINION_N": 30,
+  "PLATE_SCREWS": [
+   [
+    0.0,
+    41.0
+   ],
+   [
+    0.0,
+    -41.0
+   ]
+  ],
+  "PLINK_HOLE_D": 2.5,
+  "PLINK_IC_TOP": 3.25,
+  "PLINK_PEG_D": 2.4,
+  "POCKET_CH": 1.0,
+  "POCKET_D": 13.75,
+  "POD_X": [
+   -86.0,
+   37.5
+  ],
+  "POST_L_BORE_X0": -96.0,
+  "POST_L_CAVITY": [
+   -104.0,
+   -97.8,
+   -22.0,
+   7.0,
+   211.0,
+   233.0
+  ],
+  "POST_L_WALL_X": -97.8,
+  "POST_R_BORE_X1": 52.0,
+  "POST_R_CHANNEL_Z1": 184.0,
+  "POST_R_COVER_X": 96.2,
+  "POST_R_COVER_Z": [
+   186.0,
+   244.0
+  ],
+  "POST_R_TEAR_R": 13.5,
+  "POST_T_MIN": 14.0,
+  "PSI_C": 78.0,
+  "PSI_TOP": 112.0,
+  "REAR_ACCESS_D": 8.0,
+  "REAR_SHAFT_RECESS": 0.5,
+  "REAR_WALL_ANG": 81.0,
+  "RING_R": [
+   20.0,
+   44.0
+  ],
+  "ROOF_P0": 67.0,
+  "SEAT_H": 3.2,
+  "SERVO_POCKET": [
+   -85.9,
+   -45.1,
+   10.4
+  ],
+  "SERVO_POCKET_CLR": 0.3,
+  "SHAFT_LEN": 21.0,
+  "SLEEVE_R": [
+   1.7,
+   3.8
+  ],
+  "SOCKET_CONE": 1.09,
+  "SPOUT_PAD_R": 20.5,
+  "SPOUT_STOP_BOSS": [
+   28.6,
+   5.0,
+   2.4
+  ],
+  "STALL_DEG": 28.0,
+  "STUD_HOLE_R": 4.4,
+  "STUD_L": 16.0,
+  "STUD_POCKET_D": 3.2,
+  "STUD_WINDOW_R": 4.0,
+  "TAPE_T": 0.5,
+  "TILT_HI": 45.0,
+  "TILT_LO": 0.0,
+  "TILT_STOP_HI": 46.0,
+  "TILT_STOP_LO": -3.0,
+  "TONGUE_DPSI": [
+   -6.0,
+   4.0
+  ],
+  "TONGUE_T": 1.6,
+  "TT_GROOVE": [
+   -100.5,
+   100.0,
+   -22.0,
+   -12.0,
+   93.6
+  ],
+  "TW_NUT_U": [
+   0.8,
+   3.2
+  ],
+  "TW_R": 8.5,
+  "TW_T": 5.0,
+  "UART_CLIPS": [
+   [
+    -20.0,
+    5.0
+   ],
+   [
+    40.0,
+    5.0
+   ]
+  ],
+  "USB_STEP": [
+   57.6,
+   -14.0,
+   7.97
+  ],
+  "VALVE_BODY_Z1": 288.0,
+  "VALVE_BORE": 50.0,
+  "VALVE_LEADIN": [
+   29.8,
+   25.0,
+   278.7
+  ],
+  "VALVE_OD": 68.0,
+  "VALVE_SCREW_A": [
+   90.0,
+   180.0,
+   270.0
+  ],
+  "VALVE_SCREW_Z": 295.5,
+  "VALVE_SKIRT_R": 31.0,
+  "VALVE_Z0": 272.90000000000003,
+  "WALL": 3.0,
+  "WC_R": 38.5,
+  "WEB_X1": 14.1,
+  "WHEEL_FLANGE_R": 36.0,
+  "WHEEL_R": 35.0,
+  "WHEEL_X0": 12.5,
+  "WHEEL_X1": 29.5,
+  "WHEEL_XW": 21.0,
+  "W_P": 37.0,
+  "W_Q": -52.0,
+  "X_BODY_IN": 8.0,
+  "X_BODY_OUT": 4.0,
+  "X_COVER_IN": 31.5,
+  "X_COVER_OUT": 35.5,
+  "X_MF": 0.0
+ },
+ "joints": {
+  "PIV_feeder": {
+   "axis": "Z",
+   "lo": -60.0,
+   "hi": 60.0,
+   "home": 0.0,
+   "step": 5.0,
+   "continuous": false,
+   "origin": [
+    0.0,
+    0.0,
+    263.0
+   ],
+   "parent": "PIV_pan"
+  },
+  "PIV_feeder_pinion": {
+   "axis": "Z",
+   "lo": -88.0,
+   "hi": 88.0,
+   "home": 0.0,
+   "continuous": false,
+   "couple_to": "PIV_feeder",
+   "couple_ratio": -1.4666666666666666,
+   "origin": [
+    -55.5,
+    0.0,
+    263.0
+   ],
+   "parent": "PIV_pan"
+  },
+  "PIV_flywheel": {
+   "axis": "X",
+   "home": 0.0,
+   "step": 60.0,
+   "continuous": true,
+   "origin": [
+    21.0,
+    37.0,
+    170.0
+   ],
+   "parent": "PIV_tilt"
+  },
+  "PIV_hood": {
+   "axis": "X",
+   "lo": -0.5581388667342698,
+   "hi": 0.3271427281793169,
+   "home": 0.0,
+   "step": 1.0,
+   "continuous": false,
+   "origin": [
+    21.0,
+    -14.922,
+    190.978
+   ],
+   "parent": "PIV_nip_lift"
+  },
+  "PIV_jar": {
+   "axis": "Z",
+   "lo": 0.0,
+   "hi": 30.0,
+   "home": 0.0,
+   "step": 5.0,
+   "continuous": false,
+   "origin": [
+    0.0,
+    0.0,
+    274.0
+   ],
+   "parent": "PIV_pan"
+  },
+  "PIV_nip_lift": {
+   "axis": "X",
+   "lo": -2.1897668041422764,
+   "hi": 0.0,
+   "home": 0.0,
+   "step": 1.5,
+   "continuous": false,
+   "origin": [
+    21.0,
+    -14.922,
+    190.978
+   ],
+   "parent": "PIV_tilt"
+  },
+  "PIV_pan": {
+   "axis": "Z",
+   "lo": -90.0,
+   "hi": 90.0,
+   "home": 0.0,
+   "step": 15.0,
+   "continuous": false,
+   "origin": [
+    0.0,
+    0.0,
+    90.0
+   ],
+   "parent": null
+  },
+  "PIV_pan_pinion": {
+   "axis": "Z",
+   "lo": -90.0,
+   "hi": 90.0,
+   "home": 0.0,
+   "continuous": false,
+   "couple_to": "PIV_pan",
+   "couple_ratio": -1.0,
+   "origin": [
+    0.0,
+    54.0,
+    90.0
+   ],
+   "parent": null
+  },
+  "PIV_tilt": {
+   "axis": "X",
+   "lo": 0.0,
+   "hi": 45.0,
+   "home": 0.0,
+   "step": 2.5,
+   "continuous": false,
+   "origin": [
+    0.0,
+    0.0,
+    222.0
+   ],
+   "parent": "PIV_pan"
+  }
+ },
+ "parts": {
+  "FST_adapter_0": {
+   "part": "M3_csk x 20",
+   "host": "BUY_dewalt_adapter",
+   "step": "1",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    104.6,
+    -53.5,
+    90.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 20.0,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     101.6,
+     -56.5,
+     70.0
+    ],
+    [
+     107.6,
+     -50.5,
+     90.0
+    ]
+   ]
+  },
+  "FST_adapter_1": {
+   "part": "M3_csk x 20",
+   "host": "BUY_dewalt_adapter",
+   "step": "1",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    104.6,
+    -100.5,
+    90.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 20.0,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     101.6,
+     -103.5,
+     70.0
+    ],
+    [
+     107.6,
+     -97.5,
+     90.0
+    ]
+   ]
+  },
+  "FST_adapter_2": {
+   "part": "M3_csk x 20",
+   "host": "BUY_dewalt_adapter",
+   "step": "1",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    30.0,
+    -53.5,
+    90.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 20.0,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     27.0,
+     -56.5,
+     70.0
+    ],
+    [
+     33.0,
+     -50.5,
+     90.0
+    ]
+   ]
+  },
+  "FST_adapter_3": {
+   "part": "M3_csk x 20",
+   "host": "BUY_dewalt_adapter",
+   "step": "1",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    30.0,
+    -100.5,
+    90.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 20.0,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     27.0,
+     -103.5,
+     70.0
+    ],
+    [
+     33.0,
+     -97.5,
+     90.0
+    ]
+   ]
+  },
+  "FST_floor_0": {
+   "part": "M3_csk x 12",
+   "host": "PRT_base_shell",
+   "step": "3",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    -112.0,
+    60.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -115.0,
+     57.0,
+     0.0
+    ],
+    [
+     -109.0,
+     63.0,
+     12.0
+    ]
+   ]
+  },
+  "FST_floor_1": {
+   "part": "M3_csk x 12",
+   "host": "PRT_base_shell",
+   "step": "3",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    -112.0,
+    -75.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -115.0,
+     -78.0,
+     0.0
+    ],
+    [
+     -109.0,
+     -72.0,
+     12.0
+    ]
+   ]
+  },
+  "FST_floor_2": {
+   "part": "M3_csk x 12",
+   "host": "PRT_base_shell",
+   "step": "3",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    -30.0,
+    -112.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -33.0,
+     -115.0,
+     0.0
+    ],
+    [
+     -27.0,
+     -109.0,
+     12.0
+    ]
+   ]
+  },
+  "FST_floor_3": {
+   "part": "M3_csk x 12",
+   "host": "PRT_base_shell",
+   "step": "3",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    2.0,
+    -100.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -1.0,
+     -103.0,
+     0.0
+    ],
+    [
+     5.0,
+     -97.0,
+     12.0
+    ]
+   ]
+  },
+  "FST_floor_4": {
+   "part": "M3_csk x 12",
+   "host": "PRT_base_shell",
+   "step": "3",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    60.0,
+    -30.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     57.0,
+     -33.0,
+     0.0
+    ],
+    [
+     63.0,
+     -27.0,
+     12.0
+    ]
+   ]
+  },
+  "FST_floor_5": {
+   "part": "M3_csk x 12",
+   "host": "PRT_base_shell",
+   "step": "3",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    112.0,
+    0.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     109.0,
+     -3.0,
+     0.0
+    ],
+    [
+     115.0,
+     3.0,
+     12.0
+    ]
+   ]
+  },
+  "FST_floor_6": {
+   "part": "M3_csk x 12",
+   "host": "PRT_base_shell",
+   "step": "3",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    60.0,
+    112.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     57.0,
+     109.0,
+     0.0
+    ],
+    [
+     63.0,
+     115.0,
+     12.0
+    ]
+   ]
+  },
+  "FST_floor_7": {
+   "part": "M3_csk x 12",
+   "host": "PRT_base_shell",
+   "step": "3",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    -60.0,
+    112.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -63.0,
+     109.0,
+     0.0
+    ],
+    [
+     -57.0,
+     115.0,
+     12.0
+    ]
+   ]
+  },
+  "FST_partition_0": {
+   "part": "M3_csk x 10",
+   "host": "PRT_base_partition",
+   "step": "2a",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    -72.0,
+    -86.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 10,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -75.0,
+     -89.0,
+     0.0
+    ],
+    [
+     -69.0,
+     -83.0,
+     10.0
+    ]
+   ]
+  },
+  "FST_partition_1": {
+   "part": "M3_csk x 10",
+   "host": "PRT_base_partition",
+   "step": "2a",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    -8.0,
+    -86.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 10,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -11.0,
+     -89.0,
+     0.0
+    ],
+    [
+     -5.0,
+     -83.0,
+     10.0
+    ]
+   ]
+  },
+  "FST_mg_0": {
+   "part": "M2.5_cap x 10",
+   "host": "PRT_base_partition",
+   "step": "2a",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    -10.0,
+    -72.73,
+    16.5
+   ],
+   "into": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "length": 10,
+   "spec": "M2.5_cap",
+   "bbox_world_home": [
+    [
+     -12.25,
+     -82.73,
+     14.25
+    ],
+    [
+     -7.75,
+     -70.23,
+     18.75
+    ]
+   ]
+  },
+  "FST_mg_1": {
+   "part": "M2.5_cap x 10",
+   "host": "PRT_base_partition",
+   "step": "2a",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    -68.0,
+    -72.73,
+    16.5
+   ],
+   "into": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "length": 10,
+   "spec": "M2.5_cap",
+   "bbox_world_home": [
+    [
+     -70.25,
+     -82.73,
+     14.25
+    ],
+    [
+     -65.75,
+     -70.23,
+     18.75
+    ]
+   ]
+  },
+  "FST_mg_2": {
+   "part": "M2.5_cap x 10",
+   "host": "PRT_base_partition",
+   "step": "2a",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    -10.0,
+    -72.73,
+    65.5
+   ],
+   "into": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "length": 10,
+   "spec": "M2.5_cap",
+   "bbox_world_home": [
+    [
+     -12.25,
+     -82.73,
+     63.25
+    ],
+    [
+     -7.75,
+     -70.23,
+     67.75
+    ]
+   ]
+  },
+  "FST_mg_3": {
+   "part": "M2.5_cap x 10",
+   "host": "PRT_base_partition",
+   "step": "2a",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    -68.0,
+    -72.73,
+    65.5
+   ],
+   "into": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "length": 10,
+   "spec": "M2.5_cap",
+   "bbox_world_home": [
+    [
+     -70.25,
+     -82.73,
+     63.25
+    ],
+    [
+     -65.75,
+     -70.23,
+     67.75
+    ]
+   ]
+  },
+  "FST_buck_0": {
+   "part": "M3_pan x 8",
+   "host": "PRT_base_floor",
+   "step": "2b",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    -76.0,
+    14.399999999999999,
+    11.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 8,
+   "spec": "M3_pan",
+   "bbox_world_home": [
+    [
+     -79.0,
+     11.4,
+     3.0
+    ],
+    [
+     -73.0,
+     17.4,
+     13.4
+    ]
+   ]
+  },
+  "FST_buck_1": {
+   "part": "M3_pan x 8",
+   "host": "PRT_base_floor",
+   "step": "2b",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    -76.0,
+    -52.4,
+    11.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 8,
+   "spec": "M3_pan",
+   "bbox_world_home": [
+    [
+     -79.0,
+     -55.4,
+     3.0
+    ],
+    [
+     -73.0,
+     -49.4,
+     13.4
+    ]
+   ]
+  },
+  "FST_panservo_0": {
+   "part": "M3_cap x 12",
+   "host": "PRT_base_shell",
+   "step": "1c",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    -34.0,
+    38.0,
+    72.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     -36.75,
+     35.25,
+     69.0
+    ],
+    [
+     -31.25,
+     40.75,
+     84.0
+    ]
+   ]
+  },
+  "FST_panservo_1": {
+   "part": "M3_cap x 12",
+   "host": "PRT_base_shell",
+   "step": "1c",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    34.0,
+    38.0,
+    72.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     31.25,
+     35.25,
+     69.0
+    ],
+    [
+     36.75,
+     40.75,
+     84.0
+    ]
+   ]
+  },
+  "FST_panservo_2": {
+   "part": "M3_cap x 12",
+   "host": "PRT_base_shell",
+   "step": "1c",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    -34.0,
+    88.0,
+    72.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     -36.75,
+     85.25,
+     69.0
+    ],
+    [
+     -31.25,
+     90.75,
+     84.0
+    ]
+   ]
+  },
+  "FST_panservo_3": {
+   "part": "M3_cap x 12",
+   "host": "PRT_base_shell",
+   "step": "1c",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    34.0,
+    88.0,
+    72.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     31.25,
+     85.25,
+     69.0
+    ],
+    [
+     36.75,
+     90.75,
+     84.0
+    ]
+   ]
+  },
+  "FST_panclamp_0": {
+   "part": "M3_cap x 12",
+   "host": "PRT_pan_servo_mount",
+   "step": "1b",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    14.370000000000001,
+    79.0,
+    28.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     11.62,
+     76.25,
+     25.0
+    ],
+    [
+     17.12,
+     81.75,
+     40.0
+    ]
+   ]
+  },
+  "FST_panclamp_1": {
+   "part": "M3_cap x 12",
+   "host": "PRT_pan_servo_mount",
+   "step": "1b",
+   "kind": "FST",
+   "joint": "static",
+   "head": [
+    -14.370000000000001,
+    49.0,
+    28.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     -17.12,
+     46.25,
+     25.0
+    ],
+    [
+     -11.62,
+     51.75,
+     40.0
+    ]
+   ]
+  },
+  "FST_pinion_0": {
+   "part": "M2_pan x 8",
+   "host": "PRT_pan_pinion",
+   "step": "1a",
+   "kind": "FST",
+   "joint": "PIV_pan_pinion",
+   "head": [
+    7.0,
+    54.0,
+    74.4
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 8,
+   "spec": "M2_pan",
+   "bbox_world_home": [
+    [
+     5.1,
+     52.1,
+     73.1
+    ],
+    [
+     8.9,
+     55.9,
+     82.4
+    ]
+   ]
+  },
+  "FST_pinion_1": {
+   "part": "M2_pan x 8",
+   "host": "PRT_pan_pinion",
+   "step": "1a",
+   "kind": "FST",
+   "joint": "PIV_pan_pinion",
+   "head": [
+    4.286263797015736e-16,
+    61.0,
+    74.4
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 8,
+   "spec": "M2_pan",
+   "bbox_world_home": [
+    [
+     -1.9,
+     59.1,
+     73.1
+    ],
+    [
+     1.9,
+     62.9,
+     82.4
+    ]
+   ]
+  },
+  "FST_pinion_2": {
+   "part": "M2_pan x 8",
+   "host": "PRT_pan_pinion",
+   "step": "1a",
+   "kind": "FST",
+   "joint": "PIV_pan_pinion",
+   "head": [
+    -7.0,
+    54.0,
+    74.4
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 8,
+   "spec": "M2_pan",
+   "bbox_world_home": [
+    [
+     -8.9,
+     52.1,
+     73.1
+    ],
+    [
+     -5.1,
+     55.9,
+     82.4
+    ]
+   ]
+  },
+  "FST_pinion_3": {
+   "part": "M2_pan x 8",
+   "host": "PRT_pan_pinion",
+   "step": "1a",
+   "kind": "FST",
+   "joint": "PIV_pan_pinion",
+   "head": [
+    -1.2858791391047208e-15,
+    47.0,
+    74.4
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 8,
+   "spec": "M2_pan",
+   "bbox_world_home": [
+    [
+     -1.9,
+     45.1,
+     73.1
+    ],
+    [
+     1.9,
+     48.9,
+     82.4
+    ]
+   ]
+  },
+  "FST_pinion_ctr": {
+   "part": "M3_cap x 6",
+   "host": "BUY_horn_pan",
+   "step": "1b",
+   "kind": "FST",
+   "joint": "PIV_pan_pinion",
+   "head": [
+    0.0,
+    54.0,
+    76.9
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 6,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     -2.75,
+     51.25,
+     70.9
+    ],
+    [
+     2.75,
+     56.75,
+     79.9
+    ]
+   ]
+  },
+  "PRT_base_shell": {
+   "stl": "base_shell",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     -1.0,
+     -8.742277657347586e-08
+    ],
+    [
+     0.0,
+     8.742277657347586e-08,
+     -1.0
+    ]
+   ],
+   "orient": "upside down: deck face on the bed, walls up",
+   "supports": "no",
+   "infill": 15,
+   "kind": "PRT",
+   "joint": "static",
+   "bbox_world_home": [
+    [
+     -120.0,
+     -120.0,
+     3.0
+    ],
+    [
+     121.2,
+     120.0,
+     90.0
+    ]
+   ]
+  },
+  "PRT_base_floor": {
+   "stl": "base_floor",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "orient": "flat, bosses up",
+   "supports": "no",
+   "infill": 15,
+   "kind": "PRT",
+   "joint": "static",
+   "bbox_world_home": [
+    [
+     -120.0,
+     -120.0,
+     0.0
+    ],
+    [
+     120.0,
+     120.0,
+     11.0
+    ]
+   ]
+  },
+  "PRT_base_partition": {
+   "stl": "base_partition",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     7.549790126404332e-08,
+     -1.0
+    ],
+    [
+     0.0,
+     1.0,
+     7.549790126404332e-08
+    ]
+   ],
+   "orient": "rear face on the bed, standoffs up",
+   "supports": "no",
+   "infill": 25,
+   "kind": "PRT",
+   "joint": "static",
+   "bbox_world_home": [
+    [
+     -80.0,
+     -90.0,
+     3.0
+    ],
+    [
+     0.0,
+     -74.5,
+     85.5
+    ]
+   ]
+  },
+  "PRT_pan_servo_mount": {
+   "stl": "pan_servo_mount",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     -1.0,
+     -8.742277657347586e-08
+    ],
+    [
+     0.0,
+     8.742277657347586e-08,
+     -1.0
+    ]
+   ],
+   "orient": "plate top on the bed, pocket walls up",
+   "supports": "no",
+   "infill": 30,
+   "kind": "PRT",
+   "joint": "static",
+   "bbox_world_home": [
+    [
+     -42.0,
+     30.0,
+     32.3
+    ],
+    [
+     42.0,
+     96.0,
+     76.0
+    ]
+   ]
+  },
+  "PRT_pan_servo_clamp": {
+   "stl": "pan_servo_clamp",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "orient": "flat",
+   "supports": "no",
+   "infill": 30,
+   "kind": "PRT",
+   "joint": "static",
+   "bbox_world_home": [
+    [
+     -19.31,
+     40.31,
+     28.0
+    ],
+    [
+     19.37,
+     87.69,
+     32.0
+    ]
+   ]
+  },
+  "PRT_pan_pinion": {
+   "stl": "pan_pinion",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     -1.0,
+     -8.742277657347586e-08
+    ],
+    [
+     0.0,
+     8.742277657347586e-08,
+     -1.0
+    ]
+   ],
+   "orient": "gear top on the bed, horn recess up",
+   "supports": "no",
+   "infill": 40,
+   "kind": "PRT",
+   "joint": "PIV_pan_pinion",
+   "bbox_world_home": [
+    [
+     -28.43,
+     25.57,
+     75.9
+    ],
+    [
+     28.43,
+     82.43,
+     85.0
+    ]
+   ]
+  },
+  "BUY_battery": {
+   "mass_g": 620,
+   "src": "components.json dewalt_20v_battery envelope; rail stem width estimated (BATT_STEM_INSET)",
+   "kind": "BUY",
+   "joint": "static",
+   "bbox_world_home": [
+    [
+     10.0,
+     -115.0,
+     4.6
+    ],
+    [
+     125.0,
+     -39.0,
+     74.6
+    ]
+   ]
+  },
+  "BUY_dewalt_adapter": {
+   "mass_g": 90,
+   "src": "components.json",
+   "kind": "BUY",
+   "joint": "static",
+   "bbox_world_home": [
+    [
+     24.0,
+     -106.5,
+     62.6
+    ],
+    [
+     110.6,
+     -47.5,
+     86.0
+    ]
+   ]
+  },
+  "BUY_buck_12v": {
+   "mass_g": 180,
+   "src": "components.json buck_12v_finned (73.8 x 73.8 x 31, holes +/-33.4)",
+   "kind": "BUY",
+   "joint": "static",
+   "bbox_world_home": [
+    [
+     -112.9,
+     -55.9,
+     8.0
+    ],
+    [
+     -39.1,
+     17.9,
+     39.0
+    ]
+   ]
+  },
+  "BUY_motorgo_axis": {
+   "mass_g": 25,
+   "src": "REF/mg_axis.stl",
+   "kind": "BUY",
+   "joint": "static",
+   "bbox_world_home": [
+    [
+     -71.5,
+     -84.95,
+     13.0
+    ],
+    [
+     -6.5,
+     -65.48,
+     70.25
+    ]
+   ]
+  },
+  "BUY_usbc_plug": {
+   "mass_g": 10,
+   "src": "components.json motorgo_axis.usb_c (plug 12.5 x 7, 25 straight)",
+   "kind": "BUY",
+   "joint": "static",
+   "bbox_world_home": [
+    [
+     -71.1,
+     -105.9,
+     24.25
+    ],
+    [
+     -64.1,
+     -80.9,
+     36.75
+    ]
+   ]
+  },
+  "BUY_servo_controller": {
+   "mass_g": 30,
+   "src": "components.json; switch + terminal positions from REF/servo_controller_board_photo.png (CTRL_SW, CTRL_TB)",
+   "kind": "BUY",
+   "joint": "static",
+   "bbox_world_home": [
+    [
+     71.5,
+     20.0,
+     6.0
+    ],
+    [
+     116.5,
+     78.0,
+     22.0
+    ]
+   ]
+  },
+  "BUY_servo_pan": {
+   "mass_g": 66,
+   "src": "components.json",
+   "kind": "BUY",
+   "joint": "static",
+   "bbox_world_home": [
+    [
+     -10.07,
+     44.0,
+     28.1
+    ],
+    [
+     10.07,
+     84.0,
+     72.0
+    ]
+   ]
+  },
+  "BUY_horn_pan": {
+   "mass_g": 4,
+   "src": "components.json servo_horn_disc (+ the servo output spline)",
+   "kind": "BUY",
+   "joint": "PIV_pan_pinion",
+   "bbox_world_home": [
+    [
+     -10.0,
+     44.0,
+     68.0
+    ],
+    [
+     10.0,
+     64.0,
+     76.9
+    ]
+   ]
+  },
+  "CAB_usb": {
+   "part": "cable route",
+   "step": "",
+   "kind": "CAB",
+   "joint": "static",
+   "path_len": 89.58044691785827,
+   "lead_len": 1000,
+   "bbox_world_home": [
+    [
+     -69.6,
+     -180.19,
+     0.11
+    ],
+    [
+     -65.6,
+     -105.9,
+     32.4
+    ]
+   ]
+  },
+  "CAB_12v_in": {
+   "part": "cable route",
+   "step": "",
+   "kind": "CAB",
+   "joint": "static",
+   "path_len": 119.3545557222028,
+   "lead_len": 200,
+   "bbox_world_home": [
+    [
+     -38.38,
+     -79.8,
+     14.37
+    ],
+    [
+     22.5,
+     -21.7,
+     77.49
+    ]
+   ]
+  },
+  "CAB_12v_mg": {
+   "part": "cable route",
+   "step": "",
+   "kind": "CAB",
+   "joint": "static",
+   "path_len": 45.23992813980723,
+   "lead_len": 100,
+   "bbox_world_home": [
+    [
+     -38.56,
+     -63.03,
+     14.81
+    ],
+    [
+     -28.46,
+     -27.93,
+     45.25
+    ]
+   ]
+  },
+  "CAB_12v_ctrl": {
+   "part": "cable route",
+   "step": "",
+   "kind": "CAB",
+   "joint": "static",
+   "path_len": 168.8403209914433,
+   "lead_len": 250,
+   "bbox_world_home": [
+    [
+     -38.65,
+     -15.61,
+     5.41
+    ],
+    [
+     109.22,
+     18.56,
+     17.45
+    ]
+   ]
+  },
+  "CAB_uart": {
+   "part": "cable route",
+   "step": "",
+   "kind": "CAB",
+   "joint": "static",
+   "path_len": 213.77651834118922,
+   "lead_len": 300,
+   "bbox_world_home": [
+    [
+     -30.89,
+     -64.01,
+     5.02
+    ],
+    [
+     71.09,
+     37.51,
+     60.52
+    ]
+   ]
+  },
+  "CAB_bus_pan": {
+   "part": "cable route",
+   "step": "",
+   "kind": "CAB",
+   "joint": "static",
+   "path_len": 290.45267822150817,
+   "lead_len": 350,
+   "loop": {
+    "from": [
+     -4.0,
+     30,
+     16
+    ],
+    "to": [
+     0.0,
+     0.0,
+     76.0
+    ],
+    "path_len": 127.1,
+    "straight": 67.2,
+    "added": 59.9,
+    "min_added": 45.0
+   },
+   "bom_item": "Hiwonder 3-pin bus lead 350 (next stock length up from 300)",
+   "bbox_world_home": [
+    [
+     -5.36,
+     -1.31,
+     10.68
+    ],
+    [
+     70.53,
+     90.36,
+     76.83
+    ]
+   ]
+  },
+  "CAB_launcher_base": {
+   "part": "cable route",
+   "step": "3",
+   "kind": "CAB",
+   "joint": "static",
+   "path_len": 164.82707740341226,
+   "lead_len": 250,
+   "loop": {
+    "from": [
+     0.0,
+     0.0,
+     76.0
+    ],
+    "to": [
+     -9.18,
+     -13.11,
+     68.0
+    ],
+    "path_len": 69.3,
+    "straight": 17.9,
+    "added": 51.4,
+    "min_added": 45.0
+   },
+   "ends": {
+    "junction": [
+     0.0,
+     0.0,
+     76.0
+    ],
+    "encoder_jst": [
+     -31.8,
+     -80.75,
+     67.3
+    ],
+    "phase_pads": [
+     -44.0,
+     -74.5,
+     67.5
+    ],
+    "route_len": 164.8,
+    "straight": 89.7
+   },
+   "bbox_world_home": [
+    [
+     -45.99,
+     -83.73,
+     38.65
+    ],
+    [
+     2.8,
+     2.55,
+     79.97
+    ]
+   ]
+  },
+  "FST_gcap_0": {
+   "part": "M3_csk x 10",
+   "host": "PRT_turntable",
+   "step": "2c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    -60.0,
+    -25.2,
+    105.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 10,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -63.0,
+     -28.2,
+     95.0
+    ],
+    [
+     -57.0,
+     -22.2,
+     105.0
+    ]
+   ]
+  },
+  "FST_gcap_1": {
+   "part": "M3_csk x 10",
+   "host": "PRT_turntable",
+   "step": "2c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    -60.0,
+    -9.0,
+    105.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 10,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -63.0,
+     -12.0,
+     95.0
+    ],
+    [
+     -57.0,
+     -6.0,
+     105.0
+    ]
+   ]
+  },
+  "FST_gcap_2": {
+   "part": "M3_csk x 10",
+   "host": "PRT_turntable",
+   "step": "2c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    22.0,
+    -25.2,
+    105.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 10,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     19.0,
+     -28.2,
+     95.0
+    ],
+    [
+     25.0,
+     -22.2,
+     105.0
+    ]
+   ]
+  },
+  "FST_gcap_3": {
+   "part": "M3_csk x 10",
+   "host": "PRT_turntable",
+   "step": "2c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    22.0,
+    -9.0,
+    105.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 10,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     19.0,
+     -12.0,
+     95.0
+    ],
+    [
+     25.0,
+     -6.0,
+     105.0
+    ]
+   ]
+  },
+  "FST_gcap_4": {
+   "part": "M3_csk x 10",
+   "host": "PRT_turntable",
+   "step": "2c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    -10.0,
+    16.2,
+    105.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 10,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -13.0,
+     13.2,
+     95.0
+    ],
+    [
+     -7.0,
+     19.2,
+     105.0
+    ]
+   ]
+  },
+  "FST_gcap_5": {
+   "part": "M3_csk x 10",
+   "host": "PRT_turntable",
+   "step": "2c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    10.0,
+    16.2,
+    105.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 10,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     7.0,
+     13.2,
+     95.0
+    ],
+    [
+     13.0,
+     19.2,
+     105.0
+    ]
+   ]
+  },
+  "FST_post_0": {
+   "part": "M3_csk x 16",
+   "host": "PRT_post_L",
+   "step": "2c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    -97.0,
+    2.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -100.0,
+     -1.0,
+     92.0
+    ],
+    [
+     -94.0,
+     5.0,
+     108.0
+    ]
+   ]
+  },
+  "FST_post_1": {
+   "part": "M3_csk x 16",
+   "host": "PRT_post_L",
+   "step": "2c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    -97.0,
+    15.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -100.0,
+     12.0,
+     92.0
+    ],
+    [
+     -94.0,
+     18.0,
+     108.0
+    ]
+   ]
+  },
+  "FST_post_2": {
+   "part": "M3_csk x 16",
+   "host": "PRT_post_L",
+   "step": "2c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    -101.0,
+    -6.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -104.0,
+     -9.0,
+     92.0
+    ],
+    [
+     -98.0,
+     -3.0,
+     108.0
+    ]
+   ]
+  },
+  "FST_post_3": {
+   "part": "M3_csk x 16",
+   "host": "PRT_post_R",
+   "step": "2c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    50.0,
+    16.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     47.0,
+     13.0,
+     92.0
+    ],
+    [
+     53.0,
+     19.0,
+     108.0
+    ]
+   ]
+  },
+  "FST_post_4": {
+   "part": "M3_csk x 16",
+   "host": "PRT_post_R",
+   "step": "2c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    50.0,
+    -5.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     47.0,
+     -8.0,
+     92.0
+    ],
+    [
+     53.0,
+     -2.0,
+     108.0
+    ]
+   ]
+  },
+  "FST_post_5": {
+   "part": "M3_csk x 16",
+   "host": "PRT_post_R",
+   "step": "2c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    80.0,
+    16.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     77.0,
+     13.0,
+     92.0
+    ],
+    [
+     83.0,
+     19.0,
+     108.0
+    ]
+   ]
+  },
+  "FST_post_6": {
+   "part": "M3_csk x 16",
+   "host": "PRT_post_R",
+   "step": "2c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    80.0,
+    -5.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     77.0,
+     -8.0,
+     92.0
+    ],
+    [
+     83.0,
+     -2.0,
+     108.0
+    ]
+   ]
+  },
+  "FST_hub_0": {
+   "part": "M3_cap x 12",
+   "host": "PRT_turntable",
+   "step": "2d",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    1.0409497792752501e-15,
+    17.0,
+    77.5
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     -2.75,
+     14.25,
+     74.5
+    ],
+    [
+     2.75,
+     19.75,
+     89.5
+    ]
+   ]
+  },
+  "FST_hub_1": {
+   "part": "M3_cap x 12",
+   "host": "PRT_turntable",
+   "step": "2d",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    -14.722431864335457,
+    -8.500000000000002,
+    77.5
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     -17.47,
+     -11.25,
+     74.5
+    ],
+    [
+     -11.97,
+     -5.75,
+     89.5
+    ]
+   ]
+  },
+  "FST_hub_2": {
+   "part": "M3_cap x 12",
+   "host": "PRT_turntable",
+   "step": "2d",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    14.722431864335451,
+    -8.500000000000007,
+    77.5
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     11.97,
+     -11.25,
+     74.5
+    ],
+    [
+     17.47,
+     -5.75,
+     89.5
+    ]
+   ]
+  },
+  "FST_beam_0": {
+   "part": "M3_csk x 16",
+   "host": "PRT_post_L",
+   "step": "9",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    -102.5,
+    10.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -105.5,
+     7.0,
+     244.0
+    ],
+    [
+     -99.5,
+     13.0,
+     260.0
+    ]
+   ]
+  },
+  "FST_beam_1": {
+   "part": "M3_csk x 16",
+   "host": "PRT_post_L",
+   "step": "9",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    -101.5,
+    -5.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -104.5,
+     -8.0,
+     244.0
+    ],
+    [
+     -98.5,
+     -2.0,
+     260.0
+    ]
+   ]
+  },
+  "FST_beam_2": {
+   "part": "M3_csk x 16",
+   "host": "PRT_post_L",
+   "step": "9",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    -95.0,
+    19.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -98.0,
+     16.0,
+     244.0
+    ],
+    [
+     -92.0,
+     22.0,
+     260.0
+    ]
+   ]
+  },
+  "FST_beam_3": {
+   "part": "M3_csk x 16",
+   "host": "PRT_post_R",
+   "step": "9",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    56.0,
+    19.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     53.0,
+     16.0,
+     244.0
+    ],
+    [
+     59.0,
+     22.0,
+     260.0
+    ]
+   ]
+  },
+  "FST_beam_4": {
+   "part": "M3_csk x 16",
+   "host": "PRT_post_R",
+   "step": "9",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    56.0,
+    -21.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     53.0,
+     -24.0,
+     244.0
+    ],
+    [
+     59.0,
+     -18.0,
+     260.0
+    ]
+   ]
+  },
+  "FST_beam_5": {
+   "part": "M3_csk x 16",
+   "host": "PRT_post_R",
+   "step": "9",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    90.0,
+    16.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     87.0,
+     13.0,
+     244.0
+    ],
+    [
+     93.0,
+     19.0,
+     260.0
+    ]
+   ]
+  },
+  "FST_beam_6": {
+   "part": "M3_csk x 16",
+   "host": "PRT_post_R",
+   "step": "9",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    90.0,
+    -19.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     87.0,
+     -22.0,
+     244.0
+    ],
+    [
+     93.0,
+     -16.0,
+     260.0
+    ]
+   ]
+  },
+  "FST_postcover_0": {
+   "part": "M3_cap x 14",
+   "host": "PRT_post_R",
+   "step": "8c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    103.4536450385077,
+    17.0,
+    196.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 14,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     89.45,
+     14.25,
+     193.25
+    ],
+    [
+     106.45,
+     19.75,
+     198.75
+    ]
+   ]
+  },
+  "FST_postcover_1": {
+   "part": "M3_cap x 14",
+   "host": "PRT_post_R",
+   "step": "8c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    103.4536450385077,
+    -17.0,
+    196.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 14,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     89.45,
+     -19.75,
+     193.25
+    ],
+    [
+     106.45,
+     -14.25,
+     198.75
+    ]
+   ]
+  },
+  "FST_postcover_2": {
+   "part": "M3_cap x 14",
+   "host": "PRT_post_R",
+   "step": "8c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    103.4536450385077,
+    17.0,
+    238.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 14,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     89.45,
+     14.25,
+     235.25
+    ],
+    [
+     106.45,
+     19.75,
+     240.75
+    ]
+   ]
+  },
+  "FST_postcover_3": {
+   "part": "M3_cap x 14",
+   "host": "PRT_post_R",
+   "step": "8c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    103.4536450385077,
+    -17.0,
+    238.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 14,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     89.45,
+     -19.75,
+     235.25
+    ],
+    [
+     106.45,
+     -14.25,
+     240.75
+    ]
+   ]
+  },
+  "PRT_thrust_ring": {
+   "stl": "thrust_ring",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "orient": "flat",
+   "supports": "no",
+   "infill": 100,
+   "kind": "PRT",
+   "joint": "PIV_pan",
+   "bbox_world_home": [
+    [
+     -44.0,
+     -43.98,
+     90.0
+    ],
+    [
+     44.0,
+     43.98,
+     92.0
+    ]
+   ]
+  },
+  "PRT_turntable": {
+   "stl": "turntable",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     -1.0,
+     -8.742277657347586e-08
+    ],
+    [
+     0.0,
+     8.742277657347586e-08,
+     -1.0
+    ]
+   ],
+   "orient": "top face on the bed, hub up (groove and cap rebate open to the bed)",
+   "supports": "no",
+   "infill": 15,
+   "kind": "PRT",
+   "joint": "PIV_pan",
+   "bbox_world_home": [
+    [
+     -108.0,
+     -108.0,
+     85.0
+    ],
+    [
+     108.0,
+     108.0,
+     102.0
+    ]
+   ]
+  },
+  "PRT_groove_cap": {
+   "stl": "groove_cap",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "orient": "flat, countersinks up",
+   "supports": "no",
+   "infill": 40,
+   "kind": "PRT",
+   "joint": "PIV_pan",
+   "bbox_world_home": [
+    [
+     -87.8,
+     -30.0,
+     102.0
+    ],
+    [
+     39.8,
+     23.96,
+     105.0
+    ]
+   ]
+  },
+  "PRT_hub_gear": {
+   "stl": "hub_gear",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "orient": "flat, screw heads' face down",
+   "supports": "no",
+   "infill": 40,
+   "kind": "PRT",
+   "joint": "PIV_pan",
+   "bbox_world_home": [
+    [
+     -28.5,
+     -28.5,
+     77.5
+    ],
+    [
+     28.5,
+     28.5,
+     85.0
+    ]
+   ]
+  },
+  "PRT_post_L": {
+   "stl": "post_L",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "orient": "upright, foot on the bed (U-bore opens to the top; channel cavity roofs bridge 6 mm)",
+   "supports": "no",
+   "infill": 25,
+   "kind": "PRT",
+   "joint": "PIV_pan",
+   "bbox_world_home": [
+    [
+     -108.0,
+     -26.0,
+     102.0
+    ],
+    [
+     -88.0,
+     22.0,
+     252.0
+    ]
+   ]
+  },
+  "PRT_post_R": {
+   "stl": "post_R",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "orient": "upright, foot on the bed (servo pocket roof bridges 21 mm, teardrop passage, stop lugs drafted)",
+   "supports": "no",
+   "infill": 25,
+   "kind": "PRT",
+   "joint": "PIV_pan",
+   "bbox_world_home": [
+    [
+     36.9,
+     -26.0,
+     102.0
+    ],
+    [
+     108.0,
+     22.0,
+     252.0
+    ]
+   ]
+  },
+  "PRT_post_R_cover": {
+   "stl": "post_R_cover",
+   "print_rot": [
+    [
+     -4.371138828673793e-08,
+     0.0,
+     -1.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     1.0,
+     0.0,
+     -4.371138828673793e-08
+    ]
+   ],
+   "orient": "flat inner face on the bed, arc face up",
+   "supports": "no",
+   "infill": 25,
+   "kind": "PRT",
+   "joint": "PIV_pan",
+   "bbox_world_home": [
+    [
+     96.2,
+     -26.0,
+     186.0
+    ],
+    [
+     108.0,
+     22.0,
+     244.0
+    ]
+   ]
+  },
+  "PRT_beam": {
+   "stl": "beam",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     -1.0,
+     -8.742277657347586e-08
+    ],
+    [
+     0.0,
+     8.742277657347586e-08,
+     -1.0
+    ]
+   ],
+   "orient": "top face on the bed, tongues up",
+   "supports": "no",
+   "infill": 30,
+   "kind": "PRT",
+   "joint": "PIV_pan",
+   "bbox_world_home": [
+    [
+     -108.0,
+     -30.0,
+     231.0
+    ],
+    [
+     108.0,
+     30.0,
+     260.0
+    ]
+   ]
+  },
+  "BUY_servo_tilt": {
+   "mass_g": 66,
+   "src": "components.json",
+   "kind": "BUY",
+   "joint": "PIV_pan",
+   "bbox_world_home": [
+    [
+     55.9,
+     -10.07,
+     192.0
+    ],
+    [
+     99.8,
+     10.07,
+     232.0
+    ]
+   ]
+  },
+  "BUY_horn_tilt": {
+   "mass_g": 4,
+   "src": "components.json servo_horn_disc (+ the servo output spline)",
+   "kind": "BUY",
+   "joint": "PIV_tilt",
+   "bbox_world_home": [
+    [
+     51.0,
+     -10.0,
+     212.0
+    ],
+    [
+     59.9,
+     10.0,
+     232.0
+    ]
+   ]
+  },
+  "PRT_tilt_horn_adapter": {
+   "stl": "tilt_horn_adapter",
+   "print_rot": [
+    [
+     7.549790126404332e-08,
+     0.0,
+     1.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     -1.0,
+     0.0,
+     7.549790126404332e-08
+    ]
+   ],
+   "orient": "horn recess face on the bed, hex key up",
+   "supports": "no",
+   "infill": 60,
+   "kind": "PRT",
+   "joint": "PIV_tilt",
+   "bbox_world_home": [
+    [
+     38.7,
+     -12.93,
+     209.02
+    ],
+    [
+     52.0,
+     13.0,
+     234.98
+    ]
+   ]
+  },
+  "FST_tilt_horn_0": {
+   "part": "M2_pan x 8",
+   "host": "PRT_tilt_horn_adapter",
+   "step": "8a",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    53.5,
+    0.0,
+    229.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 8,
+   "spec": "M2_pan",
+   "bbox_world_home": [
+    [
+     45.5,
+     -1.9,
+     227.1
+    ],
+    [
+     54.8,
+     1.9,
+     230.9
+    ]
+   ]
+  },
+  "FST_tilt_horn_1": {
+   "part": "M2_pan x 8",
+   "host": "PRT_tilt_horn_adapter",
+   "step": "8a",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    53.5,
+    7.0,
+    222.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 8,
+   "spec": "M2_pan",
+   "bbox_world_home": [
+    [
+     45.5,
+     5.1,
+     220.1
+    ],
+    [
+     54.8,
+     8.9,
+     223.9
+    ]
+   ]
+  },
+  "FST_tilt_horn_2": {
+   "part": "M2_pan x 8",
+   "host": "PRT_tilt_horn_adapter",
+   "step": "8a",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    53.5,
+    8.572527594031472e-16,
+    215.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 8,
+   "spec": "M2_pan",
+   "bbox_world_home": [
+    [
+     45.5,
+     -1.9,
+     213.1
+    ],
+    [
+     54.8,
+     1.9,
+     216.9
+    ]
+   ]
+  },
+  "FST_tilt_horn_3": {
+   "part": "M2_pan x 8",
+   "host": "PRT_tilt_horn_adapter",
+   "step": "8a",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    53.5,
+    -7.0,
+    222.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 8,
+   "spec": "M2_pan",
+   "bbox_world_home": [
+    [
+     45.5,
+     -8.9,
+     220.1
+    ],
+    [
+     54.8,
+     -5.1,
+     223.9
+    ]
+   ]
+  },
+  "FST_tilt_horn_ctr": {
+   "part": "M3_cap x 6",
+   "host": "BUY_horn_tilt",
+   "step": "8b",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    51.0,
+    0.0,
+    222.0
+   ],
+   "into": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "length": 6,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     48.0,
+     -2.75,
+     219.25
+    ],
+    [
+     57.0,
+     2.75,
+     224.75
+    ]
+   ]
+  },
+  "CAB_launcher_bundle": {
+   "part": "cable route",
+   "step": "",
+   "kind": "CAB",
+   "joint": "PIV_pan",
+   "path_len": 265.3821595944174,
+   "lead_len": 350,
+   "bbox_world_home": [
+    [
+     -103.84,
+     -19.97,
+     76.0
+    ],
+    [
+     2.98,
+     3.0,
+     224.87
+    ]
+   ]
+  },
+  "CAB_bus_tilt": {
+   "part": "cable route",
+   "step": "",
+   "kind": "CAB",
+   "joint": "PIV_pan",
+   "path_len": 217.91212284766638,
+   "lead_len": 300,
+   "bbox_world_home": [
+    [
+     -1.33,
+     -18.35,
+     76.0
+    ],
+    [
+     96.38,
+     1.4,
+     191.38
+    ]
+   ]
+  },
+  "FST_motor_0": {
+   "part": "M3_pan x 10",
+   "host": "BUY_motor",
+   "step": "6a",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    5.6,
+    24.67383954653053,
+    172.07744277305665
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 10,
+   "spec": "M3_pan",
+   "bbox_world_home": [
+    [
+     -4.4,
+     21.67,
+     169.08
+    ],
+    [
+     8.0,
+     27.67,
+     175.08
+    ]
+   ]
+  },
+  "FST_motor_1": {
+   "part": "M3_pan x 10",
+   "host": "BUY_motor",
+   "step": "6a",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    5.6,
+    34.92255722694334,
+    157.67383954653053
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 10,
+   "spec": "M3_pan",
+   "bbox_world_home": [
+    [
+     -4.4,
+     31.92,
+     154.67
+    ],
+    [
+     8.0,
+     37.92,
+     160.67
+    ]
+   ]
+  },
+  "FST_motor_2": {
+   "part": "M3_pan x 10",
+   "host": "BUY_motor",
+   "step": "6a",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    5.6,
+    49.32616045346947,
+    167.92255722694335
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 10,
+   "spec": "M3_pan",
+   "bbox_world_home": [
+    [
+     -4.4,
+     46.33,
+     164.92
+    ],
+    [
+     8.0,
+     52.33,
+     170.92
+    ]
+   ]
+  },
+  "FST_motor_3": {
+   "part": "M3_pan x 10",
+   "host": "BUY_motor",
+   "step": "6a",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    5.6,
+    39.077442773056646,
+    182.32616045346947
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 10,
+   "spec": "M3_pan",
+   "bbox_world_home": [
+    [
+     -4.4,
+     36.08,
+     179.33
+    ],
+    [
+     8.0,
+     42.08,
+     185.33
+    ]
+   ]
+  },
+  "FST_nacelle_0": {
+   "part": "M3_pan x 12",
+   "host": "PRT_nacelle",
+   "step": "6a",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    5.6,
+    17.86808428644399,
+    196.88809775959223
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "spec": "M3_pan",
+   "bbox_world_home": [
+    [
+     -6.4,
+     14.87,
+     193.89
+    ],
+    [
+     8.0,
+     20.87,
+     199.89
+    ]
+   ]
+  },
+  "FST_nacelle_1": {
+   "part": "M3_pan x 12",
+   "host": "PRT_nacelle",
+   "step": "6a",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    5.6,
+    49.754610475704006,
+    152.07460149360517
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "spec": "M3_pan",
+   "bbox_world_home": [
+    [
+     -6.4,
+     46.75,
+     149.07
+    ],
+    [
+     8.0,
+     52.75,
+     155.07
+    ]
+   ]
+  },
+  "FST_enc_0": {
+   "part": "M3_csk x 12",
+   "host": "PRT_nacelle",
+   "step": "6b",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    -84.25,
+    54.51800308579494,
+    182.46473296489256
+   ],
+   "into": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -84.25,
+     51.52,
+     179.46
+    ],
+    [
+     -72.25,
+     57.52,
+     185.46
+    ]
+   ]
+  },
+  "FST_enc_1": {
+   "part": "M3_csk x 12",
+   "host": "PRT_nacelle",
+   "step": "6b",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    -84.25,
+    19.481996914205062,
+    157.53526703510744
+   ],
+   "into": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -84.25,
+     16.48,
+     154.54
+    ],
+    [
+     -72.25,
+     22.48,
+     160.54
+    ]
+   ]
+  },
+  "FST_jp_0": {
+   "part": "M3_csk x 12",
+   "host": "PRT_launcher_body",
+   "step": "6d",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    35.5,
+    -17.0,
+    199.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     23.5,
+     -20.0,
+     196.0
+    ],
+    [
+     35.5,
+     -14.0,
+     202.0
+    ]
+   ]
+  },
+  "FST_jp_1": {
+   "part": "M3_csk x 12",
+   "host": "PRT_launcher_body",
+   "step": "6d",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    35.5,
+    21.0,
+    221.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     23.5,
+     18.0,
+     218.0
+    ],
+    [
+     35.5,
+     24.0,
+     224.0
+    ]
+   ]
+  },
+  "FST_jp_2": {
+   "part": "M3_csk x 12",
+   "host": "PRT_launcher_body",
+   "step": "6d",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    35.5,
+    -16.0,
+    209.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     23.5,
+     -19.0,
+     206.0
+    ],
+    [
+     35.5,
+     -13.0,
+     212.0
+    ]
+   ]
+  },
+  "FST_cover_0": {
+   "part": "M3_csk x 12",
+   "host": "PRT_launcher_body",
+   "step": "6g",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    35.5,
+    74.0,
+    122.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     23.5,
+     71.0,
+     119.0
+    ],
+    [
+     35.5,
+     77.0,
+     125.0
+    ]
+   ]
+  },
+  "FST_cover_1": {
+   "part": "M3_csk x 12",
+   "host": "PRT_launcher_body",
+   "step": "6g",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    35.5,
+    79.0,
+    168.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     23.5,
+     76.0,
+     165.0
+    ],
+    [
+     35.5,
+     82.0,
+     171.0
+    ]
+   ]
+  },
+  "FST_cover_2": {
+   "part": "M3_csk x 12",
+   "host": "PRT_launcher_body",
+   "step": "6g",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    35.5,
+    92.0,
+    144.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     23.5,
+     89.0,
+     141.0
+    ],
+    [
+     35.5,
+     95.0,
+     147.0
+    ]
+   ]
+  },
+  "FST_cover_3": {
+   "part": "M3_csk x 12",
+   "host": "PRT_launcher_body",
+   "step": "6g",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    35.5,
+    51.0,
+    120.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     23.5,
+     48.0,
+     117.0
+    ],
+    [
+     35.5,
+     54.0,
+     123.0
+    ]
+   ]
+  },
+  "FST_hinge": {
+   "part": "M3_csk x 35",
+   "host": "",
+   "step": "6d",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    4.0,
+    -14.922295855740096,
+    190.97796923129107
+   ],
+   "into": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "length": 35.0,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     4.0,
+     -17.92,
+     187.98
+    ],
+    [
+     39.0,
+     -11.92,
+     193.98
+    ]
+   ]
+  },
+  "FST_hinge_nut": {
+   "part": "M3 hex nut",
+   "step": "6d",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "face": [
+    32.800000000000004,
+    -14.922295855740096,
+    190.97796923129107
+   ],
+   "into": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "nut_h": 2.4,
+   "bbox_world_home": [
+    [
+     32.8,
+     -17.67,
+     187.8
+    ],
+    [
+     35.2,
+     -12.17,
+     194.15
+    ]
+   ]
+  },
+  "FST_nip_stud": {
+   "part": "M3_cap x 16",
+   "host": "",
+   "step": "6c",
+   "kind": "FST",
+   "joint": "PIV_hood",
+   "head": [
+    19.5,
+    3.4124278936389985,
+    136.412427893639
+   ],
+   "into": [
+    0.0,
+    -0.9479185342788696,
+    -0.31851282715797424
+   ],
+   "length": 16.0,
+   "spec": "M3_cap",
+   "bom_item": "M3 x 16 hex head ISO 4017 (AF 5.5 x 2.0), captive in the hood's AF 5.7 pocket, never driven",
+   "bbox_world_home": [
+    [
+     16.75,
+     -12.23,
+     129.89
+    ],
+    [
+     22.25,
+     7.13,
+     139.97
+    ]
+   ]
+  },
+  "FST_nipstop": {
+   "part": "M3_cap x 6",
+   "host": "PRT_nip_stop",
+   "step": "6c",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    19.75,
+    43.69848223889302,
+    117.42600314138406
+   ],
+   "into": [
+    0.0,
+    -0.058036964386701584,
+    0.9983144402503967
+   ],
+   "length": 6.0,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     17.0,
+     40.95,
+     114.27
+    ],
+    [
+     22.5,
+     46.62,
+     123.5
+    ]
+   ]
+  },
+  "FST_nipcover_0": {
+   "part": "M3_cap x 14",
+   "host": "PRT_launcher_body",
+   "step": "6e",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    10.0,
+    -29.323527835663228,
+    171.8302158325992
+   ],
+   "into": [
+    0.0,
+    0.9479185342788696,
+    0.31851282715797424
+   ],
+   "length": 14,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     7.25,
+     -33.04,
+     168.27
+    ],
+    [
+     12.75,
+     -15.57,
+     177.71
+    ]
+   ]
+  },
+  "FST_leaf_0": {
+   "part": "M3_csk x 10",
+   "host": "PRT_nip_leaf",
+   "step": "6e",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    13.0,
+    -30.601236693149943,
+    164.0162885181497
+   ],
+   "into": [
+    0.0,
+    0.9479185342788696,
+    0.31851282715797424
+   ],
+   "length": 10,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     10.0,
+     -31.56,
+     161.17
+    ],
+    [
+     16.0,
+     -20.64,
+     168.62
+    ]
+   ]
+  },
+  "FST_nipcover_1": {
+   "part": "M3_cap x 14",
+   "host": "PRT_launcher_body",
+   "step": "6e",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    26.0,
+    -29.323527835663228,
+    171.8302158325992
+   ],
+   "into": [
+    0.0,
+    0.9479185342788696,
+    0.31851282715797424
+   ],
+   "length": 14,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     23.25,
+     -33.04,
+     168.27
+    ],
+    [
+     28.75,
+     -15.57,
+     177.71
+    ]
+   ]
+  },
+  "FST_leaf_1": {
+   "part": "M3_csk x 10",
+   "host": "PRT_nip_leaf",
+   "step": "6e",
+   "kind": "FST",
+   "joint": "PIV_tilt",
+   "head": [
+    26.0,
+    -30.601236693149943,
+    164.0162885181497
+   ],
+   "into": [
+    0.0,
+    0.9479185342788696,
+    0.31851282715797424
+   ],
+   "length": 10,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     23.0,
+     -31.56,
+     161.17
+    ],
+    [
+     29.0,
+     -20.64,
+     168.62
+    ]
+   ]
+  },
+  "PRT_nacelle": {
+   "stl": "nacelle",
+   "print_rot": [
+    [
+     7.549790126404332e-08,
+     0.0,
+     1.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     -1.0,
+     0.0,
+     7.549790126404332e-08
+    ]
+   ],
+   "orient": "front plate on the bed, journal up (duct roof bridges 15 mm)",
+   "supports": "no",
+   "infill": 25,
+   "kind": "PRT",
+   "joint": "PIV_tilt",
+   "bbox_world_home": [
+    [
+     -95.7,
+     -17.0,
+     143.5
+    ],
+    [
+     4.0,
+     63.5,
+     238.99
+    ]
+   ]
+  },
+  "PRT_launcher_body": {
+   "stl": "launcher_body",
+   "print_rot": [
+    [
+     -4.371138828673793e-08,
+     0.0,
+     -1.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     1.0,
+     0.0,
+     -4.371138828673793e-08
+    ]
+   ],
+   "orient": "left (motor) wall outer face on the bed; profile extruded so every wall is vertical",
+   "supports": "no",
+   "infill": 25,
+   "kind": "PRT",
+   "joint": "PIV_tilt",
+   "bbox_world_home": [
+    [
+     4.0,
+     -23.16,
+     113.51
+    ],
+    [
+     31.5,
+     99.0,
+     242.0
+    ]
+   ]
+  },
+  "PRT_journal_plate": {
+   "stl": "journal_plate",
+   "print_rot": [
+    [
+     -4.371138828673793e-08,
+     0.0,
+     -1.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     1.0,
+     0.0,
+     -4.371138828673793e-08
+    ]
+   ],
+   "orient": "inner face on the bed; lap step, journal, socket and stop lug grow up",
+   "supports": "no",
+   "infill": 30,
+   "kind": "PRT",
+   "joint": "PIV_tilt",
+   "bbox_world_home": [
+    [
+     31.5,
+     -23.16,
+     177.55
+    ],
+    [
+     51.7,
+     29.32,
+     242.0
+    ]
+   ]
+  },
+  "PRT_launcher_cover": {
+   "stl": "launcher_cover",
+   "print_rot": [
+    [
+     -4.371138828673793e-08,
+     0.0,
+     -1.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     1.0,
+     0.0,
+     -4.371138828673793e-08
+    ]
+   ],
+   "orient": "inner face on the bed; rebated edge steps in toward the top",
+   "supports": "no",
+   "infill": 25,
+   "kind": "PRT",
+   "joint": "PIV_tilt",
+   "bbox_world_home": [
+    [
+     31.5,
+     -19.89,
+     113.51
+    ],
+    [
+     35.5,
+     99.0,
+     223.43
+    ]
+   ]
+  },
+  "PRT_hood": {
+   "stl": "hood",
+   "print_rot": [
+    [
+     -4.371138828673793e-08,
+     0.0,
+     -1.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     1.0,
+     0.0,
+     -4.371138828673793e-08
+    ]
+   ],
+   "orient": "on its side face (profile extruded, all walls vertical; stud pocket has a vertex up)",
+   "supports": "no",
+   "infill": 40,
+   "kind": "PRT",
+   "joint": "PIV_hood",
+   "bbox_world_home": [
+    [
+     8.55,
+     -19.22,
+     120.0
+    ],
+    [
+     31.0,
+     39.62,
+     195.28
+    ]
+   ]
+  },
+  "PRT_nip_stop": {
+   "stl": "nip_stop",
+   "print_rot": [
+    [
+     1.0,
+     -0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.9983144402503967,
+     0.058036964386701584
+    ],
+    [
+     -0.0,
+     -0.058036964386701584,
+     0.9983144402503967
+    ]
+   ],
+   "orient": "bottom (screw) face on the bed: pilot vertical, contact face a vertical wall",
+   "supports": "no",
+   "infill": 100,
+   "notes": "gap-5.3 hard stop; print thicker/thinner along the face normal to move the stop",
+   "kind": "PRT",
+   "joint": "PIV_tilt",
+   "bbox_world_home": [
+    [
+     9.75,
+     39.75,
+     118.94
+    ],
+    [
+     29.75,
+     47.07,
+     125.41
+    ]
+   ]
+  },
+  "PRT_nip_stop_sleeve": {
+   "stl": "nip_stop_sleeve",
+   "print_rot": [
+    [
+     1.0,
+     -0.0,
+     0.0
+    ],
+    [
+     0.0,
+     -0.3185129165649414,
+     0.9479185342788696
+    ],
+    [
+     -0.0,
+     -0.9479185342788696,
+     -0.3185129165649414
+    ]
+   ],
+   "orient": "end on the bed (tube upright)",
+   "supports": "no",
+   "infill": 100,
+   "notes": "length 9.35 = stud_d at gap 7.0; shorten it to raise the max gap",
+   "kind": "PRT",
+   "joint": "PIV_hood",
+   "bbox_world_home": [
+    [
+     15.7,
+     -6.66,
+     129.83
+    ],
+    [
+     23.3,
+     4.62,
+     140.01
+    ]
+   ]
+  },
+  "PRT_nip_wheel": {
+   "stl": "nip_wheel",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.31851276755332947,
+     -0.9479185342788696
+    ],
+    [
+     0.0,
+     0.9479185342788696,
+     0.31851276755332947
+    ]
+   ],
+   "orient": "outer face on the bed, nut trap up (press the nut in)",
+   "supports": "no",
+   "infill": 50,
+   "kind": "PRT",
+   "joint": "PIV_nip_lift",
+   "bbox_world_home": [
+    [
+     11.05,
+     -13.27,
+     123.83
+    ],
+    [
+     27.95,
+     -3.51,
+     141.06
+    ]
+   ]
+  },
+  "FST_tw_nut": {
+   "part": "M3 hex nut",
+   "step": "6e",
+   "kind": "FST",
+   "joint": "PIV_nip_lift",
+   "face": [
+    19.5,
+    -6.777696531609988,
+    132.9884150142904
+   ],
+   "into": [
+    0.0,
+    -0.9479185342788696,
+    -0.31851282715797424
+   ],
+   "nut_h": 2.4,
+   "bbox_world_home": [
+    [
+     16.75,
+     -10.06,
+     129.21
+    ],
+    [
+     22.25,
+     -5.77,
+     136.0
+    ]
+   ]
+  },
+  "PRT_nip_leaf": {
+   "stl": "nip_leaf",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.31851276755332947,
+     -0.9479185342788696
+    ],
+    [
+     0.0,
+     0.9479185342788696,
+     0.31851276755332947
+    ]
+   ],
+   "orient": "flat: strip's outer face on the bed, root block and pads up (bending stress in the layer plane)",
+   "supports": "no",
+   "infill": 100,
+   "notes": "{'width_mm': 21.9, 'length_mm': 34.0, 'thickness_mm': 2.3, 'rate_N_per_mm': 5.93, 'preload_N': 7.1, 'root_stress_preload_MPa': 12.5, 'force_at_stop_N': 20.2, 'root_stress_at_stop_MPa': 35.5}",
+   "kind": "PRT",
+   "joint": "PIV_tilt",
+   "bbox_world_home": [
+    [
+     6.8,
+     -26.44,
+     128.36
+    ],
+    [
+     28.7,
+     -8.98,
+     170.46
+    ]
+   ]
+  },
+  "PRT_nip_cover": {
+   "stl": "nip_cover",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     -0.9479186534881592,
+     -0.318512886762619
+    ],
+    [
+     0.0,
+     0.318512886762619,
+     -0.9479186534881592
+    ]
+   ],
+   "orient": "screw-block end on the bed; shell and end walls grow up as vertical walls; skirt bridges at the top; finger slot 22 x 7.5 in the -v end wall over the thumbwheel rim (v2-A1-02)",
+   "supports": "no",
+   "infill": 30,
+   "kind": "PRT",
+   "joint": "PIV_tilt",
+   "bbox_world_home": [
+    [
+     4.0,
+     -34.05,
+     124.38
+    ],
+    [
+     31.5,
+     -4.27,
+     179.85
+    ]
+   ]
+  },
+  "PRT_flywheel": {
+   "stl": "flywheel",
+   "print_rot": [
+    [
+     -4.371138828673793e-08,
+     0.0,
+     -1.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     1.0,
+     0.0,
+     -4.371138828673793e-08
+    ]
+   ],
+   "orient": "motor-side web face on the bed; rim and hub grow up (top flange has a 45 deg underside)",
+   "supports": "no",
+   "infill": 100,
+   "notes": "wrap 12-15 mm hockey tape on the 14 mm land. The 72 mm 'bridge' cadcheck reports is the 1 mm R36 flange ring over the rim's 45 deg underside (33 mm2 ceiling): it prints as perimeter loops on the cone, declared benign (v2-A1-08)",
+   "kind": "PRT",
+   "joint": "PIV_flywheel",
+   "bbox_world_home": [
+    [
+     9.6,
+     1.0,
+     134.0
+    ],
+    [
+     29.5,
+     73.0,
+     206.0
+    ]
+   ]
+  },
+  "FST_fw_bolt_0": {
+   "part": "M3_cap x 20",
+   "host": "",
+   "step": "6f",
+   "kind": "FST",
+   "joint": "PIV_flywheel",
+   "head": [
+    19.5,
+    28.467840433800767,
+    163.5
+   ],
+   "into": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "length": 20.0,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     16.75,
+     25.47,
+     160.75
+    ],
+    [
+     22.25,
+     48.47,
+     166.25
+    ]
+   ]
+  },
+  "FST_fw_nut_0": {
+   "part": "M3 hex nut",
+   "step": "6f",
+   "kind": "FST",
+   "joint": "PIV_flywheel",
+   "face": [
+    19.5,
+    45.53215956619923,
+    163.5
+   ],
+   "into": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "nut_h": 2.4,
+   "bbox_world_home": [
+    [
+     16.75,
+     45.53,
+     160.32
+    ],
+    [
+     22.25,
+     47.93,
+     166.68
+    ]
+   ]
+  },
+  "FST_fw_bolt_1": {
+   "part": "M3_cap x 20",
+   "host": "",
+   "step": "6f",
+   "kind": "FST",
+   "joint": "PIV_flywheel",
+   "head": [
+    19.5,
+    45.53215956619923,
+    176.5
+   ],
+   "into": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "length": 20.0,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     16.75,
+     25.53,
+     173.75
+    ],
+    [
+     22.25,
+     48.53,
+     179.25
+    ]
+   ]
+  },
+  "FST_fw_nut_1": {
+   "part": "M3 hex nut",
+   "step": "6f",
+   "kind": "FST",
+   "joint": "PIV_flywheel",
+   "face": [
+    19.5,
+    28.467840433800767,
+    176.5
+   ],
+   "into": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "nut_h": 2.4,
+   "bbox_world_home": [
+    [
+     16.75,
+     26.07,
+     173.32
+    ],
+    [
+     22.25,
+     28.47,
+     179.68
+    ]
+   ]
+  },
+  "PRT_encoder_cap": {
+   "stl": "encoder_cap",
+   "print_rot": [
+    [
+     -4.371138828673793e-08,
+     0.0,
+     -1.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     1.0,
+     0.0,
+     -4.371138828673793e-08
+    ]
+   ],
+   "orient": "back face on the bed, spigot and pegs up",
+   "supports": "no",
+   "infill": 40,
+   "kind": "PRT",
+   "joint": "PIV_tilt",
+   "bbox_world_home": [
+    [
+     -84.25,
+     10.52,
+     143.51
+    ],
+    [
+     -75.75,
+     63.5,
+     199.17
+    ]
+   ]
+  },
+  "BUY_motor": {
+   "mass_g": 200,
+   "src": "components.json xteam_3674",
+   "kind": "BUY",
+   "joint": "PIV_tilt",
+   "bbox_world_home": [
+    [
+     -74.0,
+     19.05,
+     152.05
+    ],
+    [
+     21.0,
+     54.95,
+     187.95
+    ]
+   ]
+  },
+  "BUY_magnet": {
+   "mass_g": 1,
+   "src": "components.json plink_mt6701.magnet",
+   "kind": "BUY",
+   "joint": "PIV_flywheel",
+   "bbox_world_home": [
+    [
+     -76.0,
+     34.0,
+     167.0
+    ],
+    [
+     -73.5,
+     40.0,
+     173.0
+    ]
+   ]
+  },
+  "BUY_plink_encoder": {
+   "mass_g": 3,
+   "src": "components.json plink_mt6701",
+   "kind": "BUY",
+   "joint": "PIV_tilt",
+   "bbox_world_home": [
+    [
+     -80.25,
+     22.97,
+     155.62
+    ],
+    [
+     -75.65,
+     51.03,
+     184.38
+    ]
+   ]
+  },
+  "CAB_phase_0": {
+   "part": "cable route",
+   "step": "",
+   "kind": "CAB",
+   "joint": "PIV_tilt",
+   "path_len": 62.45393245778267,
+   "lead_len": 80,
+   "bbox_world_home": [
+    [
+     -89.0,
+     -3.14,
+     184.75
+    ],
+    [
+     -65.11,
+     22.86,
+     222.34
+    ]
+   ]
+  },
+  "CAB_phase_1": {
+   "part": "cable route",
+   "step": "",
+   "kind": "CAB",
+   "joint": "PIV_tilt",
+   "path_len": 62.39774003202662,
+   "lead_len": 80,
+   "bbox_world_home": [
+    [
+     -89.0,
+     -1.55,
+     186.83
+    ],
+    [
+     -65.11,
+     25.79,
+     223.49
+    ]
+   ]
+  },
+  "CAB_phase_2": {
+   "part": "cable route",
+   "step": "",
+   "kind": "CAB",
+   "joint": "PIV_tilt",
+   "path_len": 62.45394899589034,
+   "lead_len": 80,
+   "bbox_world_home": [
+    [
+     -89.0,
+     0.04,
+     188.92
+    ],
+    [
+     -65.11,
+     28.73,
+     224.63
+    ]
+   ]
+  },
+  "CAB_encoder": {
+   "part": "cable route",
+   "step": "",
+   "kind": "CAB",
+   "joint": "PIV_tilt",
+   "path_len": 84.07605460546161,
+   "lead_len": 114.79076300217037,
+   "bom_item": "one-piece twisted 5-wire JST-SH encoder lead >= 550 (ENC_LEAD), Plink -> MotorGo encoder JST, unspliced; rides CAB_launcher_bundle and CAB_launcher_base on the far side of the sleeve from the 3 phases",
+   "bbox_world_home": [
+    [
+     -95.2,
+     0.76,
+     181.39
+    ],
+    [
+     -68.71,
+     36.12,
+     224.74
+    ]
+   ]
+  },
+  "FST_feedmount_0": {
+   "part": "M3_csk x 16",
+   "host": "PRT_feeder_crown",
+   "step": "11",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    -36.0,
+    -21.0,
+    252.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -39.0,
+     -24.0,
+     252.0
+    ],
+    [
+     -33.0,
+     -18.0,
+     268.0
+    ]
+   ]
+  },
+  "FST_feedmount_1": {
+   "part": "M3_csk x 16",
+   "host": "PRT_feeder_crown",
+   "step": "11",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    -36.0,
+    21.0,
+    252.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -39.0,
+     18.0,
+     252.0
+    ],
+    [
+     -33.0,
+     24.0,
+     268.0
+    ]
+   ]
+  },
+  "FST_feedmount_2": {
+   "part": "M3_csk x 16",
+   "host": "PRT_feeder_crown",
+   "step": "11",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    34.0,
+    -20.0,
+    252.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     31.0,
+     -23.0,
+     252.0
+    ],
+    [
+     37.0,
+     -17.0,
+     268.0
+    ]
+   ]
+  },
+  "FST_feedmount_3": {
+   "part": "M3_csk x 16",
+   "host": "PRT_feeder_crown",
+   "step": "11",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    34.0,
+    20.0,
+    252.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     31.0,
+     17.0,
+     252.0
+    ],
+    [
+     37.0,
+     23.0,
+     268.0
+    ]
+   ]
+  },
+  "FST_fplate_0": {
+   "part": "M3_csk x 8",
+   "host": "PRT_feeder_crown",
+   "step": "10c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    0.0,
+    41.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 8,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -3.0,
+     38.0,
+     260.0
+    ],
+    [
+     3.0,
+     44.0,
+     268.0
+    ]
+   ]
+  },
+  "FST_fplate_1": {
+   "part": "M3_csk x 8",
+   "host": "PRT_feeder_crown",
+   "step": "10c",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    0.0,
+    -41.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 8,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -3.0,
+     -44.0,
+     260.0
+    ],
+    [
+     3.0,
+     -38.0,
+     268.0
+    ]
+   ]
+  },
+  "FST_fcover_0": {
+   "part": "M3_csk x 12",
+   "host": "PRT_feeder_crown",
+   "step": "10d",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    -66.0,
+    18.6,
+    290.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -69.0,
+     15.6,
+     278.0
+    ],
+    [
+     -63.0,
+     21.6,
+     290.0
+    ]
+   ]
+  },
+  "FST_fcover_1": {
+   "part": "M3_csk x 12",
+   "host": "PRT_feeder_crown",
+   "step": "10d",
+   "kind": "FST",
+   "joint": "PIV_pan",
+   "head": [
+    -66.0,
+    -18.6,
+    290.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 12,
+   "spec": "M3_csk",
+   "bbox_world_home": [
+    [
+     -69.0,
+     -21.6,
+     278.0
+    ],
+    [
+     -63.0,
+     -15.6,
+     290.0
+    ]
+   ]
+  },
+  "FST_valve_0": {
+   "part": "M3_cap x 10",
+   "host": "PRT_jar_adapter",
+   "step": "12",
+   "kind": "FST",
+   "joint": "PIV_jar",
+   "head": [
+    1.8982025386783976e-15,
+    31.0,
+    295.5
+   ],
+   "into": [
+    -6.123234262925839e-17,
+    -1.0,
+    0.0
+   ],
+   "length": 10,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     -2.75,
+     21.0,
+     292.75
+    ],
+    [
+     2.75,
+     34.0,
+     298.25
+    ]
+   ]
+  },
+  "FST_valve_1": {
+   "part": "M3_cap x 10",
+   "host": "PRT_jar_adapter",
+   "step": "12",
+   "kind": "FST",
+   "joint": "PIV_jar",
+   "head": [
+    -31.0,
+    3.796405077356795e-15,
+    295.5
+   ],
+   "into": [
+    1.0,
+    -1.2246468525851679e-16,
+    0.0
+   ],
+   "length": 10,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     -34.0,
+     -2.75,
+     292.75
+    ],
+    [
+     -21.0,
+     2.75,
+     298.25
+    ]
+   ]
+  },
+  "FST_valve_2": {
+   "part": "M3_cap x 10",
+   "host": "PRT_jar_adapter",
+   "step": "12",
+   "kind": "FST",
+   "joint": "PIV_jar",
+   "head": [
+    -5.694607616035192e-15,
+    -31.0,
+    295.5
+   ],
+   "into": [
+    1.8369701465288538e-16,
+    1.0,
+    0.0
+   ],
+   "length": 10,
+   "spec": "M3_cap",
+   "bbox_world_home": [
+    [
+     -2.75,
+     -34.0,
+     292.75
+    ],
+    [
+     2.75,
+     -21.0,
+     298.25
+    ]
+   ]
+  },
+  "FST_detent_0": {
+   "part": "M3_selftap_pan x 10",
+   "host": "PRT_jar_valve",
+   "step": "12",
+   "kind": "FST",
+   "joint": "PIV_jar",
+   "head": [
+    9.5,
+    37.5,
+    294.5
+   ],
+   "into": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "length": 10.0,
+   "spec": "M3_selftap_pan",
+   "bom_item": "M3 x 10 pan self-tap (stock length), head in the tab's \u00d86.6 x 1.0 counterbore",
+   "bbox_world_home": [
+    [
+     6.5,
+     27.5,
+     291.5
+    ],
+    [
+     12.5,
+     39.9,
+     297.5
+    ]
+   ]
+  },
+  "PRT_feeder_housing": {
+   "stl": "feeder_housing",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     -1.0,
+     -8.742277657347586e-08
+    ],
+    [
+     0.0,
+     8.742277657347586e-08,
+     -1.0
+    ]
+   ],
+   "orient": "disc running face on the bed, spout up",
+   "supports": "no",
+   "infill": 30,
+   "kind": "PRT",
+   "joint": "PIV_pan",
+   "bbox_world_home": [
+    [
+     -103.44,
+     -48.0,
+     245.0
+    ],
+    [
+     48.0,
+     48.0,
+     263.0
+    ]
+   ]
+  },
+  "PRT_feeder_crown": {
+   "stl": "feeder_crown",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     -1.0,
+     -8.742277657347586e-08
+    ],
+    [
+     0.0,
+     8.742277657347586e-08,
+     -1.0
+    ]
+   ],
+   "orient": "top (z 286) on the bed: lip, socket cone, slot ceilings and pocket floors all print as floors",
+   "supports": "no",
+   "infill": 25,
+   "kind": "PRT",
+   "joint": "PIV_pan",
+   "bbox_world_home": [
+    [
+     -103.44,
+     -48.0,
+     263.0
+    ],
+    [
+     48.0,
+     48.0,
+     286.0
+    ]
+   ]
+  },
+  "PRT_feeder_cover": {
+   "stl": "feeder_cover",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     -1.0,
+     -8.742277657347586e-08
+    ],
+    [
+     0.0,
+     8.742277657347586e-08,
+     -1.0
+    ]
+   ],
+   "orient": "chamfered top on the bed, ears up",
+   "supports": "no",
+   "infill": 20,
+   "kind": "PRT",
+   "joint": "PIV_pan",
+   "bbox_world_home": [
+    [
+     -89.6,
+     -24.54,
+     286.0
+    ],
+    [
+     -42.6,
+     24.54,
+     322.3
+    ]
+   ]
+  },
+  "BUY_servo_feeder": {
+   "mass_g": 66,
+   "src": "components.json",
+   "kind": "BUY",
+   "joint": "PIV_pan",
+   "bbox_world_home": [
+    [
+     -85.5,
+     -10.07,
+     276.2
+    ],
+    [
+     -45.5,
+     10.07,
+     320.1
+    ]
+   ]
+  },
+  "BUY_horn_feeder": {
+   "mass_g": 4,
+   "src": "components.json servo_horn_disc (+ the servo output spline)",
+   "kind": "BUY",
+   "joint": "PIV_feeder_pinion",
+   "bbox_world_home": [
+    [
+     -65.5,
+     -10.0,
+     271.3
+    ],
+    [
+     -45.5,
+     10.0,
+     280.2
+    ]
+   ]
+  },
+  "PRT_feeder_pinion": {
+   "stl": "feeder_pinion",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "orient": "gear face on the bed, horn recess up",
+   "supports": "no",
+   "infill": 60,
+   "kind": "PRT",
+   "joint": "PIV_feeder_pinion",
+   "bbox_world_home": [
+    [
+     -79.41,
+     -24.0,
+     263.3
+    ],
+    [
+     -31.59,
+     24.0,
+     272.3
+    ]
+   ]
+  },
+  "FST_fhorn_0": {
+   "part": "M2_pan x 8",
+   "host": "PRT_feeder_pinion",
+   "step": "10a",
+   "kind": "FST",
+   "joint": "PIV_feeder_pinion",
+   "head": [
+    -48.5,
+    0.0,
+    273.8
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 8,
+   "spec": "M2_pan",
+   "bbox_world_home": [
+    [
+     -50.4,
+     -1.9,
+     265.8
+    ],
+    [
+     -46.6,
+     1.9,
+     275.1
+    ]
+   ]
+  },
+  "FST_fhorn_1": {
+   "part": "M2_pan x 8",
+   "host": "PRT_feeder_pinion",
+   "step": "10a",
+   "kind": "FST",
+   "joint": "PIV_feeder_pinion",
+   "head": [
+    -55.5,
+    7.0,
+    273.8
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 8,
+   "spec": "M2_pan",
+   "bbox_world_home": [
+    [
+     -57.4,
+     5.1,
+     265.8
+    ],
+    [
+     -53.6,
+     8.9,
+     275.1
+    ]
+   ]
+  },
+  "FST_fhorn_2": {
+   "part": "M2_pan x 8",
+   "host": "PRT_feeder_pinion",
+   "step": "10a",
+   "kind": "FST",
+   "joint": "PIV_feeder_pinion",
+   "head": [
+    -62.5,
+    8.572527594031472e-16,
+    273.8
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 8,
+   "spec": "M2_pan",
+   "bbox_world_home": [
+    [
+     -64.4,
+     -1.9,
+     265.8
+    ],
+    [
+     -60.6,
+     1.9,
+     275.1
+    ]
+   ]
+  },
+  "FST_fhorn_3": {
+   "part": "M2_pan x 8",
+   "host": "PRT_feeder_pinion",
+   "step": "10a",
+   "kind": "FST",
+   "joint": "PIV_feeder_pinion",
+   "head": [
+    -55.5,
+    -7.0,
+    273.8
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 8,
+   "spec": "M2_pan",
+   "bbox_world_home": [
+    [
+     -57.4,
+     -8.9,
+     265.8
+    ],
+    [
+     -53.6,
+     -5.1,
+     275.1
+    ]
+   ]
+  },
+  "PRT_feeder_disc": {
+   "stl": "feeder_disc",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "orient": "gear band on the bed, fins up",
+   "supports": "no",
+   "infill": 40,
+   "kind": "PRT",
+   "joint": "PIV_feeder",
+   "bbox_world_home": [
+    [
+     -34.5,
+     -34.5,
+     263.3
+    ],
+    [
+     34.5,
+     34.5,
+     277.3
+    ]
+   ]
+  },
+  "CAB_bus_feeder": {
+   "part": "cable route",
+   "step": "",
+   "kind": "CAB",
+   "joint": "PIV_pan",
+   "path_len": 325.4629706190506,
+   "lead_len": 500,
+   "bbox_world_home": [
+    [
+     -102.29,
+     -18.36,
+     76.0
+    ],
+    [
+     1.34,
+     1.4,
+     275.93
+    ]
+   ]
+  },
+  "BUY_jar": {
+   "mass_g": 350.0,
+   "src": "DESIGN_BRIEF v2 table (Ball/Kerr regular-mouth pint, nominal, confirm with calipers)",
+   "kind": "BUY",
+   "joint": "PIV_jar",
+   "bbox_world_home": [
+    [
+     -38.5,
+     -38.5,
+     302.6
+    ],
+    [
+     38.5,
+     38.5,
+     432.6
+    ]
+   ]
+  },
+  "BUY_mm_fill": {
+   "mass_g": 400.0,
+   "src": "400 g of M&Ms (mass carrier for the tip check)",
+   "kind": "BUY",
+   "joint": "PIV_jar",
+   "bbox_world_home": [
+    [
+     -34.0,
+     -33.98,
+     334.6
+    ],
+    [
+     34.0,
+     33.98,
+     421.1
+    ]
+   ]
+  },
+  "BUY_jar_band": {
+   "mass_g": 15.0,
+   "src": "user's jar band",
+   "kind": "BUY",
+   "joint": "PIV_jar",
+   "bbox_world_home": [
+    [
+     -36.75,
+     -36.75,
+     300.5
+    ],
+    [
+     36.75,
+     36.75,
+     313.5
+    ]
+   ]
+  },
+  "PRT_jar_adapter": {
+   "stl": "jar_adapter",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     -1.0,
+     -8.742277657347586e-08
+    ],
+    [
+     0.0,
+     8.742277657347586e-08,
+     -1.0
+    ]
+   ],
+   "orient": "lid disc (glass side) on the bed, spout up",
+   "supports": "no",
+   "infill": 40,
+   "kind": "PRT",
+   "joint": "PIV_jar",
+   "bbox_world_home": [
+    [
+     -34.5,
+     -34.5,
+     290.7
+    ],
+    [
+     34.5,
+     34.5,
+     302.6
+    ]
+   ]
+  },
+  "PRT_jar_valve": {
+   "stl": "jar_valve",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "orient": "skirt + baffle bottom on the bed (lug undersides bridge 5.5 mm)",
+   "supports": "no",
+   "infill": 40,
+   "kind": "PRT",
+   "joint": "PIV_jar",
+   "bbox_world_home": [
+    [
+     -34.0,
+     -34.77,
+     272.9
+    ],
+    [
+     37.0,
+     34.77,
+     300.0
+    ]
+   ]
+  },
+  "PRT_jar_gate": {
+   "stl": "jar_gate",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "orient": "flat, chamfer, tab, stop lug and detent notches up",
+   "supports": "no",
+   "infill": 100,
+   "kind": "PRT",
+   "joint": "PIV_jar",
+   "bbox_world_home": [
+    [
+     -27.0,
+     -28.0,
+     288.35
+    ],
+    [
+     34.5,
+     28.0,
+     297.0
+    ]
+   ]
+  },
+  "PRT_gate_detent": {
+   "stl": "gate_detent",
+   "print_rot": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     -4.371138828673793e-08,
+     1.0
+    ],
+    [
+     0.0,
+     -1.0,
+     -4.371138828673793e-08
+    ]
+   ],
+   "orient": "flat +Y back face (screw-head face) on the bed: the beam along x and its bending lie in the layer plane",
+   "supports": "no",
+   "infill": 100,
+   "kind": "PRT",
+   "joint": "PIV_jar",
+   "bbox_world_home": [
+    [
+     3.5,
+     24.0,
+     288.4
+    ],
+    [
+     31.5,
+     38.5,
+     301.5
+    ]
+   ]
+  }
+ },
+ "features": [
+  {
+   "feature": "screw_hole",
+   "at": [
+    104.6,
+    -53.5,
+    90.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 20.0,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    104.6,
+    -100.5,
+    90.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 20.0,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    30.0,
+    -53.5,
+    90.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 20.0,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    30.0,
+    -100.5,
+    90.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 20.0,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -112.0,
+    60.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -112.0,
+    60.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -112.0,
+    -75.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -112.0,
+    -75.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -30.0,
+    -112.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -30.0,
+    -112.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    2.0,
+    -100.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    2.0,
+    -100.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    60.0,
+    -30.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    60.0,
+    -30.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    112.0,
+    0.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    112.0,
+    0.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    60.0,
+    112.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    60.0,
+    112.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -60.0,
+    112.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -60.0,
+    112.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -72.0,
+    -86.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -72.0,
+    -86.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -8.0,
+    -86.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -8.0,
+    -86.0,
+    0.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -76.0,
+    14.4,
+    11.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 8,
+   "kind": "clamp",
+   "head": "pan",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -76.0,
+    -52.4,
+    11.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 8,
+   "kind": "clamp",
+   "head": "pan",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -34.0,
+    38.0,
+    72.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -34.0,
+    38.0,
+    72.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    34.0,
+    38.0,
+    72.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    34.0,
+    38.0,
+    72.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -34.0,
+    88.0,
+    72.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -34.0,
+    88.0,
+    72.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    34.0,
+    88.0,
+    72.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    34.0,
+    88.0,
+    72.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    14.37,
+    79.0,
+    28.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    14.37,
+    79.0,
+    28.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -14.37,
+    49.0,
+    28.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -14.37,
+    49.0,
+    28.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "drill_to_fit_boss",
+   "at": [
+    76.5,
+    23.5,
+    8.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "od": 7.0,
+   "height": 5.0
+  },
+  {
+   "feature": "drill_to_fit_boss",
+   "at": [
+    76.5,
+    74.5,
+    8.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "od": 7.0,
+   "height": 5.0
+  },
+  {
+   "feature": "drill_to_fit_boss",
+   "at": [
+    111.5,
+    23.5,
+    8.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "od": 7.0,
+   "height": 5.0
+  },
+  {
+   "feature": "drill_to_fit_boss",
+   "at": [
+    111.5,
+    74.5,
+    8.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "od": 7.0,
+   "height": 5.0
+  },
+  {
+   "feature": "pcb_pocket",
+   "at": [
+    94.0,
+    49.0,
+    8.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "w": 42.0,
+   "h": 58.0,
+   "depth": 3,
+   "clear": 0.4
+  },
+  {
+   "feature": "horn_recess",
+   "at": [
+    0.0,
+    54.0,
+    75.9
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "disc_d": 20.0,
+   "depth": 1.0,
+   "bolt_circle_d": 14.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -60.0,
+    -25.2,
+    105.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -60.0,
+    -25.2,
+    105.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -60.0,
+    -9.0,
+    105.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -60.0,
+    -9.0,
+    105.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    22.0,
+    -25.2,
+    105.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    22.0,
+    -25.2,
+    105.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    22.0,
+    -9.0,
+    105.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    22.0,
+    -9.0,
+    105.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -10.0,
+    16.2,
+    105.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -10.0,
+    16.2,
+    105.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    10.0,
+    16.2,
+    105.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    10.0,
+    16.2,
+    105.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -97.0,
+    2.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 10.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -97.0,
+    2.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 10.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -97.0,
+    15.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 10.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -97.0,
+    15.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 10.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -101.0,
+    -6.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 10.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -101.0,
+    -6.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 10.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    50.0,
+    16.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 10.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    50.0,
+    16.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 10.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    50.0,
+    -5.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 10.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    50.0,
+    -5.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 10.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    80.0,
+    16.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 10.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    80.0,
+    16.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 10.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    80.0,
+    -5.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 10.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    80.0,
+    -5.0,
+    92.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 10.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    0.0,
+    17.0,
+    77.5
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 7.5
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    0.0,
+    17.0,
+    77.5
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 7.5
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -14.722,
+    -8.5,
+    77.5
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 7.5
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -14.722,
+    -8.5,
+    77.5
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 7.5
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    14.722,
+    -8.5,
+    77.5
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 7.5
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    14.722,
+    -8.5,
+    77.5
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 7.5
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -102.5,
+    10.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 8.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -102.5,
+    10.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 8.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -101.5,
+    -5.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 8.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -101.5,
+    -5.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 8.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -95.0,
+    19.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 8.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -95.0,
+    19.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 8.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    56.0,
+    19.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 8.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    56.0,
+    19.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 8.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    56.0,
+    -21.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 8.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    56.0,
+    -21.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 8.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    90.0,
+    16.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 8.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    90.0,
+    16.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 8.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    90.0,
+    -19.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 8.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    90.0,
+    -19.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 8.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    103.454,
+    17.0,
+    196.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 14,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 3.2,
+   "clamp": 7.253645038507699
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    103.454,
+    17.0,
+    196.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 14,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 3.2,
+   "clamp": 7.253645038507699
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    103.454,
+    -17.0,
+    196.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 14,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 3.2,
+   "clamp": 7.253645038507699
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    103.454,
+    -17.0,
+    196.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 14,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 3.2,
+   "clamp": 7.253645038507699
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    103.454,
+    17.0,
+    238.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 14,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 3.2,
+   "clamp": 7.253645038507699
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    103.454,
+    17.0,
+    238.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 14,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 3.2,
+   "clamp": 7.253645038507699
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    103.454,
+    -17.0,
+    238.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 14,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 3.2,
+   "clamp": 7.253645038507699
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    103.454,
+    -17.0,
+    238.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 14,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 3.2,
+   "clamp": 7.253645038507699
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -36.0,
+    -21.0,
+    252.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 8.0,
+   "kind": "clearance",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 0.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -36.0,
+    21.0,
+    252.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 8.0,
+   "kind": "clearance",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 0.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    34.0,
+    -20.0,
+    252.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 8.0,
+   "kind": "clearance",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 0.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    34.0,
+    20.0,
+    252.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 8.0,
+   "kind": "clearance",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 0.0
+  },
+  {
+   "feature": "horn_recess",
+   "at": [
+    52.0,
+    0.0,
+    222.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "disc_d": 20.0,
+   "depth": 1.0,
+   "bolt_circle_d": 14.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    5.6,
+    24.674,
+    172.077
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 10,
+   "kind": "clearance",
+   "head": "pan",
+   "sink": 2.4,
+   "clamp": 0.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    5.6,
+    24.674,
+    172.077
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 10,
+   "kind": "clearance",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 0.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    5.6,
+    34.923,
+    157.674
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 10,
+   "kind": "clearance",
+   "head": "pan",
+   "sink": 2.4,
+   "clamp": 0.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    5.6,
+    34.923,
+    157.674
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 10,
+   "kind": "clearance",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 0.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    5.6,
+    49.326,
+    167.923
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 10,
+   "kind": "clearance",
+   "head": "pan",
+   "sink": 2.4,
+   "clamp": 0.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    5.6,
+    49.326,
+    167.923
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 10,
+   "kind": "clearance",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 0.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    5.6,
+    39.077,
+    182.326
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 10,
+   "kind": "clearance",
+   "head": "pan",
+   "sink": 2.4,
+   "clamp": 0.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    5.6,
+    39.077,
+    182.326
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 10,
+   "kind": "clearance",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 0.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    5.6,
+    17.868,
+    196.888
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "pan",
+   "sink": 2.4,
+   "clamp": 5.6
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    5.6,
+    17.868,
+    196.888
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 5.6
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    5.6,
+    49.755,
+    152.075
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "pan",
+   "sink": 2.4,
+   "clamp": 5.6
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    5.6,
+    49.755,
+    152.075
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 5.6
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -84.25,
+    54.518,
+    182.465
+   ],
+   "into": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -84.25,
+    54.518,
+    182.465
+   ],
+   "into": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -84.25,
+    19.482,
+    157.535
+   ],
+   "into": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -84.25,
+    19.482,
+    157.535
+   ],
+   "into": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    35.5,
+    -17.0,
+    199.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    35.5,
+    -17.0,
+    199.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    35.5,
+    21.0,
+    221.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    35.5,
+    21.0,
+    221.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    35.5,
+    -16.0,
+    209.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    35.5,
+    -16.0,
+    209.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    35.5,
+    74.0,
+    122.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    35.5,
+    74.0,
+    122.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    35.5,
+    79.0,
+    168.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    35.5,
+    79.0,
+    168.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    35.5,
+    92.0,
+    144.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    35.5,
+    92.0,
+    144.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    35.5,
+    51.0,
+    120.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    35.5,
+    51.0,
+    120.0
+   ],
+   "into": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    4.0,
+    -14.922,
+    190.978
+   ],
+   "into": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "length": 35.0,
+   "kind": "clearance",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 0.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    4.0,
+    -14.922,
+    190.978
+   ],
+   "into": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "length": 35.0,
+   "kind": "clearance",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 0.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    4.0,
+    -14.922,
+    190.978
+   ],
+   "into": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "length": 35.0,
+   "kind": "clearance",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 0.0
+  },
+  {
+   "feature": "nut_trap",
+   "at": [
+    32.8,
+    -14.922,
+    190.978
+   ],
+   "into": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "af": 5.7,
+   "depth": 3.3,
+   "slot": false
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    19.75,
+    43.698,
+    117.426
+   ],
+   "into": [
+    0.0,
+    -0.058,
+    0.9983
+   ],
+   "length": 6.0,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 3.3,
+   "clamp": 1.7000000000001496
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    19.75,
+    43.698,
+    117.426
+   ],
+   "into": [
+    0.0,
+    -0.058,
+    0.9983
+   ],
+   "length": 5.0,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 1.7000000000001496
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    10.0,
+    -29.324,
+    171.83
+   ],
+   "into": [
+    0.0,
+    0.9479,
+    0.3185
+   ],
+   "length": 13.5,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 9.8
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    13.0,
+    -30.601,
+    164.016
+   ],
+   "into": [
+    0.0,
+    0.9479,
+    0.3185
+   ],
+   "length": 11.3,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 5.4
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    26.0,
+    -29.324,
+    171.83
+   ],
+   "into": [
+    0.0,
+    0.9479,
+    0.3185
+   ],
+   "length": 13.5,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 9.8
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    26.0,
+    -30.601,
+    164.016
+   ],
+   "into": [
+    0.0,
+    0.9479,
+    0.3185
+   ],
+   "length": 11.3,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 0.0,
+   "clamp": 5.4
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -36.0,
+    -21.0,
+    252.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "none",
+   "sink": 0.0,
+   "clamp": 11.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -36.0,
+    -21.0,
+    252.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "none",
+   "sink": 0.0,
+   "clamp": 11.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -36.0,
+    21.0,
+    252.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "none",
+   "sink": 0.0,
+   "clamp": 11.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -36.0,
+    21.0,
+    252.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "none",
+   "sink": 0.0,
+   "clamp": 11.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    34.0,
+    -20.0,
+    252.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "none",
+   "sink": 0.0,
+   "clamp": 11.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    34.0,
+    -20.0,
+    252.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "none",
+   "sink": 0.0,
+   "clamp": 11.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    34.0,
+    20.0,
+    252.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "none",
+   "sink": 0.0,
+   "clamp": 11.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    34.0,
+    20.0,
+    252.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 16,
+   "kind": "clamp",
+   "head": "none",
+   "sink": 0.0,
+   "clamp": 11.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    0.0,
+    41.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 8,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    0.0,
+    41.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 8,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    0.0,
+    -41.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 8,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    0.0,
+    -41.0,
+    260.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 8,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 3.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -66.0,
+    18.6,
+    290.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -66.0,
+    18.6,
+    290.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -66.0,
+    -18.6,
+    290.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -66.0,
+    -18.6,
+    290.0
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "length": 12,
+   "kind": "clamp",
+   "head": "csk",
+   "sink": 0.0,
+   "clamp": 4.0
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    0.0,
+    31.0,
+    295.5
+   ],
+   "into": [
+    -0.0,
+    -1.0,
+    0.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 3.0,
+   "clamp": 3.5
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    0.0,
+    31.0,
+    295.5
+   ],
+   "into": [
+    -0.0,
+    -1.0,
+    0.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 3.0,
+   "clamp": 3.5
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -31.0,
+    0.0,
+    295.5
+   ],
+   "into": [
+    1.0,
+    -0.0,
+    0.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 3.0,
+   "clamp": 3.5
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -31.0,
+    0.0,
+    295.5
+   ],
+   "into": [
+    1.0,
+    -0.0,
+    0.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 3.0,
+   "clamp": 3.5
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -0.0,
+    -31.0,
+    295.5
+   ],
+   "into": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 3.0,
+   "clamp": 3.5
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    -0.0,
+    -31.0,
+    295.5
+   ],
+   "into": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "length": 10,
+   "kind": "clamp",
+   "head": "cap",
+   "sink": 3.0,
+   "clamp": 3.5
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    9.5,
+    37.5,
+    294.5
+   ],
+   "into": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "length": 10.0,
+   "kind": "clamp",
+   "head": "none",
+   "sink": 0.0,
+   "clamp": 4.802102514075926
+  },
+  {
+   "feature": "screw_hole",
+   "at": [
+    9.5,
+    37.5,
+    294.5
+   ],
+   "into": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "length": 10.0,
+   "kind": "clamp",
+   "head": "pan",
+   "sink": 1.0,
+   "clamp": 5.344712720922551
+  },
+  {
+   "feature": "horn_recess",
+   "at": [
+    -55.5,
+    0.0,
+    272.3
+   ],
+   "into": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "disc_d": 20.0,
+   "depth": 1.0,
+   "bolt_circle_d": 14.0
+  }
+ ]
+}

@@ -22,7 +22,10 @@ Sources are abbreviated:
   `a08af4e9c73aea17a`, `F2` finish `acf219186d0bd28e9`, `V2R2` review `abf293a6ad3a00f0f`.
   v2 A3 agents: `P3` plan `a6a1ef3c308de2f03`, builders `B3-params` `a697af8569035dd0c`, `B3-launcher` `a54906111c8558bce`,
   `B3-feeder` `ac1b0b7e457db418e`, `B3-base` `ae57b92afa22d5800`, `B3-finish` `ae03e95c6533a28da`, `F3` finish
-  `ae5efc1c43c08dd7a`, `V2R3` review `a9d0baaa5e62c78f0`
+  `ae5efc1c43c08dd7a`, `V2R3` review `a9d0baaa5e62c78f0`.
+  v2 A4 agents: `P4` plan `aaea83537a75dface`, builders `B4-params` `a7061741ac9adb630`, `B4-launcher` `ab19211aef41d8234`,
+  `B4-feeder` `a7f1b7ad89443aea1`, `B4-cables` `a98004765603d790f`, `B4-finish` `a4c233ad282956d1b`, `F4` finish
+  `a2dd9ca6dd2a3d344`, `V2R4` review `a9b8ec9c08d63b15a`
 
 **Baseline:** v1 (the no-tools loop) ran attempts 1-3 and was then stopped by the user (2026-10-24 evening, see
 `HARVEST_BRIEF.md` "Process change"). The v1 tool results below are counterfactual. Every
@@ -1127,3 +1130,148 @@ journal (deferred by the designer, `contact_normal` exists).
   bbox-bridge warns; overlay: 3 fails exactly and the zero-margin pocket; `cad bom`: exactly 2 BAD rows; `cad rows`) and
   8 (`examples/slide-gate`: clean 0 F with the prismatic sweep, detent flex 3.2 mm³, the stop at 20.5, bridge 5.0, chain
   and service; `--bug` catches 6 planted problems; the junction warn).
+
+## v2 Attempt 4 (harvested 2026-10-25)
+
+Inputs: the 8 attempt-4 agents in `V2WF/journal.jsonl` (lines 50-65) and their transcripts, plus `HW2/renders/attempt-4/`:
+progress.md, cadcheck.json, precheck_rows.json, precheck_a3_model.json, review.md, review.json, review/ (notes.md,
+review_rows.json, cadcheck_review.json, 2 PNGs). The blend V2R4 reviewed (`/tmp/rv4/model.blend`, md5 `a6085127…`, the
+same as `HW2/blender/model.blend` at 07:10) is archived as `examples/mm-launcher-v2a4/`, with the designer's checks.json,
+manifest.json, BOM, V2R4's `review_rows_v2a4.json` and `overlay_v2a4.json` (V2R4's major as one swept row). Plan #5 had
+started (0.6 min) and is not ingested.
+
+**The tools were `a20a4d7`** (progress.md line 1): the first attempt with `payload_fit`, `sightlines`, slide `expect`,
+`cad py` and the `cad q` help, but not `dea6536` (`cad rows`, `cad bom`, `=EXPR`, prismatic joints, slide `flex`,
+`cable_chains`, stock lengths, the ray-slip and inscribed-bridge fixes). Plan #5 moved the pin to `dea6536`, so **this
+run's fixes reach v2 attempt 6.**
+
+### Per-agent cost (`cc_transcript.py workflow V2WF`)
+
+| Agent | Wall | Model | Tools | Output tok (thinking) | Cache read | Peak ctx | Longest gen | cad runs (failed) | Images |
+|---|---|---|---|---|---|---|---|---|---|
+| P4 plan | 8.3 | 7.6 | 0.7 | 40k (20k) | 2.8M | 137k | <120 s | 2 (0) | 0 |
+| B4-params | 7.0 | 4.2 | 2.8 | 19k (5k) | 1.6M | 89k | <120 s | 3 (0) | 0 |
+| B4-launcher | 18.7 | 8.8 | 9.9 | 39k (19k) | 4.6M | 139k | <120 s | 13 (2) | 1 |
+| B4-feeder | 18.8 | 9.6 | 9.2 | 45k (25k) | 3.4M | 142k | <120 s | 8 (0) | 1 |
+| B4-cables | 3.9 | 1.2 | 2.7 | 6k (1k) | 0.4M | 43k | <120 s | 1 (0) | 0 |
+| B4-finish | 21.0 | 11.0 | 10.0 | 57k (12k) | 8.8M | 199k | <120 s | 12 (0) | 6 |
+| F4 finish | 1.0 | 1.0 | 0.0 | 6k (0.3k) | 0.2M | 39k | - | 0 | 0 |
+| V2R4 review | 12.8 | 10.1 | 2.8 | 54k (25k) | 5.9M | **200k** | <120 s | 11 (0) | 5 |
+
+| | v1 best (A3) | v2 A1 | v2 A2 | v2 A3 | **v2 A4** |
+|---|---|---|---|---|---|
+| Wall (design + review) | 66.1 min | 187.5 | 150.0 | 145.8 | **91.5** (plan 8.3, builds 69.4, finish 1.0, review 12.8) |
+| Output tokens (thinking) | 352k (228k) | 902k (601k) | 524k (312k) | 474k (268k) | **266k (107k)** |
+| Cache read | 35.8M | 69.7M | 45.6M | 47.1M | **27.6M** |
+| Peak context (any agent) | 488k | 348k | 340k | 257k | **200k** |
+| Longest generation | 290 s | 765 s | 291 s | 276 s | **< 120 s** |
+| F/M/A (sum) | 6/6/6 (18) | 7/7/6 (20) | 8/8/9 (25) | 8/8/8 (24) | **8/9/9 (26)** |
+| Issues B/M/m | 0/4/4 | 0/5/7 | 0/2/6 | 0/1/5 | **0/1/2** |
+| cadcheck at hand-off | - | 0 F, 34 W | 0 F, 44 W | 0 F, 34 W, 0 untriaged | **0 F, 43 W, 0 untriaged** |
+| cad runs (failed) | - | 121 (15) | 93 (1) | 91 (3) | **50 (2)** |
+
+**The best attempt of all seven, and the cheapest v2 one:** the highest score (26), the fewest issues (3), 37% less
+wall time and 44% fewer output tokens than v2 A3, the lowest peak context, and no generation over 120 s. It is the
+first v2 attempt within 1.4x of the v1 baseline's wall time (91.5 against 66.1) while scoring 8 points higher. Part of
+the drop is scope: four small changes and no base rebuild. Manufacturability went to 9 for the first time ("cadcheck 0
+fails and every warn explained ... BOM fasteners and steps match the manifest").
+
+### Time and token sinks
+
+**V2A4-T1. A failed build read as a clean check of the old model.** B4-launcher removed the wrong line and the build
+raised `UnboundLocalError` (`0:03:44`). The agent ran `cad build ... | tail` and then `cad check`, and read a full report
+of the previous blend; it noticed only from the traceback ("the check actually ran against the old model since the
+build failure didn't halt the pipeline (tail masked the exit code)"). The cause was in the wrapper, not just the pipe:
+**Blender exits 0 when a `--python` script raises**, and `cad`'s `run()` ended in `| grep ... || true`. Measured: a
+raising script gave exit 0 without `--python-exit-code`, 1 with it. **Fixed:** `run()` passes `--python-exit-code 1`
+and keeps Blender's status through the filter; `cad build` prints `cad: BUILD FAILED (exit N) ...` on stderr, which a
+`| tail` doesn't swallow. cadcheck warns `build: the model is older than parts/launcher.py` when a `*.py` or
+`parts/*.py` beside the blend is newer than it, and that warn can't be accepted. Verify 4g plants both.
+
+**V2A4-T2. Poses past a joint's limit are taken silently** (progress.md "Tool issues"). P4 pre-ran the new full-lift
+rows at `PIV_nip_lift -2.19` on the A3 model, whose limit was -1.493: the hood was posed through the solid leaf and the
+rows passed. Only the hard-stop ray rows failed, so the precheck still worked. A warn would be wrong here: A4's own
+config has 8 deliberate past-limit poses (tilt -3/46 for hard stops beyond the 0..45 firmware range, hood 1 deg past the
+min-gap stop). **Fixed:** cadcheck lists every pose outside its joint's range in the summary, grouped by joint
+(`poses_past_limits`). `"past_limit_ok": true` drops a row from the list. A pose that names no joint, or a coupled
+joint, is a `config` fail, because set_pose ignored both. On the A3 blend with A4's config the list leads with
+"PIV_nip_lift range -1.49302..0: -2.19 in distances[23] distances[24] distances[25] distances[38] sightlines[0]".
+
+**V2A4-T3. The `a20a4d7` false warns were paid for again, as predicted.** P4 counted 9 ray-vs-nearest warns on the A3
+model and accepted them with 3 reasons. The 3 inherited bbox-bridge accepts stayed too. With today's tools all 6 accepts go
+stale on the A4 blend: designer config 0 F, 31 W, 0 untriaged, 6 stale accepts. The fix (V2A3-T2/T3) is in `dea6536`,
+which A5 runs.
+
+**V2A4-T4. Hand-written report readers, still:** 71 bash calls with `json.load` (A3: 67) in all 8 agents. 3 died on a
+guessed key: `accepted_warns` is a list, not a dict (B4-launcher); `checks.X.rows` (B4-finish); the manifest has no
+`fasteners` key (B4-finish, the same key P3 and B3-finish guessed in A3). `cad rows` arrives in A5; count again there.
+
+**V2A4-T5. Other costs.**
+- About 22 bash calls read tool source (A3: 31), mostly the ray gap, joint and `--only` code. The questions were
+  prismatic joints and hex specs, both added in `dea6536`.
+- `cad build` deletes `stl/*.stl` before exporting, which deleted B4-feeder's test coupon. B4-finish moved it to `stl/tools/`.
+  Now in footguns.md.
+- The planner was short this time (8.3 min, P3 22.2): it wrote `a4_checks.py` (7 KB) and precheck rows. On the A3 model
+  the precheck gave 7 F / 13 W, every fail a planned change.
+- The finish phase again found every step done and returned in 1.0 min.
+
+### Issues V2R4 raised, and what the tools did with them
+
+| ID | V2R4 issue | At hand-off | Now | Why it got through |
+|---|---|---|---|---|
+| V2A4-F1 | **Major (A2-01, third attempt as the one major):** the full leaf lift opens the nip at BDC (8.28..9.12) but not on the entry arc. The hood is concentric to PSI_C 78 and hinged at PSI_TOP 112, so the 2.19° lift opens psi 80 by 1.14 (BDC 1.97). Full-lift gap 7.50 / 7.67 / 7.95 at psi 80 (min / home / max stop): a 7.5 candy is rigidly squeezed at every setting | not flagged: 4 full-lift rays at BDC passed (8.28-9.12), and params `gap_bdc()` asserted over psi ±2 | **3 fails from one row:** `ray.sweep` over psi 0..100 about the wheel axis gives 7.496 / 7.666 / 7.954, worst at 80, with the profile. V2R4's 3 rows plus `gap_profile.py` gave the same numbers | the row and the assert sampled one station of a passage. New `ray.sweep`; SKILL, checklist, footguns and planner prompt say to sweep the passage |
+| V2A4-F2 | Minor (A4-01, aesthetics): the detent tab's band relief leaves a square step; the pan head stands 1.4 proud | - | - | not geometric-checkable |
+| V2A4-F3 | Minor (A4-02): BOM leaf stress numbers rest on the BDC-only gap helper; the cover's manifest orient text says slot 22 x 7.5, geometry 22 x 8.3 | - | - | follows from F1; free text built from a literal, not params |
+
+V2R4 marked 1 of 3 issues `tool_catchable`, correctly. **At hand-off cadcheck flagged none**, as in A3: every warn was
+triaged, and the miss was a row that measured the wrong place. Previous issues: 5 of 6 FIXED (A1-03 pocket, A2-02
+encoder lead, A3-01 detent, A3-02 BOM stud, A3-03 floor slide), A2-01 PARTIAL.
+
+**Recurrence: A2-01 has now been the one major in v2 A2, A3 and A4,** and each time the designer fixed exactly what
+the last reviewer's row measured. A2: the leaf ran out of travel, so travel was added. A3: the row asserted the nominal
+candy, so it was resized to the max. A4: the row sat at BDC, and the entry arc fails. The tools moved from "nobody wrote the
+row" (A1/A2) to "the row was too narrow" (A3/A4). The swept row is the cheap 1-D cover. A full payload-pass check (a
+lens probe moved along the passage) would be the next step if the sweep row still gets written at one station.
+
+**Config disputes (5):** the BDC-only full-lift rows (F1, swept row now); the params assert over psi ±2 (F1, rule in
+the SKILL); the leaf operating stress quoted at BDC lift (follows F1); the detent open notch with no row (prismatic
+joint in `dea6536`); post_R x journal_plate contact still hides the journal (`contact_normal` exists, deferred for the
+third time).
+
+### What worked
+- **Plan-time precheck with review rows:** P4 merged V2R3's rows and pre-ran them on the A3 model. All 7 fails were
+  planned changes. Five of six previous issues closed.
+- **`payload_fit`, first live use:** 4 rows with `margin` (MIN pair blocked 0.06, flat 13.5 fits 0.14). A1-03, open
+  since v1 A1, is FIXED. The designer also printed a pocket coupon to calibrate against real candies.
+- **Warn triage held:** 0 untriaged at hand-off for the second attempt running. V2R4's re-run matched the warn set.
+- **Small steps:** no generation over 120 s in any agent (A3: 5 over 120 s, the longest 276 s).
+
+### Reviewer quality (V2R4)
+- 12.8 min, the fastest v2 review. Each issue has numbers and a dimensioned fix (PSI_C 78 to 45, analytic 8.14 at psi
+  50). The major is anchored to failing rows (`review_rows.json`, 6 fails).
+- Probes where a row would do: `gap_profile.py` is now a swept row, `gate_move.py` a prismatic joint (`dea6536`), and
+  `rot_clear.py` (rotating clearance against the brief's 1.5) could be `distances` rows. `psi_c.py` is design
+  arithmetic and fine as a probe.
+- `tool_catchable` was right on all 3.
+
+### Why not the existing code (v2 A4 additions)
+- **`ray.sweep` vs N ray rows:** V2R4 wrote 3 rows by hand (origins and directions computed per angle) and still
+  needed a probe for the profile. The sweep reuses `ray_gap` per station (about 25 lines), and turns the ray in its
+  frame before the frame transform, so a ray framed in a moving joint stays framed.
+- **Sweep vs `payload_fit` along a path:** payload_fit places a probe at one floor point. A moving probe along an arc is
+  the general answer but costs a Manifold intersection per station and pose. The ray profile is enough to size PSI_C.
+- **Past-limit list vs warn vs clamping:** a warn gave 8 false warns on A4's config; clamping would silently change
+  deliberate hard-stop rows. A summary list costs nothing to triage.
+- **`--python-exit-code` vs parsing the output for "Error":** Blender's own flag; the status file keeps POSIX sh (no
+  `pipefail`).
+
+### Still open (gaps)
+- A swept ray is 1-D: a candy tilting in the passage, or a passage that isn't an arc or a line, needs a payload-pass probe.
+- Edge-break consistency and free text in the manifest (F3's stale "22 x 7.5") are not checkable from the mesh.
+- Gear tooth tips as thin walls; PCB exposure (V2A1-F11); no insertion sweep for merges (V2A1-F6); `parallel_builds`
+  untested live.
+
+### Verification of this run
+- `tools/verify_all.sh`: 71/71 passed (`/tmp/alex3d-verify.log`); A1-A3 and v2 A1-A3 unchanged. New: verify 4g (v2 A4 designer config 0 F / 0 untriaged / 6 stale accepts / 8 past-limit poses; the
+  swept row fails at 7.50 / 7.67 / 7.95 worst at psi 80; -2.19 on the A3 model listed past the limit; stale-model warn
+  survives an accept; a raising build script exits non-zero with `BUILD FAILED`).

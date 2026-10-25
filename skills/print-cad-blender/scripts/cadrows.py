@@ -27,6 +27,9 @@ def short(v, n=60):
             return "[" + ",".join(short(x) for x in v) + "]"
         if len(v) <= 3 and all(isinstance(x, list) and len(x) <= 3 for x in v):
             return "[" + ",".join(short(x) for x in v) + "]"
+        if all(isinstance(x, list) and len(x) == 2 and not isinstance(x[1], (dict, list)) for x in v):
+            # a swept ray's profile [[deg, mm], ...]: print it, it is the point of the row
+            return " ".join("%s:%s" % (short(x[0]), "-" if x[1] is None else short(x[1])) for x in v)
         return "[%d]" % len(v)
     s = str(v)
     return s if len(s) <= n else s[:n - 3] + "..."

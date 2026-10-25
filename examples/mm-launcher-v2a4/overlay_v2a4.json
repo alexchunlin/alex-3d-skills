@@ -1,0 +1,7 @@
+{"distances": [
+ {"a": "PRT_hood", "b": "PRT_flywheel", "min": "=MM_T[1] + TAPE_T",
+  "ray": {"origin": [21.0, 37.0, 132.0], "dir": [0, 0, 1],
+          "sweep": {"center": [21.0, 37.0, 170.0], "axis": [-1, 0, 0], "from": 0, "to": 100, "step": 5}},
+  "poses": [{"PIV_hood": 0.327, "PIV_nip_lift": -2.19}, {"PIV_nip_lift": -2.19}, {"PIV_hood": -0.558, "PIV_nip_lift": -2.19}],
+  "why": "v2 A4 review A2-01 as one row: the max candy on tape passes the whole gripped arc at full leaf lift"}
+]}

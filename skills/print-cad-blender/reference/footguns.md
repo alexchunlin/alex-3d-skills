@@ -61,6 +61,15 @@ at +60", "change the gap without disassembly", "the flywheel comes off at tilt 4
 (`index_tests`, `service`, `slide_out`) **before** it is written into the BOM. A2-F2 (a major) and A2-F6 were confident prose
 that nothing had executed.
 
+**Rule from v2 A4:** a gap the payload passes through is a property of the whole passage. A row (or a params assert) at
+one station passes while another station squeezes: the full-lift nip rows sat at BDC (8.28) and the entry arc was 7.50
+at psi 80, because the hood is hinged far up the arc and opens the entry less (V2A4-F1). Use a ray `sweep`.
+
+**`cad build x.py | tail` used to hide a failed build** (Blender exits 0 when a script raises). The wrapper now keeps
+the status and prints `cad: BUILD FAILED` on stderr, and `cad check` warns when the sources are newer than the blend
+(V2A4-T1). `cad build` deletes `stl/*.stl` before exporting (`export_stls(clean=True)`), so put tool output such as a
+test coupon in `stl/tools/` (v2 A4 feeder builder).
+
 The checker does not cover these. Use sections, the design log or the reviewer checklist:
 - service paths, such as tape or shim changes, that need a full teardown (A1-F6)
 - alignment jigs, such as magnet centring (A1-F7)

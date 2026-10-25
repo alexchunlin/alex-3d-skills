@@ -29,7 +29,7 @@ Checks (each one writes evidence into the JSON report, with an explicit `coverag
   index         indexer timing from config ("index_tests"): open windows of a probe through a moving
                 disc over a motion cycle (one window = one candy per cycle)
   slide         slide-out sweeps from config ("slide_out"), one object or a group
-  distances     min/max distance assertions from config ("distances"), optionally as a gap along a ray,
+  distances     min/max distance assertions from config ("distances"), optionally as a gap along a ray (or the worst of a ray swept over a passage, "sweep"),
                 with payload squeeze and a declared compliant element
   stacks        tolerance stacks from config ("stacks"): worst case and RSS against a limit
   flexures      declared springs and snap arms: beam direction vs the part's print orientation (layer bonds)
@@ -38,7 +38,7 @@ Checks (each one writes evidence into the JSON report, with an explicit `coverag
 
 Evidence for the rules here: docs/FINDINGS.md A1-F1, F3, F4, F5, F9, F10, F11, F13, F14, A2-F1 to F9, A3-F1 to F3, F7, F8 and A3-V1.
 """
-import bpy, bmesh, json, math, os, re, sys, time, fnmatch, itertools
+import bpy, bmesh, json, math, os, re, sys, time, fnmatch, glob, itertools
 from mathutils import Vector, Matrix, Euler
 from mathutils.bvhtree import BVHTree
 
@@ -562,6 +562,7 @@ def allowed(a, b):
 REPORT = {"tool": "cadcheck", "blend": bpy.data.filepath, "generated": time.strftime("%Y-%m-%d %H:%M:%S"),
           "config": {k: v for k, v in CFG.items() if k not in ("drop_tests",)}, "checks": {}, "coverage": [], "not_checked": []}
 FAILS, WARNS = [], []
+PAST_LIMITS = []   # poses outside a joint's range (check_pose_values)
 
 
 def present(check, label, names):
@@ -1798,9 +1799,26 @@ def check_slide():
         REPORT["coverage"].append("slide: %d slide-out sweeps" % len(CFG["slide_out"]))
 
 
-def ray_gap(D, home_mats):
+def ray_stations(R):
+    """[(deg or None, ray)]: the ray itself, or one ray per station of its `sweep`, turned about sweep.axis through
+    sweep.center (both in the ray's frame coordinates). v2 A4's four full-lift nip rays sat at BDC and passed at 8.28;
+    the candy enters on an arc where the hood, hinged far up the arc, opens less: 7.50 at psi 80 (FINDINGS V2A4-F1)."""
+    sw = R.get("sweep")
+    if not sw:
+        return [(None, R)]
+    c, ax = Vector(sw["center"]), Vector(sw["axis"]).normalized()
+    out = []
+    for a in frange(float(sw["from"]), float(sw["to"]), float(sw.get("step", 5.0))) + [float(sw["to"])]:
+        if out and abs(out[-1][0] - a) < 1e-6:
+            continue
+        M = Matrix.Rotation(math.radians(a), 3, ax)
+        out.append((a, dict(R, origin=list(c + M @ (Vector(R["origin"]) - c)), dir=list(M @ Vector(R["dir"])))))
+    return out
+
+
+def ray_gap(D, home_mats, R=None):
     """Gap along a line: from `origin` (frame coords) cast +dir to the first face of b and -dir to the first face of a."""
-    R = D["ray"]
+    R = R or D["ray"]
     o = frame_point(R.get("frame"), Vector(R["origin"]), home_mats)
     F = O[R["frame"]].matrix_world.to_3x3() @ home_mats[R["frame"]].to_3x3().inverted() if R.get("frame") else Matrix.Identity(3)
     w = (F @ Vector(R["dir"])).normalized()
@@ -1841,19 +1859,31 @@ def check_distances():
         poses = D.get("poses", [D.get("pose", {})])
         if not present("distances", "%s to %s" % (D["a"], D["b"]), [D["a"], D["b"], (D.get("ray") or {}).get("frame")]):
             continue
-        home_hits = None
+        stations = ray_stations(D["ray"]) if D.get("ray") else []
+        home_hits = {}
         if D.get("ray") and any(poses):
             set_pose({})
-            home_hits = _local_hits(ray_gap(D, home_mats)[2])
+            home_hits = {k: _local_hits(ray_gap(D, home_mats, R)[2]) for k, (_, R) in enumerate(stations)}
         for pose in poses:
             set_pose(pose)
             a, b = O[D["a"]], O[D["b"]]
-            near, slip = None, []
+            near, slip, sweep = None, [], None
             if D.get("ray"):
-                d, p, hits = ray_gap(D, home_mats)
+                prof = [(deg, R) + ray_gap(D, home_mats, R) for deg, R in stations]   # (deg, R, d, origin, hits)
+                hit = [(k, x) for k, x in enumerate(prof) if x[2] is not None]
+                lo, hi = D.get("min"), D.get("max")
+                bad = lambda x: max(([lo - x] if lo is not None else []) + ([x - hi] if hi is not None else []) or [-x])
+                k, (deg, R, d, p, hits) = max(hit, key=lambda kx: bad(kx[1][2])) if hit else (0, prof[0])   # the worst station
                 how = "along ray"
-                if pose and home_hits:
-                    slip = ray_slip(home_hits, _local_hits(hits))
+                if deg is not None:
+                    w = D["ray"]["sweep"]
+                    sweep = {"sweep_deg": deg, "missed_deg": [x[0] for x in prof if x[2] is None],
+                             "profile": [[x[0], round(x[2], 3) if x[2] is not None else None] for x in prof]}
+                    how = "along ray swept %g..%g deg, worst at %g" % (float(w["from"]), float(w["to"]), deg)
+                    if D.get("max") is not None and sweep["missed_deg"]:
+                        d = None   # an open station has no upper bound
+                if pose and home_hits.get(k):
+                    slip = ray_slip(home_hits[k], _local_hits(hits))
                 if slip:
                     near = min_dist(a, b, bvh_world(a), bvh_world(b))[0]
             else:
@@ -1861,9 +1891,12 @@ def check_distances():
                 how = "nearest"
             rec = {"a": a.name, "b": b.name, "pose": pose_key(pose), "mm": round(d, 3) if d is not None else None, "how": how,
                    "min": D.get("min"), "max": D.get("max"), "why": D.get("why")}
+            if sweep:
+                rec.update(sweep)
             REPORT["checks"].setdefault("distances", {"findings": []}).setdefault("rows", []).append(rec)
             if d is None:
-                finding("distances", "fail", "%s to %s: the ray missed one of them at %s" % (a.name, b.name, rec["pose"]), **rec)
+                finding("distances", "fail", "%s to %s: the ray missed one of them at %s%s" % (
+                    a.name, b.name, rec["pose"], " (swept stations %s)" % sweep["missed_deg"] if sweep else ""), **rec)
                 continue
             if (D.get("min") is not None and d < D["min"]) or (D.get("max") is not None and d > D["max"]):
                 finding("distances", "fail", "%s to %s = %.2f mm (%s) at %s, wanted %s..%s (%s)" % (a.name, b.name, d, how, rec["pose"], D.get("min"), D.get("max"), D.get("why", "")), **rec)
@@ -2372,6 +2405,61 @@ def check_cables():
 
 # ------------------------------------------------------------------ main
 
+def check_pose_values():
+    """Every pose a row asks for must name a joint and sit inside its range. set_pose takes any number, so v2 A4's
+    planner pre-ran full-lift rows at PIV_nip_lift -2.19 on a model whose limit was -1.493: the hood was posed through
+    the solid leaf and the rows passed (progress.md "Tool issues", FINDINGS V2A4-T2). Rows past a firmware limit on
+    purpose (a hard stop beyond it, "1 deg past the stop") are common: 7 in v2 A4's config. So a pose outside the range
+    is listed in the summary, not warned; a pose naming no joint, or a coupled one, is a config fail."""
+
+    def walk(x, at):
+        if isinstance(x, list):
+            for i, v in enumerate(x):
+                walk(v, "%s[%d]" % (at, i))
+        elif isinstance(x, dict):
+            for k, v in x.items():
+                if k in ("pose", "poses") and not x.get("past_limit_ok"):
+                    for j, ps in enumerate(v if isinstance(v, list) else [v]):
+                        if isinstance(ps, dict):
+                            check(ps, "%s.%s" % (at, k) + ("[%d]" % j if isinstance(v, list) else ""))
+                else:
+                    walk(v, "%s.%s" % (at, k))
+
+    def check(ps, at):
+        for jn, val in ps.items():
+            if not isinstance(jn, str) or not jn.startswith("PIV_") or not isinstance(val, (int, float)):
+                continue
+            if jn not in JOINTS:
+                finding("config", "fail", "%s: pose names %s, which is not a joint in the model (set_pose would ignore it)" % (at, jn), at=at, joint=jn)
+                continue
+            if jn in COUPLE:
+                finding("config", "fail", "%s: %s is coupled to %s, so a pose on it is overwritten; pose %s instead" % (at, jn, COUPLE[jn]["to"], COUPLE[jn]["to"]), at=at, joint=jn)
+                continue
+            sp = JOINTS[jn]
+            if sp.get("continuous") or sp["lo"] is None or sp["hi"] is None:
+                continue
+            if not float(sp["lo"]) - 1e-3 <= val <= float(sp["hi"]) + 1e-3:
+                PAST_LIMITS.append({"at": at, "joint": jn, "value": val, "lo": sp["lo"], "hi": sp["hi"]})
+
+    for key, v in CFG.items():
+        if key not in ("accepted_warns", "joints", "couplings", "carry"):
+            walk(v, key)
+
+
+def stale_model():
+    """Build sources next to the blend that are newer than it: the last `cad build` failed (or never ran), so this
+    report is about the previous model. v2 A4's launcher builder piped a failed build through tail and read a clean
+    check of the old blend (FINDINGS V2A4-T1)."""
+    b = bpy.data.filepath
+    if not b or not os.path.isfile(b):
+        return []
+    d = os.path.dirname(b)
+    t = os.path.getmtime(b)
+    srcs = glob.glob(os.path.join(d, "*.py")) + glob.glob(os.path.join(d, "parts", "*.py"))
+    return sorted((os.path.relpath(x, d), time.strftime("%H:%M:%S", time.localtime(os.path.getmtime(x))))
+                  for x in srcs if os.path.getmtime(x) > t + 2.0)
+
+
 def main():
     set_pose({})
     HOME_MW.update({o.name: o.matrix_world.copy() for o in ALL})
@@ -2380,6 +2468,13 @@ def main():
         for e in EXPRS:
             if "error" in e:
                 finding("config", "fail", "%s: expression '=%s' failed (%s; params from %s)" % (e["at"], e["expr"], e["error"], PARAMS_SRC), **e)
+    check_pose_values()
+    old_srcs = stale_model()
+    if old_srcs:
+        REPORT["stale_model"] = old_srcs
+        finding("build", "warn", "the model is older than %s (blend saved %s): the last cad build failed or was not run, so this report is about "
+                "the previous model. Rebuild, then check" % (", ".join("%s (%s)" % x for x in old_srcs[:4]),
+                                                              time.strftime("%H:%M:%S", time.localtime(os.path.getmtime(bpy.data.filepath)))))
     log("objects: %d printed, %d purchased, %d fasteners, %d cables; joints %s" % (
         len(PRINTED), len(PURCHASED), len(FASTENERS), len(CABLES),
         {n: (s["axis"], s["lo"], s["hi"]) for n, s in JOINTS.items()}))
@@ -2396,13 +2491,15 @@ def main():
         REPORT["not_checked"].append("cables: Cables collection empty")
     REPORT["not_checked"].append("not geometric: teardown step count, alignment-jig datums (declare stacks), aesthetics, BOM correctness")
     acc = CFG.get("accepted_warns") or []
-    accepted = {w: next(a.get("why", "") for a in acc if a["match"] in w) for w in WARNS if any(a["match"] in w for a in acc)}
+    accepted = {w: next(a.get("why", "") for a in acc if a["match"] in w) for w in WARNS
+                if any(a["match"] in w for a in acc) and not w.startswith("build: ")}   # a stale model is never accepted
     untriaged = [w for w in WARNS if w not in accepted]
     # under --only most warns never get a chance to fire, so "matched nothing" would list nearly every accept
     stale = [] if ONLY else [a["match"] for a in acc if not any(a["match"] in w for w in WARNS)]
     REPORT["summary"] = {"pass": not FAILS, "fails": len(FAILS), "warns": len(WARNS), "untriaged_warns": len(untriaged),
                          "fail_list": FAILS, "warn_list": untriaged, "accepted_warns": accepted, "stale_accepts": stale,
-                         "coverage": REPORT["coverage"], "not_checked": REPORT["not_checked"], "runtime_s": round(time.time() - T0, 1)}
+                         "coverage": REPORT["coverage"], "not_checked": REPORT["not_checked"], "poses_past_limits": PAST_LIMITS,
+                         "runtime_s": round(time.time() - T0, 1)}
     os.makedirs(os.path.dirname(os.path.abspath(OUT)), exist_ok=True)
     with open(OUT, "w") as f:
         json.dump(REPORT, f, indent=1, default=str)
@@ -2416,6 +2513,15 @@ def main():
         print("  ... %d more untriaged warnings in the report" % (len(untriaged) - 25))
     if stale:
         print("  accepted_warns that matched nothing (fixed? remove them):", stale)
+    if PAST_LIMITS:
+        # the parts are posed through their stops: a hard stop beyond a firmware limit is fine, a joint limit the model
+        # has not caught up with is not (V2A4-T2). Mark intended rows "past_limit_ok": true to drop them from this list
+        by = {}
+        for x in PAST_LIMITS:
+            by.setdefault((x["joint"], x["lo"], x["hi"]), {}).setdefault(x["value"], set()).add(x["at"].split(".pose")[0])
+        print("  poses outside the joint range (posed through the stops; intended?):", "; ".join(
+            "%s range %g..%g: %s" % (j, lo, hi, ", ".join("%g in %s" % (v, " ".join(sorted(r))) for v, r in sorted(vals.items())))
+            for (j, lo, hi), vals in sorted(by.items())))
     print("  not checked:", "; ".join(REPORT["not_checked"]))
 
 

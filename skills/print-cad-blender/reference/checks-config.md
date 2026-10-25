@@ -59,7 +59,11 @@ adds `carry`, `fasteners.captive` and `flexures`.
                  "pose": {"PIV_tilt": 45}, "dir": [1, 0, 0], "dist": 140}],
   "distances": [{"a": "PRT_hood", "b": "PRT_flywheel", "min": 5.5, "max": 7.0, "why": "nip squeezes a 7 mm M&M",
                  "ray": {"frame": "PIV_tilt", "origin": [21, 37, 132], "dir": [0, 0, 1]},   // gap along a line, not nearest
-                 "payload_mm": 7.0, "tape_mm": 0.5, "compliant": "PRT_hood leaf spring"}],   // squeeze > 0 needs a yielding part
+                 "payload_mm": 7.0, "tape_mm": 0.5, "compliant": "PRT_hood leaf spring"},   // squeeze > 0 needs a yielding part
+                {"a": "PRT_hood", "b": "PRT_flywheel", "min": "=MM_T[1] + TAPE_T",      // over the whole entry arc, not one station
+                 "ray": {"origin": [21, 37, 132], "dir": [0, 0, 1],                     // the station at sweep angle 0 (BDC)
+                         "sweep": {"center": [21, 37, 170], "axis": [-1, 0, 0], "from": 0, "to": 100, "step": 5}},
+                 "poses": [{"PIV_hood": 0.327, "PIV_nip_lift": -2.19}]}],
   "payload_fit": [                // does the pocket take one payload and refuse two? (v2 A1/A2 feeder pocket)
     {"name": "pocket blocks an edge-on pair", "against": ["PRT_feeder_disc"], "center": [10.5, 18.19, 263.0],  // floor point
      "frame": "PIV_feeder", "up": [0, 0, 1], "across": [1, 0, 0], "place": "pair_edge_on", "size": [12.5, 6.5],  // D x T, MIN size
@@ -156,6 +160,7 @@ skipped", and the run carries on. Keep the row; don't `--only` around it.
   `against` solids, then grown or shrunk until the answer flips: `margin_mm` is the spare, `short_by_mm` how far a
   failing row is off. Use the payload's **minimum** size for `blocked` and its **maximum** for `fits`. v2 A2's Ø14.4
   pocket blocked a 13 x 7 pair by 0.11 mm and seated a 12.5 x 6.5 pair (fail, 0.14 short). No settling or tumbling.
+  "Blocked" means an overlap above 0.01 mm³, so a rim that just touches the wall reads margin 0.00 (v2 A4 progress.md).
 - **Sightlines.** Each origin casts along `dir` (both in `frame` home coordinates, moved with the joint) through solids
   and fasteners, minus `through`. The first hit must match `first_hit`, or nothing when it is null.
 - **Assembly audit.** `assembly.step_of` in the report maps every object to its step: look there before claiming a part
@@ -167,6 +172,18 @@ skipped", and the run carries on. Keep the row; don't `--only` around it.
   that moves the part (v2 A2: a nip ray in the tilt frame read 14.18 at full leaf lift against a 7.06 nearest gap).
   Diameters, approach lines and gaps measured along a stud are not flagged (the first version flagged 9 such rows in
   v2 A3, all false: V2A3-T2).
+- **Swept ray.** `ray.sweep` turns the ray (origin and dir) about `axis` through `center`, both in the ray's frame
+  coordinates, from `from` to `to` degrees in `step`s. The row's `mm` is the worst station against `min`/`max` (the
+  smallest gap when there is no bound), with `sweep_deg`, `profile` ([[deg, mm]]) and `missed_deg`. A station where the
+  ray misses a part counts as open: it passes a `min` and fails a `max`. One row replaced v2 A4's three reviewer rows
+  and its probe script, with the same numbers (7.50 / 7.67 / 7.95 at psi 80, V2A4-F1).
+- **Poses outside a joint's range.** Any `pose`/`poses` value past the joint's `lo..hi` is listed in the summary
+  (`poses_past_limits`), not warned: rows past a firmware limit on purpose are common (a hard stop beyond it). Add
+  `"past_limit_ok": true` to such a row to drop it from the list. A pose naming no joint, or a coupled joint, is a
+  `config` fail (set_pose would ignore it). v2 A4's planner pre-ran full-lift rows at -2.19 on a model whose limit was
+  -1.493; the hood was posed through the solid leaf and the rows passed (V2A4-T2).
+- **Stale model.** When `*.py` or `parts/*.py` beside the blend is newer than the blend, cadcheck warns (`build:`), and
+  the warn cannot be accepted: the last build failed and the report is about the previous model (V2A4-T1).
 - **Compliance.** A distances row whose `compliant` names a part (`"PRT_nip_leaf: ..."`) warns when that part has no
   `flexures` row. Cables with no lead length (no `lead_len`, no `cable_leads` match) are listed in one warn.
 - **Slide-out** with `"expect": "blocked"` fails when the motion is not stopped, or is stopped by something other than

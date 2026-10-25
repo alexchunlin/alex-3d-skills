@@ -14,11 +14,18 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # never silently imports another checkout's cadlib (v2 A1 progress.md "Tool issues")
 export CAD_SKILL="${CAD_SKILL:-$(dirname "$HERE")}"
 BL="${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}"
-run() { nice -n 10 "$BL" -b --factory-startup "$@" 2>&1 | grep -v -E '^(Blender quit|Blender [0-9]|Fra:|Read blend|$)| blend +\|' || true; }
+# Blender exits 0 when a --python script raises, and the filter pipe hid any status anyway, so a failed build looked
+# like a good one and the next check read the old blend (v2 A4 launcher builder, FINDINGS V2A4-T1). Keep Blender's status.
+run() {
+  st="${TMPDIR:-/tmp}/cad.$$.status"
+  { nice -n 10 "$BL" -b --factory-startup --python-exit-code 1 "$@" 2>&1; echo $? > "$st"; } |
+    grep -v -E '^(Blender quit|Blender [0-9]|Fra:|Read blend|$)| blend +\|' || true
+  rc=$(cat "$st" 2>/dev/null || echo 1); rm -f "$st"; return "$rc"
+}
 cmd="$1"; shift || true
 case "$cmd" in
   build) s="$1"; shift; [ "${1:-}" = "--" ] && shift   # `cad build x.py -- --render` (v2 A1: Blender tried to open "--")
-         run --python "$s" -- "$@" ;;
+         run --python "$s" -- "$@" || { rc=$?; echo "cad: BUILD FAILED (exit $rc) in $s: model.blend, manifest and STLs on disk are from the last good build" >&2; exit "$rc"; } ;;
   check) b="$1"; shift
          # CONFIG and OUT are optional positionals; a flag in their place is not swallowed as a file name
          # (v2 A1: `cad check m.blend c.json --only ...` wrote a file called --only, FINDINGS V2A1-T4)

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Re-prove every tool in this repo. Writes only under /tmp/alex3d-verify. About 8 minutes, run at nice 10.
-# The attempt regressions use examples/mm-launcher-{a1,a2,a3,v2a1,v2a2,v2a3}/*.blend.gz (the blends the reviewers saw).
+# The attempt regressions use examples/mm-launcher-{a1,a2,a3,v2a1,v2a2,v2a3,v2a4}/*.blend.gz (the blends the reviewers saw).
 #   sh tools/verify_all.sh            # HW defaults to the mm-launcher project (read-only; copied first)
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -187,6 +187,41 @@ sys.exit(0 if ok else 1)" "$V/v2a3/overlay.json" \
   # cad rows: the drop rows of one test, one line per pose, from the designer's report
   [ "$($CAD rows "$V/v2a3/cadcheck.json" "min-gap stop \(gap 6.2\)" --check drop | wc -l | tr -d ' ')" = 5 ] \
     && $CAD rows "$V23/manifest.json" FST_nip_stud | grep -q "length=16" && ok "cad rows: report and manifest lines" || bad "cad rows"
+fi
+# 4g v2 attempt-4 regression (FINDINGS V2A4): the blend V2R4 reviewed, the designer's config, V2R4's major as one swept row
+V24="$ROOT/examples/mm-launcher-v2a4"
+if [ -f "$V24/mm_launcher_v2a4.blend.gz" ]; then
+  mkdir -p "$V/v2a4"; gunzip -c "$V24/mm_launcher_v2a4.blend.gz" > "$V/v2a4/model.blend"; cp "$V24/manifest.json" "$V/v2a4/"
+  # designer config: 0 fails, 0 untriaged; the 6 accepts for false warns fixed since a20a4d7 (bbox bridge, ray vs nearest)
+  # go stale; the 8 deliberate past-the-stop poses are listed, not warned
+  $CAD check "$V/v2a4/model.blend" "$V24/checks.json" "$V/v2a4/cadcheck.json" >/dev/null
+  python3 -I -c "
+import json,sys; s=json.load(open(sys.argv[1]))['summary']
+ok = s['fails'] == 0 and s['untriaged_warns'] == 0 and len(s['stale_accepts']) == 6 and len(s['poses_past_limits']) == 8
+sys.exit(0 if ok else 1)" "$V/v2a4/cadcheck.json" \
+    && ok "V2A4 designer config: 0 fails, 0 untriaged, 6 stale false-warn accepts, 8 past-limit poses listed" || bad "V2A4 designer config: unexpected result"
+  # A2-01 as one swept row over the entry arc: V2R4's three rows and probe gave 7.50 / 7.67 / 7.95 at psi 80
+  $CAD check "$V/v2a4/model.blend" "$V24/checks.json" "$V/v2a4/sweep.json" --overlay "$V24/overlay_v2a4.json" --overlay-only --only distances >/dev/null
+  python3 -I -c "
+import json,sys; d=json.load(open(sys.argv[1])); f=' | '.join(d['summary']['fail_list'])
+ok = d['summary']['fails'] == 3 and all('%s mm (along ray swept 0..100 deg, worst at 80)' % v in f for v in ('7.50', '7.67', '7.95'))
+sys.exit(0 if ok else 1)" "$V/v2a4/sweep.json" && ok "V2A4: swept nip row fails at 7.50/7.67/7.95, worst at psi 80" || bad "V2A4 swept row"
+  # the planner's precheck: A4's full-lift rows (-2.19) on the A3 model (limit -1.493) are listed as past the limit
+  if [ -f "$V/v2a3/model.blend" ]; then
+    $CAD check "$V/v2a3/model.blend" "$V24/checks.json" "$V/v2a4/pre_a3.json" --only distances >/dev/null
+    python3 -I -c "
+import json,sys; p=json.load(open(sys.argv[1]))['summary']['poses_past_limits']
+sys.exit(0 if any(x['joint'] == 'PIV_nip_lift' and x['value'] == -2.19 for x in p) else 1)" "$V/v2a4/pre_a3.json" \
+      && ok "V2A4: lift -2.19 on the A3 model (limit -1.493) is listed as past the joint range" || bad "V2A4 past-limit pose"
+  fi
+  # stale model: a source newer than the blend is an unacceptable warn; a failing build script exits non-zero
+  mkdir -p "$V/v2a4s/parts"; cp "$V/v2a4/model.blend" "$V/v2a4s/"; touch -t 203001010000 "$V/v2a4s/parts/launcher.py"
+  printf '{"accepted_warns": [{"match": "older than", "why": "no"}]}' > "$V/v2a4s/c.json"
+  $CAD check "$V/v2a4s/model.blend" "$V/v2a4s/c.json" --only parts 2>&1 | grep -q "warn build: the model is older than parts/launcher.py" \
+    && ok "cad check: sources newer than the blend give an unacceptable stale-model warn" || bad "stale model warn"
+  printf 'raise RuntimeError("planted")\n' > "$V/v2a4s/fail_build.py"
+  $CAD build "$V/v2a4s/fail_build.py" > "$V/v2a4s/build.log" 2>&1; rc=$?
+  [ $rc != 0 ] && grep -q "cad: BUILD FAILED" "$V/v2a4s/build.log" && ok "cad build: a raising script exits $rc with BUILD FAILED" || bad "cad build exit status"
 fi
 # 8 slide-gate example: prismatic joint, slide flex, =EXPR rows, cable chains and junctions, inscribed bridge span,
 #   no-pose service proved at home, stock lengths (FINDINGS V2A3)
