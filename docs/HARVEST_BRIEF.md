@@ -78,3 +78,6 @@ The CAD loop produces a new attempt (design plus review) about every 60-90 min. 
   - Your improvements reach the next v2 attempt, never one in flight.
   - Never edit or check out anything in the pin worktree yourself.
 - v2 revision runs are launched as "Revision run for v2 attempt N". Their data is in the v2 workflow's journal and transcripts (path given in the prompt) and in `mm-launch-hw/v2/renders/attempt-N/`. That covers `progress.md`, `cadcheck.json`, `review.md` and `review.json`, which includes `tool_catchable` per issue and `check_config_disputes`. The most valuable improvements fix what v2 agents actually tripped over. Watch for cadcheck false fails, missing checks, unclear skill instructions, and template prompt problems.
+
+## Printer safety
+**Hard rule (user, 2026-10-24):** never run Bambu Studio, OrcaSlicer or any slicer binary, never read ~/Library/Application Support/BambuStudio, and never contact a printer or any network service. Print time and filament are estimates computed from geometry only. Don't build tools that invoke slicers.
