@@ -34,6 +34,19 @@ A3B="$V/a3/mm_launcher.blend"
 if [ ! -f "$A3B" ] && [ -f "$ROOT/examples/mm-launcher-a3/mm_launcher_a3.blend.gz" ]; then
   mkdir -p "$V/a3"; gunzip -c "$ROOT/examples/mm-launcher-a3/mm_launcher_a3.blend.gz" > "$A3B"
 fi
+# cadcheck inter_volume: the EXACT retry fixes the open-tube artefact (A3 CAB_12v_ctrl: raw 1331.9, real 38.0) and keeps
+# real full containments (closed cube in a non-manifold box; open tube wholly in a box)
+nice -n 10 "$BL" -b --factory-startup --python "$ROOT/tools/verify.d/inter_volume_cases.py" -- \
+  "$ROOT/skills/print-cad-blender/scripts" "$A3B" 2>/dev/null | grep '^IVOL' | cut -c6- > "$CR/inter_volume.json"
+python3 -I -c "
+import json, sys; d = json.load(open(sys.argv[1]))
+ok = d['inner_in_outer_mm3'] >= 0.98 * 125 and d['outer_around_inner_mm3'] >= 0.98 * 125 and not d['outer_manifold']
+ok &= min(d['tube_inside_block_first_mm3'], d['tube_inside_tube_first_mm3']) >= 0.98 * d['tube_inside_own_mm3']
+if 'a3_raw_ctrl_first_mm3' in d:
+    ok &= d['a3_raw_ctrl_first_mm3'] >= 0.98 * d['a3_tube_own_mm3'] and abs(d['a3_ctrl_first_mm3'] - 38.0) < 1.0 and abs(d['a3_cab_first_mm3'] - 38.0) < 1.0
+sys.exit(0 if ok else 1)" "$CR/inter_volume.json" \
+  && ok "inter_volume: open A3 tube x controller 38.0 mm3 (raw EXACT 1331.9), full containments kept (125.0)" \
+  || bad "inter_volume cases (see $CR/inter_volume.json)"
 if [ -f "$A3B" ]; then
   $CAD q "$A3B" route CAB_12v_mg --config "$ROOT/examples/mm-launcher-a3/checks.json" --json "$CR/a3_12v_mg.json" --save "$CR/a3_rerouted.blend" >/dev/null
   python3 -I -c "

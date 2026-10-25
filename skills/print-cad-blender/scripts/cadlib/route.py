@@ -9,7 +9,8 @@ cadcheck's cable checks (overlap, exposure, lead length) apply to the result.
     cad q model.blend route CAB_12v_ctrl --config checks.json --save out.blend   # re-route an existing cable
 
 Why: every v1 attempt had cable review issues (FINDINGS A1-F12 routes, A2-F8 bare run, A3-F7 visible in a notch),
-and hand-typed waypoints ran CAB_12v_ctrl 1332 mm3 through BUY_servo_controller in attempts 1 to 3.
+and hand-typed waypoints put 165.6 mm3 of five A3 cables inside solids (CAB_uart 113.4, CAB_12v_ctrl 38.0 in
+BUY_servo_controller; cadcheck's 1331.9 for the latter was an open-tube boolean artefact, docs/features/cable-router.md).
 
 Model:
 - Grid: cells of `cell` mm over the leg's endpoints plus `margin`. A cell is blocked when a solid surface is closer

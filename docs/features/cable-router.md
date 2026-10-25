@@ -98,7 +98,7 @@ The off-axis value is 2 x 8 x sin 22.5° = 6.1 mm, the chord the via swings thro
 **Render:** `/tmp/alex3d-cr-a3/base_after.png` (and `base_before.png`) is a section at z 30 seen from above.
 `CAB_12v_ctrl` (red) runs along the floor from the buck and climbs over the controller to its header.
 
-## Finding: the "1332 mm³" was a cadcheck artefact
+## Finding: CAB_12v_ctrl overlaps 38.0 mm³, not 1332
 
 FINDINGS carried "CAB_12v_ctrl runs 1332 mm³ through BUY_servo_controller" from A1 to A3. The hand-made tube is
 not manifold: the curve bevel's cap rings are separate copies of the end rings. Without a manifold pair, cadcheck
@@ -107,8 +107,18 @@ cutter's whole volume: 1331.9 mm³, against the cable's own 1332.0. In the other
 the last 6 mm of cable inside the header block.
 
 Fixes on this branch:
-- `inter_volume` now runs EXACT in both orders and keeps the smaller volume. On A3, interference took 41.7 s
-  against 47.3 s before, which is within noise from the live loop, and the counts didn't change.
+- `inter_volume` retries EXACT in the other operand order only on the artefact's signature: the first result is at
+  least 98% of a non-manifold operand's own volume. It keeps the retry only if that is smaller. Otherwise the first
+  result stands, so a real full containment between solids still reports its whole volume and still fails.
+- `tools/verify.d/inter_volume_cases.py` checks three cases:
+  - the real A3 pair: raw EXACT 1331.9, reported 38.0 in both orders;
+  - a closed 125 mm³ cube inside a non-manifold box: 125.0 in both orders;
+  - an open tube wholly inside a box: the retry fires, and the 235.1 mm³ is kept.
+
+  Synthetic open tubes through boxes don't trigger the artefact (raw EXACT is already right), so case 1 uses the
+  real objects from the archived blend.
+- The archived `examples/mm-launcher-a{1,2,3}/cadcheck_summary.json` still say 1331.9. They are records of what the
+  older cadcheck printed and are left as they are.
 - `asm.tube_mesh` welds the cap rings, so cadlib cables are closed solids.
 
 ## Synthetic test (`examples/cable-router/build.py`, `tools/verify.d/cable_router.sh`)
@@ -133,7 +143,7 @@ The test also re-routes A3 `CAB_12v_mg` and asserts 0 mm³ overlap (hand route: 
 | Option | Measured | Result |
 |---|---|---|
 | Hand-typed waypoints (v1 `build_assembly.py:2244`, v2 `base.py:332`) | 5 A3 cables: 165.6 mm³ in solids over 8 cadcheck warns; issues in A1, A2 and A3 | the status quo this replaces |
-| cadcheck alone (detect, then hand-edit) | it flags overlaps and exposure but proposes no route; its biggest number (1332 mm³) was an artefact, now fixed | kept, and run on the router's output |
+| cadcheck alone (detect, then hand-edit) | it flags overlaps and exposure but proposes no route; its biggest number (1331.9 mm³ for CAB_12v_ctrl, really 38.0) was an artefact, now fixed | kept, and run on the router's output |
 | Blender Geometry Nodes "Shortest Edge Paths" (C++ Dijkstra, in the dependency) | same `CAB_12v_ctrl` grid: 169k cells, 98.6k free, 1.13M lattice edges. Mesh build 0.16 s + evaluation 0.07 s, against 0.98 s for A*. Path cost 243.8 against 240.4 | 4x faster search, but no turn cost (Dijkstra keeps no direction state) and no per-entry stub cost, plus a 1.1M-edge mesh round trip. Search is 3-21% of a route (0.06-0.79 s); the grid and exposure sampling are the rest. It could become the search engine later without changing the API |
 | `bpy.ops.mesh.shortest_path_select` | read, not run: an edit-mode operator over edge length or topology | no cost field, so no wall or exposure preference |
 | scipy `csgraph` / networkx | not in Blender's Python (checked); no installs allowed | n/a |

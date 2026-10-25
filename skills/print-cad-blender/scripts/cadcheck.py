@@ -445,8 +445,8 @@ def tmpcoll():
 
 
 def inter_volume(a, b, _swapped=False):
-    """Intersection volume (mm^3) and region bbox using a world-space copy; Manifold when both are manifold,
-    else EXACT in both operand orders, keeping the smaller."""
+    """Intersection volume (mm^3) and region bbox using a world-space copy; Manifold when both are manifold, else
+    EXACT (retried in the other order when the result looks like the open operand's own volume, see below)."""
     def wcopy(o):
         me = bpy.data.meshes.new(o.name + "_w")
         bm = world_bm(o)
@@ -476,13 +476,23 @@ def inter_volume(a, b, _swapped=False):
         bpy.data.objects.remove(o)
         bpy.data.meshes.remove(d)
     bpy.data.meshes.remove(me)
-    if solver == 'EXACT' and not _swapped:
-        # EXACT with a non-manifold cutter can return the cutter's whole volume: A1-A3's hand-made CAB_12v_ctrl tube
-        # (open cap rings) gave 1331.9 mm3 "through BUY_servo_controller", its own volume; the other order gives 38.0
+    # EXACT with a non-manifold cutter can return the cutter's whole volume: A1-A3's hand-made CAB_12v_ctrl tube (open
+    # cap rings) gave 1331.9 mm3 "through BUY_servo_controller", its own volume (1332.0); the other order gives 38.0.
+    # Only that signature (>= 98% of a non-manifold operand's own volume) triggers the swapped order, and only a smaller
+    # swapped result replaces it, so a real full containment still reports its whole volume.
+    if solver == 'EXACT' and not _swapped and v > 0 and any(
+            v >= 0.98 * own_volume(o) for o in (a, b) if not manifold_ok(o)):
         v2, region2, _ = inter_volume(b, a, _swapped=True)
         if v2 < v:
             return v2, region2, solver
     return v, region, solver
+
+
+def own_volume(o):
+    bm = world_bm(o)
+    v = abs(bm.calc_volume())
+    bm.free()
+    return v
 
 
 def sample_pts(o, cap=4000):
