@@ -12,6 +12,10 @@ Sources are abbreviated:
 - `D2` = designer attempt 2, `WF/wf_26e26b28-15e/agent-a6815d61faa83f67e.jsonl`
 - `R2` = reviewer attempt 2, `WF/wf_26e26b28-15e/agent-a49e56a72136dd0ee.jsonl`
 
+**Baseline:** by the user's decision (2026-10-24), all 8 attempts of this loop run without this repo's tools. Every
+"caught" or "would have flagged" below is counterfactual, measured on archived copies after the fact. The per-attempt
+cost and score rows are the baseline that the first tool-using loop will be compared against.
+
 Timestamps like `D1 0:17:41` are elapsed time from the agent's first message, as printed by
 `tools/transcript/cc_transcript.py timeline`. All numbers below come from that tool unless stated otherwise.
 

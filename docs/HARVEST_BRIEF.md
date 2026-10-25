@@ -66,3 +66,5 @@ The CAD loop produces a new attempt (design plus review) about every 60-90 min. 
 2. Ingest only the new attempt's data: the new journal entries, the new `agent-*.jsonl` transcripts and `renders/attempt-N/`.
 3. Add findings, especially whether issues recur across attempts, which tooling would have prevented, and per-attempt time/tokens.
 4. Improve the skills and tools, re-verify them, update STATUS and commit.
+
+**Baseline decision (user, 2026-10-24):** none of the 8 attempts in this loop will use this repo's tools. The loop runs unchanged as a baseline. Revision runs measure what the tools *would* have caught and record per-attempt baseline metrics (see `docs/STATUS.md`). They don't propose changing the running loop.
