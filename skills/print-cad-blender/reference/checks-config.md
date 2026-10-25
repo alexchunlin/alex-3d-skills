@@ -31,7 +31,11 @@ adds `carry`, `fasteners.captive` and `flexures`.
     {"step": "launcher into yoke", "merge": "launcher", "objects": ["PRT_arm_cap_*"]},
     {"step": "jar on: drop in at +30, twist to 0", "merge": "jar", "objects": [], "pose": {"PIV_jar": 30}},   // insertion pose
     {"step": "pod in, nose up 20", "merge": "pod", "objects": [], "insert_dirs": [[0, -0.34, 0.94]]},  // extra out-direction
-    {"step": "snap cover", "objects": ["PRT_snap_cover"], "insert_ok": "snap arms flex 0.8 over the lip"}],   // not tested
+    {"step": "snap cover", "objects": ["PRT_snap_cover"], "insert_ok": "snap arms flex 0.8 over the lip"},   // not tested
+    {"step": "cap screws at tilt 45", "objects": ["FST_cap_*"], "pose": {"PIV_tilt": 45},
+     "pose_how": "tilt servo slid out +X first (post cover off); pod on the 45 deg prop"},   // how a held joint gets there
+    {"step": "battery on", "objects": ["BUY_battery"], "powered": true}],   // drives can be commanded from here on
+  "joint_drives": {"PIV_tilt": "BUY_servo_tilt", "PIV_hood": null},   // what holds a joint (default: BUY_*servo*_<joint>)
   "fasteners": {"driver_r": 3.0, "hand_r": 14.0, "max_reach": 60, "max_reach_ext": 150, "min_engagement": 4.0,
                 "lkey_short": 18, "lkey_insert": 2.5, "lkey_long": 56, "lkey_swing_deg": 60,   // 2.5 mm hex key
                 "max_standoff": 2.0, "max_protrusion": 3.0,
@@ -90,6 +94,7 @@ adds `carry`, `fasteners.captive` and `flexures`.
   "cable_chains": [{"name": "encoder signal", "cables": ["CAB_encoder", "CAB_launcher_bundle", "CAB_launcher_base"],
                     "lead": 550, "why": "one 5-wire lead, Plink to MotorGo, unspliced across both joints"}],
   "cable_junctions_ok": ["CAB_bus_*"],      // an inline connector no wider than the cable; a bigger one is a BUY_ part
+  "cable_min_bend_od": 0.75,                // a corner tighter than this x OD (centreline radius) is a kink
   "fasteners": {"stock_ok": ["FST_custom_*"], "stock_lengths": {"3": [6, 8, 10, 12, 16, 20]}},   // override the stocked lengths
   "accepted_warns": [{"match": "PRT_flywheel: ceiling region needs a 72 mm bridge", "why": "1 mm flange ring, prints as a bridge over infill"}],
   "printers": {"P1S": [256, 256, 256], "H2D": [325, 320, 325]}, "prefer_printer": "P1S",
@@ -153,6 +158,15 @@ skipped", and the run carries on. Keep the row; don't `--only` around it.
   feeder's bench step; the feeder merge then read "+Z PRT_groove_cap (BUY_bus_junction) at 3" (FINDINGS V2A6-F1).
   On the v2 A1-A5 configs it gives 3 warns, all config facts: the jar step's +30 drop-in and the pod's nose-up angle
   need a `pose`, and the nip stud is listed one step before the backplate it drops into.
+- **Held poses** (part of `assembly`). A step that needs a joint away from home after the joint's drive is in: the
+  step's `pose`, or a screw at that step that the fastener check reaches only at a joint limit. The drive is
+  `joint_drives[joint]`, or by name a `BUY_` servo/motor/stepper/actuator ending in the joint's name (PIV_tilt ->
+  BUY_servo_tilt; continuous and coupled joints are left out; `null` says a joint is free by hand). The drive is in
+  from the step it lands in the main assembly (its bench merge). Before the first step marked `"powered": true` a
+  servo can only be back-driven through its gears, so the step warns unless it has `"pose_how": "<how>"`. v2 A7 put
+  the groove cap at step 11a, where one screw is reachable only at tilt 45, but the tilt servo went in at step 8 and
+  the battery at step 14 (V2R7 A7-01, major; FINDINGS V2A7-F1). Fix: do the step before the drive goes in, move the
+  screw so it is reachable at home, or take the drive out first and say so in `pose_how`.
 - **Contact fits.** `contact: true` alone accepts contact anywhere on the pair. That also hides a journal rubbing on the
   same pair: v2 A1 declared post x journal plate and shell x turntable for their thrust and stop faces, and the journals
   inside them went unmeasured (FINDINGS V2A1-V4). Add `contact_normal` (one `[x, y, z]` or a list, a home-pose world
@@ -237,6 +251,14 @@ skipped", and the run carries on. Keep the row; don't `--only` around it.
   lead's end came 8.8 mm away from it at pan -90, and the base lead 5.7 mm from the bundle, while its `distances` row
   passed because the two sleeves overlap (V2R6 A6-02). Fix: meet on the axis, or end the static run in a service loop
   and start a new route on the moving body.
+- **Kinks and shared tubes** (`cables.kinks`, `cables.shared_runs`). From each route's polyline (cadlib stores it as
+  `cab_path`; older blends get it back from the tube mesh): a corner whose fitted centreline radius is under
+  `cable_min_bend_od` x OD warns. A corner gets half of each neighbouring segment for its arc; at an end within 3 mm of
+  a `BUY_` part (plug, splice, board) the first OD must run straight, so a turn right at the plug reads radius 0. An
+  end that meets the next route of the same `cable_chains` row is a hand-over and gets its full segment. Two routes on
+  one body whose centrelines stay within half their summed radii for more than 2 OD lie in one tube and warn: the
+  channel has to hold both. v2 A7 laid the tilt and feeder bus leads in one tube for 16 mm and turned both 90 deg onto
+  the splice face 1.5 mm below (V2R7 A7-02). Model a real bundle as one route with a chain row per conductor.
 - **`--out`.** `cad check m.blend c.json OUT.json --only x` or `... --only x --out OUT.json`: both write OUT.json. Before
   v2 A6 the flag form was ignored and the default `cadcheck.json` was overwritten (V2A5-T1).
 - **Stock lengths.** Screws whose length isn't in `fasteners.stock_lengths` for their diameter warn, unless listed in

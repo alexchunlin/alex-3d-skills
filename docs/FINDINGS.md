@@ -31,7 +31,10 @@ Sources are abbreviated:
   `a4683ee602e280ba5`.
   v2 A6 agents: `P6` plan `a5c6c97fd5291db4f`, builders `B6-checks` `ab67c3c981ceb6e7b`, `B6-feeder` `a6f76c31bfd31b5c4`,
   `B6-junction` `aac18bdc4f360b240`, `B6-finish` `ad52a387901339499`, `F6` finish `a901396d59e028176`, `V2R6` review
-  `a63e157964068fba7`
+  `a63e157964068fba7`.
+  v2 A7 agents: `P7` plan `ad3613ab937789401`, builders `B7-checks` `a91da03e25e2193ee`, `B7-cap` `ab7fc7097ebb0f9d8`,
+  `B7-tail` `aabeff3011188d075`, `B7-finish` `ade4ba6e78782e6a9`, `F7` finish `ad3729c48968e6dc0`, `V2R7` review
+  `aa6f4aea5dd48c1d4`
 
 **Baseline:** v1 (the no-tools loop) ran attempts 1-3 and was then stopped by the user (2026-10-24 evening, see
 `HARVEST_BRIEF.md` "Process change"). The v1 tool results below are counterfactual. Every
@@ -1608,3 +1611,193 @@ declared and 15.6 s in a full run with the failing details. One bench rule needs
   - verify 4j: `tools/test_bevel_clamp.py`.
 - The insertion check on the v2 A1-A5 blends gives 3 warns each, all of them config facts. The `end_drift` check on
   v2 A5 gives 6 pairs, all 0.0 apart.
+
+## v2 Attempt 7 (harvested 2026-10-25)
+
+Inputs: the 7 attempt-7 agents in `V2WF/journal.jsonl` (lines 94-107) and their transcripts, plus `HW2/renders/attempt-7/`:
+progress.md, cadcheck.json, check_step{1,2,3a}.json, precheck_a6_model.json, checks_attempt6.json, checks_edit_a7.py,
+tail_feasibility.py, review.md, review.json, review/ (notes.md, review_rows.json, cadcheck.json, cadcheck_review.json, 1 PNG).
+The blend V2R7 reviewed (`/tmp/rv7/model.blend` with its checks.json) is archived as `examples/mm-launcher-v2a7/`, with
+the manifest and BOM (both unchanged since 11:00, before the review), V2R7's `review_rows_v2a7.json` and
+`overlay_v2a7_steps.json` (the step facts the insertion check asks for). Plan #8 had started (0.2 min) and is not ingested.
+
+**The tools were `6025133`** (progress.md line 1): stacks `between`, `max_mm3`, `cad rows checks.json`, but not the
+insertion check, end drift, missed-station warns, the bevel flag or `cad rows --summary` (all in `fb54dbb`, which plan
+#8 moves the pin to). **This run's fixes reach v2 attempt 9.** v2 agents: `P7` plan `ad3613ab937789401`, builders
+`B7-checks` `a91da03e25e2193ee` (a no-op again: the planner did the step), `B7-cap` `ab7fc7097ebb0f9d8`, `B7-tail`
+`aabeff3011188d075` (base + pan_stage), `B7-finish` `ade4ba6e78782e6a9`, `F7` finish `ad3729c48968e6dc0` (a no-op),
+`V2R7` review `aa6f4aea5dd48c1d4`.
+
+### Per-agent cost (`cc_transcript.py workflow V2WF`)
+
+| Agent | Wall | Model | Tools | Output tok (thinking) | Cache read | Peak ctx | Longest gen | cad runs (failed) | Images |
+|---|---|---|---|---|---|---|---|---|---|
+| P7 plan | 10.8 | 9.4 | 1.5 | 48k (27k) | 3.4M | 138k | 152 s | 4 (1) | 0 |
+| B7-checks | 0.6 | 0.6 | 0.0 | 4k (0.1k) | 0.1M | 26k | - | 0 | 0 |
+| B7-cap | 4.0 | 1.0 | 3.1 | 5k (0.4k) | 0.3M | 48k | - | 1 (0) | 0 |
+| B7-tail | 9.0 | 2.8 | 6.2 | 14k (3k) | 1.4M | 86k | - | 6 (0) | 0 |
+| B7-finish | 15.7 | 7.8 | 7.9 | 47k (7k) | 5.3M | 155k | - | 10 (0) | 3 |
+| F7 finish | 0.7 | 0.7 | 0.0 | 4k (0.4k) | 0.1M | 34k | - | 0 | 0 |
+| V2R7 review | 9.6 | 8.9 | 0.7 | 50k (24k) | 4.8M | **164k** | - | 5 (0) | 4 |
+
+| | v1 best (A3) | v2 A5 | v2 A6 | **v2 A7** |
+|---|---|---|---|---|
+| Wall (design + review) | 66.1 min | 93.3 | 76.9 | **50.5** (plan 10.8, builds 29.3, finish 0.7, review 9.6) |
+| Output tokens (thinking) | 352k (228k) | 314k (157k) | 213k (83k) | **173k (62k)** |
+| Cache read | 35.8M | 34.4M | 22.3M | **15.4M** |
+| Peak context (any agent) | 488k | 240k | 193k | **164k** |
+| Longest generation | 290 s | < 120 s | < 120 s | **152 s** (P7, reading the row options) |
+| F/M/A (sum) | 6/6/6 (18) | 9/8/9 (26) | 9/8/9 (26) | **9/8/9 (26)** |
+| Issues B/M/m | 0/4/4 | 0/1/5 | 0/1/2 | **0/1/3** |
+| cadcheck at hand-off | - | 0 F, 34 W, 0 untriaged | 0 F, 35 W, 0 untriaged | **0 F, 37 W, 0 untriaged** |
+| cad runs (failed) | - | 44 (1) | 46 (3) | **26 (1)** |
+
+The cheapest attempt in either loop, and the first under the v1 baseline's best wall time (66.1): 23% under it with 51%
+of its output tokens. The score held at 26 for the third attempt running. A6-01 and A6-03 are FIXED, A6-02 is PARTIAL
+(the bus hand-over is on the axis, the launcher bundle's is not). The one major is new, and it came from the A6-01 fix.
+
+**What `6025133` did in use:**
+- No tool issue was logged ("No tool misbehaved"). The one failed cad run was the planner's own checks.json edit
+  script, which left a missing comma; cadcheck stopped with the JSON decoder's traceback (line and column), fixed in 12 s.
+- `cad rows` calls fell from 39 to 7 and `json.load` commands stayed at 45 (A6: 48): 14 in P7 (8 of them keeping the
+  checks.json format through an edit script), 16 in B7-finish (summary, coverage, evidence numbers), 5 in V2R7 (2 to diff
+  its report against the designer's). `cad rows --summary` (in `fb54dbb`) covers the summary and coverage reads.
+- No stacks or bounded allows were added: A7's changes did not touch a toleranced purchased part.
+
+### Time and token sinks
+
+**V2A7-T1. The cheapest attempt because the fixes were small and planned.** The plan held an order change, a 14.6 mm
+cable tail and BOM text, each tried before it was planned: P7 prechecked every new row on the A6 model (4 F, all
+"CAB_bus_pan_tail not in the scene", as planned) and modelled the tail's clearances with capsules
+(`tail_feasibility.py`) before choosing `LB_LEG_R` 6.5. The builders met no surprises: B7-cap took 4.0 min for a
+one-line step change, B7-tail 9.0 min.
+
+**V2A7-T2. Finish work is now one agent.** B7-finish (15.7 min, 7.8 of it Blender: final renders, two hub-bore sections, a
+full check) did the BOM, log and renders; the `finish` phase found its step done (0.7 min), as did B7-checks (0.6). Not
+changed: the template already lets the planner fold steps.
+
+**V2A7-T3. Remaining hand reads.** V2R7 diffed its full report against the designer's with two `json.load` scripts (V2R6
+did the same), and B7-finish gathered evidence numbers with 16. Not changed this run: a `cad rows --diff` would save
+about a minute per review.
+
+### Issues V2R7 raised, and what the tools did with them
+
+| ID | V2R7 issue | At hand-off (`6025133`) | Now | Why it got through |
+|---|---|---|---|---|
+| V2A7-F1 | **Major (A7-01):** step 11a starts "tilt the pod to 45" (FST_gcap_5 is reachable only there), but the tilt servo has been in since step 8 and nothing is powered until the battery at 14: back-driving an unpowered servo through its gears and holding it at 45 while 6 screws go in | accepted warn "FST_gcap_5 reachable only at tilt=45" | **warn:** "step '11a ...' needs PIV_tilt at 45 (FST_gcap_5 is reachable only at tilt=45), but BUY_servo_tilt (by name) holds that joint from step '8 ...' and no step up to here is "powered" ..." | the fastener check found the pose, and nothing asked whether the joint can get there at that step. New **held-pose** check (`assembly.held_poses`) |
+| V2A7-F2 | Minor (A7-02): CAB_bus_tilt and CAB_bus_feeder share one tube to the splice top (-82.5 mm³) and both turn 90 deg onto its face 1.5 below | not flagged: cable-cable pairs are never tested, bend radius was in not_checked | **3 warns:** both leads "kinks: 90 deg at [5.7, 4.0, 100.5] with radius 0.0", and "CAB_bus_feeder and CAB_bus_tilt lie in one tube for 16 mm" | no check looked at cable shape. New `cables.kinks` and `cables.shared_runs` |
+| A6-02 (PARTIAL) | Minor: the Ø6 launcher bundle still hands over at r 4 and swings a 5.66 chord; the v2-A2-02 row passes only on sleeve overlap (0.916 against max 1.0) | not flagged (end drift is in `fb54dbb`) | **warn:** "CAB_launcher_base ends 0.0 mm from CAB_launcher_bundle ... at pan=90 that point is 5.7 mm further away" | the designer deferred it ("the joint never opens"); in A8 the drift warn makes that an explicit accept |
+| V2A7-F3 | Minor (A7-03): the cap-removal row lifts +Z 40 and passes, leaving the cap under the pod; the review's forward-up row at tilt 45 is clear (min 0.2), back-up hits the nip cover at 54. Two `why` strings say z 64 / r 6 (model 63 / 6.5) | passed | not flagged (SKILL and template now say a removal row runs until the part is clear) | a row's length is the designer's choice; prose numbers in `why` are not checked |
+
+V2R7 marked A7-02, A6-02 and A7-03 `tool_catchable` and A7-01 not. **At hand-off cadcheck flagged none of the four; now
+three are warns**, with V2R7's numbers. Previous issues: A6-01 FIXED, A6-02 PARTIAL, A6-03 FIXED.
+
+**Recurrence: a fix creates the next major.** A6-01 (a part placed where it cannot get in) was fixed by moving the
+groove cap to after the splice. That move put six screws at a step where one of them needs tilt 45, and the designer
+accepted the existing "reachable only at tilt=45" warn: true of the geometry, but it hid an assembly that cannot be done
+as written. The same pattern as A5 to A6: each fix is tested against the rows it touches, not against the order of
+operations around it. The held-pose check and the insertion check now test the order itself.
+
+**Recurrence: a deferred minor.** A6-02's second half was deferred with a reason ("the two Ø6 ends are 5.66 apart at
+pan ±90, less than one sleeve diameter, so that joint never opens"). The reviewer disagreed and kept it open. With the
+drift warn in A8, the deferral becomes an `accepted_warns` entry the reviewer can see.
+
+**Config disputes (4):** the 40 mm cap lift proves no removal (F3); no method or row for tilt 45 at 11a (F1); the
+base/bundle `distances` row passes on sleeve overlap (A6-02); two stale `why` strings (F3).
+
+### New: held poses (`assembly.held_poses`, V2A7-F1)
+A **need** is a step `pose`, or a screw at that step whose access the fastener check found only at a joint limit (its
+`access_best` pose). A joint's **drive** is `joint_drives[joint]`, or by name a `BUY_` part named servo, motor, stepper
+or actuator that ends in the joint's name: PIV_tilt -> BUY_servo_tilt, PIV_pan -> BUY_servo_pan, PIV_feeder ->
+BUY_servo_feeder on all v2 blends. Continuous and coupled joints are left out. The drive is in from the step where it
+lands in the need's group, which is the bench merge for the tilt drive (step 8). A need after that, away from home and
+before the first step marked `"powered": true`, warns, unless the step says how in `"pose_how"`. Needs at one step and
+joint are merged into one warn.
+
+On the v2 A1-A6 configs it finds no need at all: no step poses and no pose-only screws. A6's overlay pose (pod nose-up 20
+at step 7) comes before the tilt servo at 8, so it passes. On A7 it gives exactly A7-01. With 11a's own text ("pod at
+tilt 45") declared as a pose, the warn lists both needs. Marking the battery step `powered` does not clear it, because
+power comes at 14, after 11a. A `pose_how` on 11a lists it instead of warning. The check reads the fastener rows, so it
+needs no geometry and runs in no measurable time.
+
+**Considered: inferring drives from contact.** The tilt servo body sits on the post (static under pan) and its key on
+the journal plate (PIV_tilt). A contact test across the joint would find it without names, but the horn adapter, the
+key socket and the bearing faces all touch across the same joint. Names plus `joint_drives` were exact on all 7 blends.
+
+### New: cable kinks and shared tubes (`cables.kinks`, `cables.shared_runs`, V2A7-F2)
+Each route's polyline comes from `cab_path` (cadlib stores it from this run on) or, on older blends, from the tube
+mesh: one ring of vertices per polyline point, with ring 0 repeating the last point. The reconstruction matches
+`path_len` on all 15 A7 routes and is dropped when it doesn't. Rules:
+- **Kink:** a corner's fitted centreline radius is under `cable_min_bend_od` (0.75) x OD. A corner gets half of each
+  neighbouring segment for its arc. At an end within 3 mm of a `BUY_` part (a plug, splice or board), the first OD must
+  run straight. At an end that meets the next route of the same `cable_chains` row (a hand-over), the corner gets the
+  full segment. Without the BUY rule, A7's bus leads read radius 1.5 (90 deg over a 1.5 mm stub); with it they read 0,
+  which is what V2R7 called a zero-radius bend at the heat-shrink exit. The first version applied the straight-exit rule
+  at every end that met no chained end, which flagged the bundle's hand-over in the journal bore (radius 0). Only ends
+  at a purchased part count now.
+- **Shared tube:** two routes on one body, not in one chain, whose centrelines stay within half their summed radii
+  for more than 2 OD.
+
+On the v2 blends it gives (A1-A5) 5 warns and (A6, A7) 6: A7-02's three on A6 and A7, plus three that recur in every
+attempt and that no reviewer raised:
+- the bundle's 90 deg corner at radius 4.0 for OD 6 at the journal bore (inner radius 1.0);
+- the feeder bus lying inside the bundle for 218 mm down the left post;
+- the encoder lead sharing 22 mm of the journal bore with phase 2.
+
+Each is a real modelling question (does the channel hold both?), so they are warns to triage, not suppressed. Thresholds
+tried: 1 x OD also flags the designed R4.75 U-loop of the Ø6 base lead (0.78) and the pan bus's 140 deg turn (0.76).
+Runtime is about 5.5 s on A7.
+
+**Considered: cable-cable overlap in the interference check.** `pair_class` skips CAB-CAB pairs. Turning them on gives
+volumes (-82.5 mm³ for A7-02) but flags every hand-over between chained routes and every meeting at a splice, and it
+doesn't say how long the run is or where. Centreline distance does both, at no BVH cost.
+
+**Tried and dropped: insertion in step-list order.** The groove cap read "free +Y" with the splice (same step) ignored,
+so obstacles were extended to the parts listed earlier in the same step. On v2 A1-A7 that added 4-5 warns per config
+(the pan servo listed after its own clamp glob, the jar parts in list order, the nip stop sleeve), all list-order
+artefacts, and the cap still came out +Y with the splice present. Reverted.
+
+### What worked
+- **Plan-time trial again:** P7 prechecked the new rows (4 F, all planned), modelled the tail with capsules, and wrote
+  each step's acceptance as row numbers. The builders followed the plan with no redesign.
+- **The A6-01 fix used the rows the reviewer wrote:** V2R6's slide rows became the designer's service and slide
+  rows, and the captive row (`expect` blocked at 2.0..4.5 by the cap) is a new pattern: a row that proves retention.
+- **On-axis hand-over** for the bus lead (`BUS_PAN_AX`), with a chain row across the two routes.
+
+### Reviewer quality (V2R7)
+- 9.6 min. V2R7 re-ran the full check (identical in all 16 sections), wrote 6 cap-exit rows (4 blocked as probes, 2
+  clear), measured the shared tube with `cad q dist` and found the tilt problem from `FST_gcap_5`'s access rows plus the
+  BOM's power step. These rows are verified as tool rows (verify 4k).
+- It marked A7-01 not tool-catchable. That was correct for `6025133`; with this run's check it is.
+
+### Why not the existing code (v2 A7 additions)
+- **Held poses vs the fastener access warn:** the fastener check already said "reachable only at tilt=45" and was
+  right; what it cannot say is whether tilt 45 is reachable at that step. That needs the joint's drive and the step's
+  power, which are assembly facts. It reuses the fastener rows, `fastener_poses` and the bench/merge rules.
+- **Held poses vs a `service` row at tilt 45:** the designer had one, and it passed: service rows assume a built,
+  powered machine.
+- **Kinks vs `distances` rows:** a row measures surface distance between two parts. A turn right at a plug and two
+  leads in one tube are properties of the routes themselves, and no row names them.
+- **`cab_path` vs reading the manifest:** the manifest drops cadlib's `path`. Storing the polyline on the object keeps
+  the blend self-contained, like `cab_ends`, and changes no geometry.
+
+### Still open (gaps)
+- A removal row that stops short (A7-03) is not caught; the insertion check tests each part to infinity at its step,
+  but a `slide_out` row's length is the designer's choice.
+- Prose in `why` strings and the BOM (z 64 against a model at 63) is unchecked. `=EXPR` covers row values, not text.
+- Insertion treats parts made in place (a soldered splice lowered 25 mm) like parts brought from outside: the A7 splice
+  reads "no straight way in" at tilt 45 (+Z PRT_nip_cover at 67.6). Mark such steps `insert_ok`.
+- Held poses cover assembly steps, not service ops: those assume power.
+- Known from earlier runs: BOM free text vs model, creep and fatigue, PCB exposure, gear tips as thin walls, facet
+  defaults, `parallel_builds` untested live.
+
+### Verification of this run
+- `tools/verify_all.sh`: 84/84 passed (`/tmp/alex3d-verify.log`). A1-A3 and v2 A1-A6 are unchanged except for the new
+  cable-shape warns, which are asserted exactly: 5 on v2 A3-A5, 6 on v2 A6 (with A7-02's shared tube). New:
+  - verify 4k: the v2 A7 designer config gives 0 F and exactly 12 untriaged warns: A7-01 (held pose), A7-02 (2 kinks,
+    1 shared tube), the A6-02 drift (5.7), 4 insertion step facts and 3 other cable shapes. With
+    `overlay_v2a7_steps.json`, insertion leaves only the in-place splice and the held-pose row names both needs.
+    `powered` on step 14 does not clear it, and `pose_how` on 11a does. V2R7's cap rows: forward-up is clear (0.2),
+    back-up is blocked by the nip cover at 54.
+  - verify 4l: `tools/test_cable_shapes.py`: a kink into a plug and a 21 mm shared run are flagged; the rounded route
+    and the chained hand-over are not.

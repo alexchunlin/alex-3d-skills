@@ -167,7 +167,11 @@ passed while the entry arc was 7.50 (V2A4-F1). A clearance to a toleranced purch
 A new part goes in the assembly_order step where it physically goes in (not the bench whose cable it carries), and a step
 the BOM does at an angle ("drop in at +30", "nose up 20") gets its "pose": the insertion check then tests it. v2 A6 put the
 bus splice, seated in the pan hub under the groove cap, in the feeder's bench step, and it was the one major (V2A6-F1).
-Cable routes that meet across a joint meet on its axis (V2A6-F2).
+Cable routes that meet across a joint meet on its axis (V2A6-F2). Mark the assembly step that brings power "powered": true;
+a step that needs a servo-held joint moved before it (its "pose", or a screw reachable only at a joint limit) says how in
+"pose_how", or better, is reordered or the screw moved: v2 A7's groove cap went on at tilt 45, six steps after the tilt
+servo and before the battery, and it was the one major (V2A7-F1). Each lead is its own route, beside the others in a
+shared channel, with one OD straight out of a plug or splice (V2A7-F2).
 If the plan changes a shared params.py value (a profile constant, an interface), try it first: copy ${HW}/blender to
 /tmp, make the change there, cad build, and cad check --only drop,distances,sightlines; plan around what fails. v2 A5's
 planner predicted PSI_C 45 analytically, the params builder then hit 14 drop fails, and the launcher builder spent 30 min
@@ -214,10 +218,11 @@ ${CONFIG.parallel_builds ? `0. Merge ${HW}/blender/checks.d/*.json into checks.j
    Then run ${CAD} bom ${HW}/BOM_AND_ASSEMBLY.md ${HW}/blender/manifest.json and fix every BAD row (V2A3-F5, F6).
    Every claim cites a cadcheck row or cad q line; quote coverage and not_checked (${CAD} rows cadcheck.json --summary).
    Every BOM step that puts a part "in", "into" or "under" something has its part in that step of assembly_order, and
-   checks.insertion lists it with a free direction (V2A6-F1). Before writing a motion, timing or
+   checks.insertion lists it with a free direction (V2A6-F1). A step the BOM does at a joint angle is in
+   assembly.held_poses with "pose_how" or after the "powered" step (V2A7-F1). Before writing a motion, timing or
    service claim (index positions, "adjust without disassembly", "comes off at tilt 45"), add the matching
    index_tests / service / slide_out entry to checks.json and re-run cad check (FINDINGS A2-F2, A2-F6). "Removable" is a
-   slide_out over the whole path (A3-F3). Every printed spring or snap arm gets a flexures entry (A3-F2).
+   slide_out over the whole path, until the part is clear of the machine (A3-F3; v2 A7's cap row stopped at 40, V2R7 A7-03). Every printed spring or snap arm gets a flexures entry (A3-F2).
 Return the evidence summary from ${dir(n)}/cadcheck.json, not your opinion of it.`
 
 const reviewPrompt = (n, prevReviewPath) => `

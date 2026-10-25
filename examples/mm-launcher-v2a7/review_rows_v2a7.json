@@ -1,0 +1,22 @@
+{
+  "slide_out": [
+    {"name": "R7 A7-01 groove cap leaves the machine forward-up (-Y +Z 45 deg) at tilt 45 after its 6 screws (BOM 11a reversed / service 'Bus splice')",
+     "objects": ["PRT_groove_cap", "FST_gcap_*"], "ignore": ["CAB_*"], "pose": {"PIV_tilt": 45},
+     "dir": [0, -0.7071, 0.7071], "dist": 160, "step": 2, "min_clearance": 0.0},
+    {"name": "R7 A7-01 groove cap leaves the machine back-up (+Y +Z 45 deg) at tilt 45 after its 6 screws",
+     "objects": ["PRT_groove_cap", "FST_gcap_*"], "ignore": ["CAB_*"], "pose": {"PIV_tilt": 45},
+     "dir": [0, 0.7071, 0.7071], "dist": 160, "step": 2, "min_clearance": 0.0},
+    {"name": "R7 A7-01 groove cap leaves forward, shallow (-Y +Z 15 deg) at tilt 45",
+     "objects": ["PRT_groove_cap", "FST_gcap_*"], "ignore": ["CAB_*"], "pose": {"PIV_tilt": 45},
+     "dir": [0, -0.9659, 0.2588], "dist": 160, "step": 2, "min_clearance": 0.0},
+    {"name": "R7 A7-01 groove cap leaves back, shallow (+Y +Z 15 deg) at tilt 45",
+     "objects": ["PRT_groove_cap", "FST_gcap_*"], "ignore": ["CAB_*"], "pose": {"PIV_tilt": 45},
+     "dir": [0, 0.9659, 0.2588], "dist": 160, "step": 2, "min_clearance": 0.0},
+    {"name": "R7 A7-01 groove cap leaves forward, shallow (-Y +Z 15 deg) at tilt 0",
+     "objects": ["PRT_groove_cap", "FST_gcap_*"], "ignore": ["CAB_*"],
+     "dir": [0, -0.9659, 0.2588], "dist": 160, "step": 2, "min_clearance": 0.0},
+    {"name": "R7 A7-01 groove cap leaves back, shallow (+Y +Z 15 deg) at tilt 0",
+     "objects": ["PRT_groove_cap", "FST_gcap_*"], "ignore": ["CAB_*"],
+     "dir": [0, 0.9659, 0.2588], "dist": 160, "step": 2, "min_clearance": 0.0}
+  ]
+}

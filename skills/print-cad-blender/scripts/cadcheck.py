@@ -31,12 +31,14 @@ Checks (each one writes evidence into the JSON report, with an explicit `coverag
   slide         slide-out sweeps from config ("slide_out"), one object or a group
   distances     min/max distance assertions from config ("distances"), optionally as a gap along a ray (or the worst of a ray swept over a passage, "sweep"),
                 with payload squeeze and a declared compliant element
-  assembly      assembly_order audit: objects in no step, step labels whose screw size disagrees with the model
+  assembly      assembly_order audit: objects in no step, step labels whose screw size disagrees with the model,
+                steps that move a servo-held joint before any step is "powered" (held poses)
   insertion     each part and each merged bench group out along a straight line past the earlier steps' parts
   stacks        tolerance stacks from config ("stacks"): worst case and RSS against a limit
   flexures      declared springs and snap arms: beam direction vs the part's print orientation (layer bonds)
   stability     centre of mass and static tip angle over a coarse pose grid
-  cables        path length vs. lead length, chains, junctions, ends that come apart across a joint, exposed cable
+  cables        path length vs. lead length, chains, junctions, ends that come apart across a joint, kinked corners,
+                two routes in one tube, exposed cable
 
 Evidence for the rules here: docs/FINDINGS.md A1-F1, F3, F4, F5, F9, F10, F11, F13, F14, A2-F1 to F9, A3-F1 to F3, F7, F8 and A3-V1.
 """
@@ -99,6 +101,8 @@ DEFAULTS = {
     "cable_leads": {},
     "cable_chains": [],         # [{"name", "cables": [CAB_a, CAB_b, ...], "lead": mm, "why"}]: one conductor run, one lead
     "cable_junctions_ok": [],   # globs of cables whose meeting ends are a real connector
+    "cable_min_bend_od": 0.75,  # a corner whose centreline radius is under this x OD is a kink (V2A7-F2)
+    "joint_drives": {},         # {"PIV_x": "BUY_servo_x" or null}: what holds a joint during assembly (default: by name)
     # [{"match": "substring of the warn text", "why": "..."}]: a warn you looked at and accept. The summary counts
     # untriaged warns separately. v2 A1 finished at 0 fails, 34 warns; 3 of R1's issues (A1-05, 07, 08) were warns
     # in that list that nobody acted on (FINDINGS V2A1-F5)
@@ -2175,6 +2179,95 @@ def check_assembly():
                     st["step"][:60], m.group(0), d, sorted({round(o["fst_len"], 1) for o in same_d})), step=st["step"],
                     screws=[o.name for o in same_d])
     REPORT["coverage"].append("assembly: %d steps, %d objects placed, %d in no step" % (len(steps), len(step_of), len(loose)))
+    check_held_poses(steps)
+
+
+def joint_drives():
+    """joint -> the purchased part that holds it (a servo or gearmotor), from "joint_drives" ({"PIV_x": "BUY_..." or
+    null for a joint that is free by hand}) or by name: a BUY_ part named servo/motor/stepper/actuator ending in the
+    joint's name (PIV_tilt -> BUY_servo_tilt). Continuous and coupled joints are left out."""
+    buy = [o.name for o in PURCHASED]
+    out = {}
+    for jn, s in JOINTS.items():
+        if jn in COUPLE or s.get("continuous") or s["axis"] is None:
+            continue
+        if jn in CFG["joint_drives"]:
+            if CFG["joint_drives"][jn]:
+                out[jn] = (CFG["joint_drives"][jn], "joint_drives")
+            continue
+        sfx = jn[4:].lower()
+        hit = [n for n in buy if re.search(r"servo|motor|stepper|actuator", n.lower()) and n.lower().endswith("_" + sfx)]
+        if len(hit) == 1:
+            out[jn] = (hit[0], "by name")
+    return out
+
+
+def check_held_poses(steps):
+    """A step that needs a joint away from home after the joint's drive is in. v2 A7 moved the groove cap to step 11a,
+    where one of its screws is reachable only at tilt 45, but the tilt servo went in at step 8 and nothing is powered
+    until the battery (step 14): "tilt the pod to 45" meant back-driving an unpowered servo through its gears and
+    holding it there (V2R7 A7-01, major; FINDINGS V2A7-F1). Needs come from a step's "pose" and from screws that the
+    fastener check reaches only away from home. Mark the step that brings power with "powered": true; a step that says
+    how the joint gets there (drive taken out, horn off, a prop) gets "pose_how": "<how>"."""
+    drives = joint_drives()
+    REPORT["assembly"]["joint_drives"] = {j: {"by": d, "from": how} for j, (d, how) in sorted(drives.items())}
+    if not drives:
+        return
+    step_of = {}
+    for i, st in enumerate(steps):
+        for o in ALL:
+            if o.name not in step_of and any(fnmatch.fnmatch(o.name, g) for g in st["objects"]):
+                step_of[o.name] = i
+    merged_at = {st["merge"]: i for i, st in enumerate(steps) if st.get("merge")}
+
+    def arrives(n, grp):
+        """First step at which n is in group grp (None = main), or None."""
+        if n not in step_of:
+            return None
+        i, g, seen = step_of[n], steps[step_of[n]].get("bench"), set()
+        while g != grp:
+            j = merged_at.get(g)
+            if g is None or j is None or g in seen:
+                return None
+            seen.add(g)
+            i, g = max(i, j), steps[j].get("bench")
+        return i
+
+    powered = next((i for i, st in enumerate(steps) if st.get("powered")), None)
+    needs = []
+    for i, st in enumerate(steps):
+        for jn, v in (st.get("pose") or {}).items():
+            needs.append((i, jn, v, "the step's pose"))
+    pk_pose = {pk: p for p, pk in fastener_poses()}
+    for r in REPORT["checks"].get("fasteners", {}).get("rows", []):
+        acc = r.get("access") or {}
+        best = r.get("access_best")
+        if r.get("captive") or not best or "home" not in acc or not acc["home"].get("blocked") or r["object"] not in step_of:
+            continue
+        for jn, v in pk_pose.get(best["pose"], {}).items():
+            needs.append((step_of[r["object"]], jn, v, "%s is reachable only at %s" % (r["object"], best["pose"])))
+    rows, merged = [], {}
+    for i, jn, v, why in needs:
+        merged.setdefault((i, jn, v), []).append(why)
+    for (i, jn, v), whys in sorted(merged.items()):
+        why = "; ".join(whys)
+        if jn not in drives or abs(v - (JOINTS[jn].get("home") or 0.0)) < 1e-6:
+            continue
+        drv, how = drives[jn]
+        a = arrives(drv, steps[i].get("bench"))
+        if a is None or a > i:
+            continue
+        rec = {"step": steps[i]["step"], "joint": jn, "value": v, "why": why, "drive": drv, "drive_step": steps[a]["step"],
+               "powered": powered is not None and powered <= i, "pose_how": steps[i].get("pose_how")}
+        rows.append(rec)
+        if not rec["powered"] and not rec["pose_how"]:
+            finding("assembly", "warn", "step '%s' needs %s at %g (%s), but %s (%s) holds that joint from step '%s' and no step up to "
+                    "here is \"powered\": an unpowered %s has to be back-driven through its gears and held there by hand. Do this "
+                    "before the drive goes in, take the drive out first, or say how in the step's \"pose_how\"" % (
+                        steps[i]["step"][:50], jn, v, why, drv, how, steps[a]["step"][:40], "servo" if "servo" in drv.lower() else "drive"), **rec)
+    REPORT["assembly"]["held_poses"] = rows
+    REPORT["coverage"].append("assembly: %d step poses and pose-only screws checked against %d joint drives (%s)" % (
+        len(needs), len(drives), ", ".join("%s<-%s" % (j, d) for j, (d, _h) in sorted(drives.items()))))
 
 
 _AXES6 = [("+Z", (0, 0, 1)), ("-Z", (0, 0, -1)), ("+X", (1, 0, 0)), ("-X", (-1, 0, 0)), ("+Y", (0, 1, 0)), ("-Y", (0, -1, 0))]
@@ -2595,6 +2688,103 @@ def check_stability():
     REPORT["not_checked"].append("stability: dynamic loads (recoil, pan acceleration), friction/sliding")
 
 
+def cable_path(o):
+    """(world points at the current pose, tube radius) of a cable route, or (None, r). cadlib stores the polyline as
+    cab_path / cab_r; older blends get it back from the tube mesh, which is one ring of vertices per polyline point
+    (ring 0 repeats the last point). A reconstruction whose length is off path_len is dropped."""
+    M = o.matrix_world @ HOME_MW.get(o.name, o.matrix_world).inverted()
+    if o.get("cab_path") is not None:
+        f = list(o["cab_path"])
+        return [M @ Vector(f[i:i + 3]) for i in range(0, len(f), 3)], float(o.get("cab_r", 0.0))
+    vs = [o.matrix_world @ v.co for v in o.data.vertices]
+    for N in (10, 8, 12, 14, 16, 6, 4):
+        if len(vs) % N or len(vs) < 3 * N:
+            continue
+        rings = [vs[i:i + N] for i in range(0, len(vs), N)]
+        cs = [sum(rg, Vector()) / N for rg in rings]
+        if any(abs((p - c).length - (rings[1][0] - cs[1]).length) > 0.02 for rg, c in zip(rings, cs) for p in rg):
+            continue
+        pts = []
+        for c in cs[1:]:
+            if not pts or (c - pts[-1]).length > 1e-3:
+                pts.append(c)
+        L = sum((pts[i + 1] - pts[i]).length for i in range(len(pts) - 1))
+        if o.get("path_len") and abs(L - o["path_len"]) > 0.005 * o["path_len"] + 0.05:
+            continue
+        return pts, (rings[1][0] - cs[1]).length
+    return None, 0.0
+
+
+def _bends(pts, od, free_ends=(True, True)):
+    """Corners of a polyline as [(centreline radius that fits, turn deg, at)]. A corner gets half of each neighbouring
+    segment for its arc; an end segment that terminates in a part (not a hand-over to the next route of the same
+    conductor) first keeps one OD straight out of the termination, so a turn right at the plug reads radius 0."""
+    out, n = [], len(pts)
+    for k in range(1, n - 1):
+        a, b = pts[k] - pts[k - 1], pts[k + 1] - pts[k]
+        if a.length < 1e-6 or b.length < 1e-6:
+            continue
+        th = a.angle(b)
+        if th < math.radians(20):
+            continue
+        ta = (max(0.0, a.length - od) if free_ends[0] else a.length) if k == 1 else a.length / 2
+        tb = (max(0.0, b.length - od) if free_ends[1] else b.length) if k == n - 2 else b.length / 2
+        out.append((min(ta, tb) / math.tan(th / 2), math.degrees(th), [round(c, 1) for c in pts[k]]))
+    return out
+
+
+def _seg_dist(p, pts):
+    best = 1e9
+    for i in range(len(pts) - 1):
+        a, b = pts[i], pts[i + 1]
+        ab = b - a
+        t = 0.0 if ab.length_squared < 1e-12 else max(0.0, min(1.0, (p - a).dot(ab) / ab.length_squared))
+        best = min(best, (p - (a + ab * t)).length)
+    return best
+
+
+def _cable_shapes(chained, ends, buy):
+    """Kinked corners and shared runs. v2 A7 laid the tilt and feeder bus leads in one tube for 16 mm (82.5 mm3 of
+    overlap) and turned both 90 deg onto the splice face 1.5 mm below (V2R7 A7-02): cable-cable pairs were never
+    tested, and bend radius was in not_checked."""
+    paths = {}
+    for o in CABLES:
+        pts, r = cable_path(o)
+        if pts and len(pts) >= 2 and r > 0:
+            paths[o.name] = (pts, r)
+    kinks, shared = [], []
+    for n, (pts, r) in sorted(paths.items()):
+        od = 2 * r
+        # an end within 3 mm of a purchased part (plug, splice, board) is a termination; an end in free space, or one
+        # that meets the next route of the same conductor, is a hand-over and may turn at once
+        free = tuple(bool(buy and buy.find_nearest(pe, 3.0)[0] is not None) and not any(
+            frozenset((n, m)) in chained and any((pe - q).length < 2.0 for q in ends.get(m, [])) for m in paths if m != n)
+            for pe in (pts[0], pts[-1]))
+        bad = [b for b in _bends(pts, od, free) if b[0] < CFG["cable_min_bend_od"] * od]
+        if bad:
+            kinks.append({"cable": n, "od_mm": round(od, 2), "bends": [{"radius_mm": round(R, 2), "turn_deg": round(t), "at": at} for R, t, at in sorted(bad)]})
+    names = sorted(paths)
+    for i, x in enumerate(names):
+        for y in names[i + 1:]:
+            if body(O[x]) != body(O[y]) or frozenset((x, y)) in chained:
+                continue
+            (px, rx), (py, ry) = paths[x], paths[y]
+            if bb_gap(bbox_world(O[x]), bbox_world(O[y])) > 0:
+                continue
+            lim, run, at = 0.5 * (rx + ry), 0.0, None
+            for k in range(len(px) - 1):
+                a, b = px[k], px[k + 1]
+                m = max(1, int((b - a).length / 0.5))
+                for j in range(m):
+                    p = a + (b - a) * (j / m)
+                    if _seg_dist(p, py) < lim:
+                        run += (b - a).length / m
+                        at = at or [round(c, 1) for c in p]
+            if run > 2 * (rx + ry):
+                shared.append({"cables": [x, y], "run_mm": round(run, 1), "od_mm": [round(2 * rx, 2), round(2 * ry, 2)], "from": at})
+    return kinks, shared, len(paths)
+
+
 def _end_drift(ends, meet=2.0, near=3.0, tol=2.0):
     """Cable ends that meet something at home (another cable's end within 2 mm, or a solid within 3 mm) on another
     body: how far they come apart at each joint limit. v2 A6 moved the bus splice off the pan axis to r 7; the static
@@ -2723,9 +2913,18 @@ def check_cables():
                 "is no wider than the cable" % (len(junctions), "; ".join("%s / %s at %s" % (j["cables"][0], j["cables"][1], j["at"]) for j in junctions[:6])),
                 junctions=junctions)
     drift = _end_drift(ends) if ends else []
+    kinks, shared, n_paths = _cable_shapes(chained, ends, buy)
+    for k in kinks:
+        finding("cables", "warn", "%s (OD %g) kinks: %s. Round the corner (centreline radius >= %g x OD) and leave one OD of straight "
+                "lead out of a plug or splice" % (k["cable"], k["od_mm"], "; ".join("%d deg at %s with radius %.1f" % (
+                    b["turn_deg"], b["at"], b["radius_mm"]) for b in k["bends"][:3]), CFG["cable_min_bend_od"]), **k)
+    for r in shared:
+        finding("cables", "warn", "%s and %s lie in one tube for %.0f mm from %s: two leads cannot share a place. Route them side by side "
+                "(the channel or groove must hold both), or model the bundle as one cable with a cable_chains row per conductor" % (
+                    r["cables"][0], r["cables"][1], r["run_mm"], r["from"]), **r)
     # waived junctions stay visible: v2 A5 waived a 3-way bus junction it never modelled, and V2R5 raised it (A5-03)
     REPORT["checks"].setdefault("cables", {"findings": []}).update(chains=crow, junctions=junctions, junctions_waived=waived, ends_known=len(ends),
-                                                                    end_drift=drift)
+                                                                    end_drift=drift, kinks=kinks, shared_runs=shared)
     nolead = [r["object"] for r in rows if r["lead_len"] is None]
     if nolead:
         # v2 A2: only the phase leads had a length; bus, UART and encoder runs across the pan joint went unchecked (V2A2-F4)
@@ -2737,7 +2936,9 @@ def check_cables():
                               "with no modelled part (cable_junctions_ok); "
                               "exposure (>= %d of 26 rays escape, or %d%% of the directions toward a viewer) at home pose" % (
         len(rows), have, len(crow), len(ends), len(waived), ex["min_escape"], 100 * ex["view_frac"]))
-    REPORT["not_checked"].append("cables: bend radius, slack across joints, connector positions (review by section render)")
+    REPORT["coverage"].append("cables: %d routes with a known path: corners under %g x OD (one OD straight out of a plug or splice), "
+                              "and pairs on one body sharing a tube for more than 2 OD" % (n_paths, CFG["cable_min_bend_od"]))
+    REPORT["not_checked"].append("cables: bend radius of a lead that is not modelled as a route, slack across joints, connector positions (review by section render)")
 
 
 # ------------------------------------------------------------------ main

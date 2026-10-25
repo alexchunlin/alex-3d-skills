@@ -1,0 +1,293 @@
+{
+ "_about": "v2 A7 assembly_order with the step facts the insertion check asks for: A6's three (step 7 pose tilt 20, step 13 pose jar 30, FST_nip_stud into 6d with its backplate) and step 11a's own text, 'pod at tilt 45', as a pose. The held-pose check then flags 11a: the tilt servo is in from step 8 and nothing is powered (V2R7 A7-01, FINDINGS V2A7-F1).",
+ "assembly_order": [
+  {
+   "step": "1 base shell upside down: adapter into its fence, M3 x 20 self-tappers from the deck top",
+   "objects": [
+    "PRT_base_shell",
+    "BUY_dewalt_adapter",
+    "FST_adapter_*"
+   ]
+  },
+  {
+   "step": "1a pan drive on the bench: horn screwed into the pinion recess",
+   "bench": "pandrive",
+   "objects": [
+    "PRT_pan_pinion",
+    "BUY_horn_pan",
+    "FST_pinion_?"
+   ]
+  },
+  {
+   "step": "1b pan drive on the bench: servo into the pocket + clamp, pinion onto the spline, centre screw through the pinion",
+   "bench": "pandrive",
+   "objects": [
+    "PRT_pan_servo_*",
+    "BUY_servo_pan",
+    "FST_panclamp_*",
+    "FST_pinion_ctr"
+   ]
+  },
+  {
+   "step": "1c pan drive onto the deck posts",
+   "merge": "pandrive",
+   "objects": [
+    "FST_panservo_*"
+   ]
+  },
+  {
+   "step": "2a floor plate on the bench: partition, MotorGo on its standoffs",
+   "bench": "floor",
+   "objects": [
+    "PRT_base_floor",
+    "PRT_base_partition",
+    "FST_partition_*",
+    "BUY_motorgo_axis",
+    "FST_mg_*"
+   ]
+  },
+  {
+   "step": "2b floor plate on the bench: buck, servo controller",
+   "bench": "floor",
+   "objects": [
+    "BUY_buck_12v",
+    "FST_buck_*",
+    "BUY_servo_controller",
+    "FST_ctrl_*"
+   ]
+  },
+  {
+   "step": "2c turntable on the bench: posts from the turntable underside (v2-A6-01: the groove cap goes on at 11a, after every bus lead is in the groove)",
+   "bench": "turntable",
+   "objects": [
+    "PRT_turntable",
+    "PRT_post_L",
+    "PRT_post_R",
+    "FST_post_*"
+   ]
+  },
+  {
+   "step": "2d thrust ring on the hub, turntable assembly into the deck hole; hub gear meshed under the deck and screwed up into the hub (floor still off)",
+   "merge": "turntable",
+   "objects": [
+    "PRT_thrust_ring",
+    "PRT_hub_*",
+    "FST_hub_*",
+    "FST_tt_*"
+   ]
+  },
+  {
+   "step": "3 floor into the shell, cables; v2-A2-02 launcher base lead (phase + encoder) from the MotorGo to the hub with its U-loop under the hub gear",
+   "merge": "floor",
+   "objects": [
+    "FST_floor_*",
+    "CAB_12v*",
+    "CAB_uart*",
+    "CAB_usb*",
+    "CAB_bus_pan",
+    "BUY_usbc_plug",
+    "CAB_launcher_base*",
+    "PRT_cable_clip*",
+    "FST_clip_*"
+   ]
+  },
+  {
+   "step": "6a pod on the bench: motor into the nacelle bore (crush ribs), body onto the nacelle plate; motor + nacelle screws from inside the guard; phase leads into the journal bore",
+   "bench": "pod",
+   "objects": [
+    "PRT_nacelle",
+    "PRT_launcher_body",
+    "BUY_motor",
+    "FST_motor_*",
+    "FST_nacelle_*",
+    "CAB_phase_*"
+   ]
+  },
+  {
+   "step": "6b magnet glued on the rear shaft with the jig (spigot in the 8 mm access hole); Plink on the cap pegs; encoder cap into the bore",
+   "bench": "pod",
+   "objects": [
+    "BUY_magnet",
+    "BUY_plink_encoder",
+    "PRT_encoder_cap",
+    "FST_enc_*",
+    "CAB_encoder*"
+   ]
+  },
+  {
+   "step": "6c hex stud head (M3 x 16 hex head ISO 4017, AF 5.5 x 2.0) dropped into the backplate pocket (captive hex, never driven); v2-A1-01 nip stop pad into its pocket under the muzzle floor, 1 x M3 x 6 up from the skin",
+   "bench": "pod",
+   "objects": [
+    "PRT_nip_stop",
+    "FST_nipstop"
+   ]
+  },
+  {
+   "step": "6d backplate into its bay, journal plate on (3 csk), hinge axle through wall + boss + plate into its trapped nut",
+   "bench": "pod",
+   "objects": [
+    "FST_nip_stud",
+    "PRT_hood",
+    "PRT_journal_plate",
+    "FST_jp_*",
+    "FST_hinge",
+    "FST_hinge_nut"
+   ]
+  },
+  {
+   "step": "6e stop sleeve over the stud, thumbwheel onto the stud (set the gap), leaf screwed under the nip cover from outside, cover onto the land",
+   "bench": "pod",
+   "objects": [
+    "PRT_nip_wheel",
+    "FST_tw_*",
+    "PRT_nip_leaf",
+    "PRT_nip_cover",
+    "FST_leaf_*",
+    "FST_nipcover_*",
+    "PRT_nip_stop_sleeve"
+   ]
+  },
+  {
+   "step": "6f flywheel onto the D-shaft, two pinch bolts through their nuts (L-key from +X)",
+   "bench": "pod",
+   "objects": [
+    "PRT_flywheel",
+    "FST_fw_*",
+    "BUY_tape"
+   ]
+  },
+  {
+   "step": "6g wheel-side cover (4 csk)",
+   "bench": "pod",
+   "objects": [
+    "PRT_launcher_cover",
+    "FST_cover_*"
+   ]
+  },
+  {
+   "step": "7 pod drops into the post U-slots, held nose-up about 20 deg (v2-A1-06)",
+   "merge": "pod",
+   "objects": [],
+   "pose": {
+    "PIV_tilt": 20
+   }
+  },
+  {
+   "step": "8a tilt drive on the bench: horn screwed to the adapter",
+   "bench": "tiltdrive",
+   "objects": [
+    "PRT_tilt_horn_adapter",
+    "BUY_horn_tilt",
+    "FST_tilt_horn_?"
+   ]
+  },
+  {
+   "step": "8b tilt drive on the bench: adapter + horn onto the servo spline, centre screw through the 6.5 key hole",
+   "bench": "tiltdrive",
+   "objects": [
+    "BUY_servo_tilt",
+    "FST_tilt_horn_ctr"
+   ]
+  },
+  {
+   "step": "8 tilt servo + horn adapter slide in -X through the right post (key into the journal-plate socket), cover",
+   "merge": "tiltdrive",
+   "objects": [
+    "PRT_post_R_cover",
+    "FST_postcover_*",
+    "CAB_bus_tilt*"
+   ]
+  },
+  {
+   "step": "9 beam closes the journal U-slots",
+   "objects": [
+    "PRT_beam",
+    "FST_beam_*",
+    "CAB_launcher*"
+   ]
+  },
+  {
+   "step": "10a feeder drive on the bench: horn screwed into the pinion recess (M2 x 8)",
+   "bench": "feeder",
+   "objects": [
+    "PRT_feeder_pinion",
+    "BUY_horn_feeder",
+    "FST_fhorn_?"
+   ]
+  },
+  {
+   "step": "10b crown upside down: pinion + horn in from below; then servo #3 into its pocket from the top, spline pressed into the horn (v2-A1-04: no centre screw; the lobe cover in 10d holds the servo down)",
+   "bench": "feeder",
+   "objects": [
+    "PRT_feeder_crown",
+    "BUY_servo_feeder"
+   ]
+  },
+  {
+   "step": "10c disc in from below (band meshes with the pinion), floor plate on with 2 csk from below",
+   "bench": "feeder",
+   "objects": [
+    "PRT_feeder_disc",
+    "PRT_feeder_housing",
+    "FST_fplate_*"
+   ]
+  },
+  {
+   "step": "10d feeder upright: bus into the channel, servo cover (2 csk); the feeder bus hangs free until 11a (v2-A6-01)",
+   "bench": "feeder",
+   "objects": [
+    "PRT_feeder_cover",
+    "FST_fcover_*",
+    "CAB_bus_feeder*"
+   ]
+  },
+  {
+   "step": "11 feeder onto the beam",
+   "merge": "feeder",
+   "objects": [
+    "FST_feedmount_*"
+   ]
+  },
+  {
+   "step": "11a pod at tilt 45, groove cap still off (v2-A6-01): tilt / feeder bus leads into the turntable groove; pan lead pulled up the hub bore; 3-way splice soldered and heat-shrunk above the turntable, then lowered into the hub bore to z 74 at az 35 (BUY_bus_junction, BOM 14a, with the PIV_pan tail of the pan lead, CAB_bus_pan_tail); groove cap on (6 x M3 x 10 csk)",
+   "objects": [
+    "BUY_bus_junction",
+    "CAB_bus_pan_tail",
+    "PRT_groove_cap",
+    "FST_gcap_*"
+   ],
+   "pose": {
+    "PIV_tilt": 45
+   }
+  },
+  {
+   "step": "12 jar on the bench: adapter in the band, gate laid closed on the valve floor (stop lug up), valve onto the spout (the spout tip captures the lug; v2-A1-09); v2-A2-A1-09 detent clip screwed on the +Y cheek, bump dropped into the closed notch",
+   "bench": "jar",
+   "objects": [
+    "BUY_jar",
+    "BUY_jar_band",
+    "BUY_mm_fill",
+    "PRT_jar_adapter",
+    "PRT_jar_valve",
+    "PRT_jar_gate",
+    "FST_valve_*",
+    "PRT_gate_detent",
+    "FST_detent_*"
+   ]
+  },
+  {
+   "step": "13 jar onto the feeder: drop in at +30, twist to 0",
+   "merge": "jar",
+   "objects": [],
+   "pose": {
+    "PIV_jar": 30
+   }
+  },
+  {
+   "step": "14 battery slides onto the adapter rail +X -> -X (last; BOM step 14)",
+   "objects": [
+    "BUY_battery"
+   ]
+  }
+ ]
+}

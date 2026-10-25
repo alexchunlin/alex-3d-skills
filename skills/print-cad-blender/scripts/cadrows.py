@@ -1,7 +1,7 @@
 """cadrows: one line per row of a cadcheck.json or manifest.json, so you grep instead of writing a dump script.
 
     cad rows [cadcheck.json] [REGEX] [--check distances,drop] [--findings] [--max N]
-    cad rows cadcheck.json --summary [REGEX]             # counts, coverage, not_checked, assembly.step_of
+    cad rows cadcheck.json --summary [REGEX]             # counts, coverage, not_checked, held poses, assembly.step_of
     cad rows manifest.json [REGEX]                       # parts, fasteners, cables, joints, params
     cad rows checks.json [REGEX] [--check allow,stacks]  # config rows: allow, fits, distances, stacks, slide_out, ...
 
@@ -41,7 +41,7 @@ def short(v, n=60):
 
 
 LABEL_KEYS = ("name", "op", "object", "part", "test")
-SKIP = {"why", "msg", "status", "region", "where", "thin_wall_where", "exposed_spots", "members", "terms", "access", "blocked"}
+SKIP = {"why", "msg", "status", "region", "where", "thin_wall_where", "exposed_spots", "members", "terms", "access", "blocked", "bends"}
 
 
 def row_line(check, r, extra=""):
@@ -60,6 +60,9 @@ def row_line(check, r, extra=""):
         # insertion: the nearest blocker per direction (v2 A6 feeder group: "+Z:PRT_groove_cap(BUY_bus_junction)@3")
         bits.append("blocked=" + " ".join("%s:%s%s@%s" % (dn, b[0]["by"], "(%s)" % b[0]["mover"] if b[0].get("mover") not in (None, label) else "",
                                                           short(b[0]["at_mm"])) if b else "%s:-" % dn for dn, b in r["blocked"].items()))
+    if isinstance(r.get("bends"), list) and r["bends"] and isinstance(r["bends"][0], dict):
+        # cables.kinks: each corner, so the reviewer has the place and radius (v2 A7 bus leads at the splice, V2A7-F2)
+        bits.append("bends=" + " ".join("%sdeg@%s:r%s" % (b["turn_deg"], short(b["at"]), short(b["radius_mm"])) for b in r["bends"]))
     if "access" in r and isinstance(r["access"], dict):
         bits.append("access=" + ",".join("%s:%s" % (pk, "BLOCKED" if a.get("blocked") else "%s %g" % (a.get("tool", "ok"), a.get("reach_mm", 0)))
                                          for pk, a in r["access"].items()))
@@ -110,7 +113,13 @@ def report_summary(d):
         yield "coverage  %s" % x
     for x in s.get("not_checked") or d.get("not_checked") or []:
         yield "not_checked  %s" % x
-    for n, st in sorted((d.get("assembly") or {}).get("step_of", {}).items()):
+    asm = d.get("assembly") or {}
+    for j, x in sorted((asm.get("joint_drives") or {}).items()):
+        yield "joint_drive  %s  %s (%s)" % (j, x.get("by"), x.get("from"))
+    for h in asm.get("held_poses") or []:
+        yield "held_pose  %s=%g at step %s  drive %s since step %s  powered=%s  pose_how=%s  | %s" % (
+            h["joint"], h["value"], short(h["step"], 40), h["drive"], short(h["drive_step"], 30), h["powered"], h.get("pose_how"), h["why"])
+    for n, st in sorted(asm.get("step_of", {}).items()):
         yield "step_of  %s  %s" % (n, st)
 
 

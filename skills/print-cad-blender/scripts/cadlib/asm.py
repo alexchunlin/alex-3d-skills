@@ -268,6 +268,9 @@ def cable(name, pts, r, color="cable_blk", joint=None, lead_len=None, step=None)
     ob["path_len"] = float(L)
     # both ends at home, world mm: cadcheck finds cables that meet with no connector there (V2A3-F3)
     ob["cab_ends"] = [float(c) for c in list(pts[0]) + list(pts[-1])]
+    # the whole polyline and tube radius, for cadcheck's kink and shared-run tests (V2A7-F2)
+    ob["cab_path"] = [float(c) for p in pts for c in p]
+    ob["cab_r"] = float(r)
     if lead_len:
         ob["lead_len"] = float(lead_len)
     PARTS[name].update(path=[list(map(float, p)) for p in pts], path_len=L, lead_len=lead_len,
