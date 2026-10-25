@@ -68,3 +68,13 @@ The CAD loop produces a new attempt (design plus review) about every 60-90 min. 
 4. Improve the skills and tools, re-verify them, update STATUS and commit.
 
 **Baseline decision (user, 2026-10-24):** none of the 8 attempts in this loop will use this repo's tools. The loop runs unchanged as a baseline. Revision runs measure what the tools *would* have caught and record per-attempt baseline metrics (see `docs/STATUS.md`). They don't propose changing the running loop.
+
+## Process change (user decision, 2026-10-24 evening). This supersedes the "baseline runs all 8 attempts" decision.
+- **v1 (the no-tools baseline) stopped after attempt 3.** The user stopped it to reassess. The baseline is attempts 1-3; attempt 3's review was run so it has three scored attempts. Record the A3 baseline row as usual.
+- **v2 starts now and uses this repo's tools:** `templates/cad-loop.workflow.js` adapted, `print-cad-blender`, `cad-design-review` and `cadcheck`, in a modular project at `/Users/alxchunlin/code-stuff/mmlauncher/mm-launcher/mm-launch-hw/v2/`. The orchestration script is at `/Users/alxchunlin/code-stuff/mmlauncher/mm-launcher/orchestration/`.
+- From now on, v2 tool results are **real, not counterfactual**. Measure whether the tools helped: issues caught before review, false fails that cost agent time, time and tokens per attempt against the v1 baseline, and context peaks.
+- **The v2 agents use a pinned checkout at `~/code-stuff/alex-3d-skills-pin`** (a git worktree, detached HEAD). Each v2 attempt's planner moves the pin to this repo's `main` at the start of that attempt. So:
+  - `main` must always be working: run `sh tools/verify_all.sh` before every commit.
+  - Your improvements reach the next v2 attempt, never one in flight.
+  - Never edit or check out anything in the pin worktree yourself.
+- v2 revision runs are launched as "Revision run for v2 attempt N". Their data is in the v2 workflow's journal and transcripts (path given in the prompt) and in `mm-launch-hw/v2/renders/attempt-N/`. That covers `progress.md`, `cadcheck.json`, `review.md` and `review.json`, which includes `tool_catchable` per issue and `check_config_disputes`. The most valuable improvements fix what v2 agents actually tripped over. Watch for cadcheck false fails, missing checks, unclear skill instructions, and template prompt problems.
