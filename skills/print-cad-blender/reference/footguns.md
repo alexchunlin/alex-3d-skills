@@ -44,7 +44,10 @@ IDs point into `<repo>/docs/FINDINGS.md`. "Caught" means cadcheck or cadq flags 
 | V2A1-F2 | Gap adjustment needs a cover that comes off only at tilt 45 | service warn when an op removes parts without a slide_out at its pose | only if the op lists `remove` |
 | V2A1-F5 | 0.94 mm wall at self-tap pilots, 0.40 mm magnet stack, knife edges: all warns, none read | `accepted_warns`, `untriaged_warns` | yes (they were always warns) |
 | V2A1-V4 | `contact: true` for a thrust face also hid the journal on the same pair | `contact_normal` | yes, once declared |
-| V2A1-F3 | Pocket admits two payloads side by side | none yet (probe script) | no |
+| V2A1-F3, V2A2-F2 | Pocket admits two payloads side by side (Ø15 in A1; Ø14.4 in A2 still seats a 12.5 x 6.5 pair) | `payload_fit` pair at the minimum size, flat at the maximum | yes on v2 A2: fail, 0.14 short; 13 x 7 blocked by only 0.11 |
+| V2A2-F1 | Compliant leaf runs out of travel at full lift; the declared lift limit was not a real stop | `distances` at full deflection at both adjuster ends; a hard-stop row at the limit; drop coverage warn names the held joint | warn only ("holds PIV_nip_lift at home"); the rows are config |
+| V2A2-F6 | A ray distance fixed in the tilt frame slipped past the moving hood lip (14.18 vs 7.06) | ray-vs-nearest warn | yes |
+| V2A2-F4, F5 | Cables with no lead length; a step label's screw size disagreed with the model; a named spring with no flexures row | `cables`, `assembly` and `flexures` config warns | yes |
 
 **Rule from v2 A1:** 0 fails is not done. Read every warn on your objects: fix it, or list it under `accepted_warns`
 with a reason. Three of the first v2 reviewer's twelve issues were warns in the designer's own hand-off.

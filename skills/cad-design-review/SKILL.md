@@ -23,3 +23,5 @@ You are the reviewer, not the designer. Every issue you raise carries a number o
 - **Measured beats inferred.** "0.21 mm at 45° (cad q sweep)" is evidence. "Looks tight in side_tilt45.png" is a lead to measure, not a finding.
 - **Quote coverage.** If a class of problem was not checked, say so instead of implying it passed.
 - **Re-run, don't trust.** Re-run the designer's numbers before you repeat them.
+- **Config claims need the report too.** "X is in no step", "no row covers Y": cite the cadcheck.json field (`assembly.step_of`, the section's `rows`) that shows it. V2R2's "two parts in no step" was wrong, and it cost the design a manufacturability point (V2A2-R1).
+- **Rows, not probe scripts.** Pocket fit, finger reach and end stops are `payload_fit`, `sightlines` and `slide_out` with `expect: blocked`. Put them in `review_rows.json` so the designer re-runs them.

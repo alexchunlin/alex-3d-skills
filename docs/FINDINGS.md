@@ -16,7 +16,10 @@ Sources are abbreviated:
 - `R3` = reviewer attempt 3 (the restart that scored it), `WF/wf_26e26b28-15e/agent-aec430aae41935a1a.jsonl`
 - `V2WF` = the v2 loop's workflow dir, `WF/wf_8db95a5a-12a/`. `HW2` = `HW/v2/`. v2 A1 agents: `P1` plan
   `agent-a0cb3a38bac407e33`, builders `B1-base` `a800ddf5500adfcaa`, `B1-pan` `acdd6edb2981721dc`, `B1-launcher`
-  `a1e1c2446d3391a63`, `B1-feeder` `a598ac3528dfdb917`, `F1` finish `a4c7fa6df0fe83871`, `V2R1` review `a7067013f1c442a01`
+  `a1e1c2446d3391a63`, `B1-feeder` `a598ac3528dfdb917`, `F1` finish `a4c7fa6df0fe83871`, `V2R1` review `a7067013f1c442a01`.
+  v2 A2 agents: `P2` plan `a5f662b6704e21351`, builders `B2-params` `a5117b3d375e416e5`, `B2-pan` `a74de34b0f6956e51`,
+  `B2-launcher` `ae270a06dae7409de`, `B2-feeder` `ac785fe505d626741`, `B2-base` `a4005e3c23adee0f0`, `B2-finish`
+  `a08af4e9c73aea17a`, `F2` finish `acf219186d0bd28e9`, `V2R2` review `abf293a6ad3a00f0f`
 
 **Baseline:** v1 (the no-tools loop) ran attempts 1-3 and was then stopped by the user (2026-10-24 evening, see
 `HARVEST_BRIEF.md` "Process change"). The v1 tool results below are counterfactual. Every
@@ -769,3 +772,179 @@ issues through.
   exactly 2 fails.
 - The template dry run passes both sequential and `parallel_builds`. `parallel_builds` has not been tried in a live
   run.
+
+---
+
+## v2 Attempt 2 (harvested 2026-10-25)
+
+Inputs: the 9 attempt-2 entries in `V2WF/journal.jsonl` (lines 15-32) and their transcripts, plus `HW2/renders/attempt-2/`:
+progress.md, cadcheck.json, review.md, review.json, review/ (notes.md, lentils.py, three review cadchecks), 18 PNGs and
+`cg_grid.txt`. The blend V2R2 reviewed (`/tmp/rv2/model.blend`, md5 `de54b968…`, the same as `HW2/blender/model.blend`
+at 03:10) is archived as `examples/mm-launcher-v2a2/`, with the designer's checks.json and `overlay_v2a2.json` (the rows
+V2R2 showed were missing). Plan #3 had started (0.7 min) and is not ingested.
+
+**The tools were `6b62667`** (progress.md line 1), before the v2 A1 revision commit `f039205`. So v2 A2 had no
+`--overlay`, `accepted_warns`, missing-object handling, drop coverage warn, `contact_normal` or stability sampler.
+Problems those fix are attributed to the pin below, not counted as new. This run's fixes reach **v2 attempt 4**; v2 A3
+runs on `f039205`.
+
+### Per-agent cost (`cc_transcript.py workflow V2WF`)
+
+| Agent | Wall | Model | Tools | Output tok (thinking) | Cache read | Peak ctx | Longest gen | cad runs (failed) | Images |
+|---|---|---|---|---|---|---|---|---|---|
+| P2 plan | 9.8 | 8.0 | 1.8 | 41k (22k) | 2.7M | 141k | <120 s | 5 (0) | 0 |
+| B2-params | 6.7 | 5.1 | 1.6 | 24k (9k) | 2.4M | 92k | <120 s | 5 (0) | 0 |
+| B2-pan | 6.3 | 2.2 | 4.2 | 10k (2k) | 1.0M | 65k | <120 s | 4 (1) | 0 |
+| B2-launcher | **45.0** | 32.5 | 12.6 | **177k (133k)** | 14.8M | 340k | 291 s | 25 (0) | 4 |
+| B2-feeder | 33.6 | 21.9 | 11.7 | 109k (73k) | 9.2M | 222k | 159 s | 24 (0) | 0 |
+| B2-base | 10.6 | 5.5 | 5.1 | 30k (16k) | 2.2M | 92k | <120 s | 8 (0) | 2 |
+| B2-finish | 12.2 | 6.5 | 5.7 | 37k (10k) | 3.7M | 139k | <120 s | 11 (0) | 6 |
+| F2 finish | 7.3 | 2.4 | 5.1 | 13k (2k) | 1.0M | 73k | <120 s | 4 (0) | 2 |
+| V2R2 review | 18.5 | 16.3 | 2.2 | 83k (45k) | 8.7M | 234k | <120 s | 7 (0)¹ | 11 |
+
+¹ V2R2 ran most measurements through its own `/tmp/rv2/q` wrapper, which the extractor doesn't count.
+
+**Against the baseline and v2 A1:**
+
+| | v1 A1 | v1 A2 | v1 A3 | v2 A1 | **v2 A2** |
+|---|---|---|---|---|---|
+| Wall (design + review) | 82.6 min | 97.0 | 66.1 | 187.5 | **150.0** (plan 9.8, builds 114.4, finish 7.3, review 18.5) |
+| Output tokens (thinking) | 481k (327k) | 520k (354k) | 352k (228k) | 902k (601k) | **524k (312k)** |
+| Cache read | 26.8M | 37.9M | 35.8M | 69.7M | **45.6M** |
+| Peak context (any agent) | 522k | 698k | 488k | 348k | **340k** |
+| Longest generation | 1001 s | 1028 s | 290 s | 765 s | **291 s** |
+| F/M/A (sum) | 5/6/5 (16) | 6/5/6 (17) | 6/6/6 (18) | 7/7/6 (20) | **8/8/9 (25)** |
+| Issues B/M/m | 18 | 1/3/6 | 0/4/4 | 0/5/7 | **0/2/6** |
+| cadcheck at hand-off | - | - | - | 0 F, 34 W | **0 F, 44 W** |
+| cad runs (failed) | - | - | - | 121 (15) | **93 (1)** |
+
+v2 A2 is the best-scoring attempt so far (25 against v1's best of 18), and it gained 5 points in one revision where v1 gained 1
+per attempt. It cost 20% less wall time and 42% fewer output tokens than v2 A1, but still 1.5 to 2.3 times a v1
+attempt. The two v2 attempts total 337.5 min, against 245.7 min for all three v1 attempts.
+
+### Time and token sinks
+
+**V2A2-T1. One builder was 30% of the attempt.** B2-launcher took 45.0 of 150.0 min and 177k output tokens: two passes
+on the nip (min-gap stop pad, stop sleeve, leaf-lift joint split, bay relief, finger slot). Its long generations were:
+- `0:06:46`, 187 s: reading cadcheck's `contact`/`carry`/`vol_tol` code to decide how to declare the stop contacts;
+- `0:11:41`, 291 s: nip geometry (leaf lift against stop positions).
+
+The feeder took 33.6 min, also over two passes. The small builders were cheap: params 6.7, pan 6.3, base 10.6. Builders
+were still in series (114.4 min); the v2 script has not adopted `parallel_builds`, so it is still unmeasured. In a revision
+attempt only two builders were long, so parallel builds would save about 35 min here, against about 90 in A1.
+
+**V2A2-T2. Tool source reads, again: about 44 across 9 agents.** 8 of 9 agents read the first 30-80 lines of `cadq.py`
+for usage, because `cad q` filtered its own help out: the wrapper passes only `CADQ` and `cadq:` lines, and the usage
+was a bare `sys.exit(__doc__)`. The rest were cadcheck semantics (contact and carry, `pose_grid`, `assembly_order`,
+`ray_gap`, slide, service, the parts wall/overhang code). Most of those are documented at `f039205`, which the pin did not
+have yet. **Fixed:** `cad q` alone prints the command list; a command with missing arguments prints its own usage line
+instead of `IndexError` (B2-pan `0:03:01`, `cad q model.blend ray`); api.md has a `cad q` section.
+
+**V2A2-T3. Hand stubs to import project modules without Blender.** B2-launcher `0:00:22` (`No module named 'bpy'`)
+wrote `/tmp/a2stub/cadlib/__init__.py` so it could run `launcher_geom.report()` from plain python3. B2-feeder `0:12:20`
+hit `No module named 'cadlib'` and then `'bmesh'`. **Fixed:** `cad py -c "..."` or `cad py script.py` runs Python inside
+Blender, with bpy, cadlib, `./` and `./parts` on the path. Verified: `launcher_geom.report()` runs on a copy of the v2
+project.
+
+**V2A2-T4. Claims no row could hold** (progress.md "Tool issues"):
+- "Line of sight from outside to a printed part is clear": the A1-02 finger reach was proved with 9 hand `cad q ray`
+  lines plus a section. **New `sightlines` section:** origins, a direction in a joint frame, poses, and the first hit
+  that must match.
+- "A slide must be blocked past X": a blocked slide was always a fail, so the gate's open stop was a section. **New:**
+  `slide_out` with `"expect": "blocked"`, `blocked_by` and `at_mm`.
+- `cad q ray --pose` takes world coordinates, so a ray from a pod point at tilt 45 was transformed by hand. **New:**
+  `cad q ray ... --frame PIV_tilt`. On the archive it gives PRT_nip_wheel at 14.4 at tilt 45, which matches the
+  designer's hand-transformed ray.
+- No prismatic joint in cadlib, so the gate's open state can't join the interference sweep: **still open.** A
+  `slide_out` row covers the open position.
+- The `distances` KeyError workaround (V2A1-T3) was still in use: this is the pin, fixed at `f039205`.
+
+**V2A2-T5. cadq argument errors (3).** V2R2 `0:11:07` and `0:11:13` passed `--lentil 21,36,131.3 0,0,1`, which is the
+form the help showed, and got `ValueError` twice. **Fixed:** the help shows `--lentil X,Y,Z[:NX,NY,NZ]`, and a bare point
+defaults the normal to +Z.
+
+### Issues V2R2 raised, and what the tools did with them
+
+"At hand-off" is the designer's cadcheck at `6b62667` (`HW2/renders/attempt-2/cadcheck.json`, 0 F / 44 W). "Now" is
+this run on the archive, with the designer's own config (`/tmp/alex3d-v2a2/main_designcfg.json` before this run's
+additions, `verify 4e` after).
+
+| ID | V2R2 issue | At hand-off | Now (designer config) | Why it got through |
+|---|---|---|---|---|
+| V2A2-F1 | **Major (A2-01):** below a 6.1 setting the leaf runs out of travel before a 7.0 candy on 0.5 tape passes (6.685 bare gap at full lift at the min stop). The declared lift limit is not a real stop: the stud is 2.36 clear there, and the thumbwheel hits the cover at about -2.1° | not flagged | **warn:** the drop path touches PRT_hood, "which moves on PIV_nip_lift (-1.49..0), but the test holds PIV_nip_lift at home" (2 rows) | config gap: no full-lift distances row, no hard-stop row. The rigid-squeeze warn fired only on V2R2's row. SKILL and checklist now ask for both |
+| V2A2-F2 | **Major (A1-03, recurring from V2A1-F3):** the Ø14.4 pocket blocks a 13 x 7 edge-on pair by a hair and seats 12.5 x 6.5 | - | **fail with a row:** `payload_fit` pair at 12.5 x 6.5 seats, 0.14 mm short; 13 x 7 blocked with 0.11 mm spare (warn); a 13.5 x 7.5 flat candy fits with 0.45 | **no check existed (2nd attempt running).** V2R2 wrote `review/lentils.py`; B2-feeder copied V2R1's probe. New `payload_fit` |
+| - | Minor (A1-08): 1.12 wall at the widened bay; 171 mm² overhang on the nip cover | **warns** | warns | unread warns. The pin had no `accepted_warns`; v2 A3 does |
+| V2A2-F4 | Minor (A2-02): only the phase leads have a lead length; the pan U-loop slack isn't modelled | not flagged | **warn:** "10 cables have no lead length" | config gap. New warn |
+| V2A2-F5 | Minor (A2-04): step 10a says M2 x 4 over M2 x 8 screws; no flexures row for the leaf; (claimed) two parts in no step | not flagged | **warns:** the label mismatch; "PRT_nip_leaf is named compliant ... but has no flexures row". The "no step" part is **wrong**, see V2A2-R1 | config gaps. New `assembly` audit and compliance warn |
+| V2A2-F6 | (in A2-04) the fixed y37 nip ray slips past the hood lip at full lift: 14.18 against a real gap of about 8.3 | not flagged | **warn:** "ray gap 14.18 ... much wider than the nearest gap 7.06" (with V2R2's row) | ray artefact. New ray-vs-nearest warn |
+| - | Minor (A2-05): flattest slide 32.8° at gap 5.3 and tilt 46 (4.8° over the stall, rule 5°) | **warn** | warn | unread warn (as A1-08) |
+| - | Minors A1-09 (gate detents), A2-03 (finger slot ergonomics) | - | - | not tool-catchable. A2-03's rim height is a `sightlines` row with several origins |
+
+V2R2 marked 6 of 8 issues `tool_catchable`. **At hand-off, cadcheck flagged 2 of them (A1-08 and A2-05), both as unread
+warns again.** With this run's tools and the designer's own config, 5 of 6 are flagged: F1 as a lead warn, F4, F5, F6
+and the two warns. F2 needs a `payload_fit` row; the check now exists and fails on this model.
+
+**Recurrence:** the edge-on-pair pocket (V2A1-F3 then V2A2-F2) is the only issue that recurred, and it was the one gap
+the v2 A1 run left open. The adjuster-end lesson (V2A1-F1) half carried over: the designer tested both hood stops, but
+not the second adjuster joint (leaf lift) that the plan added.
+
+**Config disputes (7), and what each became:**
+1. fits hood x thumbwheel `contact: true` is unnecessary and could hide a rub: config.
+2. The PIV_nip_lift limit doesn't match the geometry: hard-stop distances row (SKILL, checklist).
+3. No full-lift bare-gap row; the y37 ray artefact: ray-vs-nearest warn plus checklist.
+4. drop_tests lack tilt -3 and stops x tilt 45: the drop coverage warn (`f039205`) catches the stop half.
+5. No flexures row for the leaf: compliance warn.
+6. Parts in no step, 10a label: label warn; the "no step" half is wrong (V2A2-R1).
+7. Shell x turntable contact still hides the R20 journal: fixed at `f039205` (`contact_normal`, V2A1-V4); the pin lacked it.
+
+### What worked
+
+- **The planner wrote the rows before the geometry.** P2 wrote v2-A1-NN rows for 9 of 12 issues and ran them on the
+  attempt-1 model: 12 F / 36 W. Builders then drove them to 0 F, and V2R2 rated 9 of 12 previous issues FIXED and 3
+  PARTIAL. The template's planner prompt now asks for this explicitly.
+- **A separate params work item** (B2-params, 6.7 min) made the interface change before any builder ran.
+- **Tool friction fell:** 1 failed cad run of 93, against 15 of 121 in v2 A1, mainly from the `f039205`-era fixes to
+  `cad` arguments that `6b62667` already had.
+- **The reviewer re-measured instead of trusting:** a full-lift sweep at 8 hood settings, lentil pairs at 3 sizes, and
+  the first contact on the lift joint. Each major has a number and a fix with dimensions.
+
+### Reviewer quality (V2R2)
+
+- **V2A2-R1. A false config claim.** V2R2 said PRT_nip_stop_sleeve and FST_valve_* were in no `assembly_order` step
+  (review.json A2-04, dispute 6, and the M anchor: "not 9 because ... 2 parts are in no assembly step"). Both are listed:
+  the sleeve last in step 6e, and FST_valve_* in step 12. cadcheck's own `unordered_solids_assumed_present` was
+  `['BUY_battery']`. The claim fed a manufacturability anchor, so it may have cost a point. **Fixed:** cadcheck reports
+  `assembly.step_of` and `in_no_step`, and the reviewer skill and checklist say to cite them.
+- V2R2 hand-copied checks.json into `checks_review.json` (36 KB) instead of an overlay. That is the pin again: `--overlay`
+  is from `f039205`.
+- The 7/7/6 to 8/8/9 jump is mostly aesthetics (+3): the colour map, the finished gate tab, port-only cut-outs and the
+  transmissive jar. Every anchor sentence cites a number.
+
+### Why not the existing code (v2 A2 additions)
+
+- **payload_fit vs a probe script or `cad q inside`:** `inside` tests points, and a pair of candies in a cylinder is a
+  volume question. The three probe scripts (V2R1 `add_mm_probe.py`, B2-feeder's copy, V2R2 `lentils.py`) each built
+  lens meshes and read `cad q dist` by hand. The new check reuses `inter_volume` (Manifold) and `frame_point`; the new
+  parts are the probe mesh, the placement and a bisection for the margin (about 120 lines). It reproduces V2R2's
+  numbers: 12.8 x 6.8 just touching (here 0.14 short at 12.5 x 6.5, so 12.78 x 6.78), 13 x 7 overlapping.
+- **sightlines vs drop_tests with `hit`:** a drop test emits a disc of rays along gravity and checks a landing window. A
+  finger or view ray needs explicit origins, any direction and a first-hit name. It reuses `scene_bvh`/`owner()` (about
+  45 lines).
+- **slide expect vs a new stop check:** the slide sweep already finds the blocker and the distance; the expectation adds
+  10 lines.
+- **`cad py` vs a cadlib that imports without bpy:** cadlib is bpy throughout. A Blender run takes 0.7 s, so running
+  Python inside it is 2 lines in the wrapper.
+- **Assembly audit and config warns:** the step map already existed inside `assembly_present`. The label, cable-lead and
+  compliance warns read data already in the scene props (`fst_d`, `fst_len`) and config.
+
+### Still open (gaps)
+- No prismatic joint in cadlib (the gate open state is out of the interference sweep).
+- The full-deflection gap of a compliant part is config: nothing makes the designer write the row. The drop coverage
+  warn names the held joint, and the SKILL, checklist and planner prompt ask for it.
+- Exposure doesn't cover PCBs (V2A1-F11); there is no insertion sweep for assembly merges (V2A1-F6).
+- `parallel_builds` is still untested live.
+
+### Verification of this run
+- `tools/verify_all.sh`: 54/54 passed (`/tmp/alex3d-verify.log`); A1, A2, A3 and v2 A1 are unchanged. The 9 new tests: v2 A2 designer config (4 new warns, still 0 fails); the overlay
+(payload_fit fail at 12.5 x 6.5, 0.14 short; 13 x 7 warn at 0.11; flat 13.5 x 7.5 fits; sightlines; the gate stop at
+52.5; the ray artefact; two planted rows fail); `cad q` help; `cad q ray --frame`; `cad py`.

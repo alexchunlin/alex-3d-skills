@@ -69,6 +69,20 @@ clamped part. `sink` puts `at` that far below the outer face, and the counterbor
 specs: `M3_cap`, `M3_pan`, `M3_csk`, `M3_selftap_pan`, `M2_pan`, `M2.5_cap`, `M2.5_pan`. `screw_hole` cuts M3 sizes
 only; for M2.5, cut `G.cyl` holes with `RULES`-style clearances (2.7 clear, 2.1 pilot).
 
+## cad q (one-shot measurements)
+
+`cad q` with no arguments prints every command. The ones agents use most:
+
+```
+cad q model.blend dist PRT_a PRT_b [--pose PIV_tilt=45]            # nearest distance, negative = overlap mm3
+cad q model.blend sweep PRT_a PRT_b PIV_tilt -3 48 2.5             # the same over a joint
+cad q model.blend ray 19.5,-2.33,111.27 0,-0.316,0.949 [--frame PIV_tilt --pose PIV_tilt=45]   # first hit
+cad q model.blend inside 10,18,265                                  # which solids contain the point
+```
+
+`--frame` gives the ray in that joint's home coordinates and moves it with the joint. Measurements that back a BOM
+claim belong in checks.json (`distances`, `sightlines`, `payload_fit`, `slide_out`), so every run re-proves them.
+
 ## cad q section (the command line, not the function)
 
 ```

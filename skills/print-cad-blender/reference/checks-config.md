@@ -53,11 +53,22 @@ adds `carry`, `fasteners.captive` and `flexures`.
     "probe": {"frame": "PIV_pan", "center": [21, 0, 267], "dir": [0, 0, -1], "radius": 3, "depth": 23},
     "blockers": ["PRT_feeder_disc", "PRT_feeder_plate"], "expect_windows": 1}],
   "slide_out": [{"object": "BUY_battery", "dir": [1, 0, 0], "dist": 130, "step": 5, "min_clearance": 1.5},
+                {"name": "gate open stop", "object": "PRT_jar_gate", "dir": [1, 0, 0], "dist": 56, "step": 0.5,
+                 "expect": "blocked", "blocked_by": ["PRT_jar_adapter"], "at_mm": [52, 53]},      // an end stop: must stop there
                 {"name": "flywheel off", "objects": ["PRT_flywheel", "FST_fw_*"], "ignore": ["PRT_launcher_cover"],
                  "pose": {"PIV_tilt": 45}, "dir": [1, 0, 0], "dist": 140}],
   "distances": [{"a": "PRT_hood", "b": "PRT_flywheel", "min": 5.5, "max": 7.0, "why": "nip squeezes a 7 mm M&M",
                  "ray": {"frame": "PIV_tilt", "origin": [21, 37, 132], "dir": [0, 0, 1]},   // gap along a line, not nearest
                  "payload_mm": 7.0, "tape_mm": 0.5, "compliant": "PRT_hood leaf spring"}],   // squeeze > 0 needs a yielding part
+  "payload_fit": [                // does the pocket take one payload and refuse two? (v2 A1/A2 feeder pocket)
+    {"name": "pocket blocks an edge-on pair", "against": ["PRT_feeder_disc"], "center": [10.5, 18.19, 263.0],  // floor point
+     "frame": "PIV_feeder", "up": [0, 0, 1], "across": [1, 0, 0], "place": "pair_edge_on", "size": [12.5, 6.5],  // D x T, MIN size
+     "shape": "lens", "expect": "blocked", "margin": 0.2},
+    {"name": "pocket seats one flat", "against": ["PRT_feeder_disc"], "center": [10.5, 18.19, 263.0], "place": "flat",
+     "size": [13.5, 7.5], "expect": "fits"}],                                                              // MAX size
+  "sightlines": [{"name": "finger reaches the thumbwheel through the slot", "frame": "PIV_tilt", "poses": [{}, {"PIV_tilt": 45}],
+                  "origins": [[19.5, -2.33, 111.27], [15.5, -2.33, 111.27]], "dir": [0, -0.316, 0.949],
+                  "first_hit": "PRT_nip_wheel", "max_mm": 40, "through": []}],     // null = must hit nothing
   "stacks": [{"name": "magnet centring", "limit": 0.3, "terms": [{"what": "can in bore", "tol": 0.2}, {"what": "jig in bore", "tol": 0.1}]}],
   "flexures": [{"part": "PRT_nip_cover", "name": "leaf spring", "dir": [0, -0.48, 0.88],   // beam length, world at home
                 "stress_mpa": 20.9}],                                                    // or "from"/"to" points
@@ -112,6 +123,24 @@ skipped", and the run carries on. Keep the row; don't `--only` around it.
 - **Exposure.** A cable sample is exposed when `min_escape` of 26 rays leave the assembly without hitting a solid, or when `view_frac` of the 240 directions toward a viewer above or level (`z > view_z`) do. The second rule finds a cable seen through a notch: the A3 bonnet-foot notch scores 6/26 but 8.3 mm at 10%, and R3 said "about 8 mm". Exposed samples within 6 mm form one spot, warned when its extent passes `max_cable_mm`. A nut is warned when 2 or more of its outer samples are exposed, unless it is listed in `nuts_ok`.
 - **Carry and captive.** `carry` re-parents the named objects onto a joint before any sweep, keeping their home pose. Use it for parts modelled at one setting that ride on another body in use (a thumbwheel on a stud). A `captive` fastener skips the head-buried, stand-off and access tests; engagement and nut pairing still apply. Each entry needs a reason a reviewer can check.
 - **Flexures.** The beam direction is mapped through the part's `print_rot` (the STL export matrix). More than 45° off the bed with `stress_mpa` unknown or above `interlayer_mpa` (default 15, R3's limit for PLA across layers) fails; 20-45° warns.
+- **Payload fit.** Rigid probes stand on the `center` floor point: `flat` (thickness along `up`), `edge_on`, `pair_edge_on`
+  (`count` side by side along `across`) or `stack_flat`. `shape` is `lens` (two spherical caps, the sharpest rim, so the
+  conservative choice for "blocked"), `ellipsoid`, `sphere` or `cylinder`. The probe is overlapped (Manifold) with the
+  `against` solids, then grown or shrunk until the answer flips: `margin_mm` is the spare, `short_by_mm` how far a
+  failing row is off. Use the payload's **minimum** size for `blocked` and its **maximum** for `fits`. v2 A2's Ø14.4
+  pocket blocked a 13 x 7 pair by 0.11 mm and seated a 12.5 x 6.5 pair (fail, 0.14 short). No settling or tumbling.
+- **Sightlines.** Each origin casts along `dir` (both in `frame` home coordinates, moved with the joint) through solids
+  and fasteners, minus `through`. The first hit must match `first_hit`, or nothing when it is null.
+- **Assembly audit.** `assembly.step_of` in the report maps every object to its step: look there before claiming a part
+  is in no step. Solids and fasteners in no step warn, and so does a step label whose `M<d> x <L>` matches none of
+  that step's screws of that diameter.
+- **Ray distances** also report `nearest_mm`. A ray gap much wider than the nearest gap warns: the ray probably slips
+  past the part's working face at that pose. Frame the ray in the joint that moves `a` (v2 A2: a nip ray in the tilt
+  frame read 14.18 at full leaf lift against a 7.06 nearest gap).
+- **Compliance.** A distances row whose `compliant` names a part (`"PRT_nip_leaf: ..."`) warns when that part has no
+  `flexures` row. Cables with no lead length (no `lead_len`, no `cable_leads` match) are listed in one warn.
+- **Slide-out** with `"expect": "blocked"` fails when the motion is not stopped, or is stopped by something other than
+  `blocked_by` or outside `at_mm`.
 - **Slide-out** sweeps against solids **and fasteners**. Pairs already overlapping at rest are listed in `overlapping_at_rest` and left to the interference and fastener checks.
 - **Drop slide margin.** Each pose row has `flattest_slide_deg`, the shallowest slide a hitting ray made. Rays whose slide was flatter than `stall_deg + stall_margin_deg` warn: friction varies, and A3's 21° slide over a 20° limit was a major (A3-F1).
 - **Drop coverage.** Each test lists `on_path`, the objects its rays touched. A ranged joint that moves one of them relative to the emitter, and is not in `poses` or `sweep`, is a warn: the test held it at home. Typical cases are an adjuster such as a nip-gap hinge, and a gate. Put both ends in `poses`, or list the joint under `home_only_ok` with a reason. v2 A1's nip drop ran at the home hood setting only, and R1 found stalls at the open end (FINDINGS V2A1-F1).

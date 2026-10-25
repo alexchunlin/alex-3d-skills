@@ -2,7 +2,8 @@
 # cad: thin wrapper around headless Blender for the print-cad-blender skill.
 #   cad build  build_assembly.py [-- script args]     run a cadlib build script
 #   cad check  model.blend [checks.json] [out.json] [--only a,b] [--quick]  run cadcheck (short summary, writes JSON)
-#   cad q      model.blend <cadq command ...>        one-shot measurement (see cadq.py)
+#   cad q      model.blend <cadq command ...>        one-shot measurement (`cad q` alone lists the commands)
+#   cad py     -c "import params as P; print(P.X)" | script.py [args]   Python with bpy + cadlib + ./ and ./parts on the path
 #   cad sheet  stl_dir out.png                       STL contact sheet in print orientation
 # BLENDER overrides the Blender binary. Runs at nice 10 so a parallel CAD loop keeps its CPU.
 set -e
@@ -23,7 +24,11 @@ case "$cmd" in
          o="$(dirname "$b")/cadcheck.json"; case "${1:-}" in ""|--*) ;; *) o="$1"; shift ;; esac
          # anything after OUT passes through, e.g. --only fasteners,service --quick
          if [ -n "$c" ]; then run "$b" --python "$HERE/cadcheck.py" -- --config "$c" --out "$o" "$@"; else run "$b" --python "$HERE/cadcheck.py" -- --out "$o" "$@"; fi ;;
-  q) b="$1"; shift; run "$b" --python "$HERE/cadq.py" -- "$@" | grep -E '^CADQ|Error|cadq:' ;;
+  q) case "${1:-}" in ""|-h|--help|help) sed -n '/^"""/,/^"""/p' "$HERE/cadq.py" | sed '1s/^"""//;$d'; exit 0 ;; esac
+     b="$1"; shift; run "$b" --python "$HERE/cadq.py" -- "$@" | grep -E '^CADQ|Error|cadq:' ;;
+  py) # Python with bpy, cadlib and the project on sys.path: evaluate params or pure-geometry helpers without a build
+      # (v2 A2: the launcher and feeder builders hand-stubbed bpy/cadlib to import params.py from plain python3)
+      run --python-expr "import sys, os, runpy; sys.path[:0] = [os.getcwd(), os.path.join(os.getcwd(), 'parts'), '$HERE']; a = sys.argv[sys.argv.index('--') + 1:]; sys.argv = a; exec(a[1]) if a[0] == '-c' else runpy.run_path(a[0], run_name='__main__')" -- "$@" ;;
   sheet) run --python-expr "import sys; sys.path.insert(0, '$HERE'); from cadlib import render; render.contact_sheet('$1', '$2')" ;;
-  *) sed -n '2,7p' "$0"; exit 2 ;;
+  *) sed -n '2,8p' "$0"; exit 2 ;;
 esac

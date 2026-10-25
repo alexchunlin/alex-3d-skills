@@ -1,0 +1,181 @@
+{
+ "payload_fit": [
+  {
+   "name": "pocket blocks an edge-on pair (min candy 12.5 x 6.5)",
+   "against": [
+    "PRT_feeder_disc"
+   ],
+   "center": [
+    10.5,
+    18.187,
+    263.0
+   ],
+   "across": [
+    1,
+    0,
+    0
+   ],
+   "place": "pair_edge_on",
+   "size": [
+    12.5,
+    6.5
+   ],
+   "expect": "blocked",
+   "why": "V2R2 A1-03: 12.5x6.5 pair clears by 0.154"
+  },
+  {
+   "name": "pocket blocks an edge-on pair (nominal 13 x 7)",
+   "against": [
+    "PRT_feeder_disc"
+   ],
+   "center": [
+    10.5,
+    18.187,
+    263.0
+   ],
+   "across": [
+    1,
+    0,
+    0
+   ],
+   "place": "pair_edge_on",
+   "size": [
+    13,
+    7
+   ],
+   "expect": "blocked",
+   "why": "V2R2 A1-03: 13x7 overlaps 0.607 mm3, 12.8x6.8 0.016"
+  },
+  {
+   "name": "pocket seats one flat candy (max 13.5 x 7.5)",
+   "against": [
+    "PRT_feeder_disc"
+   ],
+   "center": [
+    10.5,
+    18.187,
+    263.0
+   ],
+   "place": "flat",
+   "size": [
+    13.5,
+    7.5
+   ],
+   "expect": "fits"
+  }
+ ],
+ "sightlines": [
+  {
+   "name": "finger reaches the thumbwheel rim through the nip-cover slot",
+   "origin": [
+    19.5,
+    -2.33,
+    111.274
+   ],
+   "dir": [
+    0,
+    -0.316,
+    0.949
+   ],
+   "first_hit": "PRT_nip_wheel",
+   "why": "V2 A2 planner acceptance, V2R2 A1-02"
+  },
+  {
+   "name": "controller lever visible through the switch window",
+   "origin": [
+    200,
+    47.6,
+    17.5
+   ],
+   "dir": [
+    -1,
+    0,
+    0
+   ],
+   "first_hit": "BUY_servo_controller"
+  },
+  {
+   "name": "planted: the slot ray must hit the hood first (it does not)",
+   "origin": [
+    19.5,
+    -2.33,
+    111.274
+   ],
+   "dir": [
+    0,
+    -0.316,
+    0.949
+   ],
+   "first_hit": "PRT_hood"
+  }
+ ],
+ "slide_out": [
+  {
+   "name": "gate open end stop at +52.35 (spout shoulder)",
+   "object": "PRT_jar_gate",
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": 56,
+   "step": 0.5,
+   "expect": "blocked",
+   "blocked_by": [
+    "PRT_jar_adapter"
+   ],
+   "at_mm": [
+    52,
+    53
+   ]
+  },
+  {
+   "name": "planted: gate stop wanted at 40..45 (it is at 52.5)",
+   "object": "PRT_jar_gate",
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": 56,
+   "step": 0.5,
+   "expect": "blocked",
+   "blocked_by": [
+    "PRT_jar_adapter"
+   ],
+   "at_mm": [
+    40,
+    45
+   ]
+  }
+ ],
+ "distances": [
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": 8.0,
+   "max": 8.7,
+   "why": "V2R2 jam-lift row: the y37 ray misses the hood lip at full lift",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     37.0,
+     131.75
+    ],
+    "dir": [
+     0,
+     0,
+     1
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": -0.558,
+     "PIV_nip_lift": -1.493
+    }
+   ]
+  }
+ ],
+ "_about": "v2 A2 rows V2R2 showed were missing (FINDINGS V2A2): payload fit of the feeder pocket, finger and window sightlines, the gate end stop, and the jam-lift ray that misses the hood lip. Two planted rows must fail: a sightline and a gate stop range."
+}

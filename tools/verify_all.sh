@@ -1,6 +1,6 @@
 #!/bin/sh
 # Re-prove every tool in this repo. Writes only under /tmp/alex3d-verify. About 8 minutes, run at nice 10.
-# The attempt regressions use examples/mm-launcher-{a1,a2,a3,v2a1}/*.blend.gz (the blends the reviewers saw).
+# The attempt regressions use examples/mm-launcher-{a1,a2,a3,v2a1,v2a2}/*.blend.gz (the blends the reviewers saw).
 #   sh tools/verify_all.sh            # HW defaults to the mm-launcher project (read-only; copied first)
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -37,6 +37,10 @@ $CAD build "$V/tplroot/blender/build_assembly.py" -- --out "$V/tplout" >/dev/nul
 [ -f "$V/tplout/model.blend" ] && [ -f "$V/tplout/manifest.json" ] && ok "template: --out writes model.blend + manifest there" || bad "template --out"
 (cd "$V" && $CAD check "$V/tplout/model.blend" --only parts >/dev/null)
 [ -f "$V/tplout/cadcheck.json" ] && [ ! -e "$V/--only" ] && ok "cad check: a flag in the CONFIG slot is not a file name" || bad "cad check arg parsing"
+
+# 3c cad py: params and cadlib import with bpy present (v2 A2 builders stubbed bpy by hand, V2A2-T3)
+(cd "$V/tplroot/blender" && $CAD py -c "import bpy, cadlib, params; print('CADPY', bpy.app.version_string)") | grep -q "^CADPY" \
+  && ok "cad py: project modules import with bpy + cadlib" || bad "cad py"
 
 # 4 attempt-1 regression on the archived attempt-1 blend (the live HW blend moves on every attempt)
 A1="$ROOT/examples/mm-launcher-a1/mm_launcher_a1.blend.gz"
@@ -122,6 +126,34 @@ c=Counter((round(p[4*i],1),round(p[4*i+1],1),round(p[4*i+2],1)) for i in range(0
 print('SECTION_TOP', max(v/t for k,v in c.items() if k!=(1.0,1.0,1.0)))" 2>&1 | python3 -I -c "
 import sys; v=[float(l.split()[1]) for l in sys.stdin if l.startswith('SECTION_TOP')]; sys.exit(0 if v and v[0] < 0.5 else 1)" \
     && ok "section x21: no flooded cut colour" || bad "section x21 flooded (EXACT inversion back?)"
+fi
+# 4e v2 attempt-2 regression (FINDINGS V2A2): the blend V2R2 reviewed, the designer's own config
+V22="$ROOT/examples/mm-launcher-v2a2"
+if [ -f "$V22/mm_launcher_v2a2.blend.gz" ]; then
+  mkdir -p "$V/v2a2"; gunzip -c "$V22/mm_launcher_v2a2.blend.gz" > "$V/v2a2/model.blend"
+  # designer config: still 0 fails; the new config-completeness warns name V2R2's A2-02/A2-04 gaps and the A2-01 lead
+  $CAD check "$V/v2a2/model.blend" "$V22/checks.json" "$V/v2a2/cadcheck.json" >/dev/null
+  for pat in "PRT_nip_leaf is named compliant in distances" "says M2 x 4, but its M2 screws are [8.0] long" \
+             "10 cables have no lead length" "which moves on PIV_nip_lift (-1.49302..0), but the test holds PIV_nip_lift at home"; do
+    grep -qF "$pat" "$V/v2a2/cadcheck.json" && ok "V2A2 flags: $pat" || bad "V2A2 missing: $pat"
+  done
+  set -- $(summ "$V/v2a2/cadcheck.json"); [ "${1:-x}" = 0 ] && ok "V2A2 designer config: 0 fails" || bad "V2A2 designer config: ${1:-?} fails"
+  # V2R2's missing rows as payload_fit / sightlines / slide expect / ray artefact, plus two planted rows
+  $CAD check "$V/v2a2/model.blend" "$V22/checks.json" "$V/v2a2/overlay.json" --overlay "$V22/overlay_v2a2.json" --overlay-only \
+       --only payload,sightlines,slide,distances >/dev/null
+  python3 -I -c "
+import json,sys; d=json.load(open(sys.argv[1])); s=d['summary']; f=' | '.join(s['fail_list']); w=' | '.join(s['warn_list'])
+p=lambda k: next(r for r in d['checks']['payload']['rows'] if r['name'].startswith(k))
+ok = (s['fails'] == 4 and 'edge-on pair (min candy 12.5 x 6.5)' in f and 'planted: the slot ray' in f and 'planted: gate stop' in f
+      and '14.18 mm (along ray)' in f and 'only 0.11 mm to spare' in w and 'much wider than the nearest gap 7.06' in w
+      and 0.1 <= p('pocket blocks an edge-on pair (min')['short_by_mm'] <= 0.2 and p('pocket seats one flat candy (max')['margin_mm'] >= 0.4)
+sys.exit(0 if ok else 1)" "$V/v2a2/overlay.json" \
+    && ok "V2A2: pocket seats a 12.5x6.5 pair (0.14 short), 13x7 blocked by 0.11; sightlines, gate stop, ray artefact; planted rows fail" \
+    || bad "V2A2 overlay: unexpected result"
+  # cad q: help without a model; a ray given in the tilt frame at tilt 45 (V2A2-T3)
+  $CAD q | grep -q "ray X,Y,Z DX,DY,DZ \[--frame" && ok "cad q prints its help" || bad "cad q help"
+  $CAD q "$V/v2a2/model.blend" ray 19.5,-2.33,111.274 0,-0.316,0.949 --frame PIV_tilt --pose PIV_tilt=45 | grep -q '"hit": "PRT_nip_wheel", "mm": 14.4' \
+    && ok "cad q ray --frame: finger-slot ray at tilt 45 hits the thumbwheel at 14.4" || bad "cad q ray --frame"
 fi
 # 4b smoke: cadcheck runs on the live v1 project blend (frozen at attempt 3 since v1 stopped); reports, never asserts
 if [ -f "$HW/blender/mm_launcher.blend" ]; then

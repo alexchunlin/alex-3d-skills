@@ -156,8 +156,11 @@ ${reviewPath
     ? `Latest review: ${reviewPath} (and review.json beside it). Plan fixes for every blocker and major; minors where cheap. Don't regress what it praised.`
     : `First attempt: write the architecture plan (world frame, subsystems = parts/ modules, joints with ranges, load path, payload path, assembly order) to ${HW}/DESIGN_LOG.md, then scaffold from ${PCB}/templates/project/ into ${HW}/blender/.`}
 Before returning: update ${HW}/blender/checks.json so every review issue that is geometric has a check that would catch it
-(drop_tests, distances, fits, assembly_order; the reviewer's review/review_rows.json, if any, can be merged as is). Every
-adjuster joint gets drop and distances rows at both ends of its travel (V2A1-F1). Write the plan to ${dir(n)}/progress.md
+(drop_tests, distances, payload_fit, sightlines, slide_out with expect "blocked", fits, assembly_order; the reviewer's
+review/review_rows.json, if any, can be merged as is). Every adjuster joint gets drop and distances rows at both ends of
+its travel, with any spring at full deflection (V2A1-F1, V2A2-F1). Run the new rows on the CURRENT model.blend before
+any geometry changes: each must fail there, or it would not have caught the issue. Record the count in progress.md (v2
+A2's planner did this unprompted: 12 F on the attempt-1 model, 0 F at hand-off). Write the plan to ${dir(n)}/progress.md
 under "## Plan".${CONFIG.parallel_builds ? `
 Builders run in parallel this attempt and may not edit params.py or checks.json, so make every params.py change (IF_*
 interfaces, shared dimensions) yourself now, and give each work[] entry only its own parts/<name>.py edits.` : ''}

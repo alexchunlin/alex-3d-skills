@@ -38,7 +38,7 @@ Checks (each one writes evidence into the JSON report, with an explicit `coverag
 
 Evidence for the rules here: docs/FINDINGS.md A1-F1, F3, F4, F5, F9, F10, F11, F13, F14, A2-F1 to F9, A3-F1 to F3, F7, F8 and A3-V1.
 """
-import bpy, bmesh, json, math, os, sys, time, fnmatch, itertools
+import bpy, bmesh, json, math, os, re, sys, time, fnmatch, itertools
 from mathutils import Vector, Matrix
 from mathutils.bvhtree import BVHTree
 
@@ -79,6 +79,8 @@ DEFAULTS = {
     "drop_tests": [],
     "slide_out": [],
     "distances": [],
+    "payload_fit": [],
+    "sightlines": [],
     "masses_g": {},
     "pla_density": 1.24e-3,
     "flow_mm3_s": 12.0,
@@ -1642,7 +1644,15 @@ def check_slide():
                "min_clearance_mm": round(minclr[0], 2) if minclr[1] else None, "closest": minclr[1], "pose": pose_key(S.get("pose", {})),
                "overlapping_at_rest": at_rest}
         REPORT["checks"].setdefault("slide", {"findings": []}).setdefault("rows", []).append(rec)
-        if blocker:
+        if S.get("expect") == "blocked":
+            # an end stop: the motion must be stopped, by the named part, within at_mm (v2 A2 gate open stop, V2A2-T4)
+            rng = S.get("at_mm")
+            by_ok = not S.get("blocked_by") or any(fnmatch.fnmatch(b, g) for b in (blocker or []) for g in S["blocked_by"])
+            if not blocker:
+                finding("slide", "fail", "%s: expected a stop, but it slides the full %g mm" % (label, S["dist"]), **rec)
+            elif not by_ok or (rng and not rng[0] - 1e-6 <= free_until <= rng[1] + 1e-6):
+                finding("slide", "fail", "%s: stopped by %s at %g mm, wanted %s at %s mm" % (label, blocker, free_until, S.get("blocked_by", "any part"), rng or "any"), **rec)
+        elif blocker:
             finding("slide", "fail", "%s slide-out blocked by %s at %g mm" % (label, blocker, free_until), **rec)
         elif minclr[1] and minclr[0] < S.get("min_clearance", 1.5):
             finding("slide", "warn", "%s slides out but with only %.2f mm to %s" % (label, minclr[0], minclr[1]), **rec)
@@ -1674,9 +1684,11 @@ def check_distances():
         for pose in poses:
             set_pose(pose)
             a, b = O[D["a"]], O[D["b"]]
+            near = None
             if D.get("ray"):
                 d, p = ray_gap(D, home_mats)
                 how = "along ray"
+                near = min_dist(a, b, bvh_world(a), bvh_world(b))[0]
             else:
                 d, p = min_dist(a, b, bvh_world(a), bvh_world(b))
                 how = "nearest"
@@ -1688,6 +1700,13 @@ def check_distances():
                 continue
             if (D.get("min") is not None and d < D["min"]) or (D.get("max") is not None and d > D["max"]):
                 finding("distances", "fail", "%s to %s = %.2f mm (%s) at %s, wanted %s..%s (%s)" % (a.name, b.name, d, how, rec["pose"], D.get("min"), D.get("max"), D.get("why", "")), **rec)
+            if near is not None:
+                rec["nearest_mm"] = round(near, 3)
+                if d > near + max(1.0, 0.3 * near):
+                    # v2 A2: a nip ray fixed in PIV_tilt slipped past the hood lip at full lift and read 14.18 against a
+                    # 7.06 nearest gap (FINDINGS V2A2-F6); frame the ray in the moving part's joint
+                    finding("distances", "warn", "%s to %s: the ray gap %.2f mm at %s is much wider than the nearest gap %.2f; the ray may miss the "
+                            "part's working face (frame it in the joint that moves %s)" % (a.name, b.name, d, rec["pose"], near, a.name), **rec)
             if D.get("payload_mm"):
                 # A2-F4: a rigid 1 mm squeeze on a hard candy; thickness varies +-0.5 mm, so something must yield
                 sq = D["payload_mm"] - (d - D.get("tape_mm", 0.0))
@@ -1699,6 +1718,228 @@ def check_distances():
                     finding("distances", "warn", "%s to %s: %.2f mm rigid squeeze on a %.1f mm payload; name the part that yields (spring, flexure) under 'compliant' or the nip slips or crushes as the payload varies" % (
                         a.name, b.name, sq, D["payload_mm"]), **rec)
     set_pose({})
+
+
+
+# ------------------------------------------------------------------ payload fit and sightlines
+
+def _payload_mesh(name, shape, D, T, c, ax):
+    """A candy-like probe centred at c with its thickness along ax. "lens" = two spherical caps (sharp rim; the v2
+    reviewers' probe), "ellipsoid" = oblate spheroid (round rim), "sphere" = D only, "cylinder" = a D x T puck."""
+    r, h = D / 2.0, T / 2.0
+    bm = bmesh.new()
+    if shape == "cylinder":
+        bmesh.ops.create_cone(bm, cap_ends=True, segments=48, radius1=r, radius2=r, depth=T)
+    else:
+        bmesh.ops.create_uvsphere(bm, u_segments=64, v_segments=32, radius=1.0)
+        R = (r * r + h * h) / (2 * h) if shape == "lens" else None
+        for v in bm.verts:
+            x, y, z = v.co
+            if shape == "lens":
+                rho = min(1.0, math.hypot(x, y)) * r
+                zc = math.sqrt(max(R * R - rho * rho, 0.0)) - (R - h)
+                k = rho / max(math.hypot(x, y), 1e-9)
+                v.co = Vector((x * k, y * k, zc if z >= 0 else -zc))
+            elif shape == "sphere":
+                v.co = Vector((x * r, y * r, z * r))
+            else:
+                v.co = Vector((x * r, y * r, z * h))
+    z = Vector((0, 0, 1))
+    rot = z.rotation_difference(ax.normalized()).to_matrix().to_4x4()
+    bmesh.ops.transform(bm, matrix=Matrix.Translation(c) @ rot, verts=bm.verts)
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    ob = bpy.data.objects.new(name, me)
+    tmpcoll().objects.link(ob)
+    return ob
+
+
+def _payload_place(P, D, T, F, home_mats):
+    """[(centre, thickness axis)] in world for a payload row at size D x T. The candies rest on the floor point."""
+    c0 = frame_point(P.get("frame"), Vector(P["center"]), home_mats)
+    up = (F @ Vector(P.get("up", [0, 0, 1]))).normalized()
+    gap = 0.02 + P.get("gap", 0.0)
+    place = P.get("place", "flat")
+    if place == "flat":
+        return [(c0 + up * (T / 2 + gap), up)]
+    ac = (F @ Vector(P.get("across", [1, 0, 0]))).normalized()
+    if place == "edge_on":
+        return [(c0 + up * (D / 2 + gap), ac)]
+    if place == "pair_edge_on":
+        n = int(P.get("count", 2))
+        return [(c0 + up * (D / 2 + gap) + ac * (T * (k - (n - 1) / 2.0)), ac) for k in range(n)]
+    if place == "stack_flat":
+        n = int(P.get("count", 2))
+        return [(c0 + up * (T / 2 + gap + T * k), up) for k in range(n)]
+    sys.exit("cadcheck: payload_fit place %r (flat | edge_on | pair_edge_on | stack_flat)" % place)
+
+
+def check_payload():
+    """Does a pocket, slot or chute admit the payload the way it should? (v2 A1 and A2: the feeder pocket admitted an
+    edge-on pair; both reviewers and one designer wrote their own lentil probe, FINDINGS V2A1-F3 / V2A2-F2.)
+    Row: {"name", "against": [globs], "center": floor point, "frame", "pose", "up", "across", "place",
+          "size": [D, T], "shape": "lens", "expect": "blocked" | "fits", "margin": 0.2}
+    The probe size is moved until the answer flips: `margin_mm` is how far it can shrink (blocked) or grow (fits)
+    before the expectation stops holding. Fail when it does not hold at `size`, warn when the margin is under `margin`."""
+    rows = []
+    for P in CFG.get("payload_fit") or []:
+        if not present("payload", P["name"], [P.get("frame")]):
+            continue
+        set_pose({})
+        home_mats = {n: O[n].matrix_world.copy() for n in JOINTS}
+        set_pose(P.get("pose", {}))
+        F = (O[P["frame"]].matrix_world.to_3x3() @ home_mats[P["frame"]].to_3x3().inverted()) if P.get("frame") else Matrix.Identity(3)
+        against = [o for o in SOLIDS if any(fnmatch.fnmatch(o.name, g) for g in P["against"])]
+        if not against:
+            finding("payload", "fail", "%s: no solid matches %s; row skipped" % (P["name"], P["against"]))
+            continue
+        PD, PT = (list(P["size"]) + [P["size"][0]])[:2] if isinstance(P["size"], list) else (P["size"], P["size"])
+        shape = P.get("shape", "lens")
+        want_block = P.get("expect", "blocked") == "blocked"
+
+        def overlap(delta):
+            """Overlap volume (mm3) with the probe grown by delta mm on every side (negative = shrunk)."""
+            D, T = PD + 2 * delta, max(0.2, PT + 2 * delta)
+            probes = [_payload_mesh("_PAYLOAD_%d" % k, shape, D, T, c, ax) for k, (c, ax) in enumerate(_payload_place(P, D, T, F, home_mats))]
+            bpy.context.view_layer.update()
+            tot, hit = 0.0, set()
+            for pr in probes:
+                MANIFOLD_OK.pop(pr.name, None)
+                tp = bvh_world(pr)
+                for o in against:
+                    if bb_gap(bbox_world(pr), bbox_world(o)) > 0 or not tp.overlap(bvh_world(o)):
+                        continue
+                    v = inter_volume(pr, o)[0]
+                    if v > 1e-3:
+                        tot += v
+                        hit.add(o.name)
+            for pr in probes:
+                me = pr.data
+                bpy.data.objects.remove(pr)
+                bpy.data.meshes.remove(me)
+            return tot, sorted(hit)
+
+        v0, hit0 = overlap(0.0)
+        ok = (v0 > 0.01) if want_block else (v0 <= 0.01)
+        # bisect the flip point: shrink until a blocked probe seats, grow until a fitting one touches (2 mm max)
+        lo, hi = 0.0, 2.0
+        sgn = -1.0 if want_block else 1.0
+        if ok:
+            if ((overlap(sgn * hi)[0] > 0.01) == want_block):
+                lo = hi
+            else:
+                for _ in range(7):
+                    mid = (lo + hi) / 2
+                    if (overlap(sgn * mid)[0] > 0.01) == want_block:
+                        lo = mid
+                    else:
+                        hi = mid
+            margin = lo
+        else:
+            # how far off: grow a seating probe until it is blocked, shrink a jamming one until it fits
+            margin, lo, hi = 0.0, 0.0, 2.0
+            for _ in range(7):
+                mid = (lo + hi) / 2
+                if (overlap(-sgn * mid)[0] > 0.01) == want_block:
+                    hi = mid
+                else:
+                    lo = mid
+            short = hi
+        rec = {"name": P["name"], "place": P.get("place", "flat"), "shape": shape, "size": [PD, PT], "pose": pose_key(P.get("pose", {})),
+               "expect": "blocked" if want_block else "fits", "overlap_mm3": round(v0, 3), "overlaps": hit0,
+               "margin_mm": round(margin, 2) if ok else None, "short_by_mm": None if ok else round(short, 2), "why": P.get("why")}
+        rows.append(rec)
+        what = "%s %s %gx%g" % (rec["place"].replace("_", " "), shape, PD, PT)
+        if not ok:
+            if want_block:
+                finding("payload", "fail", "%s: a %s seats without touching %s (should be blocked; it blocks only from %.2f mm larger)" % (
+                    P["name"], what, [o.name for o in against], short), **rec)
+            else:
+                finding("payload", "fail", "%s: a %s overlaps %s by %.2f mm3 (should fit; it fits only from %.2f mm smaller)" % (
+                    P["name"], what, hit0, v0, short), **rec)
+        elif margin < P.get("margin", 0.2) - 1e-6:
+            finding("payload", "warn", "%s: %s holds with only %.2f mm to spare: a %s %.2f mm %s would %s" % (
+                P["name"], rec["expect"], margin, shape, margin, "smaller" if want_block else "larger", "seat" if want_block else "jam"), **rec)
+    set_pose({})
+    if rows:
+        REPORT["checks"].setdefault("payload", {"findings": []})["rows"] = rows
+        REPORT["coverage"].append("payload: %d payload-fit probes (rigid probe, no settling)" % len(rows))
+    elif not CFG.get("payload_fit"):
+        REPORT["not_checked"].append("payload: no payload_fit rows (pocket or slot admits two payloads, or jams one)")
+
+
+def check_sightlines():
+    """First-hit rays: a finger or tool line, a window, a line of sight (v2 A2: the planner proved 'the thumbwheel is
+    reachable through the nip-cover slot' with hand `cad q ray` lines because no row could say it).
+    Row: {"name", "origin": [x,y,z] or "origins": [...], "dir", "frame", "pose" or "poses", "first_hit": glob or null,
+          "max_mm", "through": [globs ignored, e.g. a cover you remove]}"""
+    rows = []
+    for S in CFG.get("sightlines") or []:
+        if not present("sightlines", S["name"], [S.get("frame")]):
+            continue
+        set_pose({})
+        home_mats = {n: O[n].matrix_world.copy() for n in JOINTS}
+        origins = S.get("origins") or [S["origin"]]
+        want_hit = S.get("first_hit")
+        for pose in S.get("poses", [S.get("pose", {})]):
+            set_pose(pose)
+            F = (O[S["frame"]].matrix_world.to_3x3() @ home_mats[S["frame"]].to_3x3().inverted()) if S.get("frame") else Matrix.Identity(3)
+            skip = {o.name for o in SOLIDS + FASTENERS if any(fnmatch.fnmatch(o.name, g) for g in S.get("through", []))}
+            idx = []
+            tree = scene_bvh(SOLIDS + FASTENERS, skip=skip, index=idx)
+            w = (F @ Vector(S["dir"])).normalized()
+            bad = []
+            hits = []
+            for p0 in origins:
+                p = frame_point(S.get("frame"), Vector(p0), home_mats)
+                h = tree.ray_cast(p, w, S.get("max_mm", 1e4))
+                name = owner(idx, h[2]) if h[0] is not None else None
+                hits.append({"origin": [round(c, 2) for c in p], "hit": name, "mm": round(h[3], 2) if h[0] is not None else None})
+                good = (name is None) if want_hit is None else (name is not None and fnmatch.fnmatch(name, want_hit))
+                if not good:
+                    bad.append(hits[-1])
+            rec = {"name": S["name"], "pose": pose_key(pose), "first_hit_wanted": want_hit, "rays": len(origins), "ok": len(origins) - len(bad),
+                   "hits": hits, "why": S.get("why")}
+            rows.append(rec)
+            if bad:
+                finding("sightlines", "fail", "%s at %s: %d of %d rays hit %s first, wanted %s (e.g. %s at %s mm)" % (
+                    S["name"], rec["pose"], len(bad), len(origins), sorted({b["hit"] for b in bad}, key=str), want_hit, bad[0]["hit"], bad[0]["mm"]), **rec)
+    set_pose({})
+    if rows:
+        REPORT["checks"].setdefault("sightlines", {"findings": []})["rows"] = rows
+        REPORT["coverage"].append("sightlines: %d first-hit ray rows" % len(rows))
+
+def check_assembly():
+    """Config audit of assembly_order (v2 A2: the reviewer could not tell which step held the stop sleeve and the
+    valve screws, and a step label said M2 x 4 over M2 x 8 screws, FINDINGS V2A2-F5). Reports `step_of` for every
+    object; warns on objects in no step (assumed present from the start, so access tests are optimistic for them)
+    and on a step label whose "M<d> x <L>" matches none of that step's screws."""
+    steps = CFG.get("assembly_order") or []
+    if not steps:
+        REPORT["not_checked"].append("assembly: no assembly_order (fastener access tested with everything present)")
+        return
+    step_of = {}
+    for i, st in enumerate(steps):
+        for o in ALL:
+            if o.name not in step_of and any(fnmatch.fnmatch(o.name, g) for g in st["objects"]):
+                step_of[o.name] = i
+    REPORT.setdefault("assembly", {})["step_of"] = {n: steps[i]["step"] for n, i in sorted(step_of.items())}
+    loose = sorted(o.name for o in SOLIDS + FASTENERS if o.name not in step_of)
+    REPORT["assembly"]["in_no_step"] = loose
+    if loose:
+        finding("assembly", "warn", "%d objects are in no assembly_order step, so access tests assume they are there from the start: %s" % (
+            len(loose), ", ".join(loose[:12]) + (" ..." if len(loose) > 12 else "")), objects=loose)
+    for i, st in enumerate(steps):
+        screws = [o for o in FASTENERS if step_of.get(o.name) == i and "fst_d" in o.keys() and not is_nut(o)]
+        for m in re.finditer(r"\bM(\d+(?:\.\d+)?)\s*[xX×]\s*(\d+(?:\.\d+)?)", st["step"]):
+            d, L = float(m.group(1)), float(m.group(2))
+            same_d = [o for o in screws if abs(o["fst_d"] - d) < 0.3]
+            if same_d and not any(abs(o["fst_len"] - L) < 0.6 for o in same_d):
+                finding("assembly", "warn", "step '%s' says %s, but its M%g screws are %s long" % (
+                    st["step"][:60], m.group(0), d, sorted({round(o["fst_len"], 1) for o in same_d})), step=st["step"],
+                    screws=[o.name for o in same_d])
+    REPORT["coverage"].append("assembly: %d steps, %d objects placed, %d in no step" % (len(steps), len(step_of), len(loose)))
 
 
 def check_stacks():
@@ -1727,6 +1968,15 @@ def check_flexures():
     "from"/"to" points (world, home pose) along the beam's length, optional "stress_mpa", "why"}. The beam should
     lie in the layer plane: its angle to the bed is from the part's print_rot, the same matrix the STL export uses."""
     fl = CFG["flexures"]
+    # a distances row that names a yielding part claims a spring; that spring needs a flexures row (v2 A2: the nip
+    # leaf carried every squeeze claim and had none, FINDINGS V2A2-F5)
+    declared = {F["part"] for F in fl}
+    for D in CFG["distances"]:
+        m = re.match(r"\s*((?:PRT|BUY)_[A-Za-z0-9_]+)", str(D.get("compliant") or ""))
+        if m and m.group(1) in O and m.group(1) not in declared:
+            declared.add(m.group(1))
+            finding("flexures", "warn", "%s is named compliant in distances (%s to %s) but has no flexures row: its print orientation is unchecked" % (
+                m.group(1), D["a"], D["b"]), part=m.group(1))
     if not fl:
         REPORT["not_checked"].append("flexures: no springs or snap arms declared (print orientation vs bending stress)")
         return
@@ -1888,6 +2138,11 @@ def check_cables():
             if sp["extent_mm"] > ex["max_cable_mm"] and not any(fnmatch.fnmatch(o.name, g) for g in ex["cables_ok"]):
                 finding("cables", "warn", "%s: about %.0f mm of cable is visible from outside around %s (declare it under exposure.cables_ok if intended)" % (
                     o.name, sp["extent_mm"], sp["center"]), object=o.name, **sp)
+    nolead = [r["object"] for r in rows if r["lead_len"] is None]
+    if nolead:
+        # v2 A2: only the phase leads had a length; bus, UART and encoder runs across the pan joint went unchecked (V2A2-F4)
+        finding("cables", "warn", "%d cables have no lead length (cable_leads or lead_len), so route vs purchased lead is unchecked: %s" % (
+            len(nolead), ", ".join(nolead[:10]) + (" ..." if len(nolead) > 10 else "")), objects=nolead)
     REPORT["checks"].setdefault("cables", {"findings": []})["rows"] = rows
     have = sum(1 for r in rows if r["path_len"] is not None)
     REPORT["coverage"].append("cables: %d routes, %d with path length; exposure (>= %d of 26 rays escape, or %d%% of the directions toward a viewer) at home pose" % (
@@ -1905,7 +2160,8 @@ def main():
         {n: (s["axis"], s["lo"], s["hi"]) for n, s in JOINTS.items()}))
     for name, fn in (("parts", check_parts), ("interference", check_interference), ("fasteners", check_fasteners),
                      ("service", check_service), ("drop", check_drop), ("index", check_index), ("slide", check_slide),
-                     ("distances", check_distances), ("stacks", check_stacks), ("flexures", check_flexures), ("stability", check_stability), ("cables", check_cables)):
+                     ("distances", check_distances), ("payload", check_payload), ("sightlines", check_sightlines),
+                     ("assembly", check_assembly), ("stacks", check_stacks), ("flexures", check_flexures), ("stability", check_stability), ("cables", check_cables)):
         if want(name) or (name == "interference" and want("clearance")):
             t = time.time()
             fn()
