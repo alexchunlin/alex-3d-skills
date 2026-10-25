@@ -46,8 +46,12 @@ IDs point into `<repo>/docs/FINDINGS.md`. "Caught" means cadcheck or cadq flags 
 | V2A1-V4 | `contact: true` for a thrust face also hid the journal on the same pair | `contact_normal` | yes, once declared |
 | V2A1-F3, V2A2-F2 | Pocket admits two payloads side by side (Ø15 in A1; Ø14.4 in A2 still seats a 12.5 x 6.5 pair) | `payload_fit` pair at the minimum size, flat at the maximum | yes on v2 A2: fail, 0.14 short; 13 x 7 blocked by only 0.11 |
 | V2A2-F1 | Compliant leaf runs out of travel at full lift; the declared lift limit was not a real stop | `distances` at full deflection at both adjuster ends; a hard-stop row at the limit; drop coverage warn names the held joint | warn only ("holds PIV_nip_lift at home"); the rows are config |
-| V2A2-F6 | A ray distance fixed in the tilt frame slipped past the moving hood lip (14.18 vs 7.06) | ray-vs-nearest warn | yes |
+| V2A2-F6 | A ray distance fixed in the tilt frame slipped past the moving hood lip (14.18 vs 7.06) | ray slip warn (the hit left its home face, and the gap is far above the nearest) | yes |
 | V2A2-F4, F5 | Cables with no lead length; a step label's screw size disagreed with the model; a named spring with no flexures row | `cables`, `assembly` and `flexures` config warns | yes |
+| V2A3-F1 | Pass row sized for the nominal payload while params declared a larger maximum (gap 7.61 against the 8.0 a 7.5 candy needs) | `=EXPR` rows from the params: `"min": "=MM_T[1] + TAPE_T"` | yes with the expression row: 2 fails |
+| V2A3-F3 | A 150 mm lead routed to a bore, "continued" 430 mm through other routes no BOM row bought | `cable_chains` row; junction warn on cable ends that meet with no connector | yes with the chain row: 514 mm against 150 |
+| V2A3-F5, F6 | BOM stud M3 x 20 hex against a modelled M3_cap x 16; an M3 x 9 (not stocked) | `cad bom`; stock-length warn in `fasteners` | yes: both |
+| V2A3-T6 | Gate open state outside every sweep (no slide joint); detent `ignore`d in the gate slide | `asm.joint(prismatic=True)`; slide `flex` bound | yes on `examples/slide-gate` |
 
 **Rule from v2 A1:** 0 fails is not done. Read every warn on your objects: fix it, or list it under `accepted_warns`
 with a reason. Three of the first v2 reviewer's twelve issues were warns in the designer's own hand-off.

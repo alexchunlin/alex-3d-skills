@@ -1,0 +1,37 @@
+{
+ "cable_chains": [
+  {
+   "name": "board lead, too short",
+   "cables": [
+    "CAB_a",
+    "CAB_b"
+   ],
+   "lead": 50
+  }
+ ],
+ "slide_out": [
+  {
+   "name": "gate opens, detent bound too tight",
+   "object": "PRT_gate",
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": "=GATE_TRAVEL",
+   "step": 1,
+   "min_clearance": 0.0,
+   "flex": {
+    "PRT_detent": 1.0
+   }
+  }
+ ],
+ "distances": [
+  {
+   "a": "PRT_gate",
+   "b": "PRT_stop",
+   "max": "=NOT_A_PARAM + 1",
+   "why": "a broken expression must fail, not crash"
+  }
+ ]
+}

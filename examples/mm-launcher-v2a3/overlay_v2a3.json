@@ -1,0 +1,204 @@
+{
+ "distances": [
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": "=MM_T[1] + TAPE_T",
+   "ray": {
+    "frame": "PIV_hood",
+    "origin": [
+     21.0,
+     34.0,
+     131.75
+    ],
+    "dir": [
+     0,
+     0,
+     1
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": 0.327,
+     "PIV_nip_lift": -1.493
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": -1.493
+    },
+    {
+     "PIV_hood": -0.2,
+     "PIV_nip_lift": -1.493
+    },
+    {
+     "PIV_hood": -0.558,
+     "PIV_nip_lift": -1.493
+    }
+   ],
+   "why": "V2R3 A2-01 as an expression: the declared max candy on tape needs this gap at full leaf lift (the designer's row used the nominal 7.5)"
+  }
+ ],
+ "drop_tests": [
+  {
+   "name": "review A3: thick candy (MM_T max 7.5) drop at the min-gap stop",
+   "mode": "slide",
+   "stall_deg": 28,
+   "capture_mm": 0.5,
+   "payload_mm": "=MM_T[1]",
+   "emit": {
+    "frame": "PIV_pan",
+    "center": [
+     21.0,
+     0.0,
+     262.5
+    ],
+    "normal": [
+     0,
+     0,
+     1
+    ],
+    "radius": 6.5,
+    "step": 2
+   },
+   "dir": [
+    0,
+    0,
+    -1
+   ],
+   "poses": {
+    "PIV_tilt": [
+     -3,
+     0,
+     45,
+     46
+    ],
+    "PIV_hood": [
+     0.327,
+     -0.558
+    ]
+   },
+   "expect": {
+    "hit": [
+     "PRT_flywheel"
+    ],
+    "angle": {
+     "center": "PIV_flywheel",
+     "frame": "PIV_tilt",
+     "axis": "X",
+     "zero": "-Z",
+     "positive": "-Y",
+     "range": [
+      0,
+      112
+     ]
+    }
+   },
+   "home_only_ok": {
+    "PIV_nip_lift": "leaf at rest between candies (designer's reason, agreed)"
+   }
+  }
+ ],
+ "slide_out": [
+  {
+   "name": "review A3 (A2-F2): base floor plate with its electronics drops -Z after the 8 floor screws (BOM service 'Base floor')",
+   "objects": [
+    "PRT_base_floor",
+    "PRT_base_partition",
+    "FST_partition_*",
+    "BUY_motorgo_axis",
+    "FST_mg_*",
+    "BUY_buck_12v",
+    "FST_buck_*",
+    "BUY_servo_controller"
+   ],
+   "ignore": [
+    "FST_floor_*",
+    "CAB_*",
+    "BUY_usbc_plug"
+   ],
+   "dir": [
+    0,
+    0,
+    -1
+   ],
+   "dist": 40,
+   "step": 2,
+   "min_clearance": 0.0
+  },
+  {
+   "name": "V2R3 gate opens +X 52 over the detent (flex instead of ignore)",
+   "object": "PRT_jar_gate",
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": "=GATE_TRAVEL",
+   "step": 2,
+   "min_clearance": 0.0,
+   "ignore": [
+    "FST_detent_*"
+   ],
+   "flex": {
+    "PRT_gate_detent": 1.0
+   },
+   "why": "V2R3 gate probe: the bump rides -0.43 mm3 at +26"
+  }
+ ],
+ "payload_fit": [
+  {
+   "name": "pocket blocks an edge-on pair at the declared min candy",
+   "against": [
+    "PRT_feeder_disc"
+   ],
+   "center": [
+    10.5,
+    18.187,
+    263.0
+   ],
+   "across": [
+    1,
+    0,
+    0
+   ],
+   "place": "pair_edge_on",
+   "size": [
+    "=MM_D[0]",
+    "=MM_T[0]"
+   ],
+   "expect": "blocked",
+   "margin": 0.2,
+   "why": "V2R3 A1-03: 12.5 x 6.3 pair overlaps only 0.016 mm3"
+  },
+  {
+   "name": "pocket seats one flat candy at the declared max",
+   "against": [
+    "PRT_feeder_disc"
+   ],
+   "center": [
+    10.5,
+    18.187,
+    263.0
+   ],
+   "place": "flat",
+   "size": [
+    "=MM_D[1]",
+    "=MM_T[1]"
+   ],
+   "expect": "fits",
+   "why": "V2R3: flat 13.5 x 7.5 clears by 0.198"
+  }
+ ],
+ "cable_chains": [
+  {
+   "name": "encoder signal, Plink to MotorGo",
+   "cables": [
+    "CAB_encoder",
+    "CAB_launcher_bundle",
+    "CAB_launcher_base"
+   ],
+   "lead": 150,
+   "why": "V2R3 A2-02: CAB_encoder (150 mm lead) ends at the journal bore; the conductors run on through the bundle and the base lead"
+  }
+ ]
+}

@@ -77,11 +77,38 @@ adds `carry`, `fasteners.captive` and `flexures`.
                "nuts_ok": ["FST_wheel_nut_*"]},
   "masses_g": {"BUY_battery": 620, "BUY_servo_*": 66},
   "cable_leads": {"CAB_phase_*": 80},
+  "cable_chains": [{"name": "encoder signal", "cables": ["CAB_encoder", "CAB_launcher_bundle", "CAB_launcher_base"],
+                    "lead": 550, "why": "one 5-wire lead, Plink to MotorGo, unspliced across both joints"}],
+  "cable_junctions_ok": ["CAB_bus_*"],      // cables whose meeting ends are a real connector
+  "fasteners": {"stock_ok": ["FST_custom_*"], "stock_lengths": {"3": [6, 8, 10, 12, 16, 20]}},   // override the stocked lengths
   "accepted_warns": [{"match": "PRT_flywheel: ceiling region needs a 72 mm bridge", "why": "1 mm flange ring, prints as a bridge over infill"}],
   "printers": {"P1S": [256, 256, 256], "H2D": [325, 320, 325]}, "prefer_printer": "P1S",
   "min_wall": 1.6, "overhang_deg": 45, "overhang_warn_mm2": 150, "max_bridge_mm": 25
 }
 ```
+
+## Rows that follow the params: `"=EXPR"`
+
+Any string value that starts with `=` is evaluated as a Python expression over the build's named parameters (those
+passed to `asm.new_scene(params=...)`, stored in the .blend; older blends read `manifest.json` beside the blend, or
+pass `--params file.json`). It works anywhere a number goes: `min`, `max`, `payload_mm`, `size`, `dist`, `at_mm`,
+joint values in `poses`, `lead`.
+
+```jsonc
+{"a": "PRT_hood", "b": "PRT_flywheel", "min": "=MM_T[1] + TAPE_T", "poses": [{"PIV_hood": "=HOOD_HI", "PIV_nip_lift": -1.493}]},
+{"name": "min pair blocked", "place": "pair_edge_on", "size": ["=MM_D[0]", "=MM_T[0]"], "expect": "blocked", ...}
+```
+
+Write pass rows against the payload's declared **max** and blocking rows against its **min**, from the same params the
+geometry uses. v2 A3 declared `MM_T = (6.3, 7.5)` but typed its full-lift gap row as 7.5 (nominal 7.0 + tape), so the
+row passed while the reviewer's 8.0 row failed (FINDINGS V2A3-F1). A failed expression is a `config` fail naming the
+row; the report's `params.expressions` lists every value used.
+
+`cad rows cadcheck.json [REGEX]` prints one line per row of every check (and `cad rows manifest.json FST_` the parts),
+so you grep the report instead of writing a `json.load` snippet. Report layout, if you do script it:
+`checks.<check>.findings[]` (status, msg), `checks.<check>.rows[]` for most checks, `checks.drop.tests[].rows[]` and
+`checks.payload.rows[]`, `checks.interference.{collisions,contacts,min_clearance}[]`; the manifest keeps fasteners
+under `parts` with `kind: "FST"` (there is no `fasteners` key).
 
 ## Running subsets and your own rows
 
@@ -118,7 +145,7 @@ skipped", and the run carries on. Keep the row; don't `--only` around it.
 - **Bodies.** An object's body is its nearest `PIV_` ancestor, or `static`. A pair is swept over the joints that separate the two bodies, with each coupled joint replaced by its driver.
 - **Pair classes.** For solids on the same body, an overlap above `vol_tol` fails. Across a joint, any overlap fails, a contact (zero volume) fails unless a `fits` rule sets `contact: true`, and clearance below the minimum fails. Fasteners may overlap the part they thread into on their own body; across a joint they are treated like any other solid. Cable overlaps are warns, and cable-to-cable pairs are ignored.
 - **Fasteners.** Head direction comes from cadlib props, otherwise it is inferred: the wider end is the head. Nuts are `fst_kind: "nut"` or `FST_*nut*`; a bolt-nut overlap is never an interference. The head is buried when points 0.25 mm behind its bearing face are inside a solid on the same body. Engagement is the length over which a ring at 92% of shank radius sits inside one host part, or, when a nut sits on the bolt axis, the overlap of shank and nut (short of the nut = fail). A shank or nut inside a `BUY_` that is not its thread host fails (`allow` it if the envelope just lacks the hole). Access casts a Ø`2*driver_r` ray bundle out from the head until a sphere of `hand_r` is free; if that is blocked it tries an L-key (short leg along the axis, long leg swung about it, needs `lkey_swing_deg` of clear arc). Poses: home, each joint limit, and the screw's own continuous joints every 60°; parts present per `assembly_order`. Stand-off = shank exposed under the head; protrusion = thread past the last part, warned only when visible from outside.
-- **Service.** Same access test, with every solid present except `remove`, at `pose` (or home and each limit). Blocked at the first pose but reachable at another is a warn naming the pose to use. Removal itself is assumed, so an op that removes printed or purchased parts warns unless a `slide_out` row moves them at the op's `pose`. In v2 A1 the nip cover came off only at tilt 45, while the op had no pose (FINDINGS V2A1-F2).
+- **Service.** Same access test, with every solid present except `remove`, at `pose` (or home and each limit). Blocked at the first pose but reachable at another is a warn naming the pose to use. Removal itself is assumed, so an op that removes printed or purchased parts warns unless a `slide_out` row moves them at the op's `pose`; an op with no `pose` is proved by a row at home. In v2 A1 the nip cover came off only at tilt 45, while the op had no pose (FINDINGS V2A1-F2).
 - **Index tests.** The probe bundle is cast through `blockers` at every `step` of the `sequence`; a maximal run of open poses is one window. A window spanning the cycle start counts once. Open at the park position is reported.
 - **Exposure.** A cable sample is exposed when `min_escape` of 26 rays leave the assembly without hitting a solid, or when `view_frac` of the 240 directions toward a viewer above or level (`z > view_z`) do. The second rule finds a cable seen through a notch: the A3 bonnet-foot notch scores 6/26 but 8.3 mm at 10%, and R3 said "about 8 mm". Exposed samples within 6 mm form one spot, warned when its extent passes `max_cable_mm`. A nut is warned when 2 or more of its outer samples are exposed, unless it is listed in `nuts_ok`.
 - **Carry and captive.** `carry` re-parents the named objects onto a joint before any sweep, keeping their home pose. Use it for parts modelled at one setting that ride on another body in use (a thumbwheel on a stud). A `captive` fastener skips the head-buried, stand-off and access tests; engagement and nut pairing still apply. Each entry needs a reason a reviewer can check.
@@ -134,13 +161,32 @@ skipped", and the run carries on. Keep the row; don't `--only` around it.
 - **Assembly audit.** `assembly.step_of` in the report maps every object to its step: look there before claiming a part
   is in no step. Solids and fasteners in no step warn, and so does a step label whose `M<d> x <L>` matches none of
   that step's screws of that diameter.
-- **Ray distances** also report `nearest_mm`. A ray gap much wider than the nearest gap warns: the ray probably slips
-  past the part's working face at that pose. Frame the ray in the joint that moves `a` (v2 A2: a nip ray in the tilt
-  frame read 14.18 at full leaf lift against a 7.06 nearest gap).
+- **Ray slip.** A ray row at a non-home pose is compared with the same ray at home. When the ray lands on a different
+  face of a part (off the home face's plane by more than 0.5 mm, or a normal turned more than 25°) **and** the gap is
+  much wider than the nearest gap, it warns: the ray probably slipped past the working face. Frame the ray in the joint
+  that moves the part (v2 A2: a nip ray in the tilt frame read 14.18 at full leaf lift against a 7.06 nearest gap).
+  Diameters, approach lines and gaps measured along a stud are not flagged (the first version flagged 9 such rows in
+  v2 A3, all false: V2A3-T2).
 - **Compliance.** A distances row whose `compliant` names a part (`"PRT_nip_leaf: ..."`) warns when that part has no
   `flexures` row. Cables with no lead length (no `lead_len`, no `cable_leads` match) are listed in one warn.
 - **Slide-out** with `"expect": "blocked"` fails when the motion is not stopped, or is stopped by something other than
   `blocked_by` or outside `at_mm`.
+- **Slide-out flex.** `"flex": {"PRT_gate_detent": 1.0}` lets a spring ride the moving part: overlaps with it up to
+  that many mm³ are recorded in `flexed` (largest overlap and where) instead of blocking, even when an `allow` rule
+  covers the pair. Use it for detents and snap bumps instead of `ignore`, which proves nothing about the spring (v2 A3
+  ignored its gate detent, V2A3-T5). A part named in `flex` needs a `flexures` row.
+- **Prismatic joints.** `asm.joint(..., prismatic=True)` slides along +axis, with `lo`, `hi`, `home` and `step` in mm.
+  Every sweep covers it like a rotary joint, with `overtravel_mm` (default 1.0) past each end. Model gates, drawers and
+  plungers this way: the open state then joins interference, drops, sightlines and stability.
+- **Bridges.** The span of a ceiling region is the diameter of the widest circle inside it, in print orientation, and
+  `bridge_at` gives its centre (world). It used to be the short side of the region's bounding box, which read 26.4 for
+  a 56.5° arc of width 6 (v2 A3, V2A3-T3).
+- **Cables.** A `cable_chains` row adds up its routes and fails above `lead`: use it when conductors run on through
+  several routes. Cable ends that meet another cable's end with no purchased part within 3 mm warn (cadlib builds store
+  the ends, `cab_ends`); declare the chain, or list the cables under `cable_junctions_ok` if a connector sits there.
+- **Stock lengths.** Screws whose length isn't in `fasteners.stock_lengths` for their diameter warn, unless listed in
+  `fasteners.stock_ok`. `cad bom BOM.md manifest.json` checks the BOM's fastener table against the model (size, length,
+  head, count) with the same table.
 - **Slide-out** sweeps against solids **and fasteners**. Pairs already overlapping at rest are listed in `overlapping_at_rest` and left to the interference and fastener checks.
 - **Drop slide margin.** Each pose row has `flattest_slide_deg`, the shallowest slide a hitting ray made. Rays whose slide was flatter than `stall_deg + stall_margin_deg` warn: friction varies, and A3's 21° slide over a 20° limit was a major (A3-F1).
 - **Drop coverage.** Each test lists `on_path`, the objects its rays touched. A ranged joint that moves one of them relative to the emitter, and is not in `poses` or `sweep`, is a warn: the test held it at home. Typical cases are an adjuster such as a nip-gap hinge, and a gate. Put both ends in `poses`, or list the joint under `home_only_ok` with a reason. v2 A1's nip drop ran at the home hood setting only, and R1 found stalls at the open end (FINDINGS V2A1-F1).

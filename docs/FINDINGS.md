@@ -19,7 +19,10 @@ Sources are abbreviated:
   `a1e1c2446d3391a63`, `B1-feeder` `a598ac3528dfdb917`, `F1` finish `a4c7fa6df0fe83871`, `V2R1` review `a7067013f1c442a01`.
   v2 A2 agents: `P2` plan `a5f662b6704e21351`, builders `B2-params` `a5117b3d375e416e5`, `B2-pan` `a74de34b0f6956e51`,
   `B2-launcher` `ae270a06dae7409de`, `B2-feeder` `ac785fe505d626741`, `B2-base` `a4005e3c23adee0f0`, `B2-finish`
-  `a08af4e9c73aea17a`, `F2` finish `acf219186d0bd28e9`, `V2R2` review `abf293a6ad3a00f0f`
+  `a08af4e9c73aea17a`, `F2` finish `acf219186d0bd28e9`, `V2R2` review `abf293a6ad3a00f0f`.
+  v2 A3 agents: `P3` plan `a6a1ef3c308de2f03`, builders `B3-params` `a697af8569035dd0c`, `B3-launcher` `a54906111c8558bce`,
+  `B3-feeder` `ac1b0b7e457db418e`, `B3-base` `ae57b92afa22d5800`, `B3-finish` `ae03e95c6533a28da`, `F3` finish
+  `ae5efc1c43c08dd7a`, `V2R3` review `a9d0baaa5e62c78f0`
 
 **Baseline:** v1 (the no-tools loop) ran attempts 1-3 and was then stopped by the user (2026-10-24 evening, see
 `HARVEST_BRIEF.md` "Process change"). The v1 tool results below are counterfactual. Every
@@ -948,3 +951,179 @@ not the second adjuster joint (leaf lift) that the plan added.
 - `tools/verify_all.sh`: 54/54 passed (`/tmp/alex3d-verify.log`); A1, A2, A3 and v2 A1 are unchanged. The 9 new tests: v2 A2 designer config (4 new warns, still 0 fails); the overlay
 (payload_fit fail at 12.5 x 6.5, 0.14 short; 13 x 7 warn at 0.11; flat 13.5 x 7.5 fits; sightlines; the gate stop at
 52.5; the ray artefact; two planted rows fail); `cad q` help; `cad q ray --frame`; `cad py`.
+
+---
+
+## v2 Attempt 3 (harvested 2026-10-25)
+
+Inputs: the 8 attempt-3 agents in `V2WF/journal.jsonl` (lines 34-49) and their transcripts, plus `HW2/renders/attempt-3/`:
+progress.md, cadcheck.json, review.md, review.json, review/ (notes.md, review_rows.json, cadcheck_review.json, 3 PNGs).
+The blend V2R3 reviewed (`/tmp/rv3/model.blend`, md5 `dd734037…`, the same as `HW2/blender/model.blend` at 05:42) is
+archived as `examples/mm-launcher-v2a3/`, with the designer's checks.json, manifest.json, BOM and `overlay_v2a3.json` (the
+reviewer's rows rewritten with this run's features). Plan #4 had started (1.0 min) and is not ingested.
+
+**The tools were `f039205`** (progress.md line 1): the first attempt with `--overlay`, `accepted_warns`, the drop
+coverage warn, `contact_normal` and missing-object handling, but not `a20a4d7` (`payload_fit`, `sightlines`, slide
+`expect`, `cad py`, the `cad q` help fixes). Plan #4 moved the pin to `a20a4d7`, so **this run's fixes reach v2 attempt 5.**
+
+### Per-agent cost (`cc_transcript.py workflow V2WF`)
+
+| Agent | Wall | Model | Tools | Output tok (thinking) | Cache read | Peak ctx | Longest gen | cad runs (failed) | Images |
+|---|---|---|---|---|---|---|---|---|---|
+| P3 plan | 22.2 | 16.5 | 5.7 | 72k (46k) | 5.2M | 208k | 129 s | 5 (0) | 0 |
+| B3-params | 6.6 | 4.2 | 2.4 | 18k (5k) | 1.5M | 71k | <120 s | 2 (0) | 0 |
+| B3-launcher | 29.6 | 19.6 | 9.9 | 103k (72k) | 9.6M | 223k | 203 s | 20 (0) | 2 |
+| B3-feeder | 24.6 | 13.4 | 11.3 | 74k (50k) | 4.9M | 169k | 182 s | 14 (1) | 1 |
+| B3-base | 16.7 | 9.2 | 7.5 | 51k (31k) | 2.7M | 119k | 125 s | 14 (1) | 0 |
+| B3-finish | 30.5 | 20.5 | 10.0 | 87k (32k) | 15.7M | **257k** | 276 s | 24 (0) | 5 |
+| F3 finish | 0.8 | 0.8 | 0.0 | 5k (0.3k) | 0.1M | 36k | - | 0 | 0 |
+| V2R3 review | 14.8 | 13.6 | 1.2 | 64k (31k) | 7.4M | 207k | <120 s | 12 (1) | 10 |
+
+**Against the baseline and the earlier v2 attempts:**
+
+| | v1 best (A3) | v2 A1 | v2 A2 | **v2 A3** |
+|---|---|---|---|---|
+| Wall (design + review) | 66.1 min | 187.5 | 150.0 | **145.8** (plan 22.2, builds 108.0, finish 0.8, review 14.8) |
+| Output tokens (thinking) | 352k (228k) | 902k (601k) | 524k (312k) | **474k (268k)** |
+| Cache read | 35.8M | 69.7M | 45.6M | **47.1M** |
+| Peak context (any agent) | 488k | 348k | 340k | **257k** |
+| Longest generation | 290 s | 765 s | 291 s | **276 s** |
+| F/M/A (sum) | 6/6/6 (18) | 7/7/6 (20) | 8/8/9 (25) | **8/8/8 (24)** |
+| Issues B/M/m | 0/4/4 | 0/5/7 | 0/2/6 | **0/1/5** |
+| cadcheck at hand-off | - | 0 F, 34 W | 0 F, 44 W | **0 F, 34 W, 0 untriaged** |
+| cad runs (failed) | - | 121 (15) | 93 (1) | **91 (3)** |
+
+v2 A3 is the cheapest v2 attempt (3% less wall and 10% fewer output tokens than A2) with the lowest peak context of any
+attempt, v1 or v2. It closed 5 of 8 previous issues and halved the majors (2 to 1), but scored 1 lower: aesthetics went
+9 to 8 for the one new part, the gate detent clip (A3-01). Three v2 attempts total 483.3 min; the scores have stalled at
+8/8/8-9 with one major each time.
+
+### Time and token sinks
+
+**V2A3-T1. Reading reports by hand-written `json.load` snippets: 67 bash calls in 7 of 8 agents, 6 of them died on a
+guessed key.** B3-finish alone had 26. The keys guessed wrong: `checks.distances.rows` exists, but `checks.drop.tests[i]`
+has `rows`, not `poses` (B3-launcher `0:28:05`, B3-finish `0:23:48`), and the manifest has no `fasteners` key (P3
+`0:04:47`, B3-finish `0:23:55`). About 11 more calls only printed key lists ("Inspect cadcheck.json structure").
+**Fixed:** `cad rows [cadcheck.json|manifest.json] [REGEX] [--check a,b] [--findings]` prints one line per row of every
+check (drop and payload tests flattened per pose, `why` at the end) or per manifest part, with no Blender. On the A3
+report, `cad rows "min-gap stop \(gap 6.2\)" --check drop` gives the 5 pose rows B3-launcher was after. checks-config.md
+now spells out the report layout for scripts that still need it.
+
+**V2A3-T2. The `a20a4d7` ray-vs-nearest warn is 9 for 9 false on A3, and A4 runs on it.** The rule (a ray gap far
+wider than the nearest gap, from V2A2-F6) fired on the four Ø13.9 pocket-diameter rows (a part measured against itself,
+nearest 0), the three fingertip approach lines (ray 23.6-25.6 against a nearest 12.14 elsewhere on the body) and both
+stud-axis thumbwheel rows (6.0 and 4.49 against 1.55 and 1.13 at the rim). On the A3 blend at `a20a4d7`: 0 F, 43 W,
+**9 untriaged, all false.** **Fixed:** the warn now also needs the ray's hit on a part to have left its home face (off
+the home face's plane by > 0.5 mm, or a normal turned > 25°) at a non-home pose. V2R2's slipped row on the v2 A2 blend
+still warns (14.18 against 7.06, verify 4e), and the A3 rows give none.
+
+**V2A3-T3. A false bridge warn the finisher disproved by hand.** cadcheck took a ceiling region's span as the short
+side of its xy bounding box. The crown's L-slot floors are 56.5° arc sectors, R31.35..37.4: bbox 26.4, real width 6.
+B3-finish read the bridge code (`0:08:25`), wrote `bridge_probe.py` and `inscribed.py` (`0:08:44` to `0:10:16`) and
+accepted the warn with "widest inscribed circle 5.1". The flywheel flange ring (72) and nacelle (39) warns were the same
+artefact, accepted with reasons in A3. **Fixed:** the span is now the diameter of the widest inscribed circle (a grid over the
+region, nearest boundary edge), with `bridge_at` in world coordinates. Synthetic: a 30 x 5 strip at 45° reads 5.0 (bbox
+24.7), a 20 mm square 19.9, the crown's sector 6.05. On A3: crown 26.4 to 16.6 (another region), flywheel 72 to 2.7,
+nacelle 38.9 to 15.0; the 3 accepted bridge warns go stale. Parts runtime 0.6 to 2.6 s.
+
+**V2A3-T4. A service op with no pose could never be proved.** cadcheck compared `None` with the slide row's pose key,
+so no slide_out row could prove it, and the designer added `"pose": {}` to the op by hand (progress.md "Tool issues").
+**Fixed:** an op with no pose is proved by a slide row at home.
+
+**V2A3-T5. A flexing detent can't be a slide row.** The gate slide had to `ignore` the detent clip, so nothing bounded
+the bump's ride (progress.md "Tool issues"; V2R3 measured it with `gate_move.py`: -0.43 mm³ at +26). **Fixed:** a slide
+row's `flex: {"PRT_gate_detent": 1.0}` records the largest overlap with the spring and where, and blocks only above that
+bound, even when an `allow` covers the pair. A part named in `flex` needs a `flexures` row.
+
+**V2A3-T6. No slide joint, second attempt running.** The gate's open state was outside every sweep (V2A2-T4), the
+detent's open-notch claim had no row, and V2R3 asked for "a prismatic PIV_gate 0..52.35 if the tool supports one"
+(A3-03). **Fixed:** `asm.joint(..., prismatic=True)` slides along +axis in mm; cadcheck sweeps it like any joint, with
+`overtravel_mm` (1.0) past each end. Proven on `examples/slide-gate` (verify 8).
+
+**V2A3-T7. Other costs.**
+- P3 took 22.2 min (P2 9.8): it wrote a 10 KB `mkchecks.py` in one generation (`0:16:55`) and pre-ran the new rows on
+  the A2 model (11 F / 2 W, every fail a review issue), as the template now asks.
+- `No module named 'cadlib'` 4 times (P3, B3-launcher, B3-feeder): `cad py` from `a20a4d7`, not in the pin.
+- 31 tool-source reads (V2A2: about 44): distances, slide, cable leads, buried heads, overhang, bridge, overlay. Most
+  are documented at `a20a4d7` or now.
+- B3-finish rendered the 8-view final set twice (19 renders saved).
+- **The progress file worked as a checkpoint:** the planner made "finish" a build work item, so the Finish phase found
+  every step marked done and returned in 0.8 min.
+
+### Issues V2R3 raised, and what the tools did with them
+
+"At hand-off" is the designer's cadcheck at `f039205` (0 F / 34 W, 0 untriaged). "Now" is this run's tools on the archive:
+the designer's config (verify 4f) and `overlay_v2a3.json`, V2R3's rows written with this run's features.
+
+| ID | V2R3 issue | At hand-off | Now | Why it got through |
+|---|---|---|---|---|
+| V2A3-F1 | **Major (A2-01, recurring from V2A2-F1):** the min-gap stop was sized for the nominal 7.0 candy (NIP_PASS = MM_T_NOM + tape), while params declare MM_T up to 7.5. A 7.5 candy is rigidly squeezed 0.07-0.39 mm at full lift over 46 % of the window | not flagged (the row asserted 7.5) | **2 fails** with `"min": "=MM_T[1] + TAPE_T"` (7.61 and 7.93 against 8.0) | the row was typed for the nominal. New `=EXPR` rows; SKILL, checklist and planner prompt say to size pass rows at the declared max |
+| V2A3-F2 | Minor (A1-03, third attempt): the Ø13.9 pocket blocks a 12.5 x 6.3 pair by 0.016 mm³, a zero margin | - (no `payload_fit` at `f039205`) | **warn:** `payload_fit` min pair, "only 0.00 mm to spare" (size from `=MM_D[0]`, `=MM_T[0]`) | `payload_fit` is in `a20a4d7`, which A4 has |
+| V2A3-F3 | Minor (A2-02, recurring): the 150 mm encoder lead ends at the journal bore; ~430 mm onward through the bundle and base lead is in no BOM row | not flagged | **fail** with a `cable_chains` row: 514 mm against 150. Fresh builds also warn on cable ends that meet with no connector | each route passed against its own lead. New `cable_chains`, junction warn, `cab_ends` in cadlib |
+| V2A3-F5 | Minor (A3-01): the detent clip's EB 0.3 and square plate; proud pan head; **M3 x 9 is not stock** | not flagged | **warn:** "non-stock screw lengths: M3 x 9 (FST_detent_0)"; `cad bom` flags the BOM row | new stock-length warn. The edge break and the plate shape are not tool-catchable |
+| V2A3-F6 | Minor (A3-02): the BOM lists the nip stud as M3 x 20 hex head; the model has M3_cap x 16 | not flagged | **`cad bom`: BAD** "FST_nip_stud is 16 long in the model ... has a cap head" | BOM text was never compared with the manifest. New `cad bom`; `M3_hex` spec |
+| V2A3-F7 | Minor (A3-03): no slide row for the base floor service; the detent open notch has no row (the gate is not a joint) | not flagged | V2R3's floor slide passes; the gate needs a `prismatic` joint (new) | config gap; no slide joint (T6) |
+
+V2R3 marked 2 of 6 issues `tool_catchable`. **At hand-off, cadcheck flagged none of the six.** That is new: in A1 and A2
+the misses were warns nobody read, and this time the designer triaged all 34. With this run's tools, 5 of 6 are flagged
+(F1, F2, F3 with their rows; F5 and F6 with no config at all), and the 6th needs a prismatic joint in the model. The
+remaining misses are now rows nobody writes, which is why the rows can now be written against the params.
+
+**Recurrence:** A2-01 recurred (V2A2-F1 major, now PARTIAL and still the one major), A1-03 is on its third attempt (the
+margin went from negative to zero), and A2-02 recurred. All three are payload or cable *extremes*: the designer fixed the
+nominal case each time.
+
+**Config disputes (4):** the full-lift row's 7.5 (F1, `=EXPR` now); the base floor's missing slide row (V2R3's row
+passes); the detent's open notch with no row (prismatic joint now); post_R x journal_plate contact still hides the
+journal (deferred by the designer, `contact_normal` exists).
+
+### What worked
+- **Warn triage, for the first time:** 34 warns, 0 untriaged, each with a measured reason (26 new). V2R3's re-run matched
+  the warn set exactly, and two of the accepted reasons exposed tool false warns (T3, gear-tooth wall samples).
+- **review_rows.json + `--overlay`:** V2R3 put its 3 rows in one file and ran them in one call (2 fails). The planner
+  merged V2R2's rows and pre-ran them on the old model (11 F).
+- **The finisher's inscribed-circle probe is now cadcheck's bridge span** (T3).
+- **Cheapest v2 attempt, lowest peak context (257k) of all six attempts.** No 300 s+ generation.
+- V2R3 reused the designer's measurements (identical warn set, re-run in 134 s) and spent its probes on what had no row.
+
+### Reviewer quality (V2R3)
+- Every issue has a number and a dimensioned fix. The one major is anchored to a row that fails (7.613 against 8.0).
+- **`tool_catchable` was under-marked** (2 of 6): the BOM mismatch and non-stock screw were tool-catchable with a BOM
+  cross-check, which didn't exist. The template now says "cadcheck, cad q or cad bom".
+- 2 probe scripts where a row would do: `lentil_tilt.py` (leaning pairs; it showed upright is the worst case, so a
+  `payload_fit` row suffices) and `gate_move.py` (a prismatic joint now). 1 of 4 renders wasted (camera inside a solid).
+- The aesthetics drop 9 to 8 follows the rubric ("each failed item costs a point"): 2 failed items, both on the new clip.
+
+### Why not the existing code (v2 A3 additions)
+- **`cad rows` vs jq or `json.tool`:** jq isn't guaranteed on the agents' machine, and the problem was the nesting
+  (`tests[].rows[]`, manifest `parts` by kind), not the parser. 120 lines of standard library, one line per row.
+- **Inscribed-circle bridge span vs the bbox:** the bbox is right only for axis-aligned rectangles. A medial-axis or
+  polygon-offset library (shapely) isn't in Blender's Python; a 0.1-0.24 mm grid with numpy point-to-segment distances
+  costs 2 s over 36 parts and is within one grid step on the synthetic cases.
+- **Ray slip vs dropping the warn:** V2A2-F6 was a real slip worth a warn. Comparing the hit face with the home pose
+  keeps that case (verify 4e) and drops all 9 A3 rows; it reuses `ray_gap` (25 lines).
+- **`=EXPR` vs a payload block in config:** a payload block would cover the payload rows only. Params are already in
+  the build (`asm.new_scene(params=...)`), and the same mechanism serves stops, travels and leads. Restricted `eval`
+  with no builtins (about 40 lines); a bad expression is a `config` fail, not a crash.
+- **Prismatic joints vs `slide_out` rows:** a slide row moves one group once and checks it alone; a joint joins every
+  sweep (interference with all four collections, drops, sightlines, stability). The joint is a location instead of a
+  rotation in two `set_pose` functions plus mm overtravel (about 30 lines).
+- **`cad bom` vs the reviewer reading the BOM:** the table format is the template's own (`| M3 x 16 csk ST | 18 |
+  \`FST_post_*\` ...`). 130 lines; on A3 it gives exactly V2R3's two BOM errors and no false row after exact names win
+  over globs (`FST_pinion_*` vs `FST_pinion_ctr`).
+- **`cable_chains` vs per-cable leads:** per-cable leads all passed; the failure was across routes.
+
+### Still open (gaps)
+- Edge-break consistency (A3-01) is not measurable from the mesh; the params grep in the checklist stays.
+- The wall probe still flags involute gear tooth tips as thin walls (3 accepted warns in A3: disc, pinion, hub gear).
+- Exposure doesn't cover PCBs (V2A1-F11); no insertion sweep for assembly merges (V2A1-F6).
+- Cable-end junctions need ends stored by cadlib: blends built before this run report "junctions on 0 routes".
+- `parallel_builds` is still untested live.
+- The stall: three v2 attempts end with one major on a payload extreme. `=EXPR` rows make the extremes cheap to write,
+  but nothing forces a planner to write them.
+
+### Verification of this run
+- `tools/verify_all.sh`: 66/66 passed (`/tmp/alex3d-verify.log`); A1-A3 and v2 A1-A2 unchanged. New tests: 4f (v2 A3 designer config: 0 F, 1 untriaged warn, no ray-slip or
+  bbox-bridge warns; overlay: 3 fails exactly and the zero-margin pocket; `cad bom`: exactly 2 BAD rows; `cad rows`) and
+  8 (`examples/slide-gate`: clean 0 F with the prismatic sweep, detent flex 3.2 mm³, the stop at 20.5, bridge 5.0, chain
+  and service; `--bug` catches 6 planted problems; the junction warn).

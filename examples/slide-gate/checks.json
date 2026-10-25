@@ -1,0 +1,173 @@
+{
+ "fits": [
+  {
+   "a": "PRT_gate",
+   "b": "PRT_stop",
+   "contact": true,
+   "why": "hard stop: the gate end lands on the stop face at full open"
+  }
+ ],
+ "allow": [
+  {
+   "a": "PRT_detent",
+   "b": "PRT_gate",
+   "why": "spring detent: the bump rides 0.4 into the gate top between the two notches (flexures row, slide flex)"
+  }
+ ],
+ "assembly_order": [
+  {
+   "step": "housing",
+   "objects": [
+    "PRT_housing",
+    "BUY_board",
+    "CAB_*"
+   ]
+  },
+  {
+   "step": "gate",
+   "objects": [
+    "PRT_gate"
+   ]
+  },
+  {
+   "step": "stop",
+   "objects": [
+    "PRT_stop",
+    "FST_stop"
+   ]
+  },
+  {
+   "step": "detent",
+   "objects": [
+    "PRT_detent"
+   ]
+  },
+  {
+   "step": "test block",
+   "objects": [
+    "PRT_bridge_test"
+   ]
+  }
+ ],
+ "service": [
+  {
+   "op": "detent off (no pose given: proved by the home slide row)",
+   "fasteners": [],
+   "remove": [
+    "PRT_detent"
+   ]
+  }
+ ],
+ "slide_out": [
+  {
+   "name": "gate opens over the detent",
+   "object": "PRT_gate",
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": "=GATE_TRAVEL",
+   "step": 1,
+   "flex": {
+    "PRT_detent": 5.0
+   },
+   "min_clearance": 0.0
+  },
+  {
+   "name": "gate stops at full open",
+   "object": "PRT_gate",
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": "=GATE_TRAVEL + 5",
+   "step": 0.5,
+   "flex": {
+    "PRT_detent": 5.0
+   },
+   "expect": "blocked",
+   "blocked_by": [
+    "PRT_stop"
+   ],
+   "at_mm": [
+    "=GATE_TRAVEL - 0.5",
+    "=GATE_TRAVEL + 0.5"
+   ],
+   "min_clearance": 0.0
+  },
+  {
+   "name": "detent lifts off",
+   "object": "PRT_detent",
+   "dir": [
+    0,
+    0,
+    1
+   ],
+   "dist": 20,
+   "min_clearance": 0.0
+  }
+ ],
+ "distances": [
+  {
+   "a": "PRT_gate",
+   "b": "PRT_stop",
+   "poses": [
+    {
+     "PIV_gate": "=GATE_TRAVEL"
+    }
+   ],
+   "max": 0.1,
+   "why": "hard stop at full open"
+  },
+  {
+   "a": "PRT_gate",
+   "b": "PRT_detent",
+   "poses": [
+    {
+     "PIV_gate": 0
+    },
+    {
+     "PIV_gate": "=GATE_TRAVEL"
+    }
+   ],
+   "min": 0.1,
+   "max": 0.3,
+   "why": "bump seated in a notch at both ends of the travel"
+  },
+  {
+   "a": "PRT_gate",
+   "b": "PRT_housing",
+   "min": "=CLR - 0.05",
+   "why": "running clearance to the plate and rails"
+  }
+ ],
+ "flexures": [
+  {
+   "part": "PRT_detent",
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "why": "detent arm along +Y, printed flat"
+  }
+ ],
+ "cable_chains": [
+  {
+   "name": "board lead",
+   "cables": [
+    "CAB_a",
+    "CAB_b"
+   ],
+   "lead": 80,
+   "why": "one conductor run through both routes"
+  }
+ ],
+ "exposure": {
+  "cables_ok": [
+   "CAB_*"
+  ]
+ }
+}

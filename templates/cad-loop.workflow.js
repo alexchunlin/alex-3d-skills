@@ -141,7 +141,8 @@ const common = n => `
 Project: ${HW} (brief: ${HW}/DESIGN_BRIEF.md). Attempt ${n}. Skill: read ${PCB}/SKILL.md and follow its conventions;
 cadlib API in ${PCB}/reference/api.md; check config in ${PCB}/reference/checks-config.md; purchased-part data in
 ${CONFIG.skills}/components/components.json (use it instead of re-deriving dimensions from the PNGs).
-Tools: ${CAD} build|check|q|sheet (Blender starts in under 1 s; run checks freely). Answer tool questions from the
+Tools: ${CAD} build|check|q|py|rows|bom|sheet (Blender starts in under 1 s; run checks freely). Read reports with
+${CAD} rows cadcheck.json REGEX (or manifest.json), not json.load snippets (V2A3-T1). Answer tool questions from the
 reference docs before opening cadlib/cadcheck source (V2A1-T2: builders spent minutes in the source on bench merges,
 section syntax and screw_hole). If a tool misbehaves, work around it and note it in progress.md under "## Tool issues".
 Progress file: ${dir(n)}/progress.md. Read it first; if your step is already marked done there, return its recorded result.
@@ -158,7 +159,8 @@ ${reviewPath
 Before returning: update ${HW}/blender/checks.json so every review issue that is geometric has a check that would catch it
 (drop_tests, distances, payload_fit, sightlines, slide_out with expect "blocked", fits, assembly_order; the reviewer's
 review/review_rows.json, if any, can be merged as is). Every adjuster joint gets drop and distances rows at both ends of
-its travel, with any spring at full deflection (V2A1-F1, V2A2-F1). Run the new rows on the CURRENT model.blend before
+its travel, with any spring at full deflection (V2A1-F1, V2A2-F1). Write payload sizes and gaps as "=EXPR" over params.py at
+the declared extremes ("min": "=MM_T[1] + TAPE_T"), not as typed nominals (V2A3-F1). Run the new rows on the CURRENT model.blend before
 any geometry changes: each must fail there, or it would not have caught the issue. Record the count in progress.md (v2
 A2's planner did this unprompted: 12 F on the attempt-1 model, 0 F at hand-off). Write the plan to ${dir(n)}/progress.md
 under "## Plan".${CONFIG.parallel_builds ? `
@@ -198,6 +200,7 @@ ${CONFIG.parallel_builds ? `0. Merge ${HW}/blender/checks.d/*.json into checks.j
    plus the sections the brief asks for (${CAD} q ... section), and ${CAD} sheet ${HW}/stl ${dir(n)}/stl_sheet.png.
 3. Copy the final cadcheck.json to ${dir(n)}/cadcheck.json.
 4. Update ${HW}/BOM_AND_ASSEMBLY.md (assembly steps must match checks.json assembly_order) and append "Attempt ${n}" to ${HW}/DESIGN_LOG.md.
+   Then run ${CAD} bom ${HW}/BOM_AND_ASSEMBLY.md ${HW}/blender/manifest.json and fix every BAD row (V2A3-F5, F6).
    Every claim cites a cadcheck row or cad q line; quote coverage and not_checked. Before writing a motion, timing or
    service claim (index positions, "adjust without disassembly", "comes off at tilt 45"), add the matching
    index_tests / service / slide_out entry to checks.json and re-run cad check (FINDINGS A2-F2, A2-F6). "Removable" is a
@@ -211,7 +214,7 @@ ${dir(n)}/review.md and the structured result to ${dir(n)}/review.json.
 ${prevReviewPath ? `Previous review: ${prevReviewPath}. Re-measure every previous issue and keep its id if it recurs.` : 'First review: number issues A' + n + '-01, A' + n + '-02, ...'}
 Append each measurement to ${dir(n)}/review/notes.md as you go. If it exists when you start, you were restarted: read it and
 don't redo those measurements (A3-T4).
-Mark tool_catchable=true when cadcheck or cad q could have flagged the issue before review.
+Mark tool_catchable=true when cadcheck, cad q or cad bom could have flagged the issue before review.
 Report at most 10 blocker/major issues and at most 8 minor ones (most impactful first). Fold related symptoms into one
 issue with one fix, so the next attempt converges instead of chasing a long tail.
 Put every check row you add in ${dir(n)}/review/review_rows.json and run it with --overlay (V2A1-T6); the next planner merges it.

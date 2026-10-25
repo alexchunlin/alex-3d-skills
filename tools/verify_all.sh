@@ -1,6 +1,6 @@
 #!/bin/sh
 # Re-prove every tool in this repo. Writes only under /tmp/alex3d-verify. About 8 minutes, run at nice 10.
-# The attempt regressions use examples/mm-launcher-{a1,a2,a3,v2a1,v2a2}/*.blend.gz (the blends the reviewers saw).
+# The attempt regressions use examples/mm-launcher-{a1,a2,a3,v2a1,v2a2,v2a3}/*.blend.gz (the blends the reviewers saw).
 #   sh tools/verify_all.sh            # HW defaults to the mm-launcher project (read-only; copied first)
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -155,6 +155,62 @@ sys.exit(0 if ok else 1)" "$V/v2a2/overlay.json" \
   $CAD q "$V/v2a2/model.blend" ray 19.5,-2.33,111.274 0,-0.316,0.949 --frame PIV_tilt --pose PIV_tilt=45 | grep -q '"hit": "PRT_nip_wheel", "mm": 14.4' \
     && ok "cad q ray --frame: finger-slot ray at tilt 45 hits the thumbwheel at 14.4" || bad "cad q ray --frame"
 fi
+# 4f v2 attempt-3 regression (FINDINGS V2A3): the blend V2R3 reviewed, the designer's own config, manifest and BOM
+V23="$ROOT/examples/mm-launcher-v2a3"
+if [ -f "$V23/mm_launcher_v2a3.blend.gz" ]; then
+  mkdir -p "$V/v2a3"; gunzip -c "$V23/mm_launcher_v2a3.blend.gz" > "$V/v2a3/model.blend"; cp "$V23/manifest.json" "$V/v2a3/"
+  # designer config: 0 fails, and the only untriaged warn is the real one (M3 x 9). No ray-slip false warns (9 at
+  # a20a4d7: diameters, approach lines, a stud-axis gap) and no bbox bridge warns (crown 26.4, flywheel 72, nacelle 39)
+  $CAD check "$V/v2a3/model.blend" "$V23/checks.json" "$V/v2a3/cadcheck.json" >/dev/null
+  python3 -I -c "
+import json,sys; d=json.load(open(sys.argv[1])); s=d['summary']; w=s['warn_list']
+br={r['object']: r['max_bridge_span_mm'] for r in d['checks']['parts']['rows']}
+ok = (s['fails'] == 0 and len(w) == 1 and 'M3 x 9 (FST_detent_0)' in w[0] and not any('much wider than the nearest' in x for x in list(s['accepted_warns']) + w)
+      and br['PRT_flywheel'] < 5 and br['PRT_feeder_crown'] < 25 and br['PRT_nacelle'] < 25 and len(s['stale_accepts']) == 3)
+sys.exit(0 if ok else 1)" "$V/v2a3/cadcheck.json" \
+    && ok "V2A3 designer config: 0 fails, 1 untriaged warn (M3 x 9), no ray-slip or bbox-bridge false warns" || bad "V2A3 designer config: unexpected result"
+  # V2R3's issues as rows: the max-candy gap from params (=MM_T[1] + TAPE_T), the encoder chain, the zero-margin pocket
+  $CAD check "$V/v2a3/model.blend" "$V23/checks.json" "$V/v2a3/overlay.json" --overlay "$V23/overlay_v2a3.json" --overlay-only \
+       --only drop,slide,distances,payload,cables >/dev/null
+  python3 -I -c "
+import json,sys; d=json.load(open(sys.argv[1])); s=d['summary']; f=' | '.join(s['fail_list']); w=' | '.join(s['warn_list'])
+ex={e['at']: e.get('value') for e in d['params']['expressions']}
+ok = (s['fails'] == 3 and '7.61 mm (along ray) at hood=0.327, nip_lift=-1.493, wanted 8.0' in f and 'wanted 8.0' in f.split('7.93 mm')[1]
+      and 'runs 514 mm through CAB_encoder' in f and 'only 0.00 mm to spare' in w and ex.get('distances[0].min') == 8.0
+      and ex.get('payload_fit[0].size[1]') == 6.3 and d['params']['source'].endswith('manifest.json'))
+sys.exit(0 if ok else 1)" "$V/v2a3/overlay.json" \
+    && ok "V2A3: 8.0 gap from =MM_T[1]+TAPE_T fails at 7.61/7.93; encoder chain 514 > 150; pocket margin 0" || bad "V2A3 overlay: unexpected result"
+  # cad bom: exactly the two BOM errors V2R3 found by hand
+  $CAD bom "$V23/BOM_AND_ASSEMBLY.md" "$V23/manifest.json" > "$V/v2a3/bom.txt"; rc=$?
+  [ $rc = 1 ] && [ "$(grep -c '^BAD' "$V/v2a3/bom.txt")" = 2 ] && grep -q "FST_nip_stud is 16 long" "$V/v2a3/bom.txt" \
+    && grep -q "M3 x 9 is not a stock length" "$V/v2a3/bom.txt" && ok "cad bom: nip stud x 20 vs x 16, M3 x 9" || bad "cad bom"
+  # cad rows: the drop rows of one test, one line per pose, from the designer's report
+  [ "$($CAD rows "$V/v2a3/cadcheck.json" "min-gap stop \(gap 6.2\)" --check drop | wc -l | tr -d ' ')" = 5 ] \
+    && $CAD rows "$V23/manifest.json" FST_nip_stud | grep -q "length=16" && ok "cad rows: report and manifest lines" || bad "cad rows"
+fi
+# 8 slide-gate example: prismatic joint, slide flex, =EXPR rows, cable chains and junctions, inscribed bridge span,
+#   no-pose service proved at home, stock lengths (FINDINGS V2A3)
+G8="$ROOT/examples/slide-gate"
+"$BL" -b --factory-startup --python "$G8/build.py" -- --out "$V/gate" >/dev/null 2>&1
+"$BL" -b --factory-startup --python "$G8/build.py" -- --out "$V/gate-bug" --bug >/dev/null 2>&1
+$CAD check "$V/gate/gate.blend" "$G8/checks.json" "$V/gate/cadcheck.json" >/dev/null
+python3 -I -c "
+import json,sys; d=json.load(open(sys.argv[1])); s=d['summary']; c=d['checks']
+sl={r['object']: r for r in c['slide']['rows']}
+ok = (s['fails'] == 0 and s['warns'] == 1 and 'collide only 2.5 deg (1 mm on slides) past the joint limit (gate=21)' in s['warn_list'][0]
+      and sl['gate opens over the detent']['flexed']['PRT_detent']['max_mm3'] == 3.2 and sl['gate stops at full open']['blocked_at_mm'] == 20.5
+      and c['parts']['rows'][0]['max_bridge_span_mm'] == 5.0 and c['cables']['chains'][0]['route_mm'] < 80 and not c['service']['findings']
+      and d['params']['source'] == 'scene' and any(g['joints'] == ['PIV_gate'] for g in c['interference']['groups']))
+sys.exit(0 if ok else 1)" "$V/gate/cadcheck.json" \
+  && ok "slide gate clean: prismatic sweep, detent flex 3.2 mm3, stop at 20.5, bridge 5.0 (bbox 31.8), chain, service" || bad "slide gate clean"
+$CAD check "$V/gate-bug/gate.blend" "$G8/checks.json" "$V/gate-bug/cadcheck.json" --overlay "$G8/overlay_bug.json" >/dev/null
+for pat in "expression '=NOT_A_PARAM + 1' failed" "PRT_stop x PRT_gate collide on different bodies" "wanted ['PRT_stop'] at [19.5, 20.5] mm" \
+           "detent bound too tight slide-out blocked by ['PRT_detent']" "runs 62 mm through CAB_a + CAB_b, but its lead is 50 mm" \
+           "non-stock screw lengths: M3 x 9 (FST_stop)"; do
+  grep -qF "$pat" "$V/gate-bug/cadcheck.json" && ok "slide gate bug caught: $pat" || bad "slide gate bug missed: $pat"
+done
+$CAD check "$V/gate/gate.blend" "$G8/checks.json" "$V/gate/nochain.json" --only cables --overlay "$G8/overlay_nochain.json" --overlay-only >/dev/null
+grep -qF "CAB_a / CAB_b at [30.0, -12.5, 30.0]" "$V/gate/nochain.json" && ok "cable junction with no connector warns" || bad "cable junction warn"
 # 4b smoke: cadcheck runs on the live v1 project blend (frozen at attempt 3 since v1 stopped); reports, never asserts
 if [ -f "$HW/blender/mm_launcher.blend" ]; then
   mkdir -p "$V/live"; cp "$HW/blender/mm_launcher.blend" "$V/live/"

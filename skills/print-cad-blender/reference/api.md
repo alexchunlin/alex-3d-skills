@@ -46,13 +46,13 @@ Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X
 | Call | Notes |
 |---|---|
 | `new_scene(params=dict)` | mm units, clears registries; `params` go into the manifest |
-| `joint("PIV_x", loc, axis, lo, hi, parent=None, home=0, step=None, continuous=False, couple_to=None, couple_ratio=1)` | create joints before parts that hang under them |
+| `joint("PIV_x", loc, axis, lo, hi, parent=None, home=0, step=None, continuous=False, couple_to=None, couple_ratio=1, prismatic=False)` | create joints before parts that hang under them; `prismatic=True` slides along +axis, values in mm (gates, drawers) |
 | `set_pose(PIV_pan=30, PIV_tilt=45)` | unlisted joints go home; coupled joints follow |
 | `part(ob, name, kind, color, joint=None, **info)` | `PRT` needs `stl, print_rot, orient, supports` (plus `infill`); `BUY` should give `mass_g, src`. Colours: `"pla_a"`, `"pla_b"`, `"buy"`, `"buy_metal"`, `"pcb"`, or an RGBA tuple. |
 | `R_ID, R_FLIP, R_PX_DOWN, R_NX_DOWN, R_PY_DOWN, R_NY_DOWN` | common `print_rot` values |
-| `fastener(name, at, into, length, spec="M3_cap", joint=None, host=None, step=None)` | `spec`: `M3_cap`, `M3_pan`, `M3_csk`, `M3_selftap_pan`, `M2_pan` |
+| `fastener(name, at, into, length, spec="M3_cap", joint=None, host=None, step=None)` | `spec`: `M3_cap`, `M3_pan`, `M3_csk`, `M3_selftap_pan`, `M3_hex`, `M2_pan`, `M2.5_cap`, `M2.5_pan`; use stocked lengths (cadcheck warns otherwise) |
 | `nut(name, at, into, joint=None, af=None, h=None, step=None)` | hex nut, bearing face at `at`; cadcheck checks the bolt on its axis reaches through it |
-| `cable(name, pts, r, color, joint=None, lead_len=None)` | stores `path_len`; cadcheck compares it with `lead_len` |
+| `cable(name, pts, r, color, joint=None, lead_len=None)` | stores `path_len` and both ends; cadcheck compares it with `lead_len`, and flags ends that meet another cable with no connector (declare `cable_chains`) |
 | `write_manifest(path)` | parts, joints, fasteners, cables, features, params |
 
 ### A screw, its hole and its nut (one `at`, one `into`)
@@ -66,7 +66,7 @@ A.nut("FST_cover_nut_0", (40, 0, 30 - 10), into, joint="PIV_tilt")    # optional
 
 `length` is the shank under the head, measured from `at` along `into`. `clamp` is the clearance-hole depth in the
 clamped part. `sink` puts `at` that far below the outer face, and the counterbore is cut back out from it. `fastener`
-specs: `M3_cap`, `M3_pan`, `M3_csk`, `M3_selftap_pan`, `M2_pan`, `M2.5_cap`, `M2.5_pan`. `screw_hole` cuts M3 sizes
+specs: `M3_cap`, `M3_pan`, `M3_csk`, `M3_selftap_pan`, `M3_hex`, `M2_pan`, `M2.5_cap`, `M2.5_pan`. `screw_hole` cuts M3 sizes
 only; for M2.5, cut `G.cyl` holes with `RULES`-style clearances (2.7 clear, 2.1 pilot).
 
 ## cad q (one-shot measurements)
@@ -82,6 +82,16 @@ cad q model.blend inside 10,18,265                                  # which soli
 
 `--frame` gives the ray in that joint's home coordinates and moves it with the joint. Measurements that back a BOM
 claim belong in checks.json (`distances`, `sightlines`, `payload_fit`, `slide_out`), so every run re-proves them.
+
+## cad rows, cad bom (plain python3, no Blender)
+
+```
+cad rows cadcheck.json v2-A2              # every row whose line matches the regex, one line each, with its why
+cad rows cadcheck.json --check drop,slide # rows of those checks
+cad rows cadcheck.json --findings         # fails and warns, with (accepted) marks
+cad rows manifest.json FST_nip            # parts (fasteners are kind FST), joints, params
+cad bom ../BOM_AND_ASSEMBLY.md manifest.json   # BOM fastener rows vs the model; exit 1 on a mismatch
+```
 
 ## cad q section (the command line, not the function)
 

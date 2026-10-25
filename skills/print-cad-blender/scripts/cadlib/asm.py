@@ -43,7 +43,9 @@ def new_scene(params=None):
         d.clear()
     features.LOG.clear()
     if params:
-        PARAMS.update({k: v for k, v in params.items() if isinstance(v, (int, float, str, bool, list, tuple))})
+        PARAMS.update({k: v for k, v in params.items() if isinstance(v, (int, float, str, bool, list, tuple, dict))})
+        # in the .blend too, so cadcheck can evaluate "=EXPR" rows on a copied blend without its manifest
+        sc["cad_params"] = json.dumps(PARAMS, default=str)
     geom.scratch()
 
 
@@ -71,10 +73,13 @@ def mat(rgba):
 # ------------------------------------------------------------------ joints
 
 def joint(name, loc, axis, lo=None, hi=None, parent=None, home=0.0, step=None, continuous=False,
-          couple_to=None, couple_ratio=1.0):
+          couple_to=None, couple_ratio=1.0, prismatic=False):
     """PIV_<name> empty at world `loc`, rotating about its local `axis` ('X', 'Y' or 'Z').
     lo/hi in degrees (the range the mechanism must reach); continuous=True for wheels;
-    couple_to makes it follow another joint (gears): angle = couple_ratio * other."""
+    couple_to makes it follow another joint (gears): angle = couple_ratio * other.
+    prismatic=True makes it a slide along +axis instead, with lo/hi/home/step in mm: a gate, a drawer, a plunger.
+    v2 A2 and A3 left the feeder gate's open state out of every sweep because cadlib had no slide joint, and the
+    reviewer moved the gate by hand in copies of the blend (FINDINGS V2A2-T4, V2A3-T6)."""
     assert name.startswith("PIV_"), "joint names start with PIV_"
     e = bpy.data.objects.new(name, None)
     e.empty_display_type = 'ARROWS'
@@ -93,6 +98,10 @@ def joint(name, loc, axis, lo=None, hi=None, parent=None, home=0.0, step=None, c
     if step:
         e["joint_step"] = float(step)
     e["joint_continuous"] = bool(continuous)
+    if prismatic:
+        assert not continuous, "a prismatic joint can't be continuous"
+        e["joint_kind"] = "prismatic"
+        e["joint_base_loc"] = [float(c) for c in e.location]
     if couple_to:
         e["couple_to"], e["couple_ratio"] = couple_to, float(couple_ratio)
     JOINTS[name] = e
@@ -107,6 +116,11 @@ def set_pose(**deg):
         if "couple_to" in e.keys():
             vals[n] = vals.get(e["couple_to"], 0.0) * e.get("couple_ratio", 1.0)
     for n, e in _all_joints().items():
+        if e.get("joint_kind") == "prismatic":
+            v = [0.0, 0.0, 0.0]
+            v["XYZ".index(e["joint_axis"])] = float(vals[n])
+            e.location = Vector(e["joint_base_loc"]) + Vector(v)
+            continue
         r = [0.0, 0.0, 0.0]
         r["XYZ".index(e["joint_axis"])] = math.radians(vals[n])
         e.rotation_euler = r
@@ -183,6 +197,8 @@ FASTENER_SPECS = {
     "M3_selftap_pan": (3.0, 6.0, 2.4), "M2_pan": (2.0, 3.8, 1.3),
     # ISO 4762 / ISO 7045 M2.5 (MotorGo board screws; the v2 A1 finisher looked this table up and found none)
     "M2.5_cap": (2.5, 4.5, 2.5), "M2.5_pan": (2.5, 5.0, 1.75),
+    # ISO 4017 hex head, 5.5 AF x 2.0, as a round head across flats (v2 A3 modelled a hex stud as M3_cap, V2A3-F6)
+    "M3_hex": (3.0, 5.5, 2.0),
 }
 
 
@@ -250,9 +266,12 @@ def cable(name, pts, r, color="cable_blk", joint=None, lead_len=None, step=None)
     L = sum((Vector(pts[i + 1]) - Vector(pts[i])).length for i in range(len(pts) - 1))
     ob = part(ob, name, 'CAB', color, joint, part="cable route", step=step or "")
     ob["path_len"] = float(L)
+    # both ends at home, world mm: cadcheck finds cables that meet with no connector there (V2A3-F3)
+    ob["cab_ends"] = [float(c) for c in list(pts[0]) + list(pts[-1])]
     if lead_len:
         ob["lead_len"] = float(lead_len)
-    PARTS[name].update(path=[list(map(float, p)) for p in pts], path_len=L, lead_len=lead_len)
+    PARTS[name].update(path=[list(map(float, p)) for p in pts], path_len=L, lead_len=lead_len,
+                       path_ends=[list(map(float, pts[0])), list(map(float, pts[-1]))])
     return ob
 
 
