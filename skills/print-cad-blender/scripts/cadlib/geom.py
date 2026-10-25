@@ -338,6 +338,97 @@ def join(name, obs):
     return ob
 
 
+def _world_tris(obs):
+    """World-space vertices (list of Vector) and triangles of the evaluated meshes of `obs`."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    V, T = [], []
+    for o in obs:
+        oe = o.evaluated_get(dg)
+        me = oe.to_mesh()
+        me.calc_loop_triangles()
+        base = len(V)
+        V += [o.matrix_world @ v.co for v in me.vertices]
+        T += [(base + t.vertices[0], base + t.vertices[1], base + t.vertices[2]) for t in me.loop_triangles]
+        oe.to_mesh_clear()
+    return V, T
+
+
+def swept_envelope(obs, pivot, axis=None, lo=None, hi=None, step=None, tol=0.25, voxel=0.5, method="sdf",
+                   adaptivity=0.0, name="KEEP_sweep"):
+    """Closed mesh holding every pose of `obs` while they turn about an axis: a keep-out for cuts and clearances.
+
+    pivot: a PIV_ joint empty (or its name): axis and pivot come from its world matrix, and lo/hi are joint
+           angles (default: its joint_lo/joint_hi), measured from the pose the scene is in now.
+           Or a point, with `axis` a world vector, and lo/hi relative to the current pose (deg).
+    method "sdf" (default): one OpenVDB level set of all poses at once (the soup of posed triangles), meshed at
+           +pad, where pad = r_max * step / 2 + voxel / 4. A point moves at most r_max * step / 2 between poses
+           and the distance field is 1-Lipschitz, so every in-between pose is inside (conservative by about pad).
+           step defaults to 2 * tol / r_max, so pad is about tol + voxel / 4.
+    method "union": Manifold union of the posed copies at `step` (default 2 deg). Exact at the poses, but an
+           in-between pose pokes out by up to about r_max * step^2 / 8 (measured in docs/features/blend-bracket.md).
+    The result goes in the scratch collection; ob["envelope"] holds poses, step, pad, r_max and timings.
+    D3 spent 159 s deriving the pod's swept envelope by hand (FINDINGS A3-T2)."""
+    import time
+    t0 = time.time()
+    if isinstance(pivot, str) or hasattr(pivot, "matrix_world"):
+        j = bpy.data.objects[pivot] if isinstance(pivot, str) else pivot
+        ax = j.get("joint_axis", axis if isinstance(axis, str) else "X")
+        k = "XYZ".index(ax)
+        Mj = j.matrix_world
+        c = Mj.translation.copy()
+        w = Vector(Mj.col[k][:3]).normalized()
+        now = math.degrees(j.rotation_euler[k])
+        lo = j.get("joint_lo") if lo is None else lo
+        hi = j.get("joint_hi") if hi is None else hi
+        lo, hi = lo - now, hi - now
+    else:
+        c, w = Vector(pivot), Vector(axis).normalized()
+    obs = [obs] if hasattr(obs, "data") else list(obs)
+    V, T = _world_tris(obs)
+    r_max = max(((v - c) - w * (v - c).dot(w)).length for v in V)
+    if step is None:
+        step = 2.0 if method == "union" else max(0.05, math.degrees(2 * tol / max(r_max, 1e-6)))
+    n = max(2, int(math.ceil((hi - lo) / step - 1e-9)) + 1)
+    angs = [lo + (hi - lo) * i / (n - 1) for i in range(n)]
+    dstep = math.radians((hi - lo) / (n - 1))
+    rots = [Matrix.Translation(c) @ Matrix.Rotation(math.radians(a), 4, w) @ Matrix.Translation(-c) for a in angs]
+    info = {"poses": n, "step_deg": round((hi - lo) / (n - 1), 4), "lo": lo, "hi": hi, "r_max": round(r_max, 2), "method": method}
+    if method == "union":
+        copies = []
+        for i, M in enumerate(rots):
+            bm = bmesh.new()
+            vs = [bm.verts.new(M @ v) for v in V]
+            for t in T:
+                try:
+                    bm.faces.new((vs[t[0]], vs[t[1]], vs[t[2]]))
+                except ValueError:
+                    pass
+            copies.append(_obj("%s_%d" % (name, i), bm))
+        ob = csg(copies[0], add=copies[1:])
+        ob.name = name
+        info["pad"] = 0.0
+    else:
+        import numpy as np
+        import openvdb as vdb
+        from . import blend
+        pad = r_max * dstep / 2 + voxel / 4
+        P0 = np.array([tuple(v) for v in V], dtype=np.float64)
+        T0 = np.array(T, dtype=np.uint32)
+        P = np.concatenate([P0 @ np.array(M.to_3x3()).T + np.array(M.translation) for M in rots]).astype(np.float32)
+        Tr = np.concatenate([T0 + i * len(P0) for i in range(n)])
+        o = P.min(0) - pad - 3 * voxel
+        xf = vdb.createLinearTransform([[voxel, 0, 0, 0], [0, voxel, 0, 0], [0, 0, voxel, 0], [float(o[0]), float(o[1]), float(o[2]), 1]])
+        ls = vdb.FloatGrid.createLevelSetFromPolygons(P, triangles=Tr, transform=xf, halfWidth=max(3.0, pad / voxel + 3))
+        ob = blend.vdb_to_object(ls, name, iso=pad, adaptivity=adaptivity)
+        info["pad"] = round(pad, 3)
+        info["voxel"] = voxel
+    nm, vol = solid_stats(ob)
+    ob.data.calc_loop_triangles()
+    info.update(tris=len(ob.data.loop_triangles), non_manifold_edges=nm, volume_mm3=round(vol, 1), t_s=round(time.time() - t0, 2))
+    ob["envelope"] = info
+    return ob
+
+
 def import_stl(path, name):
     """Import an STL (mm) as a single object named `name`, linked to the scratch collection."""
     before = set(bpy.data.objects)
