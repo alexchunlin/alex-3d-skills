@@ -18,6 +18,7 @@ which beats a render. Items marked with an ID caught real problems in that attem
 
 ## Manufacture
 - [ ] `parts`: all manifold, fit the P1S, no sloped overhang marked supports=no, bridges ≤ 25 mm, walls ≥ 1.6 mm.
+- [ ] **Printability is re-run on the exported STLs, not taken from the hand-off:** `cad printcheck <project>/stl --manifest <project>/blender/manifest.json --render <review_dir>/printcheck` (and `cad slice <project>/stl` if `cad slice --detect` shows a usable slicer). Every island or cantilever over 3 mm on a part marked supports: no is a blocker when the brief forbids supports; open the layer map PNG before you write it up. v2 shipped "no supports" on every part and four needed them (jar_valve tabs, feeder_cover ears, base_shell tie block, post_R top; FINDINGS "v2 post-freeze"). Never run a slicer any other way.
 - [ ] `fasteners`: no buried heads (reversed screws, A1-F10), engagement ≥ 4 mm, every bolt reaches through its nut (A2-F3), no shank or nut inside a purchased part (A2-F5), access at the assembly step and the tool it needs (straight bit or L-key arc, A1-F4, F11, A2-F1).
 - [ ] Fasteners and cables included in interference (A1-F3). The `coverage` line must list all four collections.
 - [ ] BOM fastener table vs the model: `cad bom BOM_AND_ASSEMBLY.md manifest.json` (size, length, head, count, stock lengths). V2R3 found an M3 x 20 stud that the model had as x 16, and an M3 x 9, by hand (V2A3-F5, F6).

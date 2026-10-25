@@ -12,7 +12,9 @@ def build(P):
     for sx in (-1, 1):
         for sy in (-1, 1):
             at = (sx * (h - 5.5), sy * (h - 5.5), 0.0)        # head bears on the table side; boss merges into the wall
-            bosses += F.boss((at[0], at[1], 14.0), (0, 0, 1), 7.0, 14.0)   # pilot (11 mm) + 3 mm cap
+            # the boss runs up to the deck: printed deck-down, a boss that stops short starts in mid-air (cad printcheck)
+            top = P.BASE_H - P.WALL + 0.5
+            bosses += F.boss((at[0], at[1], top), (0, 0, 1), 7.0, top)   # pilot 11 mm deep from the floor end
             cuts += F.screw_hole(at, (0, 0, 1), 10, kind="selftap")
             screws.append(at)
     shell = G.csg(shell, add=bosses)

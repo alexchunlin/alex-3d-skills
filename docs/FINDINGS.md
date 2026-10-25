@@ -1801,3 +1801,127 @@ artefacts, and the cap still came out +Y with the splice present. Reverted.
     back-up is blocked by the nip cover at 54.
   - verify 4l: `tools/test_cable_shapes.py`: a kink into a plug and a 21 mm shared run are flagged; the rounded route
     and the chained hand-over are not.
+
+## v2 post-freeze: supports on a design that claimed none (2026-10-25, task docs/tasks/2026-10-25-printability-and-slicing.md)
+
+v2 was frozen at attempt 7 and packaged with "supports: no" on all 36 printed parts. The user questioned it; an
+orchestrator check (`docs/evidence-v2-supports/printcheck.py`, `result.json`, renders) found two parts that need support
+and that cadcheck had passed. This run built a layer-based check on the exported STLs and a guarded slicer tool.
+
+### What was missed, and why (V2PF-1)
+The layer check on the shipped STLs (`mm-launch-hw/v2/stl`, written 11:14, byte-identical to the v2a7 model's export;
+archived as `examples/mm-launcher-v2a7/stl.tar.gz`) fails four parts, seven regions, all marked supports: no:
+
+| Part | Region (print frame) | Measured | Cause in the source |
+|---|---|---|---|
+| jar_valve | 3 bayonet tabs at z 2.0 | cantilevers 5.5, 5.5, 5.6 mm (65 mm² each; bbox 13 x 10.6, a rotated 5.5 x 12 tab) | tabs on the skirt, nothing under them ("lug undersides bridge 5.5 mm" in `orient`) |
+| feeder_cover | 2 screw ears at z 32.2 | cantilevers 10.4, 10.5 mm (77 mm² each) | ears printed at the top of a cover printed upside down |
+| base_shell | zip-tie anchor block at z 45 | cantilever 6.0 mm (39 mm²) | `parts/base.py:165`: a 6.5 x 8 x 10 block on the niche wall; printed deck-down its underside hangs off one wall |
+| post_R | top above the cover band at z 142 | cantilever 11.7 mm (512 mm², 48 mm long) | `parts/pan_stage.py:228`: `G.csg(ob, sub=[band])` splits the cover off and leaves the post top overhanging the gap |
+
+The old `check_parts` saw every one of these regions and passed them: it measured each flat downward face's inscribed
+circle as a "bridge span" (jar_valve 5.5, feeder_cover 5.6, base_shell 4.1, post_R 11.7, all under 25) without asking
+whether the face was anchored on two sides, only ever warned, only above 150 mm² for slopes, never looked for regions
+starting in mid-air, and read the model rather than the STLs (cadcheck.json at hand-off, `parts.rows`). The
+orchestrator's checker did flag base_shell's block (40 mm², "20% anchored", at z 45) but the part went on its
+false-positive list with the window tops; post_R's top it did not report. Both were checked in the source above.
+
+Ground truth from the task, as measured:
+- **Flagged:** jar_valve (3 fails), feeder_cover (2 fails). Pass.
+- **Not flagged:** beam and nip_cover (bed-edge chamfers and countersinks: 0 findings), flywheel's flange ring (within
+  the 45 deg allowance; two 2.9 mm ledges warn), base_shell's window tops (bridges 15.4 and 15.8 mm, pass), feeder_crown
+  (the T-junction pocket roof is a bridge: no fail; three 35 mm arc-slot floors anchored at both radial ends warn as
+  bridges over 25), nacelle (14.8 mm bridge, pass). Pass.
+- **Disagreement:** the task lists base_shell among the false positives because of its window tops; those pass. Its
+  zip-tie block is a real 6 mm cantilever (layer sections at z 44.9 / 45.1 show the block appearing off one wall with air
+  below), so base_shell does fail, once.
+
+On every archived attempt (verify 4n): v2 A1-A7 all carry the same 7 fails; v1 A1 has arm_cover_R (a 2.6 mm wall
+9.3 mm off its flange at z 1), base_shell's 0.6 mm ribs starting 20 mm up (4) and the hopper's funnel lip in mid-air;
+A2 and A3 the same base_shell and hopper regions. No reviewer raised any of them: tool-catchable, never caught.
+
+### The layer check (`scripts/printcheck.py`, `cad printcheck`, cadcheck `parts`, `cad q printcheck`)
+Each STL is sliced at mid-layer (0.2 mm) into a raster (0.1 mm, coarser only past 1.5 M cells) by nonzero winding, so
+overlapping shells union and the T-junction topology that broke the orchestrator's face-adjacency test does not matter.
+A pixel is supported within 0.2 mm (45 deg) plus half a pixel of the layer below. Each unsupported region is a
+**bridge** when straight lines in one direction end on supported material at both ends for at least half of it (holes
+the region encloses are filled first, so a counterbore printed face down is a roof with a screw hole, not a ledge), a
+**cantilever** otherwise (overhang = straight distance to the anchor or to the bridged part), or an **island** with no
+anchor. On supports: no, islands from 0.5 mm² and cantilevers over 3 mm fail; ledges of 1-3 mm and bridges over 25 mm
+warn. Unsupported slivers with no 0.4 mm core (one extrusion line) are dropped from the layer, so they neither fail nor
+carry the layer above: v1's 0.2 mm base_shell fins and the hopper's 0.1 mm funnel hairline were otherwise false
+cantilevers 12-39 mm long, and dropping the hairline exposed the real island above it.
+
+Thresholds against the data: the smallest real miss is 5.5 mm, the largest short ledge on v2 is 2.9 (flywheel). The
+3 mm fail line sits between. Runtime: 26 s for the 36 v2 STLs cold, layers that cross only the same vertical walls are
+reused, and results are cached under $TMPDIR by triangle hash, so a repeat `cad check` costs about 1 s. cadcheck reads
+`stl/<name>.stl` when it is on disk (and warns when it differs from the model), else the model's print triangles; on
+the v2a7 blend both give identical verdicts and the cache key matched byte for byte.
+
+Fixtures (`tools/test_printcheck.py`, built with cadlib and written with `cadlib.export`): an 8 mm tab (7.9 measured)
+and a floating block fail, a 35 mm bridge warns (34.7), and a 20 mm bridge, a 0.8 mm ledge, a 45 deg chamfer, a
+counterbore face down, a 6 mm horizontal hole and two overlapping unjoined shells pass.
+
+The repo's own examples had the same flaw: the project template's floor bosses stopped 16 mm short of the deck (4
+cantilevers, 4.4 mm, printed deck-down) and now run to the deck; the demo turret's base bosses (4 islands) and barrel
+muzzle (35 mm) are now declared supports: yes, which the check reports without failing.
+
+### `cad slice` (V2PF-2): a slicer that cannot hurt the user
+Installed: Bambu Studio 02.05.00.66 only (`/Applications/Orca.app` is the Orca agent IDE, `com.stablyai.orca`, not
+OrcaSlicer; detection goes by bundle id). `~/Library/Logs/DiagnosticReports` held 10 BambuStudio crash reports from
+2026-10-24 21:48-22:37, from an agent's CLI attempts with flattened and inheriting profiles (transcript of the launch-rig
+agent): all SIGSEGV in `Slic3r::CLI::run`, 7 in `PartPlateList::set_shapes -> generate_print_polygon ->
+GUI_App::plater()` at address 0x768 (a null GUI app), 3 in `GUI::get_min_flush_volumes`. GUI code called from the CLI.
+
+The guard (`scripts/guarded_run.py`) starts the slicer with posix_spawn and points its task exception ports at a Mach
+port the guard owns: a fault arrives there first and the slicer is SIGKILLed before ReportCrash sees it; an abort's
+EXC_CRASH is answered KERN_SUCCESS. Measured with a compiled crasher: unguarded, a segfault and an abort wrote 2
+`.ips` reports; guarded, as a plain binary, inside an ad-hoc-signed hardened-runtime .app, and under sandbox-exec, 0.
+Two traps found on the way, both macOS 27.0.1: (1) setting identity-carrying exception ports (EXCEPTION_DEFAULT) on a
+platform binary (`/bin/echo`, `sandbox-exec`) is an `EXC_GUARD SET_EXCEPTION_BEHAVIOR` kill of the spawner, so the guard
+refuses platform binaries and runs **inside** the sandbox rather than around it; the first attempt crashed the guard's
+own Python (one `Python-2026-10-25-170400.ips`, which may have shown the user a dialog); (2) EXCEPTION_STATE contains
+faults but lets an abort reach ReportCrash, so the identity behavior stays.
+
+Isolation: `sandbox-exec` with `(deny network*)`, reads and writes of `~/Library/Application Support/{BambuStudio,
+OrcaSlicer,PrusaSlicer}`, their caches and preferences denied, and writes allowed only in a fresh temp dir that is
+also HOME and CFFIXED_USER_HOME (and `--datadir` for Prusa/Orca). Stand-in slicers (`tools/fake_slicer.c`) prove it:
+a write outside the temp dir and a loopback connect are both denied (EPERM), HOME is the temp dir, a crashing slicer is
+marked unusable on its one smoke test without a crash report and is not run again, and time (12m 30s), filament
+(3.7 g), support heights (z 0.6-1.0 on the supports-on pass) and warnings parse.
+
+The one real smoke test: `cad slice --probe bambustudio` (20 mm cube, the app's own BBL P1S / 0.20 Standard / PLA
+Basic presets flattened into the temp dir): `3207: nozzle_volume_type not found`, then EXC_BAD_ACCESS after 0.2 s,
+caught; DiagnosticReports still 10 BambuStudio reports; the user's BambuStudio folder mtimes unchanged (stat only).
+Bambu Studio 02.05.00.66 is recorded unusable in `slicers/known.json` (committed, so the v2 pin never re-tests it).
+`cad slice` now says "NO USABLE SLICER ... cad printcheck is the authority". PrusaSlicer would make it work
+(STATUS.md has the install command); its profile is vendored (`slicers/profiles/prusa_p1s_pla.ini`, untested against a
+real PrusaSlicer, as is the G-code parsing of real Prusa/Orca/Bambu output).
+
+### Why not the existing code
+- **cadcheck `check_parts`** (prior art in this repo): it already found every region (ceiling_mm2, inscribed span).
+  Its only knob is `max_bridge_mm`. To warn on all four misses it must drop to 4.0, where it also warns on 7 parts that
+  print fine (base_floor, feeder_crown, nacelle, post_L, post_R_cover, tilt_horn_adapter, turntable: 11 warns, 4 real),
+  and it still only warns. A face's span says nothing about which of its edges are anchored.
+  Kept: manifold, bed fit, walls, slopes; replaced: the ceiling-span warn.
+- **The orchestrator's `printcheck.py`** (face adjacency, anchored edge fraction): flags jar_valve and feeder_cover, but
+  also 12 bed-chamfer islands on beam, a nip_cover island, crown islands from T-junction edges, and bbox spans on
+  nacelle and flywheel (the task's false-positive list). Its anchoring test needs shared edges, which booleans break.
+- **A slicer as the checker:** none usable here (above). A raster per layer needs only numpy, which Blender ships.
+
+### Still open
+- Sustained steep slopes (say 60-70 deg from vertical) step less than 0.3 mm per layer and pass the layer check; the
+  face-based sloped-overhang warn (over 150 mm²) still covers them.
+- The G-code and log parsing in `cad slice` is tested on stand-in output only; no working slicer is installed.
+- The fail line (3 mm) is a judgement between 2.9 (short ledges that print) and 5.5 (the smallest real miss).
+
+### Verification of this run
+- `tools/verify_all.sh`: 100/100 passed in 27.5 min (`/tmp/alex3d-verify.log`; layer results were cached from earlier
+  runs, a cold cache adds a few minutes). The attempt regressions (A1-A3, v2 A1-A7, slide gate) run with
+  `CAD_LAYER_CHECK=0` and are unchanged: the ceiling-span warn this run removed was accepted nowhere, so no accept went
+  stale. The demo and the template run with the layer check and pass (after the fixes above). New:
+  - 4m: the fixtures; `cad printcheck` on the archived v2 STLs (exactly the 4 parts and 7 regions above, none of the
+    task's false positives fail, every finding has world coordinates); cadcheck `parts` on the v2a7 blend reads
+    `stl/*.stl` and gives the same 7 fails; `cad q printcheck`; `tools/test_cad_slice.sh` (stand-in slicers, guard,
+    sandbox, parsing); `cad slice --detect` reports Bambu Studio unusable from known.json and runs nothing.
+  - 4n: the layer check on every archived attempt, fails asserted per part (v1 A1-A3, v2 A1-A7).

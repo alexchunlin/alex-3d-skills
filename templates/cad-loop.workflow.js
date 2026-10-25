@@ -213,7 +213,11 @@ ${CONFIG.parallel_builds ? `0. Merge ${HW}/blender/checks.d/*.json into checks.j
    one or add it to accepted_warns with a reason (V2A1-F5: 3 of R1's issues were warns left in a 34-warn list).
 2. Final renders: CAD_RENDER_FINAL=1 ${CAD} build ${HW}/blender/build_assembly.py -- --render --out-renders ${dir(n)}
    plus the sections the brief asks for (${CAD} q ... section), and ${CAD} sheet ${HW}/stl ${dir(n)}/stl_sheet.png.
-3. Copy the final cadcheck.json to ${dir(n)}/cadcheck.json.
+3. Copy the final cadcheck.json to ${dir(n)}/cadcheck.json. Then prove "supports: no" on the exported STLs:
+   ${CAD} printcheck ${HW}/stl --manifest ${HW}/blender/manifest.json --out ${dir(n)}/printcheck.json --render ${dir(n)}/printcheck
+   must show 0 fails (re-orient, chamfer or split the part, or mark it supports: "yes" and say where), and
+   ${CAD} slice ${HW}/stl --out ${dir(n)} (the only way a slicer may run) reports time, filament and where the slicer adds
+   support; if it says no slicer is usable, quote that line and printcheck is the evidence (FINDINGS "v2 post-freeze").
 4. Update ${HW}/BOM_AND_ASSEMBLY.md (assembly steps must match checks.json assembly_order) and append "Attempt ${n}" to ${HW}/DESIGN_LOG.md.
    Then run ${CAD} bom ${HW}/BOM_AND_ASSEMBLY.md ${HW}/blender/manifest.json and fix every BAD row (V2A3-F5, F6).
    Every claim cites a cadcheck row or cad q line; quote coverage and not_checked (${CAD} rows cadcheck.json --summary).

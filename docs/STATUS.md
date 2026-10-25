@@ -1,4 +1,4 @@
-# Status (updated 2026-10-25, after the revision run for v2 attempt 7)
+# Status (updated 2026-10-25, after the printability and slicing task; before it, the revision run for v2 attempt 7)
 
 ## Ingested
 - v1 (the no-tools baseline, attempts 1-3) is complete. Its rows are below; details are in FINDINGS A1-A3.
@@ -9,7 +9,28 @@
 - Archived blends: `examples/mm-launcher-{a1,a2,a3,v2a1,...,v2a7}/`, each the blend its reviewer saw, with its checks.json.
   The v2 ones carry overlays of the rows each reviewer showed were missing; v2a3 to v2a7 also have manifest.json and BOM.
 
-## What exists, and what is proven (`sh tools/verify_all.sh`: 84/84 pass, about 23 min)
+## Printability and slicing (2026-10-25, docs/tasks/2026-10-25-printability-and-slicing.md; FINDINGS "v2 post-freeze")
+- **v2 shipped "supports: no" on 4 parts that need support:** jar_valve (3 tabs, 5.5 mm cantilevers at z 2), feeder_cover
+  (2 ears, 10.5 mm at z 32), base_shell (zip-tie block, 6 mm), post_R (top over the cover split, 11.7 mm). The old
+  parts check measured all four as bridges under 25 mm and passed them. Every v2 attempt (A1-A7) has the same 7 fails.
+- **`cad printcheck`** (`scripts/printcheck.py`) slices the exported STLs per 0.2 mm layer and classifies unsupported
+  regions as bridge / cantilever / island; cadcheck `parts` and `cad q printcheck` run it too. Proven on the v2 STLs
+  against the task's ground truth (jar_valve and feeder_cover fail; beam, nip_cover, flywheel ring, window tops, crown,
+  nacelle do not) plus planted fixtures and every archived attempt (verify 4m, 4n). The older attempt regressions run
+  with `CAD_LAYER_CHECK=0` so their exact counts keep meaning what they did.
+- **`cad slice`** (`scripts/cadslice.py`, `guarded_run.py`): sandboxed (no network, writes only in a temp dir, the user's
+  slicer folders denied), crash-guarded (the crash never reaches ReportCrash: 0 reports where unguarded runs wrote 2),
+  one smoke test per slicer version. **Bambu Studio 02.05.00.66 is unusable**: its smoke test crashed in 0.2 s (caught,
+  no dialog), as did 10 unguarded agent runs on 2026-10-24; recorded in `slicers/known.json`. No other slicer is
+  installed, so `cad slice` reports "NO USABLE SLICER" and `cad printcheck` is the authority.
+- **Recommendation for the user:** install PrusaSlicer, whose CLI is the stable headless one:
+  `brew install --cask prusaslicer`. Then `cad slice --detect`; the first `cad slice` runs its one guarded smoke test
+  (a 20 mm cube) and, if it passes, every later run reports time, filament and where PrusaSlicer adds support. The
+  vendored profile (`slicers/profiles/prusa_p1s_pla.ini`) and the G-code parsing have only met stand-in output so far.
+- Template and demo fixed: the project template's floor bosses now run to the deck (they started 16 mm up when printed
+  deck-down); the demo turret's base and barrel are declared supports: yes.
+
+## What exists, and what is proven (`sh tools/verify_all.sh`: 100/100 pass, about 28 min)
 
 | Piece | Proven by |
 |---|---|
@@ -52,6 +73,9 @@ the tilt servo went in and before anything is powered. The new held-pose check n
 also asks for 11a's "pod at tilt 45" as a pose, which leads to the same warn.
 
 ## Known gaps
+- Layer check: sustained 60-70 deg slopes step under the allowance per layer and pass (the face-based slope warn over
+  150 mm² still covers them). The 3 mm cantilever fail line sits between 2.9 (short ledges) and 5.5 (smallest real miss).
+  `cad slice` G-code parsing is tested on stand-ins only.
 - A `slide_out` removal row that stops short (V2R7 A7-03) passes; prose numbers in `why` strings and the BOM are not
   checked against params.
 - Insertion treats parts made in place (a soldered splice) as brought from outside; such steps need `insert_ok`. It is
@@ -66,6 +90,9 @@ also asks for 11a's "pod at tilt 45" as a pose, which leads to the same warn.
 - Template edits (V2A4 to V2A7) reach v2 only if the user adopts them.
 
 ## Next (revision run for v2 attempt N)
+- If the loop restarts: its agents now get 7 new parts fails on the v2 design (above). They are real; expect the
+  designer to re-orient, gusset or split those parts, or mark them supports: "yes". The finish step runs `cad printcheck`
+  and `cad slice` (template), which reaches v2 only if the user adopts the template.
 0. v2 A8 runs on `fb54dbb`: the first with the insertion check, end drift, missed-station warns, the bevel flag and
    `cad rows --summary`. Count its insertion and drift warns, how it triages them, and how long that takes (false warns
    are a direct cost). Check whether A7-01 is fixed by order or by `pose_how`, and whether the bundle hand-over (A6-02)

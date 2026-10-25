@@ -49,7 +49,9 @@ cuts.append(G.cyl("pass", (0, 0), 4.0, BASE_H - WALL - 1, BASE_H + 1, 'Z'))   # 
 SIDE_AT, SIDE_IN = (h, 20.0, 15.0), (-1, 0, 0)    # side-wall bolt with a nut inside the cavity
 cuts += F.screw_hole(SIDE_AT, SIDE_IN, 10, kind="clearance")
 base = G.csg(base, sub=cuts)
-A.part(base, "PRT_base", 'PRT', "pla_a", stl="base", print_rot=A.R_FLIP, orient="deck on the bed", supports="no", infill=15)
+# deck on the bed puts the floor bosses' ends 18 mm up in mid-air (cad printcheck: 4 islands at z 18), so: supports
+A.part(base, "PRT_base", 'PRT', "pla_a", stl="base", print_rot=A.R_FLIP, orient="deck on the bed; tree supports under the 4 floor bosses",
+       supports="yes", infill=15)
 for i, (sx, sy) in enumerate(((-1, -1), (-1, 1), (1, -1), (1, 1))):
     A.fastener("FST_floor_%d" % i, (sx * (h - 7), sy * (h - 7), 0.0), (0, 0, 1), 10, "M3_pan", host="PRT_base", step="close base")
 
@@ -97,8 +99,9 @@ muzzle = G.csg(muzzle, sub=[G.cyl("bore", (0, TILT_Z), 4.0, -1, 50, 'Y')])
 barrel = G.csg(barrel, add=[muzzle])
 axle = G.cyl("axle", (0, TILT_Z), 3.0, -ARM_GAP / 2 - ARM_T - 1, ARM_GAP / 2 + ARM_T + 1, 'X')
 barrel = G.csg(barrel, add=[axle])
+# on its end face the muzzle is a 35 mm cantilever (cad printcheck), so: supports
 A.part(barrel, "PRT_barrel", 'PRT', "pla_a", joint="PIV_tilt", stl="barrel", print_rot=A.R_PX_DOWN,
-       orient="side face down", supports="no", infill=20)
+       orient="side face down; supports under the muzzle", supports="yes", infill=20)
 
 # ---- purchased: a servo-sized block in the base, a battery that slides out +X
 srv = G.box("srv", -30, -10, -20, 20, 5, 25)

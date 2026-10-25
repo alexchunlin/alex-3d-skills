@@ -1,0 +1,18 @@
+{
+ "_doc": "Slicer verdicts measured by `cad slice` smoke tests, committed so a fresh checkout (or the v2 pin) never re-runs a slicer known to crash. Key: bundle id @ version. A new version is untested again and gets its own one smoke test.",
+ "com.bambulab.bambu-studio@02.05.00.66": {
+  "status": "unusable",
+  "date": "2026-10-25 17:09",
+  "why": "CLI segfaults before slicing: the cad slice smoke test (bundled BBL P1S presets, isolated HOME, sandboxed) crashed with EXC_BAD_ACCESS in 0.2 s after '3207: nozzle_volume_type not found', caught by the guard with no crash report; 10 earlier crash reports (2026-10-24, unguarded agent runs) all in Slic3r::CLI::run -> PartPlateList::set_shapes -> GUI_App::plater() or get_min_flush_volumes, i.e. GUI code called with no GUI (FINDINGS v2 post-freeze)",
+  "evidence": {
+   "status": "crashed",
+   "code": -9,
+   "exception": "EXC_BAD_ACCESS",
+   "seconds": 0.2,
+   "warnings": [
+    "[error]   3207: nozzle_volume_type not found, when different_extruder or multiple extruder, new_printer_name Bambu Lab P1S 0.4 nozzle, extruder_count 1"
+   ],
+   "log_tail": "[2026-10-25 17:09:24.224495] [0x00000001f9b87f80] [trace]   Initializing StaticPrintConfigs\n[2026-10-25 17:09:24.265501] [0x00000001f9b87f80] [error]   3207: nozzle_volume_type not found, when different_extruder or multiple extruder, new_printer_name Bambu Lab P1S 0.4 nozzle, extruder_count 1\n"
+  }
+ }
+}

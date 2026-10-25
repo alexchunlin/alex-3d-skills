@@ -1,5 +1,5 @@
 #!/bin/sh
-# Re-prove every tool in this repo. Writes only under /tmp/alex3d-verify. About 8 minutes, run at nice 10.
+# Re-prove every tool in this repo. Writes only under /tmp/alex3d-verify. About 25 minutes, run at nice 10.
 # The attempt regressions use examples/mm-launcher-{a1,a2,a3,v2a1,...,v2a7}/*.blend.gz (the blends the reviewers saw).
 #   sh tools/verify_all.sh            # HW defaults to the mm-launcher project (read-only; copied first)
 set -u
@@ -9,6 +9,9 @@ HW="${HW:-$HOME/code-stuff/mmlauncher/mm-launcher/mm-launch-hw}"
 V=/tmp/alex3d-verify
 BL="${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}"
 rm -rf "$V"; mkdir -p "$V"
+# The attempt regressions below count other checks' rows exactly; the parts layer check (printcheck) has its own
+# section (4m, 4n) and runs with CAD_LAYER_CHECK=1 there and on the demo and template, which must print as declared.
+export CAD_LAYER_CHECK=0
 pass=0; fail=0
 ok() { echo "PASS $1"; pass=$((pass+1)); }
 bad() { echo "FAIL $1"; fail=$((fail+1)); }
@@ -16,7 +19,7 @@ summ() { python3 -I -c "import json,sys; s=json.load(open(sys.argv[1]))['summary
 
 # 1 demo, clean: must pass
 $CAD build "$ROOT/examples/demo-turret/build.py" --out "$V/demo-clean" >/dev/null
-$CAD check "$V/demo-clean/demo.blend" "$ROOT/examples/demo-turret/checks.json" "$V/demo-clean/cadcheck.json" >/dev/null
+CAD_LAYER_CHECK=1 $CAD check "$V/demo-clean/demo.blend" "$ROOT/examples/demo-turret/checks.json" "$V/demo-clean/cadcheck.json" >/dev/null
 set -- $(summ "$V/demo-clean/cadcheck.json"); [ "${1:-x}" = 0 ] && ok "demo clean: 0 fails" || bad "demo clean: ${1:-?} fails"
 
 # 2 demo, planted bugs: reversed screw, proud head in sweep, tilt into pan disc, bolt short of its nut must all fail
@@ -29,7 +32,7 @@ done
 # 3 project template builds and passes
 cp -R "$ROOT/skills/print-cad-blender/templates/project" "$V/tpl"; mkdir -p "$V/tplroot"; mv "$V/tpl" "$V/tplroot/blender"
 $CAD build "$V/tplroot/blender/build_assembly.py" >/dev/null
-$CAD check "$V/tplroot/blender/model.blend" "$V/tplroot/blender/checks.json" >/dev/null
+CAD_LAYER_CHECK=1 $CAD check "$V/tplroot/blender/model.blend" "$V/tplroot/blender/checks.json" >/dev/null
 set -- $(summ "$V/tplroot/blender/cadcheck.json"); [ "${1:-x}" = 0 ] && ok "template: 0 fails" || bad "template: ${1:-?} fails"
 
 # 3b template build into another dir (parallel builders, V2A1-T1); `cad check` with a flag where CONFIG/OUT would be
@@ -350,6 +353,61 @@ import json,sys; d=json.load(open(sys.argv[1])); w=d['summary']['warn_list']; c=
 ok = len(w) == 2 and [k['cable'] for k in c['kinks']] == ['CAB_kink'] and c['kinks'][0]['bends'][0]['radius_mm'] == 0.0 \
   and [r['cables'] for r in c['shared_runs']] == [['CAB_x', 'CAB_y']] and 19 <= c['shared_runs'][0]['run_mm'] <= 22
 sys.exit(0 if ok else 1)" "$V/cables/cadcheck.json" && ok "cable shapes: kink into a plug and a shared run flagged; arc, hand-over not" || bad "cable shapes"
+# 4m layer support check (printcheck) and cad slice (FINDINGS "v2 post-freeze")
+"$BL" -b --factory-startup --python "$ROOT/tools/test_printcheck.py" -- --out "$V/pc-fix" 2>&1 | grep -q "PRINTCHECK_FIXTURES ok" \
+  && ok "printcheck fixtures: 8 mm tab and floating block fail, 35 mm bridge warns; 20 mm bridge, 0.8 ledge, chamfer, counterbore, hole, overlapping shells pass" || bad "printcheck fixtures"
+# the v2 STLs as shipped (mm-launch-hw/v2/stl at 11:14, the v2a7 export): jar_valve's 3 tabs and feeder_cover's 2 ears fail,
+# and so do base_shell's zip-tie block and post_R's top; none of the orchestrator checker's false positives fail
+V27="$ROOT/examples/mm-launcher-v2a7"
+mkdir -p "$V/pc-v2" && tar -C "$V/pc-v2" -xzf "$V27/stl.tar.gz"
+$CAD printcheck "$V/pc-v2/stl" --manifest "$V27/manifest.json" --out "$V/pc-v2/printcheck.json" >/dev/null 2>&1
+python3 -I -c "
+import json,sys; d=json.load(open(sys.argv[1])); P={r['stl']: r for r in d['parts']}
+fl=lambda n: [f for f in P[n]['findings'] if f['status']=='fail']
+jv=[g['overhang_mm'] for g in P['jar_valve']['regions'] if g['status']=='fail']; fc=[g['overhang_mm'] for g in P['feeder_cover']['regions'] if g['status']=='fail']
+ok = (sorted(n for n in P if fl(n)) == ['base_shell', 'feeder_cover', 'jar_valve', 'post_R'] and len(jv) == 3 and all(5 <= v <= 6.5 for v in jv)
+      and len(fc) == 2 and all(v >= 10 for v in fc) and len(fl('base_shell')) == 1 and len(fl('post_R')) == 1
+      and all(abs(f['z_mm'] - 2.0) <= 0.2 for f in fl('jar_valve')) and all(abs(f['z_mm'] - 32.2) <= 0.3 for f in fl('feeder_cover'))
+      and not any(f['status'] == 'warn' for n in ('beam', 'nip_cover', 'nacelle', 'base_shell') for f in P[n]['findings'])
+      and all(f['kind'] == 'bridge' for f in P['feeder_crown']['findings']) and all('world' in f['msg'] for n in P for f in P[n]['findings']))
+sys.exit(0 if ok else 1)" "$V/pc-v2/printcheck.json" \
+  && ok "printcheck v2 STLs: fails exactly jar_valve (3 tabs, 5-6.5 mm at z 2), feeder_cover (2 ears >= 10 mm at z 32.2), base_shell tie block, post_R top; beam, nip_cover, nacelle, crown, window tops do not fail" || bad "printcheck v2 STLs"
+# cadcheck parts reads the exported STL when it is on disk, and gives the same verdicts as the model's own triangles
+mkdir -p "$V/pc-v2/blender" && cp "$V/v2a7/model.blend" "$V/pc-v2/blender/model.blend" 2>/dev/null || gunzip -c "$V27/mm_launcher_v2a7.blend.gz" > "$V/pc-v2/blender/model.blend"
+CAD_LAYER_CHECK=1 $CAD check "$V/pc-v2/blender/model.blend" "$V27/checks.json" "$V/pc-v2/parts.json" --only parts >/dev/null
+python3 -I -c "
+import json,sys; d=json.load(open(sys.argv[1])); s=d['summary']; rows={r['object']: r for r in d['checks']['parts']['rows']}
+lf=[f for f in s['fail_list'] if 'cantilever' in f or 'island' in f]
+ok = (len(lf) == 7 and all('(stl/' in f and 'world [' in f for f in lf) and rows['PRT_jar_valve']['layer_check']['source'] == 'stl/jar_valve.stl'
+      and rows['PRT_jar_valve']['layer_check']['needs_support'] and not rows['PRT_beam']['layer_check']['needs_support'])
+sys.exit(0 if ok else 1)" "$V/pc-v2/parts.json" && ok "cadcheck parts: layer check on stl/*.stl, 7 fails with world coordinates" || bad "cadcheck parts layer check"
+CAD_LAYER_CHECK=1 $CAD q "$V/pc-v2/blender/model.blend" printcheck PRT_feeder_cover | grep -q '"needs_support": true' && ok "cad q printcheck PRT_feeder_cover: needs support" || bad "cad q printcheck"
+sh "$ROOT/tools/test_cad_slice.sh" "$V/slice" 2>/dev/null | grep -q "CAD_SLICE_TEST ok" \
+  && ok "cad slice on stand-ins: a crashing slicer is marked unusable with no crash report and not re-run; sandbox blocks writes and network; time, filament, support z parsed" || bad "cad slice stand-in test"
+# no real slicer runs here: --detect only reads verdicts. The installed Bambu Studio is unusable by known.json
+if [ -d /Applications/BambuStudio.app ]; then
+  $CAD slice --detect 2>&1 | grep -q "bambustudio.*02.05.00.66.*unusable.*known.json" && ok "cad slice --detect: Bambu Studio 02.05.00.66 unusable (known.json), nothing run" \
+    || echo "NOTE cad slice --detect: installed Bambu Studio is not the version in known.json; its first cad slice runs one guarded smoke test"
+fi
+
+# 4n the layer check on every archived attempt: the misses it would have caught (FINDINGS "v2 post-freeze"). v1: arm_cover_R's
+# 9.3 mm wall off the flange (A1), base_shell's 0.6 mm ribs starting 20 mm up, the hopper funnel lip in mid-air; v2 A1-A7:
+# jar_valve tabs, feeder_cover ears, base_shell tie block, post_R top
+for spec in "a1:mm_launcher.blend:PRT_arm_cover_R=2,PRT_base_shell=4,PRT_hopper=1" "a2:mm_launcher.blend:PRT_base_shell=4,PRT_hopper=2" \
+            "a3:mm_launcher.blend:PRT_base_shell=4,PRT_hopper=2" "v2a1:model.blend:V2" "v2a2:model.blend:V2" "v2a3:model.blend:V2" \
+            "v2a4:model.blend:V2" "v2a5:model.blend:V2" "v2a6:model.blend:V2" "v2a7:model.blend:V2"; do
+  d=${spec%%:*}; rest=${spec#*:}; b=${rest%%:*}; want=${rest#*:}
+  [ "$want" = V2 ] && want="PRT_base_shell=1,PRT_feeder_cover=2,PRT_jar_valve=3,PRT_post_R=1"
+  [ -f "$V/$d/$b" ] || continue
+  CAD_LAYER_CHECK=1 $CAD check "$V/$d/$b" "$ROOT/examples/mm-launcher-$d/checks.json" "$V/$d/layer.json" --only parts >/dev/null
+  python3 -I -c "
+import json,sys,re,collections; s=json.load(open(sys.argv[1]))['summary']
+got=collections.Counter(re.match(r'parts: (\S+)',f).group(1) for f in s['fail_list'] if 'cantilever' in f or 'island' in f)
+want={k: int(v) for k, v in (x.split('=') for x in sys.argv[2].split(','))}
+sys.exit(0 if dict(got) == want and s['fails'] == sum(want.values()) else 1)" "$V/$d/layer.json" "$want" \
+    && ok "layer check $d: fails exactly $want" || bad "layer check $d: wanted $want"
+done
+
 # 8 slide-gate example: prismatic joint, slide flex, =EXPR rows, cable chains and junctions, inscribed bridge span,
 #   no-pose service proved at home, stock lengths (FINDINGS V2A3)
 G8="$ROOT/examples/slide-gate"

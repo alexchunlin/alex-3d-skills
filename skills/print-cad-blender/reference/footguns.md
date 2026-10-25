@@ -88,3 +88,19 @@ The checker does not cover these. Use sections, the design log or the reviewer c
 - form language, proportions, colour (A2 R2 #10, A3 R3 #4)
 - brief numbers the design quietly misses, such as a nip range of 5.5-10 against the brief's 9-12 (A3 R3 #6): keep a table of the brief's numbers against the design's
 - channel width along the payload path (R3 measured "at least 9.5 mm" by hand)
+
+**Rule from v2 post-freeze: "supports: no" is a claim that needs `cad printcheck` evidence (and `cad slice` when a slicer
+is usable).** v2 shipped every part as supports: no. jar_valve's three bayonet tabs start 2 mm above the bed and hang
+5.5 mm off the skirt, feeder_cover's two screw ears are 10.5 mm cantilevers at z 32, base_shell's zip-tie block hangs
+6 mm off the niche wall (printed deck-down), and splitting post_R's cover band off left the post's top cantilevered
+11.7 mm over the gap. cadcheck's old test called every flat downward face a "bridge" without asking whether it was
+anchored on two sides, only warned, and read the model rather than the STLs. The layer check now slices the exported
+STLs and fails these. When it fails: re-orient the part, add a 45 deg chamfer or gusset under the ledge, split the
+part, or mark it `supports: "yes"` and say where in `orient`. A counterbore printed face down, a slot roof, a window
+top are bridges (anchored on opposite sides) and pass under 25 mm.
+
+| ID | Mistake | Check | Catches it |
+|---|---|---|---|
+| V2PF-1 | Bayonet tabs, screw ears, a tie block and a split-off post top hang in the air on parts marked supports: no | `parts` layer check, `cad printcheck` | yes: 7 fails on the v2 STLs (FINDINGS "v2 post-freeze") |
+| V2PF-2 | A slicer run by hand with hand-built profiles crashed 10 times, each a dialog for the user | `cad slice` only: sandboxed, crash-guarded, one smoke test per version | yes: Bambu Studio 02.05.00.66 marked unusable with no dialog |
+

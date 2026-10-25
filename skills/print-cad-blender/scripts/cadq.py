@@ -11,6 +11,8 @@ Commands
   inside X,Y,Z                        which solids contain the point
   section AXIS VAL OUT.png CAMX,CAMY,CAMZ ORTHO [--scope PIV_tilt,static] [--keep -|+]
   render OUT.png CAMX,CAMY,CAMZ TX,TY,TZ [--ortho S] [--lens L]
+  printcheck PART                     layer support check of one printed part (its exported STL if on disk, else the
+                                      model in print orientation): one line per bridge / cantilever / island region
   --lentil X,Y,Z[:NX,NY,NZ][;...]     (with section/render) M&M-size markers (normal = thickness axis, default 0,0,1)
 
 Prints one JSON object per result line prefixed with CADQ, so agents can grep it. `cad q` with no arguments prints
@@ -148,10 +150,19 @@ try:
             R.camera(cam, tgt, ortho=float(FLAGS["ortho"]) if "ortho" in FLAGS else None, lens=float(FLAGS.get("lens", 50)))
             path = R.shot(os.path.abspath(out))
         emit(render=path, pose=C.pose_key(POSE))
+    elif cmd == "printcheck":
+        o = obj(POS[1])
+        res, src, note = C.layer_check(o, C.stl_dirs())
+        emit(part=o.name, source=src, supports=o.get("supports"), needs_support=res["needs_support"], layers=res["layers"],
+             max_overhang_mm=res["max_overhang_mm"], max_bridge_mm=res["max_bridge_mm"], note=note,
+             findings=[f["status"] + ": " + f["msg"] for f in res["findings"]])
+        for g in res["regions"]:
+            if g["status"] != "ok" or "--all" in A:
+                emit(**{k: v for k, v in g.items() if not k.startswith("_")})
     else:
         usage_of(cmd)
 except (IndexError, ValueError) as e:
-    if cmd not in ("list", "dist", "sweep", "ray", "inside", "section", "render"):
+    if cmd not in ("list", "dist", "sweep", "ray", "inside", "section", "render", "printcheck"):
         raise
     print("cadq: %s: %s" % (cmd, e))
     usage_of(cmd)
