@@ -72,8 +72,8 @@ the render-and-look loop, so a numeric check is preferred over a picture whereve
 (`D1 0:55:24 #43`). A script split into per-subsystem modules makes the edits small and local.
 
 **A1-T8. The reviewer spends its time reverse-engineering the script.** R1 used 7 calls to read
-`build_assembly.py` in chunks to find parameters and part intent (`R1 #21-23, #26, #30, #34, #42`), with
-70-104 s of thinking before each. It then wrote 10 throwaway measurement scripts (`/tmp/rv_*.py`). A
+`build_assembly.py` in chunks to find parameters and part intent (`R1 #21-23, #26, #30, #34, #42`). The
+model time before the longer reads was 71-93 s (`R1 #26, #30, #34`). It then wrote 10 throwaway measurement scripts (`/tmp/rv_*.py`). A
 machine-readable part manifest (part, pivot, joint ranges, fastener axes) and a standard measure CLI remove
 both.
 
@@ -125,6 +125,46 @@ drop rays, cross-pivot fastener/cable overlaps, 2.5° tilt sweep, battery slide;
 - **Strictness held:** "a single blocker caps that metric at 6" was applied (F = 5, M = 6).
 - **Noise risks:** Aesthetics (5) rests on judgement from 33 images, with no anchor examples. Scores are integers with anchors 5-6 = "significant risk", so a 1-point move can come from one issue. `measurements.json` uses ad-hoc keys (36 KB, mostly per-ray hit lists), so the next reviewer can't diff it.
 - **Cost:** 18.6 min and 103k output tokens, of which about 8 min went on reading code and writing measurement scripts (A1-T8).
+
+### Verification of the tools built this run (2026-10-24)
+
+All runs are on copies: `/tmp/alex3d-a1` (attempt-1 outputs), plus the archived blend `examples/mm-launcher-a1/mm_launcher_a1.blend.gz`.
+`tools/verify_all.sh` re-runs everything: 17/17 passed.
+
+- **cadcheck on the attempt-1 blend** (`examples/mm-launcher-a1/checks.json`, which declares the D1 joints, the 9 designed running fits and the BOM assembly order; 36 s, 102 objects, 11 joint groups up to 48 poses each). It reproduces R1 numerically:
+  - A1-F3 feeder disc x screw: 48.6 mm³ at feeder 30° (27.2 at home, the same as R1)
+  - A1-F10 four motor screws: 27 mm³ each in the flywheel, plus "head inside launcher_body"
+  - A1-F9 trunnion x bonnet contact at 19 poses
+  - A1-F5 hopper 0.21 mm at 45° (fail) and overlap at 47.5° (warn)
+  - A1-F1 drop landing 44-80° against a 0-26° window at tilt 0; tilt 22.5 and 45 hit the chute wall
+  - A1-F2 nip 9.50 mm
+  - A1-F11 trunnion screws need 114 mm reach
+
+  22 fails in total.
+- **The same blend without the declarations** (the first run) gave 36 fails. The extra 14 were designed running fits (journals 0.14 mm, hub 0.26 mm, horn pockets 0.30 mm) and the plain thrust bearing. Declaring `fits` removed them. This is why `fits` and `allow` must carry a reason the reviewer audits.
+- **New, unconfirmed by R1:**
+  - `CAB_12v_ctrl` runs 1332 mm³ through `BUY_servo_controller`
+  - `FST_cover_0`'s driver path is blocked 2.4 mm out by the cover's own boss
+  - the yoke-foot screws sit beside 108-114 mm arm walls (driver handle clearance)
+  - the flywheel has a 72 mm ceiling region in print orientation (`parts` warn)
+
+  The next reviewer should confirm or refute each with a section.
+- **cadq** reproduces R1's numbers exactly: disc x screw -27.235 mm³, hopper 0.212 mm at 45° and -38.9 mm³ at 47.5°, and the outlet ray hits `PRT_launcher_body` 39.0 mm down at 45° tilt.
+- **Demo turret** (`examples/demo-turret`): the clean build passes (0 fails). The `--bug` build plants a reversed screw, a proud head in the muzzle sweep and a tilt range into the pan disc; all three fail.
+  The first demo build had 7 real fails of my own making: arm screw heads in the base deck, a cable through a solid disc, and an axle fit declared tighter than faceting allows. The checker found them before any render.
+- **Earlier checker bugs fixed during verification:**
+  - A normal-sign point-in-solid test misfired near edges: it reported `FST_cap_L1` "head inside encoder_cap", which is false. It was replaced by a 3-direction ray parity test.
+  - A thread test on the screw axis always saw the pilot hole (air). It now samples a ring at 92% of the shank radius.
+  - Tool access without an assembly order blocked screws behind parts installed later. `assembly_order` with bench/merge steps fixed that.
+  - Slide-out used a triangle overlap and flagged the battery at 0 mm. It now uses the intersection volume.
+
+### Why not the existing code (prior art, measured; details in `tools/prior_art/README.md`)
+
+- **D1's `checks.py`:** R1's re-run (`HW/renders/attempt-1/review/checks_rerun.json`) reports 0 interference on the same blend where cadcheck finds both blockers. It excludes fasteners and cables, ignores contacts and checks only 3 tilt poses. Its manifold, wall, overhang, CG and boolean-volume code is kept inside cadcheck.
+- **D1's geometry helpers:** kept, moved into `cadlib/geom.py` (plus the CSG closed-solid check and teardrop orientation).
+- **trimesh + manifold3d:** checks 29 STLs in 0.16 s with the same answers. STLs have no assembly, joints or fasteners, so 0 of the 8 tool-catchable R1 issues are reachable. Blender's MANIFOLD solver is the same library.
+- **Blender MCP / daemon:** not built. Cold start is 0.7 s and Blender was 2.3 of 64 min.
+- **build123d:** not measured yet. It is the candidate for the fillet/aesthetics gap.
 
 ### Implications for tooling (what this run built, see STATUS.md)
 
