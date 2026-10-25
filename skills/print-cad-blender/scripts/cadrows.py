@@ -1,6 +1,7 @@
 """cadrows: one line per row of a cadcheck.json or manifest.json, so you grep instead of writing a dump script.
 
     cad rows [cadcheck.json] [REGEX] [--check distances,drop] [--findings] [--max N]
+    cad rows cadcheck.json --summary [REGEX]             # counts, coverage, not_checked, assembly.step_of
     cad rows manifest.json [REGEX]                       # parts, fasteners, cables, joints, params
     cad rows checks.json [REGEX] [--check allow,stacks]  # config rows: allow, fits, distances, stacks, slide_out, ...
 
@@ -40,7 +41,7 @@ def short(v, n=60):
 
 
 LABEL_KEYS = ("name", "op", "object", "part", "test")
-SKIP = {"why", "msg", "status", "region", "where", "thin_wall_where", "exposed_spots", "members", "terms", "access"}
+SKIP = {"why", "msg", "status", "region", "where", "thin_wall_where", "exposed_spots", "members", "terms", "access", "blocked"}
 
 
 def row_line(check, r, extra=""):
@@ -55,6 +56,10 @@ def row_line(check, r, extra=""):
         if v is None or v == [] or v == {}:
             continue
         bits.append("%s=%s" % (k, short(v)))
+    if isinstance(r.get("blocked"), dict):
+        # insertion: the nearest blocker per direction (v2 A6 feeder group: "+Z:PRT_groove_cap(BUY_bus_junction)@3")
+        bits.append("blocked=" + " ".join("%s:%s%s@%s" % (dn, b[0]["by"], "(%s)" % b[0]["mover"] if b[0].get("mover") not in (None, label) else "",
+                                                          short(b[0]["at_mm"])) if b else "%s:-" % dn for dn, b in r["blocked"].items()))
     if "access" in r and isinstance(r["access"], dict):
         bits.append("access=" + ",".join("%s:%s" % (pk, "BLOCKED" if a.get("blocked") else "%s %g" % (a.get("tool", "ok"), a.get("reach_mm", 0)))
                                          for pk, a in r["access"].items()))
@@ -88,6 +93,25 @@ def report_findings(d, checks):
             msg = "%s: %s" % (check, f.get("msg"))
             tag = f["status"].upper() if f["status"] == "fail" else ("warn(accepted)" if msg in acc else "warn")
             yield "%-15s %s" % (tag, msg)
+
+
+def report_summary(d):
+    """--summary: header, counts, coverage, not_checked and assembly.step_of, one line each. v2 A6's finish agents and
+    reviewer read these with 8 json.load snippets (summary keys, coverage, step_of; FINDINGS V2A6-T4)."""
+    s = d.get("summary", {})
+    yield "report  tool=%s  generated=%s  blend=%s" % (d.get("tool"), d.get("generated"), d.get("blend"))
+    yield "summary  pass=%s  fails=%s  warns=%s  untriaged=%s  accepted=%d  stale_accepts=%s  poses_past_limits=%d  runtime_s=%s" % (
+        s.get("pass"), s.get("fails"), s.get("warns"), s.get("untriaged_warns"), len(s.get("accepted_warns") or {}),
+        short(s.get("stale_accepts") or []), len(s.get("poses_past_limits") or []), s.get("runtime_s"))
+    for k in ("unbounded_allows",):
+        for x in sorted(s.get(k) or []):
+            yield "%s  %s" % (k, x)
+    for x in s.get("coverage") or d.get("coverage") or []:
+        yield "coverage  %s" % x
+    for x in s.get("not_checked") or d.get("not_checked") or []:
+        yield "not_checked  %s" % x
+    for n, st in sorted((d.get("assembly") or {}).get("step_of", {}).items()):
+        yield "step_of  %s  %s" % (n, st)
 
 
 def manifest_rows(m):
@@ -141,6 +165,8 @@ def main(argv):
         lines = config_rows(d, checks)
     elif "--findings" in flags:
         lines = report_findings(d, checks)
+    elif "--summary" in flags:
+        lines = report_summary(d)
     else:
         lines = report_rows(d, checks)
     cap = int(vals.get("--max") or 400)

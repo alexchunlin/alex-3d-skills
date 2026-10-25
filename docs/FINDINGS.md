@@ -28,7 +28,10 @@ Sources are abbreviated:
   `a2dd9ca6dd2a3d344`, `V2R4` review `a9b8ec9c08d63b15a`.
   v2 A5 agents: `P5` plan `a3ebd0625cbbbed8c`, builders `B5-params` `a88feb02c28c95899`, `B5-launcher` `a38b2d19c5e922bf3`,
   `B5-feeder` `a2ac75214634ea45d`, `B5-finish` `aaceba7df82b03f7a`, `F5` finish `a25a45ccbe64f5e05`, `V2R5` review
-  `a4683ee602e280ba5`
+  `a4683ee602e280ba5`.
+  v2 A6 agents: `P6` plan `a5c6c97fd5291db4f`, builders `B6-checks` `ab67c3c981ceb6e7b`, `B6-feeder` `a6f76c31bfd31b5c4`,
+  `B6-junction` `aac18bdc4f360b240`, `B6-finish` `ad52a387901339499`, `F6` finish `a901396d59e028176`, `V2R6` review
+  `a63e157964068fba7`
 
 **Baseline:** v1 (the no-tools loop) ran attempts 1-3 and was then stopped by the user (2026-10-24 evening, see
 `HARVEST_BRIEF.md` "Process change"). The v1 tool results below are counterfactual. Every
@@ -1420,3 +1423,188 @@ entry-arc rows at psi 50..80 only (F2, `ray.sweep` in A6).
   designer config 0 F / 0 untriaged / 0 stale with the detent allow listed as unbounded and the gate slide recording the
   sub-vol_tol ride; one swept row gives 8.099 at psi 90; the band stack with `between` fails at 0.322 on the detent and a
   0.1 mm³ bounded allow fails at 0.43; `--out` after `--only` leaves `cadcheck.json` alone).
+
+## v2 Attempt 6 (harvested 2026-10-25)
+
+Inputs: the 7 attempt-6 agents in `V2WF/journal.jsonl` (lines 80-93) and their transcripts, plus `HW2/renders/attempt-6/`:
+progress.md, cadcheck.json, precheck_a5_model.json, checks_attempt5.json, review.md, review.json, review/ (notes.md,
+review_rows.json, cadcheck_review.json, 2 PNGs). The blend V2R6 reviewed (`/tmp/rv6/model.blend`, md5 `e3cf6fdd…`, the same
+as `HW2/blender/model.blend` at 10:25, before attempt 7 edited the sources) is archived as `examples/mm-launcher-v2a6/` with
+the designer's checks.json, manifest.json, BOM, V2R6's `review_rows_v2a6.json` and `overlay_v2a6_steps.json` (the
+assembly_order with the three step facts the new insertion check asks for). Plan #7 had started (0.6 min) and is not
+ingested.
+
+**The tools were `36189b8`** (progress.md line 1): the first attempt with `ray.sweep`, the past-limit list, the stale-model
+warn and `BUILD FAILED`, but not `6025133` (stacks `between`, `max_mm3`, `cad rows checks.json`). Plan #7 moves the pin to
+`6025133`, so **this run's fixes reach v2 attempt 8.** v2 agents: `P6` plan `a5c6c97fd5291db4f`, builders `B6-checks`
+`ab67c3c981ceb6e7b` (a no-op: the planner had done the step), `B6-feeder` `a6f76c31bfd31b5c4`, `B6-junction`
+`aac18bdc4f360b240` (pan_stage + base), `B6-finish` `ad52a387901339499`, `F6` finish `a901396d59e028176`, `V2R6` review
+`a63e157964068fba7`.
+
+### Per-agent cost (`cc_transcript.py workflow V2WF`)
+
+| Agent | Wall | Model | Tools | Output tok (thinking) | Cache read | Peak ctx | Longest gen | cad runs (failed) | Images |
+|---|---|---|---|---|---|---|---|---|---|
+| P6 plan | **17.6** | 8.9 | 8.7 | 44k (26k) | 2.8M | 146k | <120 s | 0 (0) | 0 |
+| B6-checks | 0.5 | 0.5 | 0.0 | 3k (0.2k) | 0.1M | 30k | - | 0 | 0 |
+| B6-feeder | 14.6 | 4.9 | 9.7 | 24k (9k) | 2.4M | 97k | <120 s | 11 (0) | 1 |
+| B6-junction | 15.3 | 8.3 | 7.0 | 44k (23k) | 3.2M | 118k | <120 s | 17 (3) | 0 |
+| B6-finish | 14.9 | 8.1 | 6.9 | 50k (9k) | 9.0M | **193k** | <120 s | 10 (0) | 6 |
+| F6 finish | 4.7 | 1.9 | 2.8 | 9k (1k) | 0.5M | 43k | - | 1 | 0 |
+| V2R6 review | 9.3 | 7.2 | 2.1 | 40k (16k) | 4.3M | 163k | <120 s | 7 (0) | 7 |
+
+| | v1 best (A3) | v2 A4 | v2 A5 | **v2 A6** |
+|---|---|---|---|---|
+| Wall (design + review) | 66.1 min | 91.5 | 93.3 | **76.9** (plan 17.6, builds 45.3, finish 4.7, review 9.3) |
+| Output tokens (thinking) | 352k (228k) | 266k (107k) | 314k (157k) | **213k (83k)** |
+| Cache read | 35.8M | 27.6M | 34.4M | **22.3M** |
+| Peak context (any agent) | 488k | 200k | 240k | **193k** |
+| Longest generation | 290 s | < 120 s | < 120 s | **< 120 s** |
+| F/M/A (sum) | 6/6/6 (18) | 8/9/9 (26) | 9/8/9 (26) | **9/8/9 (26)** |
+| Issues B/M/m | 0/4/4 | 0/1/2 | 0/1/5 | **0/1/2** |
+| cadcheck at hand-off | - | 0 F, 43 W, 0 untriaged | 0 F, 34 W, 0 untriaged | **0 F, 35 W, 0 untriaged, 0 stale** |
+| cad runs (failed) | - | 50 (2) | 44 (1) | **46 (3)** |
+
+The cheapest v2 attempt so far, and the first under 80 minutes: about 32% fewer output tokens than A5 and the smallest
+peak context in either loop. The score held at 26. All 6 of A5's issues are FIXED. The new major is a part placed in a
+step that cannot reach it.
+
+**What `36189b8` did in use:**
+- **`ray.sweep` was adopted.** P6 turned the designer's 5 point entry-arc rows (and V2R5's 9) into one swept row per
+  setting, plus swept hood-to-tape and rest-gap rows. They reproduced V2R5 exactly: 8.099 at psi 90 / 8.211 / 8.397.
+- **The past-limit list** showed 8 intended poses on the unchanged A5 model; P6 marked 7 rows `past_limit_ok`.
+- **`BUILD FAILED`** fired twice in B6-junction (its own `_note_loop` and cable-budget asserts), and each was fixed on the
+  next 2.4 s build. The stale-model warn never fired.
+- **`cad rows`** went from 8 calls in A5 to 39. `json.load` calls fell from 76 to 48: 16 config edits (load + dump), 21
+  report reads, 8 config reads, 2 manifest reads, 1 other.
+
+### Time and token sinks
+
+**V2A6-T1. Plan doubled to 17.6 min, mostly in checks.** P6 ran four checks on the unchanged A5 model, 8.7 min of tool
+time in all:
+- a full baseline check on the new tools (165 s);
+- `--only interference` with the new rows (96 s);
+- the bounded-fits rule (90 s);
+- a full precheck of the new checks.json (169 s).
+
+The baseline on the new tools paid off, because it found the past-limit list. The last full precheck repeated the
+first, and only the rows had changed. The builds still came in 25 min under A5 (45.3 against 69.9): this time the
+planner had tried its changes, and no builder redesigned anything (contrast V2A5-T2). Not changed: a subset precheck
+would have been enough, but the template already says to precheck the rows.
+
+**V2A6-T2. `G.bevel` after a dense-faceted cut gave ~0.1 edge breaks on the whole part (A5 and A6).** B6-feeder found
+the detent tab's EB 1.0 measuring 0.115 (ray at 0:04:48), and traced it to the n=768 cylinder cut (0.28 mm facets).
+Blender's bevel overlap clamp is **global**: one short edge next to a bevelled one scales every break on the part. The
+fix was to rebuild the tab as a 6-chord prism, after about 2 min of probing. A5's tab had the same defect, and V2R5 did
+not see it ("edge-break consistency is not measurable", in Known gaps).
+**Fixed:** `cadlib.geom.bevel` measures how far its new vertices move. An unclamped break moves box corners about
+1.4 x w. Under 0.7 x w, it prints a warning and sets `bevel_clamped`, and cadcheck's `parts` warns on that. The test
+(`tools/test_bevel_clamp.py`): a plain box is not flagged, and a box minus an n=768 cylinder is (largest move 0.014 for
+w 1.0). The template and demo builds are not flagged.
+
+**V2A6-T3. Facet sag against a design-value `min`.** B6-junction's splice-to-hub-gear row (min 1.0) read 0.969 with
+default facets: an n=48 Ø10 envelope against an R13 bore. Bumping the bore to n=256 fixed it, at about 1.5 min.
+This is now in the SKILL as a note; cadlib's facet defaults are unchanged, because changing them mid-v2 would move
+every number in the next build.
+
+**V2A6-T4. Remaining report reads.** Of the 21 report reads, 8 were the summary, coverage, not_checked and
+`assembly.step_of` (B6-finish, F6, V2R6). **Fixed:** `cad rows cadcheck.json --summary [REGEX]` prints the counts,
+unbounded allows, coverage, not_checked and step_of, one line each. The other reads were slide, part mass and
+thin-wall rows, and `cad rows` already prints those.
+
+**V2A6-T5. Other costs.**
+- B6-checks spent 0.5 min finding its step done, because the planner had done it. The finish phase again found
+  little to do (4.7 min, text only).
+- 7 bash calls read tool source (A5: 18).
+- V2R6 took 9.3 min, the fastest review in v2. It re-ran the full check (identical in all 16 sections) and wrote 4
+  review rows (one fails).
+
+### Issues V2R6 raised, and what the tools did with them
+
+| ID | V2R6 issue | At hand-off | Now | Why it got through |
+|---|---|---|---|---|
+| V2A6-F1 | **Major (A6-01):** BOM step 10d splices and seats the bus junction in the hub bore, but by then the groove cap (2c) closes it above and the base floor (3) below; V2R6's slide row: +Z blocked by `PRT_groove_cap` at 4 mm | not flagged: `BUY_bus_junction` was in the feeder's **bench** step 10d, so every test at that step saw only feeder parts | **two warns:** "BUY_bus_junction is in bench step '10d' (group 'feeder') but 146.0 mm from every other part of that group", and the feeder merge (step 11) "has no straight way in: +Z PRT_groove_cap (BUY_bus_junction) at 3, -Z PRT_beam (PRT_feeder_housing) at 0, ..." | nothing tested whether a part can get to its place; the config step was the feeder's, because the feeder bus lead runs to it. New `insertion` check |
+| V2A6-F2 | Minor (A6-02): the static pan lead ends 1.2 under the splice, which now sits at r 7 and orbits 9.9 mm over ±90 pan; the base lead's meeting point at r 4 does the same, and its `distances` row passes only because the two Ø6 sleeves overlap | not flagged (the junction warn compares ends at home only) | **two warns:** CAB_bus_pan 8.8 mm further from BUY_bus_junction at pan -90; CAB_launcher_base 5.7 mm from CAB_launcher_bundle at pan 90. A5's on-axis meetings: 6 pairs, all 0.0 | cable ends were compared at home only. New `cables.end_drift` |
+| V2A6-F3 | Minor (A6-03): the swept full-lift and tape rows at home and the max stop miss their psi 0 station (`missed_deg [0]`) | passed silently (an open station passes a `min`) | **4 warns**, one per row and pose, "missed a part at 1 of 53 stations (0 deg)" | `ray.sweep` (36189b8) reported `missed_deg` but did not warn |
+
+V2R6 marked all 3 `tool_catchable`, correctly. **At hand-off cadcheck flagged none of them; now all 3 are warns** with V2R6's
+numbers (groove cap at 3 above the splice top, against V2R6's 2.5 from a ray origin 0.5 higher; 8.8 + 1.2 = 10.0 against
+V2R6's 9.9 chord). Previous issues: 6 of 6 FIXED (A5-01 to A5-06).
+
+**Recurrence:** the config described the design inaccurately again, this time in assembly_order. A part sat in a step
+that matched its cable, not where it is assembled. Every row at that step then passed by construction, just as A5's
+detent row (`min` 0.3 for a tab built 0.32 away, V2A5-F1) passed by construction. The insertion check doesn't depend on
+which step the designer chose: it moves the bench group in at its merge, so the part is tested where it ends up.
+
+**Config disputes (3):** no row for placing the splice (F1); the base/bundle meeting row passing on overlapping
+sleeves (F2); the swept rows missing psi 0 (F3).
+
+### New: the insertion check (`--only insertion`, V2A6-F1)
+Each PRT/BUY part, and each bench group at its merge, has to come out of its place in a straight line past the
+solids and fasteners of the earlier steps in its assembly. Directions tried: ±X/Y/Z, ± the axis of each screw that
+touches the part, and the step's `insert_dirs`. The step's `pose` is set first. Rays run both ways: from the moving
+part's samples into the obstacles, and from obstacle samples in its lane back into it.
+
+It took four rounds on the A6 blend to get the false blocks out:
+- **28 warns at first.** A hit at t ≈ 0 on a face sharing an edge with the mover blocked every seated cover, so the
+  first version ignored entering hits within 0.05 mm.
+- **11 warns.** Parts of a merge step were counted as present before that step, which blocked A6's thrust ring with
+  the turntable it goes under. Also, the pod parts sit on 3° and 19° screw axes, so screw axes became directions.
+- **9 warns.** A flush cover's edge break, a coplanar seat and faceted bores at zero clearance still read "blocked at
+  0.05-0.6". So a hit now counts only when the point 0.3 mm past it is inside the obstacle and more than 0.05 mm from
+  its surface.
+- **5 warns.** Each one is real or a config fact. Besides the two A6-01 warns:
+  - the jar step says "drop in at +30" and the pod step "held nose-up about 20 deg", but neither has a `pose`. With
+    the poses declared, the jar comes out +Z and the pod +Z;
+  - `FST_nip_stud` is in step 6c, "dropped into the backplate pocket", one step before the backplate. Moved to 6d,
+    the backplate comes out +X.
+
+On the v2 A1-A5 blends it gives the same 3 config-fact warns and nothing else. Time on A6 is 6.6 s with the facts
+declared and 15.6 s in a full run with the failing details. One bench rule needs no geometry: a bench part more than
+2 mm from every other part of its group, by bounding box, warns. That is the A6 splice, 146 mm from the feeder.
+
+### What worked
+- **Plan-time trial, done properly:** P6 prechecked every new row on the A5 model. The failure count was 5 F, as
+  planned, and the builders hit no surprises; contrast V2A5-T2.
+- **B6-feeder found and fixed the cause** of the clamped edge breaks instead of accepting them. **B6-junction measured
+  an overlap** (-5.09 mm³ against the swept splice) and moved the base lead rather than accepting a warn.
+- **Swept rows and `cad rows`** became the default way to measure and to read.
+
+### Reviewer quality (V2R6)
+- 9.3 min, every issue with numbers and a fix. V2R6 re-ran the full check and matched all 16 sections. It wrote 4
+  review rows: 3 slides and 1 service, with 1 fail, the A6-01 evidence. They are verified as tool rows (verify 4i).
+- It found the closed bore from `assembly.step_of` plus two `cad q ray` lines, which is what the insertion check now
+  does for every part.
+- `tool_catchable` was right on all 3.
+
+### Why not the existing code (v2 A6 additions)
+- **Insertion vs `slide_out` rows:** a slide row tests one part along one direction that the designer chose, at a pose
+  with everything present. V2R6 needed 3 rows and a service op to show A6-01. The insertion check tests every part at
+  its own step, against only what is there, with no rows to write. It reuses `bvh_world`, `_edge_samples`, `inside`,
+  `fastener_axis` and the bench/merge rules from `assembly_present`. A swept-BVH step test like `check_slide`'s would
+  cost 6 directions x 80 parts x ~100 steps of BVH rebuilds. Ray casting is about 3-7 s.
+- **Considered: a disassembly planner** (blocking graphs, non-straight paths). It would need a motion-planning
+  dependency for a case that one straight line plus a declared pose covered on all six v2 configs.
+- **End drift vs a `distances` row:** the row measures surface distance, so two overlapping Ø6 sleeves read 0 whatever
+  the ends do (A6-02). Drift follows the end points through each joint limit; it reuses `cab_ends` and `relevant_joints`.
+- **Bevel clamp flag vs `use_clamp_overlap = False`:** without the clamp, Blender makes self-intersecting geometry
+  when the break is wider than a short neighbouring edge. Measuring the vertex moves costs one KD-tree and does not
+  change geometry: every v2 build stays bit-identical.
+
+### Still open (gaps)
+- Insertion: straight lines only, and parts of the same step are not tested against each other. A part pushed in
+  along an axis no screw marks needs `insert_dirs`.
+- BOM free text vs model (tape width, splice position text). Material creep and fatigue are outside geometry.
+- A swept ray is 1-D. Other open gaps: gear tooth tips read as thin walls; PCB exposure (V2A1-F11); `parallel_builds`
+  is untested live.
+- cadlib facet defaults are not sag-based (V2A6-T3).
+
+### Verification of this run
+- `tools/verify_all.sh`: 79/79 passed (`/tmp/alex3d-verify.log`). A1-A3 and v2 A1-A5 are unchanged, except that
+  v2 A3-A5 now also carry the 3 insertion step-fact warns, which are asserted exactly. New:
+  - verify 4i: the v2 A6 designer config gives 0 F and exactly 11 untriaged warns: A6-01 x2, A6-02 x2 (8.8 / 5.7),
+    A6-03 x4, plus the 3 step facts. With `overlay_v2a6_steps.json`, only the 2 A6-01 warns remain. V2R6's slide row
+    fails on `PRT_groove_cap`.
+  - verify 4j: `tools/test_bevel_clamp.py`.
+- The insertion check on the v2 A1-A5 blends gives 3 warns each, all of them config facts. The `end_drift` check on
+  v2 A5 gives 6 pairs, all 0.0 apart.

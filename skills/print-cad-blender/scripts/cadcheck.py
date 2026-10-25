@@ -31,10 +31,12 @@ Checks (each one writes evidence into the JSON report, with an explicit `coverag
   slide         slide-out sweeps from config ("slide_out"), one object or a group
   distances     min/max distance assertions from config ("distances"), optionally as a gap along a ray (or the worst of a ray swept over a passage, "sweep"),
                 with payload squeeze and a declared compliant element
+  assembly      assembly_order audit: objects in no step, step labels whose screw size disagrees with the model
+  insertion     each part and each merged bench group out along a straight line past the earlier steps' parts
   stacks        tolerance stacks from config ("stacks"): worst case and RSS against a limit
   flexures      declared springs and snap arms: beam direction vs the part's print orientation (layer bonds)
   stability     centre of mass and static tip angle over a coarse pose grid
-  cables        path length vs. lead length, and exposed (visible from outside) cable length
+  cables        path length vs. lead length, chains, junctions, ends that come apart across a joint, exposed cable
 
 Evidence for the rules here: docs/FINDINGS.md A1-F1, F3, F4, F5, F9, F10, F11, F13, F14, A2-F1 to F9, A3-F1 to F3, F7, F8 and A3-V1.
 """
@@ -754,6 +756,10 @@ def check_parts():
             finding("parts", "warn", "%s: ceiling region needs a %.0f mm bridge (limit %g) around %s" % (o.name, span, CFG.get("max_bridge_mm", 25), sp_at), object=o.name, at=sp_at)
         if "print_rot" not in o.keys():
             finding("parts", "warn", "%s has no print_rot; checked as modelled" % o.name, object=o.name)
+        if o.get("bevel_clamped"):
+            w_, mv_ = list(o["bevel_clamped"])
+            finding("parts", "warn", "%s: cadlib.bevel's overlap clamp cut the %g edge break to about %.2f on every edge (dense facets or a sliver "
+                    "next to a bevelled edge; bevel before that cut, FINDINGS V2A6-T2)" % (o.name, w_, mv_ / 1.4), object=o.name)
     REPORT["checks"].setdefault("parts", {"findings": []}).update(
         {"rows": rows, "unique_stls": len(seen), "est_total_g": round(tot_g), "est_total_h": round(tot_h, 1)})
     REPORT["coverage"].append("parts: %d printed objects (%d unique STLs): manifold, bed fit %s, overhang, wall probe, bed contact" % (len(PRINTED), len(seen), list(P)))
@@ -1920,6 +1926,12 @@ def check_distances():
                 continue
             if (D.get("min") is not None and d < D["min"]) or (D.get("max") is not None and d > D["max"]):
                 finding("distances", "fail", "%s to %s = %.2f mm (%s) at %s, wanted %s..%s (%s)" % (a.name, b.name, d, how, rec["pose"], D.get("min"), D.get("max"), D.get("why", "")), **rec)
+            if sweep and sweep["missed_deg"]:
+                # a min-only row passes a station whose ray hits nothing: v2 A6's full-lift rows at home and the max stop
+                # silently dropped psi 0 (V2R6 A6-03, FINDINGS V2A6-F3)
+                finding("distances", "warn", "%s to %s: the swept ray missed a part at %d of %d stations (%s deg) at %s, so they measured nothing; "
+                        "start the sweep where both faces are, or move the origin onto the passage" % (
+                            a.name, b.name, len(sweep["missed_deg"]), len(sweep["profile"]), ", ".join("%g" % x for x in sweep["missed_deg"][:8]), rec["pose"]), **rec)
             if slip:
                 rec["nearest_mm"], rec["ray_slip"] = round(near, 3), slip
                 if d > near + max(1.0, 0.3 * near):
@@ -2165,6 +2177,211 @@ def check_assembly():
     REPORT["coverage"].append("assembly: %d steps, %d objects placed, %d in no step" % (len(steps), len(step_of), len(loose)))
 
 
+_AXES6 = [("+Z", (0, 0, 1)), ("-Z", (0, 0, -1)), ("+X", (1, 0, 0)), ("-X", (-1, 0, 0)), ("+Y", (0, 1, 0)), ("-Y", (0, -1, 0))]
+
+
+def _entry_hit(tree, p, d, maxd=3000.0):
+    """Distance along d to the first face the ray enters and goes on into solid material, or None. A hit counts when
+    the point 0.3 mm past it is inside the part and more than 0.05 mm from its surface. That passes faces the ray
+    leaves through (it starts on or inside a part it touches), grazes, or clips at zero clearance: on the A6 model a
+    flush cover's edge break, a coplanar seat and faceted bores at zero clearance each read "blocked" at 0.05-0.6 mm
+    on parts that lift straight out. A part pressed against a wall is still blocked: its samples behind the contact
+    face run into the wall."""
+    q, went = p, 0.0
+    for _ in range(12):
+        loc, nrm, _i, dist = tree.ray_cast(q, d, maxd - went)
+        if loc is None:
+            return None
+        if nrm.dot(d) < -0.02:
+            r = loc + d * 0.3
+            near = tree.find_nearest(r)
+            if near[0] is not None and near[3] > 0.05 and inside(tree, r):
+                return went + dist
+        went += dist + 1e-3
+        q = loc + d * 1e-3
+    return None
+
+
+def _lane(boxes, d):
+    """The lane a group of boxes sweeps along d: (u, v, d basis, (lo, hi) per basis axis) from the box corners."""
+    u, v = perp_basis(d)
+    B = (u, v, d)
+    cs = [Vector((x, y, z)) for lo, hi in boxes for x in (lo.x, hi.x) for y in (lo.y, hi.y) for z in (lo.z, hi.z)]
+    return B, [(min(c.dot(e) for c in cs), max(c.dot(e) for c in cs)) for e in B]
+
+
+def _ahead(B, ext, pts, tol=0.05):
+    """Do any of pts lie in the lane, ahead of its back end?"""
+    return any(all(ext[k][0] - tol <= p.dot(B[k]) <= ext[k][1] + tol for k in (0, 1)) and p.dot(B[2]) > ext[2][0] - tol for p in pts)
+
+
+def _box_ahead(box, B, ext):
+    """Conservative: the box's projection overlaps the lane's cross-section and reaches past its back end."""
+    e2 = [(min(c.dot(e) for c in _corners(box)), max(c.dot(e) for c in _corners(box))) for e in B]
+    return all(e2[k][1] >= ext[k][0] - 0.05 and e2[k][0] <= ext[k][1] + 0.05 for k in (0, 1)) and e2[2][1] > ext[2][0]
+
+
+def _corners(box):
+    lo, hi = box
+    return [Vector((x, y, z)) for x in (lo.x, hi.x) for y in (lo.y, hi.y) for z in (lo.z, hi.z)]
+
+
+def _blocked(movers, obst, d, cache, first_only):
+    """Straight-line insertion test along -d (removal along d, to infinity): rays from the moving parts' samples
+    along d into the obstacles, and rays from the obstacles' samples in a moving part's lane back into it.
+    -> [(obstacle, mover, mm)] sorted by distance; only the first found when first_only. Otherwise the nearest hit
+    per obstacle, from the reverse rays only where the forward rays found none (6 s -> 2 s on A6's feeder group)."""
+    quick = first_only
+    d = Vector(d).normalized()
+    B, ext = _lane([bbox_world(o) for o in movers], d)
+    ahead = [n for n in obst if _box_ahead(bbox_world(O[n]), B, ext)]
+    out = []
+    for n in ahead:
+        tn = cache["bvh"].setdefault(n, bvh_world(O[n]))
+        nb = bbox_world(O[n])
+        for m in movers:
+            Bm, em = _lane([bbox_world(m)], d)
+            if not _box_ahead(nb, Bm, em):
+                continue
+            best = None
+            for p in cache["pts"].setdefault(m.name, _edge_samples(m, 2.0, 600)):
+                h = _entry_hit(tn, p, d)
+                if h is not None and (best is None or h < best):
+                    best = h
+                    if quick:
+                        break
+            if best is None:
+                tm = cache["bvh"].setdefault(m.name, bvh_world(m))
+                for p in cache["pts"].setdefault(n, _edge_samples(O[n], 2.0, 3000)):
+                    if _ahead(Bm, em, (p,)):
+                        h = _entry_hit(tm, p, -d)
+                        if h is not None and (best is None or h < best):
+                            best = h
+                            if quick:
+                                break
+            if best is not None:
+                out.append((n, m.name, round(best, 2)))
+                if first_only:
+                    return out
+    return sorted(out, key=lambda x: x[2])
+
+
+def check_insertion():
+    """Can each part, and each bench group at its merge, go in along a straight line with the parts of the earlier
+    steps in place? v2 A6 put a bus splice in a hub bore at step 10d: the groove cap (2c) closes the bore above and the
+    base floor (3) below, and nothing in the config said so; V2R6 found it with a hand slide row (FINDINGS V2A6-F1).
+
+    Tested: each PRT/BUY object against the solids and fasteners of earlier steps that are in its assembly (bench or
+    main), and each merge step's group against the assembly it joins, along +-X, +-Y, +-Z and the step's
+    "insert_dirs" ([[x, y, z], ...]: the direction the part moves to come out), at the step's "pose" (default home).
+    A step with "insert_ok": "<reason>" is listed, not tested (bayonets, snap arms, parts tilted in). Cables bend, and
+    parts of the same step are placed in any order, so neither is an obstacle. Also warns on a bench part with no part
+    of its group within 2 mm (by bounding box): it is not in that sub-assembly (the A6 splice sat in bench 'feeder')."""
+    steps = CFG.get("assembly_order") or []
+    if not steps:
+        return
+    step_of = {}
+    for i, st in enumerate(steps):
+        for o in SOLIDS + FASTENERS:
+            if o.name not in step_of and any(fnmatch.fnmatch(o.name, g) for g in st["objects"]):
+                step_of[o.name] = i
+    merged_at = {st["merge"]: i for i, st in enumerate(steps) if st.get("merge")}
+
+    def lands_in(g, grp, i):
+        seen = set()
+        while g != grp:
+            j = merged_at.get(g)
+            if g is None or j is None or j > i or g in seen:
+                return False
+            seen.add(g)
+            g = steps[j].get("bench")
+        return True
+
+    unordered = [o.name for o in SOLIDS if o.name not in step_of]
+
+    def placed(grp, i):
+        """Solids and fasteners in group grp (None = main) before step i. A group merged at step i itself is left out:
+        parts of one step go in in any order (A6 step 2d: the thrust ring goes on the hub before the turntable)."""
+        return [n for n, j in step_of.items() if j < i and lands_in(steps[j].get("bench"), grp, i - 1)]
+
+    fst_axes = []
+    for f in FASTENERS:
+        if not is_nut(f):
+            try:
+                fst_axes.append((f.name, bbox_world(f), fastener_axis(f)[2]))
+            except Exception:
+                pass
+
+    def axes_for(mv):
+        """+-X/Y/Z, then +-the axis of each screw that touches the moving parts: a part goes on along its screw
+        or stud (A6's nip stop and sleeve sit on 3 and 19 deg screw axes, and read blocked along every world axis)."""
+        out = list(_AXES6)
+        for fn, fb, ax in fst_axes:
+            if any(bb_gap(fb, bbox_world(o)) < 0.5 for o in mv) and all(abs(ax.dot(Vector(v))) < 0.9995 for _, v in out):
+                out += [("along %s" % fn, tuple(ax)), ("against %s" % fn, tuple(-ax))]
+            if len(out) >= 14:
+                break
+        return out
+
+    rows, skipped, loose = [], [], []
+    set_pose({})
+    cache = {"bvh": {}, "pts": {}, "pose": pose_key({})}
+    for i, st in enumerate(steps):
+        tests = []
+        grp = st.get("bench")
+        for n, j in step_of.items():
+            if j == i and KIND[n] in ("PRT", "BUY"):
+                tests.append(([O[n]], n))
+        if st.get("merge"):
+            g = st["merge"]
+            mem = [n for n, j in step_of.items() if j < i and lands_in(steps[j].get("bench"), g, i)]
+            if mem:
+                tests.append(([O[n] for n in mem], "group '%s' (%d objects)" % (g, len(mem))))
+        if not tests:
+            continue
+        if st.get("insert_ok"):
+            skipped.append({"step": st["step"], "why": st["insert_ok"], "objects": [t[1] for t in tests]})
+            continue
+        if grp:
+            # a bench part far from the rest of its sub-assembly is in the wrong group (A6: the splice in 'feeder')
+            mates = [n for n, j in step_of.items() if KIND[n] in ("PRT", "BUY") and lands_in(steps[j].get("bench"), grp, merged_at.get(grp, len(steps)))]
+            for mv, label in tests:
+                if len(mv) == 1 and len(mates) > 1:
+                    gap = min(bb_gap(bbox_world(mv[0]), bbox_world(O[m])) for m in mates if m != label)
+                    if gap > 2.0:
+                        loose.append(label)
+                        finding("insertion", "warn", "%s is in bench step '%s' (group '%s') but %.1f mm from every other part of that group: "
+                                "it is not in that sub-assembly; place it in the step where it goes in" % (label, st["step"][:50], grp, gap),
+                                object=label, step=st["step"], gap_mm=round(gap, 1))
+        if pose_key(st.get("pose", {})) != cache.get("pose"):
+            set_pose(st.get("pose", {}))
+            cache = {"bvh": {}, "pts": {}, "pose": pose_key(st.get("pose", {}))}
+        for mv, label in tests:
+            dirs = axes_for(mv) + [("dir %s" % list(v), tuple(Vector(v).normalized())) for v in st.get("insert_dirs", [])]
+            names = {o.name for o in mv}
+            obst = [n for n in placed(grp, i) + unordered if n not in names and KIND[n] != "CAB"
+                    and not any(allowed(n, m) for m in names)]
+            free = None
+            for dn, d in dirs:
+                if not _blocked(mv, obst, d, cache, True):
+                    free = dn
+                    break
+            rec = {"object": label, "step": st["step"], "free_dir": free, "obstacles": len(obst)}
+            if free is None:
+                rec["blocked"] = {dn: [{"by": b, "mover": m, "at_mm": a} for b, m, a in _blocked(mv, obst, d, cache, False)[:3]] for dn, d in dirs}
+                why = "; ".join("%s %s" % (dn, ", ".join("%s%s at %g" % (x["by"], "" if len(mv) == 1 else " (%s)" % x["mover"], x["at_mm"]) for x in bl[:2]))
+                                for dn, bl in rec["blocked"].items())
+                finding("insertion", "warn", "%s (step '%s') has no straight way in with the earlier steps' parts in place: %s. Reorder the "
+                        "steps, remove the blocker first (a service row), or give the step its \"insert_dirs\" / \"pose\" (\"insert_ok\" with a "
+                        "reason for a twist or snap)" % (label, st["step"][:50], why), **rec)
+            rows.append(rec)
+    set_pose({})
+    REPORT["checks"].setdefault("insertion", {"findings": []}).update(rows=rows, not_tested=skipped, loose_bench_parts=loose)
+    REPORT["coverage"].append("insertion: %d parts and merged groups, straight along +-X/Y/Z (and insert_dirs) against earlier steps; %d steps insert_ok" % (
+        len(rows), len(skipped)))
+    REPORT["not_checked"].append("insertion: paths that are not one straight line, parts of the same step against each other, cables")
+
+
 def check_stacks():
     """Tolerance stacks (A2-F7: the magnet jig referenced the nacelle bore, 0.55-0.75 mm worst case vs 0.3 allowed).
     {"name", "limit": mm, "terms": [{"what", "tol": +-mm}]}: worst case = sum, RSS = root of the sum of squares.
@@ -2378,6 +2595,61 @@ def check_stability():
     REPORT["not_checked"].append("stability: dynamic loads (recoil, pan acceleration), friction/sliding")
 
 
+def _end_drift(ends, meet=2.0, near=3.0, tol=2.0):
+    """Cable ends that meet something at home (another cable's end within 2 mm, or a solid within 3 mm) on another
+    body: how far they come apart at each joint limit. v2 A6 moved the bus splice off the pan axis to r 7; the static
+    pan lead still ended 1.2 under it at home, and at pan +-90 its attach point was 9.9 mm away. The launcher base
+    lead met the moving bundle at r 4 the same way (5.7 mm), and its distances row passed because the sleeves overlap
+    (V2R6 A6-02, FINDINGS V2A6-F2). Ends that meet on the joint axis do not move apart, so they pass."""
+    idx = []
+    tree = scene_bvh(SOLIDS, index=idx)
+    pairs = []   # (cable, end k, other object, other end k or None, home local point on the other object)
+    names = sorted(ends)
+    for x in names:
+        for k, p in enumerate(ends[x]):
+            for y in names:
+                if y != x and relevant_joints(O[x], O[y]):
+                    for k2, q in enumerate(ends[y]):
+                        if (p - q).length < meet and (y, k2, x, k) not in [(a, b, c, e) for a, b, c, e, _ in pairs]:
+                            pairs.append((x, k, y, k2, None))
+            loc, _n, fi, dist = tree.find_nearest(p, near)
+            if loc is not None:
+                s = owner(idx, fi)
+                if s and relevant_joints(O[x], O[s]):
+                    pairs.append((x, k, s, None, O[s].matrix_world.inverted() @ loc))
+    if not pairs:
+        return []
+
+    def endpt(c, k):
+        return O[c].matrix_world @ HOME_MW[c].inverted() @ ends[c][k] if c in HOME_MW else ends[c][k]
+
+    out = []
+    for x, k, y, k2, ql in pairs:
+        p0 = ends[x][k]
+        q0 = ends[y][k2] if k2 is not None else HOME_MW[y] @ ql
+        d0 = (p0 - q0).length
+        worst = (0.0, "home")
+        for jn in sorted(relevant_joints(O[x], O[y])):
+            s = JOINTS.get(jn) or {}
+            vals = (90.0, 180.0, 270.0) if s.get("continuous") else tuple(v for v in (s.get("lo"), s.get("hi")) if v is not None)
+            for v in vals:
+                set_pose({jn: v})
+                p = endpt(x, k)
+                q = endpt(y, k2) if k2 is not None else O[y].matrix_world @ ql
+                g = (p - q).length - d0
+                if g > worst[0]:
+                    worst = (g, pose_key({jn: v}))
+        set_pose({})
+        r = {"cable": x, "end": [round(c, 1) for c in p0], "meets": y, "home_mm": round(d0, 2), "moves_apart_mm": round(worst[0], 1),
+             "at": worst[1], "bodies": [body(O[x]), body(O[y])]}
+        out.append(r)
+        if worst[0] > tol:
+            finding("cables", "warn", "%s ends %.1f mm from %s at home, but they are on different bodies (%s / %s): at %s that point is %.1f mm "
+                    "further away, so the route stops short of what it plugs into. Meet on the joint axis, or put the last stretch on the moving "
+                    "body after a service loop" % (x, d0, y, r["bodies"][0], r["bodies"][1], worst[1], worst[0]), **r)
+    return out
+
+
 def check_cables():
     rows = []
     ex = CFG["exposure"]
@@ -2450,8 +2722,10 @@ def check_cables():
                 "it as a BUY_ part (it takes room in the bore and in the twist), or list the cables under cable_junctions_ok if it "
                 "is no wider than the cable" % (len(junctions), "; ".join("%s / %s at %s" % (j["cables"][0], j["cables"][1], j["at"]) for j in junctions[:6])),
                 junctions=junctions)
+    drift = _end_drift(ends) if ends else []
     # waived junctions stay visible: v2 A5 waived a 3-way bus junction it never modelled, and V2R5 raised it (A5-03)
-    REPORT["checks"].setdefault("cables", {"findings": []}).update(chains=crow, junctions=junctions, junctions_waived=waived, ends_known=len(ends))
+    REPORT["checks"].setdefault("cables", {"findings": []}).update(chains=crow, junctions=junctions, junctions_waived=waived, ends_known=len(ends),
+                                                                    end_drift=drift)
     nolead = [r["object"] for r in rows if r["lead_len"] is None]
     if nolead:
         # v2 A2: only the phase leads had a length; bus, UART and encoder runs across the pan joint went unchecked (V2A2-F4)
@@ -2544,7 +2818,7 @@ def main():
     for name, fn in (("parts", check_parts), ("interference", check_interference), ("fasteners", check_fasteners),
                      ("service", check_service), ("drop", check_drop), ("index", check_index), ("slide", check_slide),
                      ("distances", check_distances), ("payload", check_payload), ("sightlines", check_sightlines),
-                     ("assembly", check_assembly), ("stacks", check_stacks), ("flexures", check_flexures), ("stability", check_stability), ("cables", check_cables)):
+                     ("assembly", check_assembly), ("insertion", check_insertion), ("stacks", check_stacks), ("flexures", check_flexures), ("stability", check_stability), ("cables", check_cables)):
         if want(name) or (name == "interference" and want("clearance")):
             t = time.time()
             fn()

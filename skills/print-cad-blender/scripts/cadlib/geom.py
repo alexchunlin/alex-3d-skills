@@ -279,14 +279,33 @@ def solid_stats(ob):
 
 def bevel(ob, w, seg=1, angle=40.0):
     """Edge break on every edge sharper than `angle`. Do it before booleans that cut fine detail:
-    bevelling after booleans is fragile (attempt-1 finding)."""
+    bevelling after booleans is fragile (attempt-1 finding).
+
+    Blender's overlap clamp is global: one short edge next to a bevelled edge (the facets of a dense cylinder cut, a
+    boolean sliver) shrinks every edge break on the part. v2 A5 and A6's detent tab (box minus an n=768 cylinder) got
+    about 0.1 instead of 1.0 on every edge (FINDINGS V2A6-T2). So the move of the vertices the bevel makes is measured
+    (an unclamped break moves box corners about 1.4 x w): under 0.7 x w prints a warning and sets
+    ob["bevel_clamped"] = [w, largest move], which cadcheck reports."""
+    from mathutils import kdtree
+    vs = ob.data.vertices
+    kd = kdtree.KDTree(len(vs))
+    for i, v in enumerate(vs):
+        kd.insert(v.co, i)
+    kd.balance()
     m = ob.modifiers.new("bev", 'BEVEL')
     m.width = w
     m.segments = seg
     m.limit_method = 'ANGLE'
     m.angle_limit = math.radians(angle)
     m.use_clamp_overlap = True
-    return apply_mods(ob)
+    apply_mods(ob)
+    moved = max((kd.find(v.co)[2] for v in ob.data.vertices), default=0.0) if len(vs) else 0.0
+    if 1e-4 < moved < 0.7 * w:
+        ob["bevel_clamped"] = [w, round(moved, 3)]
+        print("cadlib.bevel: %s: the overlap clamp cut the %g edge break to about %.2f (no vertex moved more than %.3f): a short edge sits "
+              "next to a bevelled one (dense facets from a cylinder cut, a boolean sliver). Bevel before that cut, or cut with fewer "
+              "segments" % (ob.name, w, moved / 1.4, moved))
+    return ob
 
 
 def xform(ob, M):

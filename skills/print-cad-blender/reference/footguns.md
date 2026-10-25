@@ -73,6 +73,13 @@ the status and prints `cad: BUILD FAILED` on stderr, and `cad check` warns when 
 (V2A4-T1). `cad build` deletes `stl/*.stl` before exporting (`export_stls(clean=True)`), so put tool output such as a
 test coupon in `stl/tools/` (v2 A4 feeder builder).
 
+**Rule from v2 A6:** a part is in the step where it physically goes in, not the sub-assembly whose cable it carries.
+The bus splice sat in the pan hub bore, closed above by a groove cap fitted at step 2c and below by the base floor, but
+its config step was the feeder's bench step 10d, so no access or slide test ever saw the closed bore (V2A6-F1). The
+`insertion` check now catches both the bench mismatch and the blocked merge. Two more from the same attempt: cable runs
+that meet across a joint meet on its axis (V2A6-F2), and `G.bevel` after a dense-faceted cut gives ~0.1 edge breaks
+everywhere on the part, because the overlap clamp is global (V2A6-T2).
+
 The checker does not cover these. Use sections, the design log or the reviewer checklist:
 - service paths, such as tape or shim changes, that need a full teardown (A1-F6)
 - alignment jigs, such as magnet centring (A1-F7)

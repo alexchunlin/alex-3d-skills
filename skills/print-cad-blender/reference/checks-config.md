@@ -28,7 +28,10 @@ adds `carry`, `fasteners.captive` and `flexures`.
     {"step": "flywheel (bench)", "bench": "fw", "objects": ["PRT_flywheel", "FST_fw_*"]},
     {"step": "launcher (bench)", "bench": "launcher", "objects": ["PRT_launcher_*", "FST_motor_*"]},
     {"step": "flywheel onto launcher", "bench": "launcher", "merge": "fw", "objects": ["FST_hub_*"]},  // bench into bench
-    {"step": "launcher into yoke", "merge": "launcher", "objects": ["PRT_arm_cap_*"]}],
+    {"step": "launcher into yoke", "merge": "launcher", "objects": ["PRT_arm_cap_*"]},
+    {"step": "jar on: drop in at +30, twist to 0", "merge": "jar", "objects": [], "pose": {"PIV_jar": 30}},   // insertion pose
+    {"step": "pod in, nose up 20", "merge": "pod", "objects": [], "insert_dirs": [[0, -0.34, 0.94]]},  // extra out-direction
+    {"step": "snap cover", "objects": ["PRT_snap_cover"], "insert_ok": "snap arms flex 0.8 over the lip"}],   // not tested
   "fasteners": {"driver_r": 3.0, "hand_r": 14.0, "max_reach": 60, "max_reach_ext": 150, "min_engagement": 4.0,
                 "lkey_short": 18, "lkey_insert": 2.5, "lkey_long": 56, "lkey_swing_deg": 60,   // 2.5 mm hex key
                 "max_standoff": 2.0, "max_protrusion": 3.0,
@@ -139,6 +142,17 @@ skipped", and the run carries on. Keep the row; don't `--only` around it.
   brings a bench group in: into the main assembly, or into another bench when the merge step has its own `bench`.
   Merges chain to any depth. Parts that no step matches are assumed present throughout and listed under
   `assembly.unordered_solids_assumed_present`. Fasteners are access-tested against the parts present at their step.
+- **Insertion** (`--only insertion`, about 7 s on the v2 launcher). Each `PRT_`/`BUY_` part must come out of its place
+  along one straight line, to infinity, past the solids and fasteners of the earlier steps in its group; so must each
+  merged bench group, past the group it joins. Directions: ±X, ±Y, ±Z, ± the axis of each screw that touches the part
+  (a sleeve goes on along its stud), and the step's `insert_dirs` (the direction the part moves to come **out**). The
+  step's `pose` is set first (a bayonet at its drop-in angle). Parts of the same step and cables are not obstacles;
+  zero-clearance seats and edge breaks don't block (a hit counts only 0.3 mm into the other part). A step with
+  `insert_ok: "<reason>"` is listed, not tested. A part in a `bench` step that is more than 2 mm from every other
+  part of its group warns too: it is in the wrong sub-assembly. v2 A6 put the bus splice (in the pan hub) in the
+  feeder's bench step; the feeder merge then read "+Z PRT_groove_cap (BUY_bus_junction) at 3" (FINDINGS V2A6-F1).
+  On the v2 A1-A5 configs it gives 3 warns, all config facts: the jar step's +30 drop-in and the pod's nose-up angle
+  need a `pose`, and the nip stud is listed one step before the backplate it drops into.
 - **Contact fits.** `contact: true` alone accepts contact anywhere on the pair. That also hides a journal rubbing on the
   same pair: v2 A1 declared post x journal plate and shell x turntable for their thrust and stop faces, and the journals
   inside them went unmeasured (FINDINGS V2A1-V4). Add `contact_normal` (one `[x, y, z]` or a list, a home-pose world
@@ -178,8 +192,10 @@ skipped", and the run carries on. Keep the row; don't `--only` around it.
 - **Swept ray.** `ray.sweep` turns the ray (origin and dir) about `axis` through `center`, both in the ray's frame
   coordinates, from `from` to `to` degrees in `step`s. The row's `mm` is the worst station against `min`/`max` (the
   smallest gap when there is no bound), with `sweep_deg`, `profile` ([[deg, mm]]) and `missed_deg`. A station where the
-  ray misses a part counts as open: it passes a `min` and fails a `max`. One row replaced v2 A4's three reviewer rows
-  and its probe script, with the same numbers (7.50 / 7.67 / 7.95 at psi 80, V2A4-F1).
+  ray misses a part counts as open: it fails a `max`, and on a `min` row it warns, because that station measured
+  nothing (v2 A6's full-lift rows at home and the max stop dropped psi 0 unseen, V2R6 A6-03). Start the sweep where
+  both faces are. One row replaced v2 A4's three reviewer rows and its probe script, with the same numbers
+  (7.50 / 7.67 / 7.95 at psi 80, V2A4-F1).
 - **Poses outside a joint's range.** Any `pose`/`poses` value past the joint's `lo..hi` is listed in the summary
   (`poses_past_limits`), not warned: rows past a firmware limit on purpose are common (a hard stop beyond it). Add
   `"past_limit_ok": true` to such a row to drop it from the list. A pose naming no joint, or a coupled joint, is a
@@ -215,6 +231,12 @@ skipped", and the run carries on. Keep the row; don't `--only` around it.
   the ends, `cab_ends`); declare the chain, or model the connector as a `BUY_` part. `cable_junctions_ok` waives an
   inline connector no wider than the cable; waived junctions are listed in `cables.junctions_waived` (v2 A5 waived a 3-way
   bus junction it never modelled, V2R5 A5-03).
+- **Cable ends across a joint** (`cables.end_drift`). A cable end that meets another cable's end (within 2 mm) or a
+  solid (within 3 mm) on another body is followed to each joint limit; coming more than 2 mm apart warns. Ends that
+  meet on the joint axis stay together and pass. v2 A6 moved the bus splice to r 7 off the pan axis: the static pan
+  lead's end came 8.8 mm away from it at pan -90, and the base lead 5.7 mm from the bundle, while its `distances` row
+  passed because the two sleeves overlap (V2R6 A6-02). Fix: meet on the axis, or end the static run in a service loop
+  and start a new route on the moving body.
 - **`--out`.** `cad check m.blend c.json OUT.json --only x` or `... --only x --out OUT.json`: both write OUT.json. Before
   v2 A6 the flag form was ignored and the default `cadcheck.json` was overwritten (V2A5-T1).
 - **Stock lengths.** Screws whose length isn't in `fasteners.stock_lengths` for their diameter warn, unless listed in

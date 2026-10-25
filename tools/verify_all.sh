@@ -1,6 +1,6 @@
 #!/bin/sh
 # Re-prove every tool in this repo. Writes only under /tmp/alex3d-verify. About 8 minutes, run at nice 10.
-# The attempt regressions use examples/mm-launcher-{a1,a2,a3,v2a1,v2a2,v2a3,v2a4,v2a5}/*.blend.gz (the blends the reviewers saw).
+# The attempt regressions use examples/mm-launcher-{a1,a2,a3,v2a1,v2a2,v2a3,v2a4,v2a5,v2a6}/*.blend.gz (the blends the reviewers saw).
 #   sh tools/verify_all.sh            # HW defaults to the mm-launcher project (read-only; copied first)
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -163,12 +163,13 @@ if [ -f "$V23/mm_launcher_v2a3.blend.gz" ]; then
   # a20a4d7: diameters, approach lines, a stud-axis gap) and no bbox bridge warns (crown 26.4, flywheel 72, nacelle 39)
   $CAD check "$V/v2a3/model.blend" "$V23/checks.json" "$V/v2a3/cadcheck.json" >/dev/null
   python3 -I -c "
-import json,sys; d=json.load(open(sys.argv[1])); s=d['summary']; w=s['warn_list']
+import json,sys; d=json.load(open(sys.argv[1])); s=d['summary']; w=[x for x in s['warn_list'] if not x.startswith('insertion: ')]
+ins=[x for x in s['warn_list'] if x.startswith('insertion: ')]; facts = len(ins) == 3 and all(any(k in x for x in ins) for k in ('PRT_hood (step', \"group 'pod'\", \"group 'jar'\"))
 br={r['object']: r['max_bridge_span_mm'] for r in d['checks']['parts']['rows']}
-ok = (s['fails'] == 0 and len(w) == 1 and 'M3 x 9 (FST_detent_0)' in w[0] and not any('much wider than the nearest' in x for x in list(s['accepted_warns']) + w)
+ok = (s['fails'] == 0 and facts and len(w) == 1 and 'M3 x 9 (FST_detent_0)' in w[0] and not any('much wider than the nearest' in x for x in list(s['accepted_warns']) + w)
       and br['PRT_flywheel'] < 5 and br['PRT_feeder_crown'] < 25 and br['PRT_nacelle'] < 25 and len(s['stale_accepts']) == 3)
 sys.exit(0 if ok else 1)" "$V/v2a3/cadcheck.json" \
-    && ok "V2A3 designer config: 0 fails, 1 untriaged warn (M3 x 9), no ray-slip or bbox-bridge false warns" || bad "V2A3 designer config: unexpected result"
+    && ok "V2A3 designer config: 0 fails, 1 untriaged warn (M3 x 9) plus the 3 insertion step facts, no ray-slip or bbox-bridge false warns" || bad "V2A3 designer config: unexpected result"
   # V2R3's issues as rows: the max-candy gap from params (=MM_T[1] + TAPE_T), the encoder chain, the zero-margin pocket
   $CAD check "$V/v2a3/model.blend" "$V23/checks.json" "$V/v2a3/overlay.json" --overlay "$V23/overlay_v2a3.json" --overlay-only \
        --only drop,slide,distances,payload,cables >/dev/null
@@ -197,9 +198,10 @@ if [ -f "$V24/mm_launcher_v2a4.blend.gz" ]; then
   $CAD check "$V/v2a4/model.blend" "$V24/checks.json" "$V/v2a4/cadcheck.json" >/dev/null
   python3 -I -c "
 import json,sys; s=json.load(open(sys.argv[1]))['summary']
-ok = s['fails'] == 0 and s['untriaged_warns'] == 0 and len(s['stale_accepts']) == 6 and len(s['poses_past_limits']) == 8
+ins=[x for x in s['warn_list'] if x.startswith('insertion: ')]; facts = len(ins) == 3 and all(any(k in x for x in ins) for k in ('PRT_hood (step', \"group 'pod'\", \"group 'jar'\"))
+ok = s['fails'] == 0 and s['untriaged_warns'] == 3 and facts and len(s['stale_accepts']) == 6 and len(s['poses_past_limits']) == 8
 sys.exit(0 if ok else 1)" "$V/v2a4/cadcheck.json" \
-    && ok "V2A4 designer config: 0 fails, 0 untriaged, 6 stale false-warn accepts, 8 past-limit poses listed" || bad "V2A4 designer config: unexpected result"
+    && ok "V2A4 designer config: 0 fails, untriaged = the 3 insertion step facts, 6 stale false-warn accepts, 8 past-limit poses listed" || bad "V2A4 designer config: unexpected result"
   # A2-01 as one swept row over the entry arc: V2R4's three rows and probe gave 7.50 / 7.67 / 7.95 at psi 80
   $CAD check "$V/v2a4/model.blend" "$V24/checks.json" "$V/v2a4/sweep.json" --overlay "$V24/overlay_v2a4.json" --overlay-only --only distances >/dev/null
   python3 -I -c "
@@ -233,10 +235,11 @@ if [ -f "$V25/mm_launcher_v2a5.blend.gz" ]; then
   python3 -I -c "
 import json,sys; d=json.load(open(sys.argv[1])); s=d['summary']
 fl=[r.get('flexed',{}).get('PRT_gate_detent',{}).get('max_mm3',0) for r in d['checks']['slide']['rows']]
-ok = s['fails'] == 0 and s['untriaged_warns'] == 0 and not s['stale_accepts'] \
+ins=[x for x in s['warn_list'] if x.startswith('insertion: ')]; facts = len(ins) == 3 and all(any(k in x for x in ins) for k in ('PRT_hood (step', \"group 'pod'\", \"group 'jar'\"))
+ok = s['fails'] == 0 and s['untriaged_warns'] == 3 and facts and not s['stale_accepts'] \
   and any('gate_detent' in k and 'jar_gate' in k for k in s['unbounded_allows']) and max(fl) > 0.2
 sys.exit(0 if ok else 1)" "$V/v2a5/cadcheck.json" \
-    && ok "V2A5 designer config: 0 F / 0 untriaged / 0 stale; detent allow listed as unbounded; slide flex records the sub-vol_tol ride" || bad "V2A5 designer config: unexpected result"
+    && ok "V2A5 designer config: 0 F / 0 stale, untriaged = the 3 insertion step facts; detent allow listed as unbounded; slide flex records the sub-vol_tol ride" || bad "V2A5 designer config: unexpected result"
   # A5-02: the designer's 5 rows (psi 50..80) and V2R5's 9 hand rows as one swept row per setting: 8.099 at psi 90
   $CAD check "$V/v2a5/model.blend" "$V25/checks.json" "$V/v2a5/sweep.json" --overlay "$V25/overlay_v2a5.json" --overlay-only --only distances >/dev/null
   python3 -I -c "
@@ -255,6 +258,40 @@ sys.exit(0 if ok else 1)" "$V/v2a5/band.json" \
   $CAD check "$V/v2a5o/model.blend" "$V25/checks.json" --only stacks --out "$V/v2a5o/pre.json" >/dev/null
   [ -f "$V/v2a5o/pre.json" ] && [ ! -f "$V/v2a5o/cadcheck.json" ] && ok "cad check: --out after --only writes there, not over cadcheck.json" || bad "cad check --out flag"
 fi
+# 4i v2 attempt-6 regression (FINDINGS V2A6): the blend V2R6 reviewed and the designer's config
+V26="$ROOT/examples/mm-launcher-v2a6"
+if [ -f "$V26/mm_launcher_v2a6.blend.gz" ]; then
+  mkdir -p "$V/v2a6"; gunzip -c "$V26/mm_launcher_v2a6.blend.gz" > "$V/v2a6/model.blend"; cp "$V26/manifest.json" "$V/v2a6/"
+  # designer config: 0 fails, and every new untriaged warn is one of V2R6's issues or a config fact: A6-01 twice
+  # (insertion: the splice in the feeder's bench step, and the feeder merge blocked +Z by the groove cap), A6-02 twice
+  # (cable ends 8.8 / 5.7 apart across pan), A6-03 (swept rows that missed psi 0), plus the jar/pod/stud step facts
+  $CAD check "$V/v2a6/model.blend" "$V26/checks.json" "$V/v2a6/cadcheck.json" >/dev/null
+  python3 -I -c "
+import json,sys; s=json.load(open(sys.argv[1]))['summary']; w=s['warn_list']; f=' | '.join(w)
+ok = (s['fails'] == 0 and len(s['accepted_warns']) == 35 and not s['stale_accepts']
+  and \"BUY_bus_junction is in bench step '10d\" in f and \"group 'feeder' (16 objects)\" in f and '+Z PRT_groove_cap (BUY_bus_junction) at 3' in f
+  and 'CAB_bus_pan ends 1.2 mm from BUY_bus_junction' in f and 'at pan=-90 that point is 8.8 mm' in f and 'CAB_launcher_base ends 0.0 mm from CAB_launcher_bundle' in f
+  and sum('the swept ray missed a part' in x for x in w) == 4
+  and sum(x.startswith('insertion: ') for x in w) == 5 and len(w) == 11)
+print(len(w)); sys.exit(0 if ok else 1)" "$V/v2a6/cadcheck.json" \
+    && ok "V2A6 designer config: 0 F; insertion flags A6-01 twice, cable drift A6-02 twice, 4 missed swept stations (A6-03)" || bad "V2A6 designer config: unexpected result"
+  # with the three config facts the check asks for (step poses for the pod and jar, the nip stud in the backplate's
+  # step), only the two A6-01 warns are left
+  $CAD check "$V/v2a6/model.blend" "$V26/checks.json" "$V/v2a6/ins.json" --only insertion --overlay "$V26/overlay_v2a6_steps.json" --overlay-only >/dev/null
+  python3 -I -c "
+import json,sys; d=json.load(open(sys.argv[1])); w=d['summary']['warn_list']; r={x['object']: x for x in d['checks']['insertion']['rows']}
+ok = len(w) == 2 and all('bus_junction' in x or \"group 'feeder'\" in x for x in w) and r[\"group 'jar' (11 objects)\"]['free_dir'] == '+Z' \
+  and r['PRT_hood']['free_dir'] == '+X' and r['PRT_nip_stop_sleeve']['free_dir'] == 'along FST_nip_stud'
+sys.exit(0 if ok else 1)" "$V/v2a6/ins.json" \
+    && ok "V2A6 insertion with the step facts declared: only A6-01 left; jar out +Z at +30, sleeve along its stud" || bad "V2A6 insertion with step facts"
+  # V2R6's own rows reproduce its A6-01 evidence: the splice blocked +Z by the groove cap
+  $CAD check "$V/v2a6/model.blend" "$V26/checks.json" "$V/v2a6/rows.json" --only slide,service --overlay "$V26/review_rows_v2a6.json" --overlay-only >/dev/null
+  grep -qF "R6 A6-01 bus junction placed/removed from above" "$V/v2a6/rows.json" && python3 -I -c "
+import json,sys; s=json.load(open(sys.argv[1]))['summary']; sys.exit(0 if s['fails'] == 1 and 'PRT_groove_cap' in s['fail_list'][0] else 1)" "$V/v2a6/rows.json" \
+    && ok "V2A6: V2R6's slide row fails on PRT_groove_cap, as in its review" || bad "V2A6 review rows"
+fi
+# 4j cadlib.bevel flags a globally clamped edge break (V2A6-T2)
+"$BL" -b --factory-startup --python "$ROOT/tools/test_bevel_clamp.py" 2>&1 | grep -q "BEVEL_CLAMP ok" && ok "cadlib.bevel: n=768 cut clamps the break and is flagged; plain box is not" || bad "bevel clamp flag"
 # 8 slide-gate example: prismatic joint, slide flex, =EXPR rows, cable chains and junctions, inscribed bridge span,
 #   no-pose service proved at home, stock lengths (FINDINGS V2A3)
 G8="$ROOT/examples/slide-gate"

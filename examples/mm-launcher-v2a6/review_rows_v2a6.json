@@ -1,0 +1,39 @@
+{
+  "slide_out": [
+    {
+      "name": "R6 A6-01 bus junction placed/removed from above (BOM 10d): BUY_bus_junction +Z out of the hub bore, everything assembled (cables ignored)",
+      "object": "BUY_bus_junction",
+      "ignore": ["CAB_*"],
+      "dir": [0, 0, 1],
+      "dist": 40,
+      "step": 1,
+      "min_clearance": 0.0
+    },
+    {
+      "name": "R6 A6-01 groove cap lifts +Z at tilt 45 after its 6 screws (only way into the bore from above)",
+      "objects": ["PRT_groove_cap", "FST_gcap_*"],
+      "ignore": ["CAB_*"],
+      "pose": {"PIV_tilt": 45},
+      "dir": [0, 0, 1],
+      "dist": 40,
+      "step": 1,
+      "min_clearance": 0.0
+    },
+    {
+      "name": "R6 A6-01 bus junction drops -Z out of the hub bore with the base floor group off (the access the BOM should use)",
+      "object": "BUY_bus_junction",
+      "ignore": ["CAB_*", "PRT_base_floor", "PRT_base_partition", "FST_partition_*", "BUY_motorgo_axis", "FST_mg_*", "BUY_buck_12v", "FST_buck_*", "BUY_servo_controller", "FST_floor_*", "BUY_usbc_plug"],
+      "dir": [0, 0, -1],
+      "dist": 70,
+      "step": 1,
+      "min_clearance": 0.0
+    }
+  ],
+  "service": [
+    {
+      "op": "R6 A6-01 groove cap off for the bus junction (BOM 10d), pod at tilt 45",
+      "fasteners": ["FST_gcap_*"],
+      "pose": {"PIV_tilt": 45}
+    }
+  ]
+}

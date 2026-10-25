@@ -164,6 +164,10 @@ the declared extremes ("min": "=MM_T[1] + TAPE_T"), not as typed nominals (V2A3-
 along an arc or a chute is a ray row with "sweep" over the whole passage, not one station: v2 A4's nip rows sat at BDC and
 passed while the entry arc was 7.50 (V2A4-F1). A clearance to a toleranced purchased part is a "stacks" row with
 "between" (the limit is the measured gap): v2 A5's band stack typed 3.0 while a detent tab sat 0.322 off the band (V2A5-F1).
+A new part goes in the assembly_order step where it physically goes in (not the bench whose cable it carries), and a step
+the BOM does at an angle ("drop in at +30", "nose up 20") gets its "pose": the insertion check then tests it. v2 A6 put the
+bus splice, seated in the pan hub under the groove cap, in the feeder's bench step, and it was the one major (V2A6-F1).
+Cable routes that meet across a joint meet on its axis (V2A6-F2).
 If the plan changes a shared params.py value (a profile constant, an interface), try it first: copy ${HW}/blender to
 /tmp, make the change there, cad build, and cad check --only drop,distances,sightlines; plan around what fails. v2 A5's
 planner predicted PSI_C 45 analytically, the params builder then hit 14 drop fails, and the launcher builder spent 30 min
@@ -208,7 +212,9 @@ ${CONFIG.parallel_builds ? `0. Merge ${HW}/blender/checks.d/*.json into checks.j
 3. Copy the final cadcheck.json to ${dir(n)}/cadcheck.json.
 4. Update ${HW}/BOM_AND_ASSEMBLY.md (assembly steps must match checks.json assembly_order) and append "Attempt ${n}" to ${HW}/DESIGN_LOG.md.
    Then run ${CAD} bom ${HW}/BOM_AND_ASSEMBLY.md ${HW}/blender/manifest.json and fix every BAD row (V2A3-F5, F6).
-   Every claim cites a cadcheck row or cad q line; quote coverage and not_checked. Before writing a motion, timing or
+   Every claim cites a cadcheck row or cad q line; quote coverage and not_checked (${CAD} rows cadcheck.json --summary).
+   Every BOM step that puts a part "in", "into" or "under" something has its part in that step of assembly_order, and
+   checks.insertion lists it with a free direction (V2A6-F1). Before writing a motion, timing or
    service claim (index positions, "adjust without disassembly", "comes off at tilt 45"), add the matching
    index_tests / service / slide_out entry to checks.json and re-run cad check (FINDINGS A2-F2, A2-F6). "Removable" is a
    slide_out over the whole path (A3-F3). Every printed spring or snap arm gets a flexures entry (A3-F2).
