@@ -4,6 +4,8 @@
     cad build blender/build_assembly.py -- --render     # + preview renders (960 px)
     CAD_RENDER_FINAL=1 cad build blender/build_assembly.py -- --render --out-renders renders/attempt-N
     cad check blender/model.blend blender/checks.json
+    cad build blender/build_assembly.py -- --out /tmp/proj-feeder   # model.blend, manifest.json, stl/ go there instead
+                                                                    # (parallel builders must not share one model.blend)
 
 Parameters live in params.py; each subsystem is one module in parts/ with a build(P) function.
 Edit the module you are changing; rebuild; check. Keep each module small enough to edit in place.
@@ -11,7 +13,8 @@ Edit the module you are changing; rebuild; check. Keep each module small enough 
 import importlib, os, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-SKILL = os.environ.get("CAD_SKILL", os.path.expanduser("~/code-stuff/alex-3d-skills/skills/print-cad-blender"))
+# `cad build` sets CAD_SKILL to its own checkout; set it yourself if you run Blender directly
+SKILL = os.environ.get("CAD_SKILL") or sys.exit("CAD_SKILL is not set: run this through <skill>/scripts/cad build")
 sys.path.insert(0, os.path.join(SKILL, "scripts"))
 sys.path.insert(0, HERE)
 from cadlib import asm, export, render  # noqa: E402
@@ -36,11 +39,14 @@ for name in (arg("--only", "") or ",".join(SUBSYSTEMS)).split(","):
     mod.build(P)
     print("SUBSYSTEM %s built in %.1f s" % (name, time.time() - t))
 
-qty = export.export_stls(os.path.join(ROOT, "stl"))
-asm.write_manifest(os.path.join(HERE, "manifest.json"))
+OUT = arg("--out")
+if OUT:
+    os.makedirs(OUT, exist_ok=True)
+qty = export.export_stls(os.path.join(OUT or ROOT, "stl"))
+asm.write_manifest(os.path.join(OUT or HERE, "manifest.json"))
 if "--render" in argv:
     out = arg("--out-renders", os.path.join(ROOT, "renders", "preview"))
     render.view_set(out, poses=P.RENDER_POSES)
     render.exploded(out)
-export.save_blend(os.path.join(HERE, "model.blend"))
+export.save_blend(os.path.join(OUT or HERE, "model.blend"))
 print("BUILD_DONE %.1f s, stls %s" % (time.time() - t0, qty))

@@ -40,6 +40,14 @@ IDs point into `<repo>/docs/FINDINGS.md`. "Caught" means cadcheck or cadq flags 
 | A3-F5 | Hinge axle threads 2.5 mm into PLA | engagement < `min_engagement` | yes (warn): 2.0 mm |
 | A3-F7 | 8 mm of bundle seen through a notch at the bonnet foot (unchanged since A2; R2 missed it) | cable exposure, viewer-direction rule | yes (warn): 8 mm (R3: about 8) |
 | A3-F8 | Battery-bay window shows the adapter nuts | nut visibility | partial: both nuts warned; window size not checked |
+| V2A1-F1 | Nip adjuster tested at its home setting only; stalls at the open end, hood hits the body past the closed end | drop coverage warn ("holds PIV_hood at home"), then drop rows at both ends | yes: warn, then 3 fails with both ends |
+| V2A1-F2 | Gap adjustment needs a cover that comes off only at tilt 45 | service warn when an op removes parts without a slide_out at its pose | only if the op lists `remove` |
+| V2A1-F5 | 0.94 mm wall at self-tap pilots, 0.40 mm magnet stack, knife edges: all warns, none read | `accepted_warns`, `untriaged_warns` | yes (they were always warns) |
+| V2A1-V4 | `contact: true` for a thrust face also hid the journal on the same pair | `contact_normal` | yes, once declared |
+| V2A1-F3 | Pocket admits two payloads side by side | none yet (probe script) | no |
+
+**Rule from v2 A1:** 0 fails is not done. Read every warn on your objects: fix it, or list it under `accepted_warns`
+with a reason. Three of the first v2 reviewer's twelve issues were warns in the designer's own hand-off.
 
 **Rule from A2:** every sentence in the BOM or design log that states a motion, timing or service claim ("park at 0, fire
 at +60", "change the gap without disassembly", "the flywheel comes off at tilt 45") gets a `checks.json` entry

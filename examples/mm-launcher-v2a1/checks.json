@@ -1,0 +1,1115 @@
+{
+ "_about": "v2 checks. Every geometric v1 review issue has a row here; the id in each 'why' points into ../renders/attempt-N/review.md (A1-#n, A2-#n, A3-Xn). Object names follow DESIGN_LOG.md 'v2 naming'. distances.a/b are exact names.",
+ "overtravel_deg": 2.5,
+ "moving_min_clearance": 0.5,
+ "moving_warn_clearance": 1.0,
+ "allow": [
+  {
+   "a": "BUY_servo_*",
+   "b": "BUY_horn_*",
+   "why": "spline inside the horn hub"
+  },
+  {
+   "a": "BUY_motor",
+   "b": "PRT_flywheel",
+   "why": "motor shaft (modelled with the stator) sits in the clamping D-bore"
+  },
+  {
+   "a": "BUY_motor",
+   "b": "BUY_magnet",
+   "why": "magnet glued to the rear shaft end"
+  },
+  {
+   "a": "BUY_battery",
+   "b": "BUY_dewalt_adapter",
+   "why": "battery rail stem slides into the adapter"
+  },
+  {
+   "a": "FST_adapter_*",
+   "b": "BUY_dewalt_adapter",
+   "why": "self-tap M3 into the adapter's own corner holes (not modelled in the envelope)"
+  },
+  {
+   "a": "BUY_horn_*",
+   "b": "PRT_*horn_adapter",
+   "why": "horn disc sits in its 1.0 mm recess"
+  },
+  {
+   "a": "BUY_horn_feeder",
+   "b": "PRT_feeder_pinion",
+   "why": "horn disc sits in the pinion recess"
+  },
+  {
+   "a": "PRT_nip_leaf",
+   "b": "PRT_nip_wheel",
+   "why": "leaf drawn in its free (as-printed, flat) state: the two pads stand LEAF_PRE 1.2 into the thumbwheel top = the ~9 N preload (A3-M1)"
+  },
+  {
+   "a": "FST_nip_stud",
+   "b": "PRT_nip_wheel",
+   "why": "stud threads through the thumbwheel's captive nut; the wheel rides the stud, drawn static at the 6.5 setting, so the stud's swing shows as overlap in its bore"
+  },
+  {
+   "a": "FST_nip_stud",
+   "b": "FST_tw_nut",
+   "why": "stud runs in the thumbwheel's captive nut (thread); the nut is drawn static at the 6.5 setting"
+  }
+ ],
+ "fits": [
+  {
+   "a": "PRT_base_shell",
+   "b": "PRT_turntable",
+   "contact": true,
+   "why": "plain thrust ring on the deck + hub journal in the deck hole"
+  },
+  {
+   "a": "PRT_base_shell",
+   "b": "PRT_thrust_ring",
+   "contact": true,
+   "why": "thrust ring rides with the turntable and slides on the deck top"
+  },
+  {
+   "a": "PRT_base_*",
+   "b": "PRT_pan_pinion",
+   "min_clearance": 0.2,
+   "why": "pinion turns in its deck opening"
+  },
+  {
+   "a": "PRT_turntable",
+   "b": "PRT_pan_pinion",
+   "min_clearance": 0.1,
+   "why": "1:1 hub gear mesh"
+  },
+  {
+   "a": "PRT_hub_gear",
+   "b": "PRT_pan_pinion",
+   "min_clearance": 0.1,
+   "why": "1:1 hub gear mesh (gear screwed up into the hub)"
+  },
+  {
+   "a": "PRT_post_L",
+   "b": "PRT_nacelle",
+   "min_clearance": 0.1,
+   "why": "left tilt journal R15 in R15.2 bore"
+  },
+  {
+   "a": "PRT_beam",
+   "b": "PRT_nacelle",
+   "min_clearance": 0.1,
+   "why": "beam tongue closes the left journal U-slot"
+  },
+  {
+   "a": "PRT_post_R",
+   "b": "PRT_journal_plate",
+   "contact": true,
+   "why": "right journal + printed hard-stop lugs touch at -3 / +46 (A1-#5)"
+  },
+  {
+   "a": "PRT_beam",
+   "b": "PRT_journal_plate",
+   "min_clearance": 0.1,
+   "why": "beam tongue closes the right journal U-slot"
+  },
+  {
+   "a": "PRT_post_R",
+   "b": "PRT_tilt_horn_adapter",
+   "min_clearance": 0.2,
+   "why": "horn adapter turns in the post's inner-wall hole"
+  },
+  {
+   "a": "BUY_servo_tilt",
+   "b": "PRT_tilt_horn_adapter",
+   "min_clearance": 0.2,
+   "why": "adapter face runs 0.3 off the servo case"
+  },
+  {
+   "a": "BUY_servo_tilt",
+   "b": "BUY_horn_tilt",
+   "min_clearance": 0.0,
+   "why": "horn on the spline"
+  },
+  {
+   "a": "PRT_feeder_housing",
+   "b": "PRT_feeder_disc",
+   "min_clearance": 0.3,
+   "why": "disc runs on the housing floor under the gear-ring lip"
+  },
+  {
+   "a": "PRT_feeder_housing",
+   "b": "PRT_feeder_pinion",
+   "min_clearance": 0.3,
+   "why": "pinion in its chamber"
+  },
+  {
+   "a": "PRT_feeder_disc",
+   "b": "PRT_feeder_pinion",
+   "min_clearance": 0.1,
+   "why": "gear mesh 44:30"
+  },
+  {
+   "a": "PRT_feeder_housing",
+   "b": "PRT_jar_gate",
+   "min_clearance": 0.3,
+   "why": "gate handle stub passes over the housing top as the jar twists"
+  },
+  {
+   "a": "PRT_feeder_crown",
+   "b": "PRT_feeder_disc",
+   "min_clearance": 0.3,
+   "why": "disc land R31 journals in the crown bore R31.3; gear band under the lip (cavity R35, 0.3 below the lip)"
+  },
+  {
+   "a": "PRT_feeder_crown",
+   "b": "PRT_feeder_pinion",
+   "min_clearance": 0.3,
+   "why": "pinion in its chamber R24.3"
+  },
+  {
+   "a": "PRT_feeder_crown",
+   "b": "PRT_jar_valve",
+   "contact": true,
+   "why": "bayonet lugs bear on the L-slot leg floors (jar weight) and twist 30 deg; valve skirt 0.3 inside the chamber bore"
+  },
+  {
+   "a": "PRT_feeder_crown",
+   "b": "PRT_jar_gate",
+   "min_clearance": 0.3,
+   "why": "gate blade and tab pass over the crown top as the jar twists"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_launcher_body",
+   "min_clearance": 0.3,
+   "why": "backplate swings in its bay (bay = swept band + 0.5)"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_journal_plate",
+   "min_clearance": 0.3,
+   "why": "backplate swings next to the journal plate"
+  },
+  {
+   "a": "FST_hinge",
+   "b": "PRT_hood",
+   "contact": true,
+   "why": "hinge axle through the backplate boss"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_nip_wheel",
+   "contact": true,
+   "why": "thumbwheel is the minimum-gap stop the backplate rests on (via the stud)"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "FST_nip_stud",
+   "contact": true,
+   "why": "stud head in the backplate's hex pocket"
+  }
+ ],
+ "assembly_order": [
+  {
+   "step": "1 base shell upside down: adapter into its fence, M3 x 20 self-tappers from the deck top",
+   "objects": [
+    "PRT_base_shell",
+    "BUY_dewalt_adapter",
+    "FST_adapter_*"
+   ]
+  },
+  {
+   "step": "1a pan drive on the bench: horn screwed into the pinion recess",
+   "bench": "pandrive",
+   "objects": [
+    "PRT_pan_pinion",
+    "BUY_horn_pan",
+    "FST_pinion_?"
+   ]
+  },
+  {
+   "step": "1b pan drive on the bench: servo into the pocket + clamp, pinion onto the spline, centre screw through the pinion",
+   "bench": "pandrive",
+   "objects": [
+    "PRT_pan_servo_*",
+    "BUY_servo_pan",
+    "FST_panclamp_*",
+    "FST_pinion_ctr"
+   ]
+  },
+  {
+   "step": "1c pan drive onto the deck posts",
+   "merge": "pandrive",
+   "objects": [
+    "FST_panservo_*"
+   ]
+  },
+  {
+   "step": "2a floor plate on the bench: partition, MotorGo on its standoffs",
+   "bench": "floor",
+   "objects": [
+    "PRT_base_floor",
+    "PRT_base_partition",
+    "FST_partition_*",
+    "BUY_motorgo_axis",
+    "FST_mg_*"
+   ]
+  },
+  {
+   "step": "2b floor plate on the bench: buck, servo controller",
+   "bench": "floor",
+   "objects": [
+    "BUY_buck_12v",
+    "FST_buck_*",
+    "BUY_servo_controller",
+    "FST_ctrl_*"
+   ]
+  },
+  {
+   "step": "2c turntable on the bench: groove cap, posts from the turntable underside",
+   "bench": "turntable",
+   "objects": [
+    "PRT_turntable",
+    "PRT_groove_cap",
+    "FST_gcap_*",
+    "PRT_post_L",
+    "PRT_post_R",
+    "FST_post_*"
+   ]
+  },
+  {
+   "step": "2d thrust ring on the hub, turntable assembly into the deck hole; hub gear meshed under the deck and screwed up into the hub (floor still off)",
+   "merge": "turntable",
+   "objects": [
+    "PRT_thrust_ring",
+    "PRT_hub_*",
+    "FST_hub_*",
+    "FST_tt_*"
+   ]
+  },
+  {
+   "step": "3 floor into the shell, cables",
+   "merge": "floor",
+   "objects": [
+    "FST_floor_*",
+    "CAB_12v*",
+    "CAB_uart*",
+    "CAB_usb*",
+    "CAB_bus_pan*",
+    "BUY_usbc_plug"
+   ]
+  },
+  {
+   "step": "6a pod on the bench: motor into the nacelle bore (crush ribs), body onto the nacelle plate; motor + nacelle screws from inside the guard; phase leads into the journal bore",
+   "bench": "pod",
+   "objects": [
+    "PRT_nacelle",
+    "PRT_launcher_body",
+    "BUY_motor",
+    "FST_motor_*",
+    "FST_nacelle_*",
+    "CAB_phase_*"
+   ]
+  },
+  {
+   "step": "6b magnet glued on the rear shaft with the jig (spigot in the 8 mm access hole); Plink on the cap pegs; encoder cap into the bore",
+   "bench": "pod",
+   "objects": [
+    "BUY_magnet",
+    "BUY_plink_encoder",
+    "PRT_encoder_cap",
+    "FST_enc_*",
+    "CAB_encoder*"
+   ]
+  },
+  {
+   "step": "6c hex stud head dropped into the backplate pocket (captive hex, never driven)",
+   "bench": "pod",
+   "objects": [
+    "FST_nip_stud"
+   ]
+  },
+  {
+   "step": "6d backplate into its bay, journal plate on (3 csk), hinge axle through wall + boss + plate into its trapped nut",
+   "bench": "pod",
+   "objects": [
+    "PRT_hood",
+    "PRT_journal_plate",
+    "FST_jp_*",
+    "FST_hinge",
+    "FST_hinge_nut"
+   ]
+  },
+  {
+   "step": "6e thumbwheel onto the stud (set the gap), leaf screwed under the nip cover from outside, cover onto the land",
+   "bench": "pod",
+   "objects": [
+    "PRT_nip_wheel",
+    "FST_tw_*",
+    "PRT_nip_leaf",
+    "PRT_nip_cover",
+    "FST_leaf_*",
+    "FST_nipcover_*"
+   ]
+  },
+  {
+   "step": "6f flywheel onto the D-shaft, two pinch bolts through their nuts (L-key from +X)",
+   "bench": "pod",
+   "objects": [
+    "PRT_flywheel",
+    "FST_fw_*"
+   ]
+  },
+  {
+   "step": "6g wheel-side cover (4 csk)",
+   "bench": "pod",
+   "objects": [
+    "PRT_launcher_cover",
+    "FST_cover_*"
+   ]
+  },
+  {
+   "step": "7 pod drops into the post U-slots",
+   "merge": "pod",
+   "objects": []
+  },
+  {
+   "step": "8a tilt drive on the bench: horn screwed to the adapter",
+   "bench": "tiltdrive",
+   "objects": [
+    "PRT_tilt_horn_adapter",
+    "BUY_horn_tilt",
+    "FST_tilt_horn_?"
+   ]
+  },
+  {
+   "step": "8b tilt drive on the bench: adapter + horn onto the servo spline, centre screw through the 6.5 key hole",
+   "bench": "tiltdrive",
+   "objects": [
+    "BUY_servo_tilt",
+    "FST_tilt_horn_ctr"
+   ]
+  },
+  {
+   "step": "8 tilt servo + horn adapter slide in -X through the right post (key into the journal-plate socket), cover",
+   "merge": "tiltdrive",
+   "objects": [
+    "PRT_post_R_cover",
+    "FST_postcover_*",
+    "CAB_bus_tilt*"
+   ]
+  },
+  {
+   "step": "9 beam closes the journal U-slots",
+   "objects": [
+    "PRT_beam",
+    "FST_beam_*",
+    "CAB_launcher*"
+   ]
+  },
+  {
+   "step": "10a feeder drive on the bench: horn screwed into the pinion recess (M2 x 4)",
+   "bench": "feeder",
+   "objects": [
+    "PRT_feeder_pinion",
+    "BUY_horn_feeder",
+    "FST_fhorn_?"
+   ]
+  },
+  {
+   "step": "10b crown upside down: pinion + horn in from below, servo #3 into its pocket from the top (spline into the horn), centre screw up through the pinion",
+   "bench": "feeder",
+   "objects": [
+    "PRT_feeder_crown",
+    "BUY_servo_feeder",
+    "FST_fhorn_ctr"
+   ]
+  },
+  {
+   "step": "10c disc in from below (band meshes with the pinion), floor plate on with 2 csk from below",
+   "bench": "feeder",
+   "objects": [
+    "PRT_feeder_disc",
+    "PRT_feeder_housing",
+    "FST_fplate_*"
+   ]
+  },
+  {
+   "step": "10d feeder upright: bus into the channel, servo cover (2 csk)",
+   "bench": "feeder",
+   "objects": [
+    "PRT_feeder_cover",
+    "FST_fcover_*",
+    "CAB_bus_feeder*"
+   ]
+  },
+  {
+   "step": "11 feeder onto the beam",
+   "merge": "feeder",
+   "objects": [
+    "FST_feedmount_*"
+   ]
+  },
+  {
+   "step": "12 jar on the bench: adapter in the band, valve on the spout, gate",
+   "bench": "jar",
+   "objects": [
+    "BUY_jar",
+    "BUY_jar_band",
+    "BUY_mm_fill",
+    "PRT_jar_adapter",
+    "PRT_jar_valve",
+    "PRT_jar_gate",
+    "FST_valve_*"
+   ]
+  },
+  {
+   "step": "13 jar onto the feeder: drop in at +30, twist to 0",
+   "merge": "jar",
+   "objects": []
+  }
+ ],
+ "fasteners": {
+  "min_engagement": 4.0,
+  "max_standoff": 2.0,
+  "max_protrusion": 3.0
+ },
+ "service": [
+  {
+   "op": "set the nip gap: nip cover off (thumbwheel turns by hand) (A2-#7, A2-F6)",
+   "fasteners": [
+    "FST_nipcover_*"
+   ]
+  },
+  {
+   "op": "pod cover off for tape / flywheel (A1-#6)",
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "fasteners": [
+    "FST_cover_*"
+   ]
+  },
+  {
+   "op": "re-tighten the flywheel pinch bolts, cover off (A2-#1)",
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "remove": [
+    "PRT_launcher_cover",
+    "FST_cover_*"
+   ],
+   "fasteners": [
+    "FST_fw_bolt_*"
+   ]
+  },
+  {
+   "op": "encoder cap off (A1-#7)",
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "fasteners": [
+    "FST_enc_*"
+   ]
+  },
+  {
+   "op": "tilt servo swap: right post cover off",
+   "fasteners": [
+    "FST_postcover_*"
+   ]
+  },
+  {
+   "op": "feeder servo cover off",
+   "fasteners": [
+    "FST_fcover_*"
+   ]
+  },
+  {
+   "op": "base floor off",
+   "fasteners": [
+    "FST_floor_*"
+   ]
+  }
+ ],
+ "drop_tests": [
+  {
+   "name": "outlet_to_descending_rear_tape (A1-#1, A1-#9, A3-F1)",
+   "mode": "slide",
+   "stall_deg": 28,
+   "capture_mm": 0.5,
+   "payload_mm": 7.0,
+   "emit": {
+    "frame": "PIV_pan",
+    "center": [
+     21.0,
+     0.0,
+     262.5
+    ],
+    "normal": [
+     0,
+     0,
+     1
+    ],
+    "radius": 6.5,
+    "step": 2
+   },
+   "dir": [
+    0,
+    0,
+    -1
+   ],
+   "poses": {
+    "PIV_tilt": [
+     0,
+     15,
+     22.5,
+     30,
+     40,
+     45,
+     46
+    ]
+   },
+   "expect": {
+    "hit": [
+     "PRT_flywheel"
+    ],
+    "angle": {
+     "center": "PIV_flywheel",
+     "frame": "PIV_tilt",
+     "axis": "X",
+     "zero": "-Z",
+     "positive": "-Y",
+     "range": [
+      0,
+      112
+     ]
+    }
+   }
+  }
+ ],
+ "index_tests": [
+  {
+   "name": "feeder_fire_plus60_one_candy (A2-#2)",
+   "joint": "PIV_feeder",
+   "sequence": [
+    0,
+    60,
+    0
+   ],
+   "step": 2,
+   "probe": {
+    "frame": "PIV_pan",
+    "center": [
+     21.0,
+     0.0,
+     271.0
+    ],
+    "dir": [
+     0,
+     0,
+     -1
+    ],
+    "radius": 3,
+    "depth": 11
+   },
+   "blockers": [
+    "PRT_feeder_disc",
+    "PRT_feeder_housing"
+   ],
+   "expect_windows": 1
+  },
+  {
+   "name": "feeder_fire_minus60_one_candy (A2-#2)",
+   "joint": "PIV_feeder",
+   "sequence": [
+    0,
+    -60,
+    0
+   ],
+   "step": 2,
+   "probe": {
+    "frame": "PIV_pan",
+    "center": [
+     21.0,
+     0.0,
+     271.0
+    ],
+    "dir": [
+     0,
+     0,
+     -1
+    ],
+    "radius": 3,
+    "depth": 11
+   },
+   "blockers": [
+    "PRT_feeder_disc",
+    "PRT_feeder_housing"
+   ],
+   "expect_windows": 1
+  },
+  {
+   "name": "feeder_column_never_open_to_outlet (baffle over the outlet sector, A2-#2)",
+   "joint": "PIV_feeder",
+   "sequence": [
+    0,
+    60,
+    0,
+    -60,
+    0
+   ],
+   "step": 2,
+   "probe": {
+    "frame": "PIV_pan",
+    "center": [
+     21.0,
+     0.0,
+     287.5
+    ],
+    "dir": [
+     0,
+     0,
+     -1
+    ],
+    "radius": 3,
+    "depth": 27.5
+   },
+   "blockers": [
+    "PRT_feeder_disc",
+    "PRT_feeder_housing",
+    "PRT_feeder_crown",
+    "PRT_jar_valve"
+   ],
+   "expect_windows": 0
+  }
+ ],
+ "slide_out": [
+  {
+   "name": "battery out +X past every fastener (A3-M2, A2-#5, A1-#13)",
+   "object": "BUY_battery",
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": 120,
+   "step": 5,
+   "min_clearance": 1.0
+  },
+  {
+   "name": "flywheel off +X at tilt 45, cover removed (A1-#6, A1-#18)",
+   "objects": [
+    "PRT_flywheel",
+    "FST_fw_*"
+   ],
+   "ignore": [
+    "PRT_launcher_cover",
+    "FST_cover_*",
+    "BUY_motor"
+   ],
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": 140,
+   "step": 5
+  },
+  {
+   "name": "pod cover off forward at tilt 45 (A1-#6) (screws out first)",
+   "objects": [
+    "PRT_launcher_cover"
+   ],
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "dist": 90,
+   "step": 5,
+   "ignore": [
+    "FST_cover_*"
+   ]
+  },
+  {
+   "name": "encoder cap off -X at tilt 45 (A1-#7) (screws out first)",
+   "objects": [
+    "PRT_encoder_cap",
+    "BUY_plink_encoder"
+   ],
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "dir": [
+    -1,
+    0,
+    0
+   ],
+   "dist": 15,
+   "step": 1,
+   "ignore": [
+    "FST_enc_*"
+   ]
+  },
+  {
+   "name": "nip cover + leaf off, down at tilt 45 (cover faces down there; at tilt 0 it sits over the turntable) (A3-M1 leaf replaceable) (screws out first)",
+   "objects": [
+    "PRT_nip_cover",
+    "PRT_nip_leaf",
+    "FST_leaf_*"
+   ],
+   "dir": [
+    0,
+    0,
+    -1
+   ],
+   "dist": 30,
+   "step": 2,
+   "ignore": [
+    "FST_nipcover_*"
+   ],
+   "pose": {
+    "PIV_tilt": 45
+   }
+  },
+  {
+   "name": "jar group lifts off when unlocked (brief 1: refill)",
+   "objects": [
+    "BUY_jar",
+    "BUY_jar_band",
+    "BUY_mm_fill",
+    "PRT_jar_adapter",
+    "PRT_jar_valve",
+    "PRT_jar_gate",
+    "FST_valve_*"
+   ],
+   "pose": {
+    "PIV_jar": 30
+   },
+   "dir": [
+    0,
+    0,
+    1
+   ],
+   "dist": 60,
+   "step": 2,
+   "min_clearance": 0.3
+  },
+  {
+   "name": "gate opens: pull +X (brief 1)",
+   "object": "PRT_jar_gate",
+   "ignore": [
+    "PRT_jar_valve"
+   ],
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": 52,
+   "step": 2,
+   "min_clearance": 0.3
+  },
+  {
+   "name": "tilt servo out +X through the right post (no pod removal; guided by its 0.3 clamp pocket)",
+   "objects": [
+    "BUY_servo_tilt",
+    "BUY_horn_tilt",
+    "PRT_tilt_horn_adapter",
+    "FST_tilt_horn_*"
+   ],
+   "ignore": [
+    "PRT_post_R_cover",
+    "FST_postcover_*"
+   ],
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": 60,
+   "step": 5,
+   "min_clearance": 0.25
+  }
+ ],
+ "distances": [
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": 5.5,
+   "max": 7.0,
+   "why": "nip squeezes a 7 mm M&M ~1 mm over 0.5 tape (A1-#2, A2-#4)",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     37.0,
+     131.75
+    ],
+    "dir": [
+     0,
+     0,
+     1
+    ]
+   },
+   "payload_mm": 7.0,
+   "tape_mm": 0.5,
+   "compliant": "PRT_nip_leaf: flat-printed leaf spring, ~9 N preload, backplate lifts 1.5 mm (A3-M1)"
+  },
+  {
+   "a": "FST_adapter_0",
+   "b": "BUY_battery",
+   "min": 3.0,
+   "why": "adapter screw tip >= 3 mm above the battery face (A3-M2, A2-#5)"
+  },
+  {
+   "a": "FST_adapter_1",
+   "b": "BUY_battery",
+   "min": 3.0,
+   "why": "adapter screw tip >= 3 mm above the battery face (A3-M2, A2-#5)"
+  },
+  {
+   "a": "BUY_jar_band",
+   "b": "PRT_feeder_housing",
+   "min": 2.0,
+   "why": "glass/band tolerance +/-1: nothing touches the band (brief 1)"
+  },
+  {
+   "a": "BUY_jar_band",
+   "b": "PRT_feeder_crown",
+   "min": 2.0,
+   "why": "glass/band tolerance +/-1: nothing touches the band (brief 1); the crown is the housing part nearest the band",
+   "poses": [
+    {},
+    {
+     "PIV_jar": 30
+    }
+   ]
+  },
+  {
+   "a": "BUY_jar",
+   "b": "PRT_feeder_crown",
+   "min": 2.0,
+   "why": "glass never touches the crown (brief 1)",
+   "poses": [
+    {},
+    {
+     "PIV_jar": 30
+    }
+   ]
+  },
+  {
+   "a": "BUY_jar",
+   "b": "PRT_feeder_cover",
+   "min": 2.0,
+   "why": "glass never touches the servo lobe (brief 1)",
+   "poses": [
+    {},
+    {
+     "PIV_jar": 30
+    }
+   ]
+  },
+  {
+   "a": "PRT_feeder_disc",
+   "b": "PRT_jar_valve",
+   "min": 1.5,
+   "why": "agitator / disc top clears the valve bottom (no shear plane)"
+  },
+  {
+   "a": "PRT_feeder_housing",
+   "b": "PRT_launcher_body",
+   "min": 2.5,
+   "why": "feeder spout to the pod drum at every tilt (A1-#5, A1-#9)",
+   "poses": [
+    {
+     "PIV_tilt": 0
+    },
+    {
+     "PIV_tilt": 22.5
+    },
+    {
+     "PIV_tilt": 45
+    },
+    {
+     "PIV_tilt": 46
+    },
+    {
+     "PIV_tilt": -3
+    }
+   ]
+  },
+  {
+   "a": "PRT_beam",
+   "b": "PRT_launcher_body",
+   "min": 2.5,
+   "why": "beam underside to the pod at every tilt incl. the stops (A1-#5)",
+   "poses": [
+    {
+     "PIV_tilt": 0
+    },
+    {
+     "PIV_tilt": 22.5
+    },
+    {
+     "PIV_tilt": 45
+    },
+    {
+     "PIV_tilt": 46
+    },
+    {
+     "PIV_tilt": -3
+    }
+   ]
+  },
+  {
+   "a": "PRT_post_L",
+   "b": "PRT_encoder_cap",
+   "min": 2.0,
+   "why": "left post to the encoder end at every tilt",
+   "poses": [
+    {
+     "PIV_tilt": 0
+    },
+    {
+     "PIV_tilt": 22.5
+    },
+    {
+     "PIV_tilt": 46
+    },
+    {
+     "PIV_tilt": -3
+    }
+   ]
+  },
+  {
+   "a": "PRT_flywheel",
+   "b": "PRT_launcher_body",
+   "min": 1.5,
+   "why": "wheel to guard cavity (A1-#11 no rubbing)"
+  }
+ ],
+ "stacks": [
+  {
+   "name": "magnet centring on the rear shaft (A1-#7, A2-#6)",
+   "limit": 0.3,
+   "terms": [
+    {
+     "what": "jig spigot 7.8 in the motor's 8.0 rear access hole",
+     "tol": 0.1
+    },
+    {
+     "what": "magnet in its 6.1 jig pocket",
+     "tol": 0.05
+    },
+    {
+     "what": "encoder cap spigot crush ribs in the nacelle bore",
+     "tol": 0.05
+    },
+    {
+     "what": "motor can crush ribs in the nacelle bore",
+     "tol": 0.05
+    },
+    {
+     "what": "Plink PCB pegs 2.3 in 2.5 holes",
+     "tol": 0.1
+    },
+    {
+     "what": "MT6701 IC position on the PCB",
+     "tol": 0.05
+    }
+   ]
+  },
+  {
+   "name": "jar band clears the housing (designed radial clearance 3.0)",
+   "limit": 3.0,
+   "terms": [
+    {
+     "what": "glass thread / band (nominal jar)",
+     "tol": 1.0
+    },
+    {
+     "what": "adapter disc in the band",
+     "tol": 0.75
+    },
+    {
+     "what": "spout in the valve bore",
+     "tol": 0.15
+    },
+    {
+     "what": "valve in the socket",
+     "tol": 0.3
+    },
+    {
+     "what": "bayonet lug in its slot",
+     "tol": 0.2
+    }
+   ]
+  },
+  {
+   "name": "pocket over outlet at fire (outlet 16, pocket 15, candy 13)",
+   "limit": 1.0,
+   "terms": [
+    {
+     "what": "gear backlash at the pocket circle",
+     "tol": 0.15
+    },
+    {
+     "what": "servo deadband +/-0.5 deg at the pinion -> 0.34 deg at r 21",
+     "tol": 0.12
+    },
+    {
+     "what": "disc land R31 in the crown bore R31.3 (radial play)",
+     "tol": 0.3
+    },
+    {
+     "what": "outlet position in the housing",
+     "tol": 0.1
+    }
+   ]
+  }
+ ],
+ "exposure": {
+  "max_cable_mm": 5,
+  "cables_ok": [
+   "CAB_usb*"
+  ],
+  "min_escape": 8
+ },
+ "cable_leads": {
+  "CAB_phase_*": 80
+ },
+ "masses_g": {
+  "BUY_battery": 620,
+  "BUY_dewalt_adapter": 90,
+  "BUY_buck_12v": 180,
+  "BUY_motorgo_axis": 25,
+  "BUY_servo_controller": 30,
+  "BUY_servo_*": 66,
+  "BUY_horn_*": 4,
+  "BUY_motor": 200,
+  "BUY_magnet": 1,
+  "BUY_plink_encoder": 3,
+  "BUY_usbc_plug": 10,
+  "BUY_jar": 350,
+  "BUY_mm_fill": 400,
+  "BUY_jar_band": 15
+ },
+ "printers": {
+  "P1S": [
+   256,
+   256,
+   256
+  ],
+  "H2D": [
+   325,
+   320,
+   325
+  ]
+ },
+ "prefer_printer": "P1S"
+}

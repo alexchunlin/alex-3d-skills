@@ -181,6 +181,8 @@ FASTENER_SPECS = {
     # spec: (shank d, head d, head h)
     "M3_cap": (3.0, 5.5, 3.0), "M3_pan": (3.0, 6.0, 2.4), "M3_csk": (3.0, 6.0, 1.7),
     "M3_selftap_pan": (3.0, 6.0, 2.4), "M2_pan": (2.0, 3.8, 1.3),
+    # ISO 4762 / ISO 7045 M2.5 (MotorGo board screws; the v2 A1 finisher looked this table up and found none)
+    "M2.5_cap": (2.5, 4.5, 2.5), "M2.5_pan": (2.5, 5.0, 1.75),
 }
 
 

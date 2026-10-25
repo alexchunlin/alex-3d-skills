@@ -2,6 +2,13 @@
 
     Blender -b model.blend --python cadcheck.py -- [--config checks.json] [--out report.json]
                                                    [--only parts,interference,...] [--quick]
+                                                   [--overlay extra.json ... [--overlay-only]]
+
+--overlay merges another config on top (repeatable): list sections (drop_tests, slide_out, service, distances, ...)
+are appended (allow and fits rules go first, so they win), dict sections updated. With --overlay-only, list sections
+named in the overlays replace the base rows, so `--only drop,slide --overlay mine.json --overlay-only` runs just
+your rows. The v2 A1 reviewer spent about 5.5 of 14.7 min hand-building copies of checks.json with sections emptied
+(FINDINGS V2A1-T6).
 
 Works on any .blend that follows the conventions in ../SKILL.md (collections Printed / Purchased /
 Fasteners / Cables, moving links parented under PIV_* empties). Joint ranges come from PIV_* custom
@@ -76,6 +83,10 @@ DEFAULTS = {
     "pla_density": 1.24e-3,
     "flow_mm3_s": 12.0,
     "cable_leads": {},
+    # [{"match": "substring of the warn text", "why": "..."}]: a warn you looked at and accept. The summary counts
+    # untriaged warns separately. v2 A1 finished at 0 fails, 34 warns; 3 of R1's issues (A1-05, 07, 08) were warns
+    # in that list that nobody acted on (FINDINGS V2A1-F5)
+    "accepted_warns": [],
 }
 
 T0 = time.time()
@@ -85,6 +96,20 @@ if _arg("--config"):
         user = json.load(f)
     for k, v in user.items():
         if isinstance(v, dict) and isinstance(CFG.get(k), dict):
+            CFG[k].update(v)
+        else:
+            CFG[k] = v
+_replaced = set()
+for _ov in [ARGV[i + 1] for i, a in enumerate(ARGV[:-1]) if a == "--overlay"]:     # repeatable
+    with open(_ov) as f:
+        extra = json.load(f)
+    for k, v in extra.items():
+        if isinstance(v, list) and isinstance(CFG.get(k), list):
+            if "--overlay-only" in ARGV and k not in _replaced:
+                CFG[k], _ = list(v), _replaced.add(k)
+            else:
+                CFG[k] = v + CFG[k] if k in ("allow", "fits", "accepted_warns") else CFG[k] + v   # first matching rule wins
+        elif isinstance(v, dict) and isinstance(CFG.get(k), dict):
             CFG[k].update(v)
         else:
             CFG[k] = v
@@ -129,6 +154,9 @@ for _g, _piv in CFG["carry"].items():
         _o.parent = O[_piv]
         _o.matrix_world = _mw
 bpy.context.view_layer.update()
+
+
+HOME_MW = {}
 
 
 def is_nut(o):
@@ -246,24 +274,34 @@ def frange(a, b, st):
     return out
 
 
-def thin(lst, k):
+def thin(lst, k, keep=()):
+    """k evenly spaced items of lst; indices in `keep` always stay."""
     if len(lst) <= k:
         return lst
-    idx = sorted(set(round(i * (len(lst) - 1) / (k - 1)) for i in range(k)))
-    return [lst[i] for i in idx]
+    keep = set(i % len(lst) for i in keep) | {0, len(lst) - 1}
+    rest = [i for i in range(len(lst)) if i not in keep]
+    m = max(0, k - len(keep))
+    pick = set(rest[round(j * (len(rest) - 1) / (m - 1))] for j in range(m)) if m > 1 else ({rest[len(rest) // 2]} if m == 1 and rest else set())
+    return [lst[i] for i in sorted(keep | pick)]
 
 
 def pose_grid(drv, quick=False, cap=None):
+    """Joint-angle combinations for a group of driver joints, thinned to `cap`. Thinning keeps each joint's limits and
+    overtravel poses: it used to keep only the list ends, which are the overtravel poses, so in a two-joint group the
+    in-range limits (tilt -3 and 46 in v2 A1) were never visited and a collision there showed only as an overtravel
+    warn (FINDINGS V2A1-V2)."""
     drv = sorted(drv)
     if not drv:
         return [({}, False)]
     per = [samples(j, quick) for j in drv]
+    keeps = [(0, 1, -2, -1) if len(p) > 3 and p[0][1] else (0, -1) for p in per]
     cap = cap or CFG["max_poses_per_group"]
     while math.prod(len(p) for p in per) > cap:
-        i = max(range(len(per)), key=lambda k: len(per[k]))
-        if len(per[i]) <= 3:
+        i = max(range(len(per)), key=lambda k: len(per[k]) - len(keeps[k]))
+        floor = len(keeps[i]) + (0 if len(keeps[i]) == 4 else 1)
+        if len(per[i]) <= floor:
             break
-        per[i] = thin(per[i], max(3, len(per[i]) - 2))
+        per[i] = thin(per[i], max(floor, len(per[i]) - 2), keeps[i])
     out = []
     for combo in itertools.product(*per):
         out.append(({j: a for j, (a, _) in zip(drv, combo)}, any(ot for _, ot in combo)))
@@ -388,6 +426,35 @@ def min_dist(a, b, ta, tb):
     return best
 
 
+def contact_faces(fit, a, b):
+    """For a fits rule with contact=true and "contact_normal" ([x,y,z] or a list, home-pose world directions of the
+    rule's `a` part, turning with it): a test f(world_normal) -> True when a face is one of the declared contact faces
+    (within 20 deg of +-a normal). Without contact_normal, contact=true accepts contact anywhere on the pair, which also
+    hides a rubbing journal on the same pair (v2 A1 review: post x journal plate and shell x turntable were thrust or
+    stop faces plus a R15/R15.2 and R20/R20.3 journal, FINDINGS V2A1-V4)."""
+    cn = fit.get("contact_normal") if fit else None
+    if not cn:
+        return None
+    cn = [cn] if isinstance(cn[0], (int, float)) else cn
+    ref = a if fnmatch.fnmatch(a.name, fit.get("a", "*")) else b
+    hm = HOME_MW.get(ref.name, ref.matrix_world).to_3x3()
+    loc = [(hm.inverted() @ Vector(c)).normalized() for c in cn]
+    cur = ref.matrix_world.to_3x3()
+    wn = [(cur @ v).normalized() for v in loc]
+    return lambda n: any(abs(n.normalized().dot(v)) >= 0.94 for v in wn)
+
+
+def min_dist_off(a, b, ta, tb, is_contact):
+    """min_dist that ignores samples whose nearest face is a declared contact face."""
+    best = (1e9, None)
+    for src, tree in ((a, tb), (b, ta)):
+        for p in sample_pts(src):
+            r = tree.find_nearest(p)
+            if r[0] is not None and r[3] < best[0] and not is_contact(r[1]):
+                best = (r[3], p)
+    return best
+
+
 _DIRS = (Vector((0.0123, 0.0071, 1)).normalized(), Vector((1, 0.0137, 0.0059)).normalized(), Vector((-0.577, 0.611, -0.541)).normalized())
 
 
@@ -429,6 +496,16 @@ def allowed(a, b):
 REPORT = {"tool": "cadcheck", "blend": bpy.data.filepath, "generated": time.strftime("%Y-%m-%d %H:%M:%S"),
           "config": {k: v for k, v in CFG.items() if k not in ("drop_tests",)}, "checks": {}, "coverage": [], "not_checked": []}
 FAILS, WARNS = [], []
+
+
+def present(check, label, names):
+    """True when every named object exists. Otherwise one fail naming the row, and the caller skips the row: a
+    half-built assembly keeps its checks.json rows (v2 A1: a distances row naming a not-yet-built part raised
+    KeyError and took down the whole run, so builders skipped every distances row with --only, FINDINGS V2A1-T3)."""
+    miss = sorted({n for n in names if isinstance(n, str) and n and n != "world" and n not in O})
+    if miss:
+        finding(check, "fail", "%s: %s not in the scene; row skipped (build the part or fix the name)" % (label, ", ".join(miss)), missing=miss)
+    return not miss
 
 
 def finding(check, status, msg, **data):
@@ -623,6 +700,9 @@ def check_interference():
                 tested_pairs += 1
                 ov = ta.overlap(tb)
                 key = (a.name, b.name)
+                isc = contact_faces(fit, a, b) if fit and fit.get("contact") else None
+                if ov and isc and all(isc(a.matrix_world.to_3x3() @ a.data.polygons[i].normal) for i, _ in ov):
+                    ov = None     # touching only on declared contact faces; the rest of the pair is measured below
                 if ov:
                     if why:
                         continue
@@ -630,7 +710,7 @@ def check_interference():
                     rec = {"a": a.name, "b": b.name, "pose": pose_key(pose), "overtravel": over, "tri_overlaps": len(ov),
                            "volume_mm3": round(vol, 2), "region": region, "solver": solver}
                     if cls == "moving":
-                        tag = "collisions" if vol >= CFG["vol_tol"] else ("contacts" if not (fit and fit.get("contact")) else None)
+                        tag = "collisions" if vol >= CFG["vol_tol"] else ("contacts" if not (fit and fit.get("contact") and not isc) else None)
                     elif cls == "cable":
                         tag = "cable_overlaps" if vol >= CFG["vol_tol"] else None
                     else:
@@ -644,8 +724,8 @@ def check_interference():
                         else:
                             prev["n_poses"] += 1
                             prev["in_range_poses"] += 0 if over else 1
-                elif cls == "moving" and not why and not (fit and fit.get("contact")):
-                    d, p = min_dist(a, b, ta, tb)
+                elif cls == "moving" and not why and (isc or not (fit and fit.get("contact"))):
+                    d, p = min_dist_off(a, b, ta, tb, isc) if isc else min_dist(a, b, ta, tb)
                     prev = worst.get(("min_clearance", key))
                     if prev is None or d < prev["mm"]:
                         worst[("min_clearance", key)] = {"a": a.name, "b": b.name, "mm": round(d, 3), "pose": pose_key(pose),
@@ -725,11 +805,14 @@ def fastener_axis(o):
     return head, tip, d, big, shank
 
 
-def scene_bvh(objs, skip=()):
+def scene_bvh(objs, skip=(), index=None):
+    """One BVH over many objects. index (a list) receives (first face index, name) per object, for owner()."""
     bm = bmesh.new()
     for o in objs:
         if o.name in skip:
             continue
+        if index is not None:
+            index.append((len(bm.faces), o.name))
         t = world_bm(o)
         me = bpy.data.meshes.new("_t")
         t.to_mesh(me)
@@ -739,6 +822,16 @@ def scene_bvh(objs, skip=()):
     tree = BVHTree.FromBMesh(bm)
     bm.free()
     return tree
+
+
+def owner(index, face):
+    """Object name owning face `face` of a scene_bvh built with index=[...]."""
+    name = None
+    for start, n in index:
+        if start > face:
+            break
+        name = n
+    return name
 
 
 def perp_basis(d):
@@ -851,7 +944,9 @@ def assembly_present():
     """object name -> set of solids present when it is installed (None = unknown, assume all).
 
     assembly_order: [{"step": "...", "objects": [globs], "bench": "<group>"?, "merge": "<group>"?}, ...]
-    A bench step builds a sub-assembly away from the rest; a later step with merge=<group> brings it in.
+    A bench step builds a sub-assembly away from the rest; a later step with merge=<group> brings it in. A merge step
+    that is itself a bench step brings the group into that bench (sub-assemblies of sub-assemblies, any depth; v2 A1's
+    feeder designer restructured its steps because this was missing, FINDINGS V2A1-T2).
     """
     steps = CFG.get("assembly_order") or []
     if not steps:
@@ -865,6 +960,18 @@ def assembly_present():
     unordered = sorted(n for n in names if n not in step_of and KIND[n] in ("PRT", "BUY"))
     REPORT.setdefault("assembly", {})["unordered_solids_assumed_present"] = unordered
     merged_at = {st["merge"]: i for i, st in enumerate(steps) if st.get("merge")}
+
+    def lands_in(g, grp, i):
+        """Is a part built in group g (None = the main assembly) present in group grp at step i?"""
+        seen = set()
+        while g != grp:
+            j = merged_at.get(g)
+            if g is None or j is None or j > i or g in seen:
+                return False
+            seen.add(g)
+            g = steps[j].get("bench")
+        return True
+
     out = {}
     solids = [o.name for o in SOLIDS]
     for n in names:
@@ -877,11 +984,7 @@ def assembly_present():
             j = step_of.get(m)
             if j is None or j > i:
                 continue
-            g2 = steps[j].get("bench")
-            if grp:
-                if g2 == grp:
-                    pres.add(m)
-            elif g2 is None or merged_at.get(g2, 1e9) <= i:
+            if lands_in(steps[j].get("bench"), grp, i):
                 pres.add(m)
         out[n] = pres
     return out
@@ -1156,6 +1259,16 @@ def check_service():
     rows = []
     for op in ops:
         removed = {o.name for o in ALL if any(fnmatch.fnmatch(o.name, g) for g in op.get("remove", []))}
+        # removal is assumed, not tested: say so unless a slide_out row moves those parts at the op's pose (v2 A1: the
+        # nip cover came off only at tilt 45, blocked by the groove cap at tilt 0, and the op had no pose, FINDINGS V2A1-F2)
+        parts_off = sorted(n for n in removed if KIND.get(n) in ("PRT", "BUY"))
+        if parts_off:
+            pk = pose_key(op["pose"]) if "pose" in op else None
+            proved = [S for S in CFG["slide_out"] if any(fnmatch.fnmatch(n, g) for n in parts_off for g in (S.get("objects") or [S.get("object", "")]))
+                      and pk is not None and pose_key(S.get("pose", {})) == pk]
+            if not proved:
+                finding("service", "warn", "'%s' removes %s %s; no slide_out row moves them at that pose, so removal is assumed" % (
+                    op["op"], parts_off[:4], "at %s" % pk if pk else "at every pose (no pose given)"), op=op["op"])
         fsts = [o for o in FASTENERS if not is_nut(o) and o.name not in removed and any(fnmatch.fnmatch(o.name, g) for g in op["fasteners"])]
         poses = [(op["pose"], pose_key(op["pose"]))] if "pose" in op else [p for p in fastener_poses() if not any(JOINTS[j].get("continuous") for j in p[0])]
         res = {o.name: {} for o in fsts}
@@ -1208,7 +1321,7 @@ def landing_angle(ang, point):
     return math.degrees(math.atan2(ps * loc[pk], zs * loc[zk]))
 
 
-def slide_trace(p, g, walls, targets, T):
+def slide_trace(p, g, walls, targets, T, touched=None):
     """Fall along g; on a wall, slide down its slope; stall below stall_deg. Ported from the attempt-2 designer's
     tracer (HW/blender/checks.py:395 trace_drops), generalised to any target objects.
     Returns (outcome, point, target, flattest slide in deg or None): outcome is "hit", "stall", "lost" or "max_steps".
@@ -1235,6 +1348,8 @@ def slide_trace(p, g, walls, targets, T):
         if mode == "fall":
             h = walls.ray_cast(P, g, T.get("max_mm", 400))
             hit_d = h[3] if h[0] is not None else T.get("max_mm", 400)
+            if touched is not None and h[0] is not None:
+                touched[1].add(h[2])
             th = None
             for nm, t in targets.items():
                 r = t.ray_cast(P, g, hit_d)
@@ -1268,6 +1383,8 @@ def slide_trace(p, g, walls, targets, T):
         if slope < stall:
             return "stall", P, None, flat
         hw = walls.ray_cast(P, d, 1.0)
+        if touched is not None and hw[0] is not None:
+            touched[1].add(hw[2])
         if hw[0] is not None:
             n2 = hw[1].normalized()
             if n2.dot(d) > 0:
@@ -1276,6 +1393,8 @@ def slide_trace(p, g, walls, targets, T):
             continue
         Pn = P + d * 1.0
         ha = walls.ray_cast(Pn + n * 0.8, -n, 2.5)
+        if touched is not None and ha[0] is not None:
+            touched[1].add(ha[2])
         if ha[0] is not None:
             n2 = ha[1].normalized()
             if n2.dot(n) < 0:
@@ -1299,6 +1418,8 @@ def check_drop():
         mode = T.get("mode", "ray")
         modes.add(mode)
         em = T["emit"]
+        if not present("drop", T["name"], [em.get("frame"), (T.get("expect", {}).get("angle") or {}).get("center")]):
+            continue
         g = Vector(T.get("dir", [0, 0, -1])).normalized()
         poses = []
         if "poses" in T:
@@ -1315,12 +1436,15 @@ def check_drop():
         want_hit = exp.get("hit")
         ang = exp.get("angle")
         rows = []
+        on_path = set()      # objects the payload touched or first hit, at any pose
         for pose in poses:
             set_pose(pose)
             objs = [o for o in SOLIDS + FASTENERS if o.name not in T.get("ignore", [])]
             if mode == "slide":
                 tnames = [o.name for o in objs if want_hit and any(fnmatch.fnmatch(o.name, w) for w in want_hit if w)]
-                walls = scene_bvh([o for o in objs if o.name not in tnames])
+                widx = []
+                walls = scene_bvh([o for o in objs if o.name not in tnames], index=widx)
+                touched = (widx, set())
                 targets = {n: bvh_world(O[n]) for n in tnames}
             else:
                 trees = {o.name: (bvh_world(o), o) for o in objs}
@@ -1329,7 +1453,7 @@ def check_drop():
                 p_home = Vector(em["center"]) + u * i + v * j
                 p = frame_point(em.get("frame"), p_home, home_mats)
                 if mode == "slide":
-                    oc, pt, name, flat = slide_trace(p, g, walls, targets, T)
+                    oc, pt, name, flat = slide_trace(p, g, walls, targets, T, touched)
                     outcomes[oc] = outcomes.get(oc, 0) + 1
                     if oc == "hit" and flat is not None:
                         flats.append((flat, [round(c, 1) for c in p]))
@@ -1348,6 +1472,9 @@ def check_drop():
                 hits[name] = hits.get(name, 0) + 1
                 if best and ang and name in (want_hit or [name]):
                     angles.append(landing_angle(ang, best[2]))
+            on_path |= {n for n in hits if isinstance(n, str) and n in O}
+            if mode == "slide":
+                on_path |= {owner(widx, f) for f in touched[1]}
             row = {"pose": pose_key(pose), "rays": len(offs), "first_hit": hits}
             if mode == "slide":
                 row.update(outcomes=outcomes, stall_points=stalls[:5])
@@ -1374,7 +1501,21 @@ def check_drop():
                 if min(angles) < lo or max(angles) > hi:
                     finding("drop", "fail", "%s at %s: lands %.0f..%.0f deg, window %g..%g" % (
                         T["name"], row["pose"], min(angles), max(angles), lo, hi), test=T["name"], pose=row["pose"])
-        out.append({"name": T["name"], "mode": mode, "rows": rows})
+        # A ranged joint that moves a wall the payload touches, held at home for the whole test: the v2 A1 nip drop ran at
+        # the home hood setting only, and R1 found stalls from a 7.4 mm gap at the open end (FINDINGS V2A1-F1)
+        swept = set(T.get("poses", {})) | set(T.get("sweep", [])) | set(T.get("home_only_ok", []))
+        movers = {}
+        fr = em.get("frame")
+        fchain = set(joint_chain(O[fr])) if fr and fr != "world" else set()
+        for n in sorted(on_path - {None}):
+            for j in drivers(set(joint_chain(O[n])) ^ fchain):     # joints that move it relative to the emitter
+                sj = JOINTS.get(j, {})
+                if j not in swept and not sj.get("continuous") and sj.get("lo") is not None and sj.get("hi") is not None and sj["hi"] > sj["lo"]:
+                    movers.setdefault(j, []).append(n)
+        for j, names in movers.items():
+            finding("drop", "warn", "%s: the payload path touches %s, which moves on %s (%g..%g), but the test holds %s at home; add both "
+                    "ends to poses (or list it under home_only_ok)" % (T["name"], names[:4], j, JOINTS[j]["lo"], JOINTS[j]["hi"], j), test=T["name"], joint=j)
+        out.append({"name": T["name"], "mode": mode, "rows": rows, "on_path": sorted(on_path - {None})})
     set_pose({})
     REPORT["checks"].setdefault("drop", {"findings": []})["tests"] = out
     REPORT["coverage"].append("drop: %d tests (%s)" % (len(tests), ", ".join(
@@ -1393,6 +1534,8 @@ def check_index():
     rows = []
     for T in tests:
         pr = T["probe"]
+        if not present("index", T["name"], list(T["blockers"]) + [T["joint"], pr.get("frame")]):
+            continue
         g = Vector(pr.get("dir", [0, 0, -1])).normalized()
         u, v = perp_basis(g)
         offs = [Vector((0, 0, 0))] + _ring(u, v, pr.get("radius", 3.0))
@@ -1526,6 +1669,8 @@ def check_distances():
     home_mats = {n: O[n].matrix_world.copy() for n in JOINTS}
     for D in CFG["distances"]:
         poses = D.get("poses", [D.get("pose", {})])
+        if not present("distances", "%s to %s" % (D["a"], D["b"]), [D["a"], D["b"], (D.get("ray") or {}).get("frame")]):
+            continue
         for pose in poses:
             set_pose(pose)
             a, b = O[D["a"]], O[D["b"]]
@@ -1643,6 +1788,25 @@ def hull2d(pts):
     return lo[:-1] + up[:-1]
 
 
+def stability_poses():
+    """Every driver joint at lo, home and hi; continuous joints every 45 deg. The old pose_grid(cap=27) call thinned
+    5 joints to 3 samples each, 2 of them overtravel, so 1 pose survived, and continuous pan was left out
+    (v2 A1: the finisher wrote its own 64-pose CG grid, FINDINGS V2A1-V3)."""
+    per = []
+    for n in sorted(JOINTS):
+        s = JOINTS[n]
+        if n in COUPLE or s["axis"] is None:
+            continue
+        if s.get("continuous"):
+            per.append([(n, a) for a in frange(0, 359.9, 45.0)])
+        elif s["lo"] is not None and s["hi"] is not None:
+            per.append([(n, a) for a in sorted({float(s["lo"]), float(s.get("home") or 0.0), float(s["hi"])})])
+    while per and math.prod(len(p) for p in per) > 4000:
+        i = max(range(len(per)), key=lambda k: len(per[k]))
+        per[i] = thin(per[i], len(per[i]) - 1)
+    return [dict(c) for c in itertools.product(*per)] if per else [{}]
+
+
 def check_stability():
     set_pose({})
     statics = [o for o in SOLIDS if body(o) == "static"]
@@ -1654,21 +1818,23 @@ def check_stability():
     masses = CFG["masses_g"]
     rows = []
     missing = [o.name for o in PURCHASED if not any(fnmatch.fnmatch(o.name, k) for k in masses) and "mass_g" not in o.keys()]
-    drv = frozenset(n for n in JOINTS if n not in COUPLE and not JOINTS[n].get("continuous"))
-    for pose, over in pose_grid(drv, True, cap=27):
-        if over:
-            continue
+    # mass and local centroid once per part; each pose only moves the centroids
+    parts = []
+    for o in SOLIDS:
+        c, vol = centroid_vol(o)
+        if KIND[o.name] == "PRT":
+            inf = float(o.get("infill", 20)) / 100
+            m = vol * CFG["pla_density"] * (0.45 + 0.55 * inf)
+        else:
+            m = float(o.get("mass_g", next((v for k, v in masses.items() if fnmatch.fnmatch(o.name, k)), 0.0)))
+        if m > 0:
+            parts.append((o, o.matrix_world.inverted() @ c, m))
+    for pose in stability_poses():
         set_pose(pose)
         M, S = 0.0, Vector()
-        for o in SOLIDS:
-            c, vol = centroid_vol(o)
-            if KIND[o.name] == "PRT":
-                inf = float(o.get("infill", 20)) / 100
-                m = vol * CFG["pla_density"] * (0.45 + 0.55 * inf)
-            else:
-                m = float(o.get("mass_g", next((v for k, v in masses.items() if fnmatch.fnmatch(o.name, k)), 0.0)))
+        for o, cl, m in parts:
             M += m
-            S += c * m
+            S += (o.matrix_world @ cl) * m
         cg = S / M
         # signed distance from CG projection to the hull boundary (positive inside)
         dmin = 1e9
@@ -1682,7 +1848,7 @@ def check_stability():
                      "tip_angle_deg": round(math.degrees(math.atan2(dmin, h)), 1)})
     set_pose({})
     worst = min(rows, key=lambda r: r["tip_angle_deg"])
-    REPORT["checks"].setdefault("stability", {"findings": []}).update({"rows": rows, "worst": worst, "footprint_pts": len(hull), "purchased_without_mass": missing})
+    REPORT["checks"].setdefault("stability", {"findings": []}).update({"poses": len(rows), "rows": sorted(rows, key=lambda r: r["tip_angle_deg"])[:10], "worst": worst, "footprint_pts": len(hull), "purchased_without_mass": missing})
     if worst["tip_angle_deg"] < 10:
         finding("stability", "fail", "static tip angle only %.1f deg at %s" % (worst["tip_angle_deg"], worst["pose"]), **worst)
     elif worst["tip_angle_deg"] < 20:
@@ -1732,6 +1898,8 @@ def check_cables():
 # ------------------------------------------------------------------ main
 
 def main():
+    set_pose({})
+    HOME_MW.update({o.name: o.matrix_world.copy() for o in ALL})
     log("objects: %d printed, %d purchased, %d fasteners, %d cables; joints %s" % (
         len(PRINTED), len(PURCHASED), len(FASTENERS), len(CABLES),
         {n: (s["axis"], s["lo"], s["hi"]) for n, s in JOINTS.items()}))
@@ -1746,18 +1914,26 @@ def main():
     if not CABLES:
         REPORT["not_checked"].append("cables: Cables collection empty")
     REPORT["not_checked"].append("not geometric: teardown step count, alignment-jig datums (declare stacks), aesthetics, BOM correctness")
-    REPORT["summary"] = {"pass": not FAILS, "fails": len(FAILS), "warns": len(WARNS), "fail_list": FAILS, "warn_list": WARNS,
+    acc = CFG.get("accepted_warns") or []
+    accepted = {w: next(a.get("why", "") for a in acc if a["match"] in w) for w in WARNS if any(a["match"] in w for a in acc)}
+    untriaged = [w for w in WARNS if w not in accepted]
+    stale = [a["match"] for a in acc if not any(a["match"] in w for w in WARNS)]
+    REPORT["summary"] = {"pass": not FAILS, "fails": len(FAILS), "warns": len(WARNS), "untriaged_warns": len(untriaged),
+                         "fail_list": FAILS, "warn_list": untriaged, "accepted_warns": accepted, "stale_accepts": stale,
                          "coverage": REPORT["coverage"], "not_checked": REPORT["not_checked"], "runtime_s": round(time.time() - T0, 1)}
     os.makedirs(os.path.dirname(os.path.abspath(OUT)), exist_ok=True)
     with open(OUT, "w") as f:
         json.dump(REPORT, f, indent=1, default=str)
-    print("CADCHECK %s: %d fail, %d warn -> %s" % ("PASS" if not FAILS else "FAIL", len(FAILS), len(WARNS), OUT))
+    print("CADCHECK %s: %d fail, %d warn (%d untriaged, %d accepted) -> %s" % (
+        "PASS" if not FAILS else "FAIL", len(FAILS), len(WARNS), len(untriaged), len(accepted), OUT))
     for s in FAILS[:40]:
         print("  FAIL", s)
-    for s in WARNS[:25]:
+    for s in untriaged[:25]:
         print("  warn", s)
-    if len(WARNS) > 25:
-        print("  ... %d more warnings in the report" % (len(WARNS) - 25))
+    if len(untriaged) > 25:
+        print("  ... %d more untriaged warnings in the report" % (len(untriaged) - 25))
+    if stale:
+        print("  accepted_warns that matched nothing (fixed? remove them):", stale)
     print("  not checked:", "; ".join(REPORT["not_checked"]))
 
 

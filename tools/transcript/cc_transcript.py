@@ -37,7 +37,10 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
 
-BLENDER_RE = re.compile(r"(Blender(\.app)?/Contents/MacOS/Blender|\bblender\b\s+-b|\$BLENDER|\bBL\b\s+-b)", re.I)
+# the print-cad-blender wrapper too (`cad build|check|q|sheet`, `$CAD ...`): v2 agents never call Blender directly, so
+# the v2 A1 summaries showed "blender runs 0" for agents that ran dozens of checks (FINDINGS V2A1-T7)
+BLENDER_RE = re.compile(r"(Blender(\.app)?/Contents/MacOS/Blender|\bblender\b\s+-b|\$BLENDER|\bBL\b\s+-b|"
+                        r"(?:/scripts/cad|\$\{?\w+\}?|(?:^|[\s;&|(])cad)\s+(?:build\s+\S+\.py|(?:check|q)\s+\S+\.blend|sheet\s))", re.I)
 SAVED_RE = re.compile(r"Saved:\s*'([^']+\.(?:png|jpg|jpeg|exr))'", re.I)
 WROTE_RE = re.compile(r"(?:wrote|saved|render(?:ed)?)\s*[:=]?\s*(\S+\.(?:png|jpg|jpeg))", re.I)
 HEREDOC_RE = re.compile(r"cat\s+>\s*(\S+)\s+<<\s*'?(\w+)'?\n(.*?)\n\2", re.S)

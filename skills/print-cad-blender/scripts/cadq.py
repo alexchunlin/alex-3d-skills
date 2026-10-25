@@ -117,8 +117,8 @@ elif cmd in ("section", "render"):
             c, n = spec.split(":")
             R.marker_lentil("MM_%d" % k, vec(c), vec(n))
     if cmd == "section":
-        axis, val, out, cam, ortho = POS[1], float(POS[2]), POS[3], vec(POS[4]), float(POS[5])
-        k = "xyz".index(axis)
+        axis, val, out, cam, ortho = POS[1].lower(), float(POS[2]), POS[3], vec(POS[4]), float(POS[5])
+        k = "xyz".index(axis)     # X or x (v2 A1: 3 agents hit ValueError on "X")
         tgt = cam.copy()
         tgt[k] = val
         scope = set(FLAGS["scope"].split(",")) if "scope" in FLAGS else None

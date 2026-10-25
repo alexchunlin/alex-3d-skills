@@ -55,6 +55,30 @@ Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X
 | `cable(name, pts, r, color, joint=None, lead_len=None)` | stores `path_len`; cadcheck compares it with `lead_len` |
 | `write_manifest(path)` | parts, joints, fasteners, cables, features, params |
 
+### A screw, its hole and its nut (one `at`, one `into`)
+
+```python
+at, into = (40, 0, 30), (0, 0, -1)                   # head bears on z=30, shank goes down
+cover = G.csg(cover, sub=F.screw_hole(at, into, 12, kind="clamp", clamp=3, head="cap", sink=2.5))
+A.fastener("FST_cover_0", at, into, 12, spec="M3_cap", joint="PIV_tilt", host="PRT_body", step="cover")
+A.nut("FST_cover_nut_0", (40, 0, 30 - 10), into, joint="PIV_tilt")    # optional: bearing face 10 mm down the shank
+```
+
+`length` is the shank under the head, measured from `at` along `into`. `clamp` is the clearance-hole depth in the
+clamped part. `sink` puts `at` that far below the outer face, and the counterbore is cut back out from it. `fastener`
+specs: `M3_cap`, `M3_pan`, `M3_csk`, `M3_selftap_pan`, `M2_pan`, `M2.5_cap`, `M2.5_pan`. `screw_hole` cuts M3 sizes
+only; for M2.5, cut `G.cyl` holes with `RULES`-style clearances (2.7 clear, 2.1 pilot).
+
+## cad q section (the command line, not the function)
+
+```
+cad q model.blend section AXIS VAL OUT.png CAMX,CAMY,CAMZ ORTHO [--keep -|+] [--scope PIV_tilt,static] [--pose PIV_tilt=45] [--lentil X,Y,Z:NX,NY,NZ]
+cad q model.blend section x 21 /tmp/sec_x21.png 400,0,200 320       # cut at x=21, keep x<21, camera on +X, 320 mm wide
+```
+
+AXIS is x, y or z (either case). The camera looks along AXIS toward VAL, from CAM. ORTHO is the view width in mm.
+Four v2 A1 agents read cadq.py to get this right.
+
 ## export and render
 
 | Call | Notes |
@@ -62,7 +86,7 @@ Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X
 | `E.export_stls(dir)` | one STL per unique `stl` name, in print orientation; deletes stale STLs; returns `{name: qty}` |
 | `E.save_blend(path)` | removes scratch objects, goes to the home pose, saves, deletes the `.blend1` backup |
 | `R.view_set(outdir, poses={name: {joint: deg}})` | iso, iso_front_left, front, side, top, rear, plus one iso per pose. 960 px by default; `CAD_RENDER_FINAL=1` gives 1800 px. |
-| `R.section(outdir, fname, axis, val, cam_loc, cam_tgt, ortho, keep_side="-", scope={joints})` | cut faces in yellow |
+| `R.section(outdir, fname, axis, val, cam_loc, cam_tgt, ortho, keep_side="-", scope={joints})` | cut faces in yellow; closed solids are cut with Manifold |
 | `R.exploded(outdir, offsets=None, scale=1)` | auto radial explode when `offsets` is None |
 | `R.contact_sheet(stl_dir, out_png)` | fresh process only (it resets the scene); `cad sheet` does that |
 | `R.marker_lentil(name, center, normal, d=13, t=7)`, `R.marker_rod(name, a, b)` | payload and tangent markers for sections |

@@ -157,8 +157,11 @@ def section(outdir, fname, axis, val, cam_loc, cam_tgt, ortho, keep_side="-", sc
             ob.hide_render = True
             hidden.append(ob)
         elif crosses:
+            # Manifold on closed solids: EXACT turned PRT_jar_valve, PRT_base_shell and PRT_journal_plate inside out,
+            # so they flooded the view and the v2 A1 finisher wrote its own pre-cut script (FINDINGS V2A1-T5)
+            nm, vol = geom.solid_stats(ob)
             m = ob.modifiers.new("sec", 'BOOLEAN')
-            m.operation, m.solver, m.object = 'DIFFERENCE', 'EXACT', cutter
+            m.operation, m.solver, m.object = 'DIFFERENCE', ('MANIFOLD' if not nm and vol > 0 else 'EXACT'), cutter
             if hasattr(m, "material_mode"):
                 m.material_mode = 'TRANSFER'
             mods.append((ob, m))

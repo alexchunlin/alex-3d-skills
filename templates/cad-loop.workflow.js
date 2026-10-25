@@ -20,6 +20,10 @@ export const meta = {
 //    renders/attempt-N/progress.md and resumes from it. The loop resumes from args.start_attempt.
 //  - The designer reported checks_passed=true on partial checks (A1-F14). Schemas here ask for the
 //    cadcheck fail/warn counts and coverage, not a boolean.
+//  - v2 A1 (the first loop run with this shape): 4 sequential builders took 136.6 of 187.5 min, and each one re-read
+//    the same skill, brief and tool source (V2A1-T1). parallel_builds runs them at once, each into its own
+//    model.blend, and leaves params.py and checks.json to the planner and the finisher. Off by default until
+//    a run has proven it.
 // No filesystem access in workflow scripts, so state crosses runs through args and files on disk.
 // To resume a killed run with cached agents, use Workflow({scriptPath, resumeFromRunId}).
 // ---------------------------------------------------------------------------------------------
@@ -33,6 +37,8 @@ const CONFIG = Object.assign({
   start_attempt: 1,                          // resume: set to the next attempt number
   history: [],                               // resume: [{n, f, m, a}] from earlier runs
   render_budget: 12,                         // preview renders per build agent
+  stop_after: 0,                             // >0: stop after this attempt's review
+  parallel_builds: false,                    // true: builders run at once; the planner owns params.py (V2A1-T1)
 }, typeof args === 'object' && args ? args : {})
 
 const HW = CONFIG.hw
@@ -135,7 +141,9 @@ const common = n => `
 Project: ${HW} (brief: ${HW}/DESIGN_BRIEF.md). Attempt ${n}. Skill: read ${PCB}/SKILL.md and follow its conventions;
 cadlib API in ${PCB}/reference/api.md; check config in ${PCB}/reference/checks-config.md; purchased-part data in
 ${CONFIG.skills}/components/components.json (use it instead of re-deriving dimensions from the PNGs).
-Tools: ${CAD} build|check|q|sheet (Blender starts in under 1 s; run checks freely).
+Tools: ${CAD} build|check|q|sheet (Blender starts in under 1 s; run checks freely). Answer tool questions from the
+reference docs before opening cadlib/cadcheck source (V2A1-T2: builders spent minutes in the source on bench merges,
+section syntax and screw_hole). If a tool misbehaves, work around it and note it in progress.md under "## Tool issues".
 Progress file: ${dir(n)}/progress.md. Read it first; if your step is already marked done there, return its recorded result.
 After each build+check, append one line: "<time-free step label> | <what changed> | cadcheck <fails>F/<warns>W".
 Keep each generation short: edit one module, rebuild, check, repeat. Use the Edit tool for code changes.
@@ -148,7 +156,11 @@ ${reviewPath
     ? `Latest review: ${reviewPath} (and review.json beside it). Plan fixes for every blocker and major; minors where cheap. Don't regress what it praised.`
     : `First attempt: write the architecture plan (world frame, subsystems = parts/ modules, joints with ranges, load path, payload path, assembly order) to ${HW}/DESIGN_LOG.md, then scaffold from ${PCB}/templates/project/ into ${HW}/blender/.`}
 Before returning: update ${HW}/blender/checks.json so every review issue that is geometric has a check that would catch it
-(drop_tests, distances, fits, assembly_order); write the plan to ${dir(n)}/progress.md under "## Plan".
+(drop_tests, distances, fits, assembly_order; the reviewer's review/review_rows.json, if any, can be merged as is). Every
+adjuster joint gets drop and distances rows at both ends of its travel (V2A1-F1). Write the plan to ${dir(n)}/progress.md
+under "## Plan".${CONFIG.parallel_builds ? `
+Builders run in parallel this attempt and may not edit params.py or checks.json, so make every params.py change (IF_*
+interfaces, shared dimensions) yourself now, and give each work[] entry only its own parts/<name>.py edits.` : ''}
 Done when every blocker/major appears in some work[].review_issues or in deferred with a reason.`
 
 const buildPrompt = (n, w) => `
@@ -157,8 +169,15 @@ ${common(n)}
 Changes to make: ${JSON.stringify(w.changes)}
 Review issues this closes: ${JSON.stringify(w.review_issues)}
 Acceptance (prove each with a cadcheck row or a cad q line): ${JSON.stringify(w.acceptance)}
-Edit ${HW}/blender/parts/${w.subsystem}.py (and params.py if needed). Loop: edit, ${CAD} build ${HW}/blender/build_assembly.py,
-${CAD} check ${HW}/blender/model.blend ${HW}/blender/checks.json, until no fail involves this subsystem's objects.
+${CONFIG.parallel_builds
+    ? `Other subsystems are being built at the same time. Edit only ${HW}/blender/parts/${w.subsystem}.py. Don't edit params.py or
+checks.json: put new check rows in ${HW}/blender/checks.d/${w.subsystem}.json (same schema), and list any params.py change you
+need in not_done. Loop: edit, ${CAD} build ${HW}/blender/build_assembly.py -- --out /tmp/cadloop-${w.subsystem},
+${CAD} check /tmp/cadloop-${w.subsystem}/model.blend ${HW}/blender/checks.json /tmp/cadloop-${w.subsystem}/cadcheck.json --overlay ${HW}/blender/checks.d/${w.subsystem}.json,
+until no fail involves this subsystem's objects.`
+    : `Edit ${HW}/blender/parts/${w.subsystem}.py (and params.py if needed). Loop: edit, ${CAD} build ${HW}/blender/build_assembly.py,
+${CAD} check ${HW}/blender/model.blend ${HW}/blender/checks.json, until no fail involves this subsystem's objects.`}
+Fix or accept every warn on this subsystem's objects: an accepted warn goes under accepted_warns with a reason (V2A1-F5).
 Fails that belong to another subsystem: list them in not_done, don't fix them here.
 Render at most ${CONFIG.render_budget} previews (960 px); prefer cad q measurements over images.
 Return the final cadcheck summary numbers.`
@@ -168,7 +187,10 @@ You finish attempt ${n}.
 ${common(n)}
 Plan: ${plan.plan}
 Subsystem results: ${JSON.stringify(builds.map(b => b && { s: b.subsystem, not_done: b.not_done, fails: b.check.fails }))}
-1. Fix remaining cadcheck fails that span subsystems, or list them in deferred.
+${CONFIG.parallel_builds ? `0. Merge ${HW}/blender/checks.d/*.json into checks.json, apply the params.py requests in the builders' not_done,
+   and rebuild the shared ${HW}/blender/model.blend.
+` : ''}1. Fix remaining cadcheck fails that span subsystems, or list them in deferred. Finish with 0 untriaged warns: fix each
+   one or add it to accepted_warns with a reason (V2A1-F5: 3 of R1's issues were warns left in a 34-warn list).
 2. Final renders: CAD_RENDER_FINAL=1 ${CAD} build ${HW}/blender/build_assembly.py -- --render --out-renders ${dir(n)}
    plus the sections the brief asks for (${CAD} q ... section), and ${CAD} sheet ${HW}/stl ${dir(n)}/stl_sheet.png.
 3. Copy the final cadcheck.json to ${dir(n)}/cadcheck.json.
@@ -187,8 +209,11 @@ ${prevReviewPath ? `Previous review: ${prevReviewPath}. Re-measure every previou
 Append each measurement to ${dir(n)}/review/notes.md as you go. If it exists when you start, you were restarted: read it and
 don't redo those measurements (A3-T4).
 Mark tool_catchable=true when cadcheck or cad q could have flagged the issue before review.
+Report at most 10 blocker/major issues and at most 8 minor ones (most impactful first). Fold related symptoms into one
+issue with one fix, so the next attempt converges instead of chasing a long tail.
+Put every check row you add in ${dir(n)}/review/review_rows.json and run it with --overlay (V2A1-T6); the next planner merges it.
 For every motion, timing or service claim in the BOM, check that checks.json has an index_tests / service / slide_out
-entry that matches the documented values. If it is missing, add it to your copy of checks.json and run it (A2-F2).`
+entry that matches the documented values. If it is missing, add it to review_rows.json and run it (A2-F2).`
 
 const attempts = []
 let history = CONFIG.history.map(h => `#${h.n}: ${h.f}/${h.m}/${h.a}`).join(', ')
@@ -202,12 +227,14 @@ for (let n = CONFIG.start_attempt; n <= CONFIG.max_attempts && !passed; n++) {
   log(`attempt ${n}: ${plan.work.length} subsystems to change, ${plan.deferred.length} deferred`)
 
   phase('Build')
+  const runBuild = w => agent(buildPrompt(n, w), { label: `build #${n} ${w.subsystem}`, phase: 'Build', schema: BUILD_SCHEMA })
   const builds = []
-  for (const w of plan.work) {          // sequential: subsystems share one assembly and one .blend
-    const b = await agent(buildPrompt(n, w), { label: `build #${n} ${w.subsystem}`, phase: 'Build', schema: BUILD_SCHEMA })
-    builds.push(b)
-    if (b) log(`attempt ${n} ${w.subsystem}: cadcheck ${b.check.fails}F/${b.check.warns}W`)
+  if (CONFIG.parallel_builds) {         // each builder writes its own /tmp model.blend; the finisher merges
+    builds.push(...await parallel(plan.work.map(w => () => runBuild(w))))
+  } else {
+    for (const w of plan.work) builds.push(await runBuild(w))   // sequential: one shared model.blend
   }
+  builds.forEach((b, i) => { if (b) log(`attempt ${n} ${plan.work[i].subsystem}: cadcheck ${b.check.fails}F/${b.check.warns}W`) })
 
   phase('Finish')
   const design = await agent(finishPrompt(n, plan, builds), { label: `finish #${n}`, phase: 'Finish', schema: FINISH_SCHEMA })
@@ -224,6 +251,7 @@ for (let n = CONFIG.start_attempt; n <= CONFIG.max_attempts && !passed; n++) {
   history = (history ? history + ', ' : '') + `#${n}: ${f}/${m}/${a}`
   passed = f >= CONFIG.target && m >= CONFIG.target && a >= CONFIG.target
   prevReview = `${dir(n)}/review.md`
+  if (CONFIG.stop_after && n >= CONFIG.stop_after) { log(`stopping after attempt ${n} (stop_after)`); break }
 }
 
 return {

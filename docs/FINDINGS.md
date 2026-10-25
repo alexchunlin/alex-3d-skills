@@ -14,6 +14,9 @@ Sources are abbreviated:
 - `D3` = designer attempt 3, `WF/wf_26e26b28-15e/agent-a16a800e7f34fb0ab.jsonl`
 - `R3a` = the first reviewer for attempt 3, interrupted after 6.6 min, `WF/wf_26e26b28-15e/agent-a84bc90b0abd58f66.jsonl`
 - `R3` = reviewer attempt 3 (the restart that scored it), `WF/wf_26e26b28-15e/agent-aec430aae41935a1a.jsonl`
+- `V2WF` = the v2 loop's workflow dir, `WF/wf_8db95a5a-12a/`. `HW2` = `HW/v2/`. v2 A1 agents: `P1` plan
+  `agent-a0cb3a38bac407e33`, builders `B1-base` `a800ddf5500adfcaa`, `B1-pan` `acdd6edb2981721dc`, `B1-launcher`
+  `a1e1c2446d3391a63`, `B1-feeder` `a598ac3528dfdb917`, `F1` finish `a4c7fa6df0fe83871`, `V2R1` review `a7067013f1c442a01`
 
 **Baseline:** v1 (the no-tools loop) ran attempts 1-3 and was then stopped by the user (2026-10-24 evening, see
 `HARVEST_BRIEF.md` "Process change"). The v1 tool results below are counterfactual. Every
@@ -546,3 +549,223 @@ Cost: cables went from 1.5 to 5.5 s.
   pattern changed from 11 to 15 mm with the new exposure rule.
 - The live v1 blend (frozen at A3) with the A2 config gives 10 fails, all config mismatches. The A3 config is the
   right one for it.
+
+---
+
+## v2 Attempt 1 (harvested 2026-10-25; the first attempt that used these tools for real)
+
+Inputs: the 7 attempt-1 entries in `V2WF/journal.jsonl` and their transcripts, plus `HW2/renders/attempt-1/`:
+progress.md, cadcheck.json, review.md, review.json, review/, 16 PNGs and `cg_grid.txt`. The blend V2R1 reviewed
+(`/tmp/rv1/model.blend`, md5 `d952d17f…`) is archived as `examples/mm-launcher-v2a1/`. Plan #2 and build #2 had started
+and are not ingested.
+
+**The tools the agents used were `2197aac`** (progress.md line 1: "tools: 2197aac"). That is before the A3 revision
+commit `ca81683`, so v2 A1 had no `carry`, `captive`, `flexures` or fastener-aware `slide_out`. Attempt 2 runs on
+`6b62667`, which has those. This run's fixes reach **v2 attempt 3**.
+
+### Per-agent cost (`cc_transcript.py workflow V2WF`)
+
+| Agent | Wall | Model | Tools | Output tok (thinking) | Cache read | Peak ctx | First edit | Longest gen | cad runs (failed) | Images |
+|---|---|---|---|---|---|---|---|---|---|---|
+| P1 plan | 20.1 | 19.8 | 0.3 | 118k (68k) | 4.7M | 226k | 12.4 min | 176 s | 4 (1) | 0 |
+| B1-base | 27.3 | 25.3 | 2.0 | 149k (112k) | 11.2M | 303k | 17.7 min | 307 s | 16 (0) | 4 |
+| B1-pan | 30.2 | 26.7 | 3.5 | 151k (109k) | 11.2M | 283k | 15.2 min | **765 s** (cache miss, 174k re-written) | 22 (5) | 2 |
+| B1-launcher | 32.9 | 27.1 | 5.8 | 156k (102k) | 14.9M | 348k | 8.6 min | 231 s | 20 (4) | 1 |
+| B1-feeder | 46.2 | 34.8 | 11.4 | 188k (149k) | 13.1M | 331k | 23.8 min | 446 s (cache miss, 157k) | 16 (3) | 3 |
+| F1 finish | 16.1 | 9.9 | 6.2 | 61k (15k) | 8.3M | 191k | 0.5 min | <120 s | 25 (2) | 13 |
+| V2R1 review | 14.7 | 13.6 | 1.1 | 79k (45k) | 6.3M | 196k | - | <120 s | 18 (0) | 10 |
+
+**Against the v1 baseline:**
+
+| | v1 A1 | v1 A2 | v1 A3 | **v2 A1** |
+|---|---|---|---|---|
+| Wall (design + review) | 82.6 min | 97.0 | 66.1 | **187.5** (plan 20.1, builds 136.6, finish 16.1, review 14.7) |
+| Output tokens (thinking) | 481k (327k) | 520k (354k) | 352k (228k) | **902k (601k)** |
+| Cache read | 26.8M | 37.9M | 35.8M | **69.7M** |
+| Peak context (any agent) | 522k | 698k | 488k | **348k** |
+| Longest generation | 1001 s | 1028 s | 290 s | 765 s |
+| F/M/A (sum) | 5/6/5 (16) | 6/5/6 (17) | 6/6/6 (18) | **7/7/6 (20)** |
+| Issues B/M/m | 18 | 1/3/6 | 0/4/4 | **0/5/7** |
+| cadcheck at hand-off | (none) | (none) | (none) | 0 fails, 34 warns |
+
+v2 A1 scores **2 points above v1's final attempt**, starting from scratch on a changed brief (jar hopper, test-rig
+launcher), with no blocker. It also took 2.3 times v1 A1's wall time and 1.9 times its output tokens. Peak context
+fell by a third. The aim was fewer, cheaper attempts, and only the first half held: one attempt beat three, but that
+one attempt cost 76% of v1's whole three-attempt total (245.7 min).
+
+### Time and token sinks
+
+**V2A1-T1. Four builders in series: 136.6 of 187.5 min (new; template shape).** The template runs builders one
+after another, because they share one `model.blend`. Each builder is a fresh agent. Before its first edit, each one
+re-read SKILL.md, api.md, checks-config.md, checks.json, the brief, the design log and progress.md, about 25-30k
+tokens and about 1 min of calls each. The builders spent **65.3 min in total before their first edit**: base 17.7,
+pan 15.2, launcher 8.6, feeder 23.8. Most of that was hand geometry against v1 coordinates:
+- B1-pan `0:13:38`, 765 s and 72k thinking tokens: re-deriving v1 journal, lug and servo positions to map them onto
+  the IF_* frame.
+- B1-base `0:14:35`, 307 s: the MotorGo world envelope and USB niche.
+
+The rest was tool source (T2). A first attempt builds every subsystem from zero, so later attempts should cost less.
+**Fix (template, opt-in):** `parallel_builds`. Builders run at once, each with `cad build -- --out /tmp/cadloop-<sub>`,
+and their new rows go to `checks.d/<sub>.json` (run with `--overlay`). The planner owns params.py, and the finisher
+merges. Wall time for an all-subsystem attempt would drop from 136.6 to about 46 min (the slowest builder). This is
+untested in a live run, so it is off by default. The v2 script is its own copy, so this needs the user to adopt it.
+
+**V2A1-T2. Builders read tool source for answers the docs lacked (new).** There were 30+ source reads across 7 agents
+(fork scan, timestamps in `/tmp/alex3d-v2a1/`):
+- bench/merge semantics in assembly_order: 4 agents (B1-base `0:07:12`, B1-pan `0:14:57`, B1-feeder `0:17:21`, P1
+  `0:15:27`). B1-feeder `0:20:37` then spent 186 s restructuring steps 10a/10b because "bench-to-bench merging isn't
+  supported";
+- `cad q section` syntax: 4 agents;
+- screw_hole/fastener semantics: 3;
+- slide semantics: 2;
+- stability/pose_grid: 2.
+
+**Fixed:** checks-config.md now has an assembly-order semantics paragraph, a "Running subsets" section and the
+contact-fit, stability, drop-coverage and warn-triage rules. api.md has a screw+hole+nut example and the `cad q
+section` command line. cadcheck now supports nested bench merges (`lands_in`, any depth). SKILL.md says to read the
+reference before the source.
+
+**V2A1-T3. `check_distances` crashed on a not-yet-built object (KeyError, `cadcheck.py:1456` at 2197aac).** It hit P1
+`0:16:46` and B1-pan `0:28:13`. The workaround in progress.md "Tool issues" was to drop distances with `--only` in
+every builder run (12 runs), so every distances row went unchecked until the finisher. **Fixed:** `present()` turns a
+missing name in distances, index or drop rows into one fail ("not in the scene; row skipped") and the run continues.
+Regression: verify 4d, "missing object".
+
+**V2A1-T4. `cad` wrapper argument bugs (3 hits).**
+- `cad check m.blend c.json --only X` took `--only` as the output path, so the filter was lost. B1-base `0:17:35`
+  deleted a 44 KB file named `./--only`; B1-feeder `0:35:32` found a 130 KB one.
+- `cad build x.py -- --render` passed a doubled `--`, and Blender tried to open `blender/--` (B1-feeder `0:37:02`).
+  SKILL.md documented exactly that form.
+- `cad q section X ...` gave `ValueError: substring not found` on an uppercase axis (B1-pan `0:28:55`, B1-launcher
+  `0:31:50`, B1-feeder `0:44:27`).
+
+**Fixed:** flags in the CONFIG or OUT position are no longer swallowed; a leading `--` after the build script is
+dropped; the axis is lower-cased. `cad build` exports `CAD_SKILL` from its own checkout, and the template no longer
+defaults to the unpinned path (P1 had to repoint it: progress.md "Tool issues").
+
+**V2A1-T5. `render.section` turned closed solids inside out (EXACT boolean).** PRT_jar_valve, PRT_base_shell and
+PRT_journal_plate flooded the sections. F1 bisected it from `0:05:17` to `0:07:11`, with 7 extra image reads, and
+wrote `HW2/blender/tools/section_precut.py` to pre-cut with `geom.csg` (Manifold). V2R1 reused that script.
+**Fixed:** `render.section` uses Manifold on closed solids. Reproduced on the archive:
+- at HEAD the x=21 section is 95% one cut colour (`/tmp/alex3d-v2a1/sec_x21_old.png`);
+- after the fix, the largest non-background colour is 13% (`sec_x21.png`).
+
+Regression: verify 4d, "section x21".
+
+**V2A1-T6. The reviewer hand-built checks.json copies (5.5 of 14.7 min).** V2R1 spent `0:01:53-0:04:44` and
+`0:09:51-0:12:18` writing `checks_review{,2,3,4,5}.json` by emptying other sections. **Fixed:** `cad check ...
+--overlay rows.json` (repeatable) appends rows (allow and fits rules go first), and `--overlay-only` replaces the base
+rows of the named sections. The reviewer skill and template now say to keep added rows in
+`review/review_rows.json`, which the next planner merges.
+
+**V2A1-T7. `cc_transcript.py` counted 0 Blender runs for v2 agents.** It only matched the Blender binary. **Fixed:**
+it now matches `cad build|check|q|sheet` through any path or variable. The counts in the table above come from the
+fixed tool: 121 cad runs, 15 failed.
+
+### Issues V2R1 raised, and what the tools did with them
+
+"At hand-off" is the designer's cadcheck at 2197aac (`HW2/renders/attempt-1/cadcheck.json`, 0 F / 34 W). "Now" is
+this run on the archive with the designer's own config (`/tmp/alex3d-v2a1/final_designcfg.json`).
+
+| ID | V2R1 issue | At hand-off | Now (designer config) | Why it got through |
+|---|---|---|---|---|
+| V2A1-F1 | **Major:** nip has no hard stops; drop stalls from a 7.4 mm gap; hood hits the body past the minimum (A1-01) | not flagged: drop rows held PIV_hood at home | **warn:** "the payload path touches ['PRT_hood'], which moves on PIV_hood (-6.51..1.09), but the test holds PIV_hood at home". With both ends added (`overlay_drop.json`): **fail**, 18/31 stall at tilt 0 and 31/31 at tilt 22.5 and 46 | coverage gap: new drop coverage warn |
+| V2A1-F2 | **Major:** setting the gap needs the nip cover off, which comes off only at tilt 45 (A1-02) | not flagged | not flagged: the service op has no `remove` list (its title says "nip cover off") | config gap. New warn when an op removes parts without a matching slide_out; checklist |
+| V2A1-F3 | **Major:** Ø15 pocket admits two edge-on candies (A1-03) | - | - | **no payload-fit check (gap)**: V2R1 wrote `review/add_mm_probe.py` |
+| V2A1-F4 | **Major:** feeder servo swap needs a feeder teardown (A1-04) | not flagged: no service row | fails once V2R1's row exists | config gap: BOM claim without a row. Checklist and template already ask; not done |
+| V2A1-F5 | **Major:** 0.94 mm crown wall at the self-tap pilots (A1-05) | **warn** (thin wall 0.94) | warn | **an unread warn.** New `accepted_warns` and untriaged count; finish prompt and SKILL "done" rule |
+| V2A1-F6 | Pod drop-in only at tilt 10-35 (A1-06) | not flagged | not flagged | the assembly-order merge has no insertion sweep; needs a slide_out row (checklist) |
+| V2A1-F7 | Magnet stack 0.40 > 0.30 (A1-07) | **warn** | warn | an unread warn (as F5) |
+| V2A1-F8 | Knife edges and an undeclared 48 mm bridge (A1-08) | **warns** | warns | an unread warn (as F5) |
+| - | Bare gate sheet, feeder form language, colours (A1-09, 10, 12) | - | - | not tool-catchable (A1-09's open state is a modelling gap: no PIV_gate) |
+| V2A1-F11 | PCB visible through a base-wall notch (A1-11) | - | - | **exposure covers cables and nuts only, not PCBs (gap)** |
+
+V2R1 marked 9 of 12 issues `tool_catchable`. **At hand-off, cadcheck had already flagged 3 of them (F5, F7, F8),
+all as warns the designer passed on.** With this run's tools and the designer's own config, 4 of 12 are flagged (F1
+added). The rest need a row the designer did not write (F2, F4, F6) or a check that doesn't exist (F3, F11). The
+pattern differs from v1. There, the tools lacked checks. Here, the checks existed, and **warns and missing rows** let
+issues through.
+
+**Config disputes (8), and what each became:**
+1. A gate slide that ignores its own guide: config.
+2. A service op with no pose: new warn plus checklist.
+3. Drop at home hood only: new warn.
+4. Distances at home only: checklist.
+5. No feeder-servo service row: checklist.
+6. Step 7 needs a pose: checklist.
+7. **V2A1-V4. Contact fits hide journals:** fixed with `contact_normal`. On the archive with `overlay_fits.json`,
+   post_R x journal_plate is now measured at 0.142 mm and shell x turntable at 0.258 mm. Before, neither pair had a
+   clearance row.
+8. **Stability evaluated 1 pose:** fixed (V2A1-V3).
+
+### cadcheck bugs this attempt exposed (fixed)
+
+- **V2A1-V2. `pose_grid` thinning dropped the in-range limits.** `thin()` kept the list ends, which are the
+  overtravel samples. In a two-joint group thinned to 5 samples per joint, tilt -3 and 46 were never visited, so a
+  collision at a hard stop would have shown only as an overtravel warn. Now `thin(keep=...)` always keeps lo, hi and
+  both overtravel samples. On v2 A1 this changed nothing (the same 34 warns plus 2 new ones, F1 and a cable spot).
+  Interference went from 40 to 62 s, with 3-joint groups at 64-75 poses instead of 36-45.
+- **V2A1-V3. Stability evaluated 1 pose.** `pose_grid(cap=27)` thinned 5 joints to 3 samples, 2 of them overtravel,
+  and stability skips overtravel, so only the all-midpoint pose survived. Continuous pan was excluded too. F1 wrote
+  its own 64-pose `cg_grid.py` (worst 29.8°). Now every driver joint is sampled at lo/home/hi, and continuous joints
+  every 45°. Local centroids are computed once, so 864 poses take 1.0 s. Worst: 31.2° at pan -90, tilt 45, hood
+  -6.5, feeder -60. The 1.4° gap to F1's number comes from mass assumptions; F1 used a full jar.
+- **V2A1-V4. Contact fits** (dispute 7): see above.
+- **check_drop** crashed when a slide ray ended on nothing (`None in bpy.data.objects` raises a TypeError). This run's
+  first version of the coverage warn hit it on the demo; found by verify_all.
+
+### What worked
+
+- **The modular project.** params.py with IF_* interfaces, one module per subsystem, and progress.md lines after
+  every build plus check made a 4-subsystem first attempt resumable. Peak context was 348k, against 522-698k in v1.
+- **cadcheck as the builders' loop.** 121 cad runs and 0 fails at hand-off. Every V2R1 measurement re-ran with the
+  same tool: V2R1 had 18 cad runs and 0 failures, against R1's hand scripts. Its review took 14.7 min, the shortest
+  so far, with 10 images.
+- **progress.md "Tool issues".** The planner prompt asked agents to log tool problems instead of stopping. That
+  section is where T3 and the CAD_SKILL bug were found. Keep it.
+- **The reviewer issue cap** (at most 10 B/M and 8 minors, folded): 12 issues, each with one fix and a number.
+
+### Reviewer quality (V2R1)
+
+- Every issue cites a cadcheck row, a `cad q` line or a render, and there are 8 concrete config disputes. The anchors
+  were applied as written: F 7 for "3 or more majors"; M rounded down from 8; A capped at 6 by "unfinished element in
+  a hero view".
+- V2R1 found F1, F2, F4 and F6 by **adding rows** the designer had not written. That is the reviewer doing the
+  designer's coverage work, which is why the template now asks the planner for adjuster-end rows and merges
+  `review_rows.json`.
+- V2R1 accepted the designer's cg_grid as evidence (dispute 8) instead of re-running it. That was reasonable with a
+  1-pose tool; the tool now covers it.
+
+### Why not the existing code (v2 A1 additions)
+
+- **Overlay vs `--only` and hand copies:** `--only` filters checks, not rows. The merge loop for DEFAULTS existed, and
+  `--overlay` reuses it (about 15 lines). Measured: V2R1 spent 5.5 min on copies.
+- **Stability sampler vs `pose_grid`:** `pose_grid` is tuned for interference, which wants overtravel. Stability wants
+  limits and continuous joints. Reusing it was the bug, and a separate 20-line sampler fixes it.
+  `centroid_vol` is reused, just called once per part.
+- **`contact_normal` vs splitting the rule:** rules match object pairs, and the thrust face and journal are the same
+  two objects, so no glob separates them. Filtering by face normal in the existing overlap and min_dist path is
+  about 35 lines.
+- **Section:** `geom.csg` (Manifold) already existed, and F1's workaround used it. The fix picks the solver per
+  object in `render.section` (3 lines). F1's pre-cut script is no longer needed.
+- **Drop coverage:** this reuses `slide_trace`, `joint_chain` and `drivers`. The only addition is face-to-object
+  bookkeeping in `scene_bvh` (`owner()`).
+- **Parallel builds:** the sequential loop is the prior art, and its cost is measured: 136.6 min for 4 builders. The
+  change is about 20 template lines plus `--out` in the project template. Its benefit is unmeasured until a run uses
+  it.
+
+### Still open (gaps)
+- No payload-fit check, such as two candies in a pocket (F3). V2R1's probe is `HW2/renders/attempt-1/review/add_mm_probe.py`.
+- Exposure doesn't cover PCBs or other purchased internals (F11).
+- No insertion sweep for an assembly merge step (F6); this needs a slide_out row today.
+- Missing-row problems (F2, F4, F6) are config completeness, which no tool can force. The levers are the checklist,
+  the planner prompt and review_rows.json.
+
+### Verification of this run
+- `tools/verify_all.sh`: 45/45 passed (`/tmp/alex3d-verify.log`). The 9 new tests: template `--out`; `cad check`
+  argument parsing; v2 A1 (4 patterns, plus "exactly the 3 open-end stall fails, journals measured, stability over 864
+  poses"); the missing-object row; the x=21 section colour test.
+- A1, A2 and A3 are unchanged after the `pose_grid` and stability changes: still 7 patterns, exactly 15 fails, and
+  exactly 2 fails.
+- The template dry run passes both sequential and `parallel_builds`. `parallel_builds` has not been tried in a live
+  run.

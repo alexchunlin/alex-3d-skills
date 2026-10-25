@@ -7,12 +7,20 @@
 # BLENDER overrides the Blender binary. Runs at nice 10 so a parallel CAD loop keeps its CPU.
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# build scripts find cadlib through CAD_SKILL; default to the checkout this wrapper lives in, so a pinned copy
+# never silently imports another checkout's cadlib (v2 A1 progress.md "Tool issues")
+export CAD_SKILL="${CAD_SKILL:-$(dirname "$HERE")}"
 BL="${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}"
 run() { nice -n 10 "$BL" -b --factory-startup "$@" 2>&1 | grep -v -E '^(Blender quit|Blender [0-9]|Fra:|Read blend|$)| blend +\|' || true; }
 cmd="$1"; shift || true
 case "$cmd" in
-  build) s="$1"; shift; run --python "$s" -- "$@" ;;
-  check) b="$1"; c="${2:-}"; o="${3:-$(dirname "$b")/cadcheck.json}"; shift; shift 2>/dev/null || true; shift 2>/dev/null || true
+  build) s="$1"; shift; [ "${1:-}" = "--" ] && shift   # `cad build x.py -- --render` (v2 A1: Blender tried to open "--")
+         run --python "$s" -- "$@" ;;
+  check) b="$1"; shift
+         # CONFIG and OUT are optional positionals; a flag in their place is not swallowed as a file name
+         # (v2 A1: `cad check m.blend c.json --only ...` wrote a file called --only, FINDINGS V2A1-T4)
+         c=""; case "${1:-}" in ""|--*) ;; *) c="$1"; shift ;; esac
+         o="$(dirname "$b")/cadcheck.json"; case "${1:-}" in ""|--*) ;; *) o="$1"; shift ;; esac
          # anything after OUT passes through, e.g. --only fasteners,service --quick
          if [ -n "$c" ]; then run "$b" --python "$HERE/cadcheck.py" -- --config "$c" --out "$o" "$@"; else run "$b" --python "$HERE/cadcheck.py" -- --out "$o" "$@"; fi ;;
   q) b="$1"; shift; run "$b" --python "$HERE/cadq.py" -- "$@" | grep -E '^CADQ|Error|cadq:' ;;

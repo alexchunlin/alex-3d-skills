@@ -1,6 +1,6 @@
 #!/bin/sh
-# Re-prove every tool in this repo. Writes only under /tmp/alex3d-verify. About 3 minutes, run at nice 10.
-# The attempt regressions use examples/mm-launcher-a{1,2,3}/mm_launcher_a*.blend.gz (the blends the reviewers saw).
+# Re-prove every tool in this repo. Writes only under /tmp/alex3d-verify. About 8 minutes, run at nice 10.
+# The attempt regressions use examples/mm-launcher-{a1,a2,a3,v2a1}/*.blend.gz (the blends the reviewers saw).
 #   sh tools/verify_all.sh            # HW defaults to the mm-launcher project (read-only; copied first)
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -31,6 +31,12 @@ cp -R "$ROOT/skills/print-cad-blender/templates/project" "$V/tpl"; mkdir -p "$V/
 $CAD build "$V/tplroot/blender/build_assembly.py" >/dev/null
 $CAD check "$V/tplroot/blender/model.blend" "$V/tplroot/blender/checks.json" >/dev/null
 set -- $(summ "$V/tplroot/blender/cadcheck.json"); [ "${1:-x}" = 0 ] && ok "template: 0 fails" || bad "template: ${1:-?} fails"
+
+# 3b template build into another dir (parallel builders, V2A1-T1); `cad check` with a flag where CONFIG/OUT would be
+$CAD build "$V/tplroot/blender/build_assembly.py" -- --out "$V/tplout" >/dev/null
+[ -f "$V/tplout/model.blend" ] && [ -f "$V/tplout/manifest.json" ] && ok "template: --out writes model.blend + manifest there" || bad "template --out"
+(cd "$V" && $CAD check "$V/tplout/model.blend" --only parts >/dev/null)
+[ -f "$V/tplout/cadcheck.json" ] && [ ! -e "$V/--only" ] && ok "cad check: a flag in the CONFIG slot is not a file name" || bad "cad check arg parsing"
 
 # 4 attempt-1 regression on the archived attempt-1 blend (the live HW blend moves on every attempt)
 A1="$ROOT/examples/mm-launcher-a1/mm_launcher_a1.blend.gz"
@@ -83,6 +89,39 @@ import json,sys; d=json.load(open(sys.argv[1])); s=d['summary']
 nip=[x for x in s['fail_list'] + [w for w in s['warn_list'] if w.startswith('fasteners')] if 'nip_stud' in x or 'nip_nut' in x]
 sys.exit(1 if (s['fails'] != 2 or nip or d['checks']['index']['findings']) else 0)" "$V/a3/cadcheck.json" \
     && ok "A3: exactly the 2 R3-confirmed fails, no nip-mechanism findings, feeder index 1 candy per fire" || bad "A3: unexpected fails"
+fi
+# 4d v2 attempt-1 regression (FINDINGS V2A1): the first tool-using attempt, archived as R1 saw it
+V2="$ROOT/examples/mm-launcher-v2a1"
+if [ -f "$V2/mm_launcher_v2a1.blend.gz" ]; then
+  mkdir -p "$V/v2a1"; gunzip -c "$V2/mm_launcher_v2a1.blend.gz" > "$V/v2a1/model.blend"
+  # designer config + R1's two missing pieces: hood-end drop poses (A1-01) and contact_normal on the journal fits (dispute 7)
+  $CAD check "$V/v2a1/model.blend" "$V2/checks.json" "$V/v2a1/cadcheck.json" --overlay "$V2/overlay_drop.json" --overlay "$V2/overlay_fits.json" >/dev/null
+  for pat in "the payload path touches ['PRT_hood'], which moves on PIV_hood" \
+             "nip drop at both hood ends at hood=-6.50948, tilt=46: 31/31 rays end at ['stall']" \
+             "magnet centring on the rear shaft (A1-#7, A2-#6): worst case 0.40" "PRT_feeder_crown: 40 wall samples < 1.6 mm (min 0.94)"; do
+    grep -qF "$pat" "$V/v2a1/cadcheck.json" && ok "V2A1 reproduces: $pat" || bad "V2A1 missing: $pat"
+  done
+  python3 -I -c "
+import json,sys; d=json.load(open(sys.argv[1])); s=d['summary']; i=d['checks']['interference']
+pairs={frozenset((r['a'],r['b'])) for r in i['min_clearance']}
+need={frozenset(('PRT_post_R','PRT_journal_plate')), frozenset(('PRT_base_shell','PRT_turntable'))}
+st=d['checks']['stability']
+ok = s['fails']==3 and all('nip drop at both hood ends at hood=-6.5' in f for f in s['fail_list']) and need <= pairs and st['poses'] >= 100
+sys.exit(0 if ok else 1)" "$V/v2a1/cadcheck.json" \
+    && ok "V2A1: exactly the 3 open-end stall fails; contact fits measure their journals; stability over 864 poses" || bad "V2A1: unexpected fails, journals unmeasured or 1-pose stability"
+  # a row naming a part that isn't built yet: one fail, the run carries on (V2A1-T3)
+  echo '{"distances": [{"a": "PRT_not_built_yet", "b": "PRT_hood", "min": 1}]}' > "$V/v2a1/missing.json"
+  $CAD check "$V/v2a1/model.blend" "$V2/checks.json" "$V/v2a1/missing_out.json" --only distances --overlay "$V/v2a1/missing.json" >/dev/null
+  grep -qF "PRT_not_built_yet not in the scene; row skipped" "$V/v2a1/missing_out.json" && ok "missing object: reported, run completes" || bad "missing object crashed the run"
+  # section through closed solids uses Manifold: the EXACT cutter flooded 95% of this view (V2A1-T5)
+  $CAD q "$V/v2a1/model.blend" section x 21 "$V/v2a1/sec_x21.png" 400,0,200 320 >/dev/null
+  "$BL" -b --factory-startup --python-expr "
+import bpy; from collections import Counter
+im=bpy.data.images.load('$V/v2a1/sec_x21.png'); p=im.pixels[:]; n=len(p)//4
+c=Counter((round(p[4*i],1),round(p[4*i+1],1),round(p[4*i+2],1)) for i in range(0,n,7)); t=sum(c.values())
+print('SECTION_TOP', max(v/t for k,v in c.items() if k!=(1.0,1.0,1.0)))" 2>&1 | python3 -I -c "
+import sys; v=[float(l.split()[1]) for l in sys.stdin if l.startswith('SECTION_TOP')]; sys.exit(0 if v and v[0] < 0.5 else 1)" \
+    && ok "section x21: no flooded cut colour" || bad "section x21 flooded (EXACT inversion back?)"
 fi
 # 4b smoke: cadcheck runs on the live v1 project blend (frozen at attempt 3 since v1 stopped); reports, never asserts
 if [ -f "$HW/blender/mm_launcher.blend" ]; then

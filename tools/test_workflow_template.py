@@ -11,6 +11,7 @@ src = open(os.path.join(ROOT, "templates", "cad-loop.workflow.js")).read().repla
 harness = """
 const calls=[]; const scores=[[5,6,5],[8,8,7],[9,9,9]]; let r=0
 const log=m=>calls.push('log'); const phase=p=>calls.push('phase:'+p)
+const parallel=async fs=>Promise.all(fs.map(f=>f()))
 const ok={fails:0,warns:1,fail_list:[],coverage:[],not_checked:[]}
 async function agent(prompt,opts){ calls.push(opts.label)
   if(opts.phase==='Plan') return {plan:'p',work:[{subsystem:'base',changes:[],review_issues:[],acceptance:[]},{subsystem:'launcher',changes:[],review_issues:[],acceptance:[]}],deferred:[]}
@@ -18,13 +19,16 @@ async function agent(prompt,opts){ calls.push(opts.label)
   if(opts.phase==='Finish') return {summary:'',addressed:[],deferred:[],printed_parts:['a'],check:ok,render_dir:''}
   const [f,m,a]=scores[r++]; return {functionality:f,manufacturability:m,aesthetics:a,anchors:{},issues:[{id:'x',tool_catchable:true}],previous_issue_status:[],check_config_disputes:[]}
 }
-const args={hw:'/tmp/x',start_attempt:2,history:[{n:1,f:5,m:6,a:5}]}
+const args={hw:'/tmp/x',start_attempt:2,history:[{n:1,f:5,m:6,a:5}],parallel_builds:PARALLEL}
 const out = await (async()=>{ %s })()
 const want='plan #2|build #2 base|build #2 launcher|finish #2|review #2'
 const got=calls.filter(c=>!c.startsWith('phase')&&c!=='log').slice(0,5).join('|')
 if(got!==want||!out.passed||!out.history.endsWith('#4: 9/9/9')){console.log('FAIL',got,out.history);process.exit(1)}
 console.log('OK', out.history)
 """ % src
-with tempfile.NamedTemporaryFile("w", suffix=".mjs", delete=False) as f:
-    f.write(harness)
-sys.exit(subprocess.call(["node", f.name]))
+rc = 0
+for par in ("false", "true"):          # sequential builds, then parallel_builds (V2A1-T1)
+    with tempfile.NamedTemporaryFile("w", suffix=".mjs", delete=False) as f:
+        f.write(harness.replace("PARALLEL", par))
+    rc |= subprocess.call(["node", f.name])
+sys.exit(rc)

@@ -1,0 +1,3 @@
+{"fits": [
+ {"a": "PRT_base_shell", "b": "PRT_turntable", "contact": true, "contact_normal": [0, 0, 1], "min_clearance": 0.1, "why": "thrust face only; R20/R20.3 journal measured"},
+ {"a": "PRT_post_R", "b": "PRT_journal_plate", "contact": true, "contact_normal": [1, 0, 0], "min_clearance": 0.1, "why": "side thrust only; journal and stop lugs measured"}]}
