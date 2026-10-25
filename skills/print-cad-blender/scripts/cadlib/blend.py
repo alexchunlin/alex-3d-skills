@@ -32,6 +32,35 @@ except ImportError:                # pragma: no cover
 
 # ------------------------------------------------------------------ grid and fields
 
+MAX_CELLS = 40_000_000   # grid cells: grow peaks at 1.63 GB for 36.9M (measured, docs/features/blend-bracket.md)
+
+
+class GridTooLarge(ValueError):
+    pass
+
+
+def check_cells(lo, hi, voxel, max_cells=None, what="grid"):
+    """Refuse a grid over max_cells before anything is allocated. The message names the extent, the voxel and the
+    smallest voxel that fits. Returns the cell count."""
+    max_cells = max_cells or MAX_CELLS
+    ext = [float(hi[i] - lo[i]) for i in range(3)]
+    n = 1
+    for e in ext:
+        n *= int(math.ceil(e / voxel)) + 1
+    if n > max_cells:
+        fit = (ext[0] * ext[1] * ext[2] / max_cells) ** (1 / 3)
+        while True:   # the +1 per axis makes the closed form a little optimistic
+            m = 1
+            for e in ext:
+                m *= int(math.ceil(e / fit)) + 1
+            if m <= max_cells:
+                break
+            fit *= 1.02
+        raise GridTooLarge("%s: %.0f x %.0f x %.0f mm at voxel %g mm is %.0fM cells (max_cells %.0fM); "
+                           "the smallest voxel that fits is %.2f mm, or split the part, or raise max_cells"
+                           % (what, ext[0], ext[1], ext[2], voxel, n / 1e6, max_cells / 1e6, math.ceil(fit * 100) / 100))
+    return n
+
 class Grid:
     """Axis-aligned sample grid: origin `lo` (world mm), voxel `h`, `shape` (nx, ny, nz). X, Y, Z broadcast."""
 
@@ -332,9 +361,10 @@ def tri_count(ob):
 
 
 def skin(name, fields, fillet=5.0, keepout=(), keepout_clear=0.5, keepout_edge=1.0, clip=None, voxel=0.5,
-         adaptivity=0.0, bias=0.0, max_tris=None):
+         adaptivity=0.0, bias=0.0, max_tris=None, max_cells=None):
     """The blended outer solid only (no exact cuts): round union of `fields`, keep-outs cut, meshed by OpenVDB.
     bias moves the surface outward (mm), e.g. to pay back the inward chord error of adaptivity or decimation.
+    Raises GridTooLarge, before allocating, when the grid would exceed max_cells (default MAX_CELLS).
     Returns (object, report dict)."""
     assert vdb is not None, "openvdb is not available in this Blender"
     t0 = time.time()
@@ -346,8 +376,20 @@ def skin(name, fields, fillet=5.0, keepout=(), keepout_clear=0.5, keepout_edge=1
         m = 3 * voxel
         lo = Vector([max(lo[i], clip[0][i] - m) for i in range(3)])
         hi = Vector([min(hi[i], clip[1][i] + m) for i in range(3)])
+    cells = check_cells(lo, hi, voxel, max_cells, "blend.skin(%s)" % name)
     g = Grid(lo, hi, voxel)
-    d = round_union([f(g) for f in fields], fillet)
+    # streamed round union: two arrays live at a time, however many members there are
+    m = s = None
+    for f in fields:
+        d = f(g)
+        m = d if m is None else np.minimum(m, d, out=m)
+        t = np.maximum(fillet - d, 0) if fillet > 0 else None
+        if t is not None:
+            t *= t
+            s = t if s is None else np.add(s, t, out=s)
+        del d, t
+    d = m if fillet <= 0 else np.subtract(np.maximum(m, fillet, out=m), np.sqrt(s, out=s), out=m)
+    del m, s
     for k in keepout:
         f = k if isinstance(k, Field) else mesh_field(k, band=keepout_clear + keepout_edge + 3 * voxel)
         d = round_intersect(d, keepout_clear - f(g), keepout_edge)
@@ -365,13 +407,13 @@ def skin(name, fields, fillet=5.0, keepout=(), keepout_clear=0.5, keepout_edge=1
         m.use_collapse_triangulate = True
         geom.apply_mods(ob)
     nm, vol = geom.solid_stats(ob)
-    return ob, {"voxel": voxel, "grid": list(g.shape), "fillet": fillet, "adaptivity": adaptivity, "bias": bias,
+    return ob, {"voxel": voxel, "grid": list(g.shape), "cells_M": round(cells / 1e6, 1), "fillet": fillet, "adaptivity": adaptivity, "bias": bias,
                 "skin_tris_raw": tris, "skin_tris": tri_count(ob), "skin_non_manifold": nm,
                 "t_field_s": round(t_field, 2), "t_mesh_s": round(time.time() - t0 - t_field, 2)}
 
 
 def grow(name, holds=(), fillet=5.0, extra=(), keepout=(), keepout_clear=0.5, keepout_edge=1.0, clip=None, holes=(),
-         voxel=0.5, adaptivity=0.0, bias=0.02, max_tris=40000):
+         voxel=0.5, adaptivity=0.0, bias=0.02, max_tris=40000, max_cells=None):
     """Grow one smooth printed solid around `holds` (Tube, Block) and `extra` fields (rod, capsule, rbox, sphere).
 
     fillet:      concave fillet radius between every pair of members
@@ -386,10 +428,12 @@ def grow(name, holds=(), fillet=5.0, extra=(), keepout=(), keepout_clear=0.5, ke
                  arm radius within 0.02 mm (docs/features/blend-bracket.md).
     bias:        moves the skin out (mm) so walls stay at or above spec after meshing and decimation (+0.016 mm on
                  the node with 0.02). adaptivity (OpenVDB, 0..1) is cheaper but flattens round arms: 0.05 cost 0.21 mm.
+    max_cells:   dense grid limit (default MAX_CELLS = 40M; 36.9M peaked at 1.63 GB). Over it, GridTooLarge is raised before
+                 anything is allocated, naming the smallest voxel that fits. It does not coarsen silently.
     Returns (object, report dict). The report is also stored on the object as ob["blend"]."""
     t0 = time.time()
     ob, rep = skin(name, [h.field() for h in holds] + list(extra), fillet, keepout, keepout_clear, keepout_edge, clip,
-                   voxel, adaptivity, bias, max_tris)
+                   voxel, adaptivity, bias, max_tris, max_cells)
     sub = []
     for h in holds:
         sub += h.cutters()

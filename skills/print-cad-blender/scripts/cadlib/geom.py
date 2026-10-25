@@ -354,7 +354,7 @@ def _world_tris(obs):
 
 
 def swept_envelope(obs, pivot, axis=None, lo=None, hi=None, step=None, tol=0.25, voxel=0.5, method="sdf",
-                   adaptivity=0.0, name="KEEP_sweep"):
+                   adaptivity=0.0, name="KEEP_sweep", max_cells=None):
     """Closed mesh holding every pose of `obs` while they turn about an axis: a keep-out for cuts and clearances.
 
     pivot: a PIV_ joint empty (or its name): axis and pivot come from its world matrix, and lo/hi are joint
@@ -366,7 +366,11 @@ def swept_envelope(obs, pivot, axis=None, lo=None, hi=None, step=None, tol=0.25,
            step defaults to 2 * tol / r_max, so pad is about tol + voxel / 4.
     method "union": Manifold union of the posed copies at `step` (default 2 deg). Exact at the poses, but an
            in-between pose pokes out by up to about r_max * step^2 / 8 (measured in docs/features/blend-bracket.md).
-    The result goes in the scratch collection; ob["envelope"] holds poses, step, pad, r_max and timings.
+    max_cells: the "sdf" level set is sparse, but its peak memory still tracks the swept bounding box (A3 nacelle
+           9M cells: 1.2 GB; the 7-part pod 34M: 2.2 GB). Over max_cells (default blend.MAX_CELLS, 40M) it raises
+           blend.GridTooLarge before building anything, naming the smallest voxel that fits.
+    The result goes in the scratch collection; ob["envelope"] holds poses, step, pad, r_max and timings. Keep it out of
+    the Printed and Purchased collections: at 230k-925k triangles it would slow every cadcheck pass.
     D3 spent 159 s deriving the pod's swept envelope by hand (FINDINGS A3-T2)."""
     import time
     t0 = time.time()
@@ -413,6 +417,13 @@ def swept_envelope(obs, pivot, axis=None, lo=None, hi=None, step=None, tol=0.25,
         from . import blend
         pad = r_max * dstep / 2 + voxel / 4
         P0 = np.array([tuple(v) for v in V], dtype=np.float64)
+        # size guard on the swept bounding box, one pose at a time, before the triangle soup or the level set exist
+        blo, bhi = np.full(3, np.inf), np.full(3, -np.inf)
+        for M in rots:
+            Q = P0 @ np.array(M.to_3x3()).T + np.array(M.translation)
+            blo, bhi = np.minimum(blo, Q.min(0)), np.maximum(bhi, Q.max(0))
+        m = pad + 3 * voxel
+        info["cells_M"] = round(blend.check_cells(blo - m, bhi + m, voxel, max_cells, "swept_envelope(%s)" % name) / 1e6, 1)
         T0 = np.array(T, dtype=np.uint32)
         P = np.concatenate([P0 @ np.array(M.to_3x3()).T + np.array(M.translation) for M in rots]).astype(np.float32)
         Tr = np.concatenate([T0 + i * len(P0) for i in range(n)])

@@ -153,6 +153,53 @@ the centre. Three solid tubes can't share the centre point, so the core between 
 
 Render: `/tmp/alex3d-bb-node/node.png`: tubes near-black, connector red.
 
+### Organic setting (`--organic`, review on PR #4)
+
+This setting is closer to the user's reference: one smooth body with large concave faces between short grips. It uses
+fillet 15 and sleeves that end 36 mm from the centre (21.8 mm sockets, about 4 mm of plain sleeve showing), against
+6 and 40 for the default. I also tried 30/13, which reads as a ball with collars and has only 15.8 mm sockets, and
+34/12, which has visibly smaller concave faces.
+
+| Measure | Result |
+|---|---|
+| `grow` time | 1.8 s (grid 268^3 = 19.2M cells) |
+| Triangles | 43,040, closed |
+| Fit | 0.190-0.199 mm over 1,296 rays |
+| Wall | min 4.015 mm |
+| `cad check --only parts` | 0 fails, 0 warns. 72 x 72 x 72 mm, wall probe 4.00 |
+| Print orientation | 2,416 mm2 overhang + 738 mm2 ceilings, 98 mm2 on the bed: still `supports=yes` |
+
+Render: `/tmp/alex3d-bb-node/node_organic.png`.
+
+## Size guard (review on PR #4)
+
+`blend.skin`/`grow` evaluate a dense float32 grid. `geom.swept_envelope` builds a sparse OpenVDB level set, but its
+peak memory still tracks the swept box. Both now check the cell count first, against `max_cells` (default
+`blend.MAX_CELLS` = 40M). Over it, they raise `blend.GridTooLarge` before anything big is allocated.
+- The message names the extent, the voxel and the smallest voxel that fits: "341 x 263 x 263 mm at voxel 0.5 mm is
+  190M cells (max_cells 40M); the smallest voxel that fits is 0.86 mm".
+- I chose an error over auto-coarsening. The voxel sets the skin accuracy and the envelope's pad, so changing it
+  silently would change a keep-out's guarantee.
+- The swept box is computed pose by pose, so the guard runs before the triangle soup exists.
+
+Peak RSS, measured with `resource.getrusage`, Blender baseline about 225 MB:
+
+| Request | Cells | Peak RSS | Time |
+|---|---|---|---|
+| node `grow`, voxel 0.5 | 15.3M | 807 MB | 1.5 s |
+| node `grow`, voxel 0.37 | 36.9M | 1,632 MB | 3.6 s |
+| node `grow`, voxel 0.28 | 84M | refused, "smallest voxel that fits is 0.37" | 0.0 s |
+| nacelle `swept_envelope`, voxel 0.5 | 9M (swept box) | 1,199 MB | 2.3 s |
+| 7-part pod `swept_envelope`, voxel 0.5 | 34M (swept box) | 2,224 MB | 8.9 s |
+
+- `grow` now folds members into the round union one at a time (two arrays live), so its memory no longer grows with
+  the number of members.
+- The envelope's memory is driven more by its output triangles (460k and 925k here) than by the box. At the 40M limit
+  it is about 2.2 GB.
+
+`tools/verify.d/blend_bracket_guard.py` asks for a 190M-cell `grow` and a 76M-cell sweep. Both must be refused in
+under 2 s with peak RSS growing by under 150 MB (measured: 0.0 s, +0.5 MB).
+
 ## Place the parts, grow the bracket (`examples/blend-bracket/build.py`, `/tmp/alex3d-bb-bracket/`)
 
 Hiwonder servo and the Hiwonder controller board from `components/placeholders.py`, at fixed poses:
@@ -178,7 +225,9 @@ Renders:
 
 ## Verification
 
-`tools/verify.d/blend_bracket.sh` (about 15 s) asserts:
+`tools/verify.d/blend_bracket.sh` (about 20 s) asserts:
+- The organic node (fillet 15) passes the same fit and wall assertions.
+- The size guard refuses oversized `grow` and `swept_envelope` requests before allocating.
 - The node is closed; all 6 sockets are within ±0.05 mm of the 0.2 mm fit with no missed rays; the wall is at least
   4.0; it has under 60k triangles.
 - `cad check --only parts` on the node: 0 fails, fits P1S, wall probe at least 4.0.
@@ -191,8 +240,9 @@ Renders:
 
 - **Holds are tubes and boxes.** `mesh_field` blends any closed mesh as a member, but a mesh hold has no exact
   clearance cutter: Manifold has no offset. Pass an explicit cutter in `holes` for now.
-- **Voxel cost grows as 1 / voxel^3.** The node grid is 248^3 (15M voxels, about 1.6 s). Parts much over 150 mm need a
-  coarser voxel, or sparse evaluation near the surface (not done).
+- **Voxel cost grows as 1 / voxel^3.** The node grid is 248^3 (15M voxels, about 1 s). Parts over about 170 mm cube
+  at voxel 0.5 hit the 40M-cell guard. They need a coarser voxel (the error names it), splitting, or sparse
+  evaluation near the surface (not done).
 - **Printability is reported, not designed in.** The node needs supports in every orientation. There is no overhang-
   aware field term (for example a 45 deg chamfer under horizontal sleeves) yet.
 - **The fillet is circular per pair.** At three-way corners the n-ary round union gives a 3.11 mm fill. Changing that

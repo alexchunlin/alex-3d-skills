@@ -1,5 +1,5 @@
 # blend-bracket: cadlib.blend grows the 6-way tube node and the servo bracket; geom.swept_envelope holds every pose.
-# Sourced by tools/verify_all.sh (uses $ROOT $CAD $V $BL, calls ok/bad). About 25 s. Evidence: docs/features/blend-bracket.md.
+# Sourced by tools/verify_all.sh (uses $ROOT $CAD $V $BL, calls ok/bad). About 20 s. Evidence: docs/features/blend-bracket.md.
 BB="$V/bb"; mkdir -p "$BB"
 SCR="$ROOT/skills/print-cad-blender/scripts"
 
@@ -18,6 +18,22 @@ python3 -I -c "
 import json,sys; d=json.load(open(sys.argv[1])); r=d['checks']['parts']['rows'][0]
 sys.exit(0 if d['summary']['fails']==0 and r['non_manifold_edges']==0 and r['fits']['P1S'] and r['min_wall_mm']>=4.0 else 1)" "$BB/node/cadcheck.json" \
   && ok "blend node: cadcheck parts 0 fails, fits P1S, wall probe >= 4.0" || bad "blend node: cadcheck parts"
+
+# organic node (fillet 15, short grips): same fit and wall assertions
+$CAD build "$ROOT/examples/blend-node/build.py" -- --out "$BB/node" --organic >/dev/null
+python3 -I -c "
+import json,sys; r=json.load(open(sys.argv[1])); g=r['grow']; h=r['holds']
+c=[x for m in h.values() for x in (m['clearance_min'], m['clearance_max'])]
+ok = g['non_manifold_edges']==0 and len(h)==6 and all(m['fit_ok'] and m['missed']==0 for m in h.values()) \
+  and max(abs(x-0.2) for x in c) <= 0.05 and min(m['wall_min'] for m in h.values()) >= 4.0 and g['fillet']==15
+print('clearance %.3f-%.3f, wall %.3f, %d tris' % (min(c), max(c), min(m['wall_min'] for m in h.values()), g['tris']))
+sys.exit(0 if ok else 1)" "$BB/node/report_organic.json" > "$BB/node_organic.txt" 2>&1 \
+  && ok "blend node --organic (fillet 15): closed, $(cat "$BB/node_organic.txt")" || bad "blend node --organic: $(cat "$BB/node_organic.txt")"
+
+# size guard: oversized grow and sweep requests are refused before allocating
+G1=$(nice -n 10 "$BL" -b --factory-startup --python "$ROOT/tools/verify.d/blend_bracket_guard.py" -- "$SCR" 2>&1 | grep '^GUARD' | sed 's/^GUARD //')
+echo "$G1" | grep -q '"ok": true' && ok "blend size guard refuses 190M-cell grow and 76M-cell sweep before allocating: $(echo "$G1" | cut -c1-160)" \
+  || bad "blend size guard: $G1"
 
 # swept envelope: every vertex and edge midpoint of 25 random poses inside (synthetic L arm, and the A3 nacelle if present)
 sweep() { nice -n 10 "$BL" -b --factory-startup "$@" 2>&1 | grep '^SWEEPCHK' | sed 's/^SWEEPCHK //'; }
