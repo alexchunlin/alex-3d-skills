@@ -1,0 +1,900 @@
+{
+ "blend": "HW/blender/mm_launcher.blend 2026-10-24 20:27 (the blend R2 reviewed), archived as mm_launcher_a2.blend.gz",
+ "summary": {
+  "pass": false,
+  "fails": 15,
+  "warns": 63,
+  "fail_list": [
+   "fasteners: FST_fw_bolt_0 stops 0.35 mm short of its nut FST_fw_nut_0: no thread engagement",
+   "fasteners: FST_fw_bolt_0 cannot be driven: straight bit blocked by PRT_flywheel at 18.5 mm; L-key long leg clear over 0 deg (need 60) (all 12 poses tried)",
+   "fasteners: FST_fw_bolt_2 stops 0.35 mm short of its nut FST_fw_nut_2: no thread engagement",
+   "fasteners: FST_fw_bolt_2 cannot be driven: straight bit blocked by PRT_flywheel at 18.5 mm; L-key long leg clear over 0 deg (need 60) (all 12 poses tried)",
+   "fasteners: FST_adapter_0 runs 2.5 mm into purchased part BUY_battery, which is not what it threads into (it has a nut)",
+   "fasteners: FST_adapter_1 runs 2.5 mm into purchased part BUY_battery, which is not what it threads into (it has a nut)",
+   "fasteners: FST_adapter_2 runs 2.5 mm into purchased part BUY_battery, which is not what it threads into (it has a nut)",
+   "fasteners: FST_adapter_3 runs 2.5 mm into purchased part BUY_battery, which is not what it threads into (it has a nut)",
+   "fasteners: FST_adapter_nut_0 sits inside purchased part BUY_battery (100% of its volume samples)",
+   "fasteners: FST_adapter_nut_1 sits inside purchased part BUY_battery (100% of its volume samples)",
+   "fasteners: FST_adapter_nut_2 sits inside purchased part BUY_battery (100% of its volume samples)",
+   "fasteners: FST_adapter_nut_3 sits inside purchased part BUY_battery (100% of its volume samples)",
+   "service: 're-tighten the flywheel (BOM 5: tilt 45, cover off)': FST_fw_bolt_0 cannot be reached (straight bit blocked by PRT_flywheel at 18.5 mm; L-key long leg clear over 0 deg (need 60)) at tilt=45",
+   "service: 're-tighten the flywheel (BOM 5: tilt 45, cover off)': FST_fw_bolt_2 cannot be reached (straight bit blocked by PRT_flywheel at 18.5 mm; L-key long leg clear over 0 deg (need 60)) at tilt=45",
+   "index: feeder_one_candy_per_cycle: 2 open windows over [0, 60, 0] on PIV_feeder (want 1), open at [[0.0, 6.0], [54.0, 60.0]] deg; open at the park position"
+  ],
+  "warn_list": [
+   "parts: PRT_arm_cap_L: 159 mm2 of sloped overhang steeper than 45 deg, supports=no",
+   "parts: PRT_arm_cap_R: 159 mm2 of sloped overhang steeper than 45 deg, supports=no",
+   "parts: PRT_base_shell: 215 mm2 of sloped overhang steeper than 45 deg, supports=no",
+   "parts: PRT_base_shell: ceiling region needs a 30 mm bridge (limit 25)",
+   "parts: PRT_flywheel: ceiling region needs a 72 mm bridge (limit 25)",
+   "parts: PRT_journal_plate: ceiling region needs a 55 mm bridge (limit 25)",
+   "parts: PRT_launcher_body: 14 wall samples < 1.6 mm (min 1.47)",
+   "parts: PRT_nacelle: ceiling region needs a 35 mm bridge (limit 25)",
+   "parts: PRT_pan_hub: 72 wall samples < 1.6 mm (min 1.54)",
+   "parts: PRT_pan_pinion: 72 wall samples < 1.6 mm (min 1.54)",
+   "interference: PRT_launcher_body x PRT_hood collide only 2.5 deg past the joint limit (hood=-8.21): no margin",
+   "interference: PRT_launcher_body x FST_clamp_l collide only 2.5 deg past the joint limit (hood=-8.21): no margin",
+   "interference: PRT_launcher_cover x FST_clamp_r collide only 2.5 deg past the joint limit (hood=3.46): no margin",
+   "interference: PRT_launcher_body x FST_clamp_r collide only 2.5 deg past the joint limit (hood=-8.21): no margin",
+   "interference: PRT_yoke_arm_R x PRT_journal_plate collide only 2.5 deg past the joint limit (tilt=47.5): no margin",
+   "interference: cable BUY_servo_controller x CAB_12v_ctrl overlap 1331.9 mm3 (route through solid?)",
+   "interference: cable BUY_buck_12v x CAB_uart overlap 74.1 mm3 (route through solid?)",
+   "interference: cable PRT_servo_pocket_feeder x CAB_bus_feeder overlap 25.1 mm3 (route through solid?)",
+   "interference: cable BUY_motor x CAB_phase_tilt_0 overlap 21.4 mm3 (route through solid?)",
+   "interference: cable BUY_motor x CAB_phase_tilt_1 overlap 21.4 mm3 (route through solid?)",
+   "interference: cable BUY_motor x CAB_phase_tilt_2 overlap 21.4 mm3 (route through solid?)",
+   "interference: cable PRT_arm_cover_L x CAB_bus_feeder overlap 16.5 mm3 (route through solid?)",
+   "interference: cable BUY_motorgo_axis x CAB_uart overlap 16.3 mm3 (route through solid?)",
+   "interference: cable BUY_servo_controller x CAB_uart overlap 15.1 mm3 (route through solid?)",
+   "interference: cable PRT_nacelle x CAB_encoder_tilt overlap 11.8 mm3 (route through solid?)",
+   "interference: cable PRT_base_floor x CAB_uart overlap 7.9 mm3 (route through solid?)",
+   "interference: cable BUY_buck_12v x CAB_12v_mg overlap 1.7 mm3 (route through solid?)",
+   "interference: cable BUY_servo_controller x CAB_bus_ctrl overlap 0.7 mm3 (route through solid?)",
+   "clearance: PRT_journal_plate to PRT_servo_pocket_tilt 0.30 mm just past the limit (tilt=47.5)",
+   "clearance: PRT_feeder_disc to FST_cap_R-1 0.40 mm just past the limit (feeder=62.5)",
+   "clearance: PRT_pan_hub to PRT_servo_pocket_pan 0.50 mm at pan=-92.5",
+   "clearance: PRT_pan_pinion to PRT_servo_pocket_pan 0.50 mm at pan=-92.5",
+   "clearance: PRT_arm_cover_L to PRT_nacelle 0.50 mm at tilt=-2.5",
+   "clearance: PRT_journal_plate to PRT_hood 0.50 mm at hood=-8.21",
+   "clearance: PRT_launcher_cover to PRT_hood 0.50 mm at hood=-8.21",
+   "clearance: PRT_feeder_plate to PRT_horn_adapter_feeder 0.60 mm at feeder=-2.5",
+   "clearance: PRT_servo_pocket_pan to PRT_horn_adapter_pan 0.70 mm at pan=-92.5",
+   "clearance: PRT_servo_pocket_feeder to PRT_horn_adapter_feeder 0.70 mm at feeder=62.5",
+   "clearance: PRT_servo_pocket_tilt to PRT_horn_adapter_tilt 0.70 mm at tilt=-2.5",
+   "clearance: PRT_horn_adapter_tilt to BUY_servo_tilt 0.82 mm at tilt=35",
+   "clearance: PRT_horn_adapter_pan to BUY_servo_pan 0.82 mm at pan=-75",
+   "clearance: PRT_horn_adapter_feeder to BUY_servo_feeder 0.82 mm at feeder=15",
+   "fasteners: FST_motor_0: only 3.5 mm of thread in BUY_motor",
+   "fasteners: FST_motor_1: only 3.5 mm of thread in BUY_motor",
+   "fasteners: FST_motor_2: only 3.5 mm of thread in BUY_motor",
+   "fasteners: FST_motor_3: only 3.5 mm of thread in BUY_motor",
+   "fasteners: FST_hinge: only 2.0 mm of thread in PRT_journal_plate",
+   "fasteners: FST_jack_0 head stands 11.0 mm off the part: exposed shank under the head",
+   "fasteners: FST_jack_1 head stands 11.0 mm off the part: exposed shank under the head",
+   "fasteners: FST_foot_0 needs a 134 mm+ bit/extension (head 124 mm below open space)",
+   "fasteners: FST_foot_1 needs a 134 mm+ bit/extension (head 124 mm below open space)",
+   "fasteners: FST_foot_2 needs a 134 mm+ bit/extension (head 124 mm below open space)",
+   "fasteners: FST_foot_3 needs a 134 mm+ bit/extension (head 124 mm below open space)",
+   "fasteners: FST_foot_4 needs a 136 mm+ bit/extension (head 126 mm below open space)",
+   "fasteners: FST_foot_5 needs a 136 mm+ bit/extension (head 126 mm below open space)",
+   "fasteners: FST_foot_6 needs a 130 mm+ bit/extension (head 120 mm below open space)",
+   "fasteners: FST_foot_7 needs a 130 mm+ bit/extension (head 120 mm below open space)",
+   "service: 'change the nip gap (BOM 5: no disassembly)': FST_clamp_r reachable only at tilt=45 (at home blocked by PRT_yoke_arm_R 2.2 mm out)",
+   "slide: BUY_battery slides out but with only 1.25 mm to PRT_base_shell",
+   "distances: PRT_hood to PRT_flywheel: 1.01 mm rigid squeeze on a 7.0 mm payload; name the part that yields (spring, flexure) under 'compliant' or the nip slips or crushes as the payload varies"
+  ],
+  "coverage": [
+   "parts: 33 printed objects (28 unique STLs): manifold, bed fit ['P1S', 'H2D'], overhang, wall probe, bed contact",
+   "interference/clearance: 119 objects in ['Printed', 'Purchased', 'Fasteners', 'Cables'], 3279 pair-pose tests, joints swept ['PIV_feeder', 'PIV_flywheel', 'PIV_hood', 'PIV_pan', 'PIV_tilt'] with 2.5 deg overtravel",
+   "fasteners: 46 screws, 8 nuts; head-buried, thread engagement (bolt-to-nut pairing), shanks/nuts inside purchased parts, head stand-off, protruding thread, access (\u00d86 bit to 14 mm hand clearance, else a 18/56 mm L-key with a 60 deg swing) at 12 poses, parts present per assembly_order (15 steps)",
+   "service: 3 ops, 8 screw accesses with the built assembly present",
+   "drop: 1 tests (fall + slide on walls, no bounce or rolling)",
+   "index: 1 indexer timing tests (probe through the moving parts over the motion sequence)",
+   "slide: 2 slide-out sweeps",
+   "stacks: 1 tolerance stacks (declared terms only)",
+   "stability: CG and tip angle over 1 poses, footprint from static parts' lowest faces",
+   "cables: 17 routes, 0 with path length; exposure (>= 8 of 26 rays escape) at home pose"
+  ],
+  "not_checked": [
+   "fasteners: pilot/clearance hole diameters (use cadlib.features for those); wrench access to nuts",
+   "stability: dynamic loads (recoil, pan acceleration), friction/sliding",
+   "cables: bend radius, slack across joints, connector positions (review by section render)",
+   "not geometric: teardown step count, alignment-jig datums (declare stacks), aesthetics, BOM correctness"
+  ],
+  "runtime_s": 57.8
+ },
+ "fasteners": [
+  {
+   "object": "FST_clamp_l",
+   "length_mm": 12.0,
+   "nut": null,
+   "nut_gap_mm": null,
+   "engagement_mm": 5.0,
+   "thread_host": "PRT_hood",
+   "into_purchased": {},
+   "standoff_mm": -0.0,
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 12.0,
+    "blocked": false,
+    "tool": "straight"
+   }
+  },
+  {
+   "object": "FST_clamp_r",
+   "length_mm": 12.0,
+   "nut": null,
+   "nut_gap_mm": null,
+   "engagement_mm": 5.0,
+   "thread_host": "PRT_hood",
+   "into_purchased": {},
+   "standoff_mm": -0.0,
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 12.0,
+    "blocked": false,
+    "tool": "straight"
+   }
+  },
+  {
+   "object": "FST_jack_0",
+   "length_mm": 28.0,
+   "nut": {
+    "name": "FST_jack_nut_0",
+    "from_mm": 11.35,
+    "to_mm": 13.75,
+    "len_mm": 2.4
+   },
+   "nut_gap_mm": 0.0,
+   "engagement_mm": 2.4,
+   "thread_host": "FST_jack_nut_0",
+   "into_purchased": {},
+   "standoff_mm": 11.0,
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 0.0,
+    "blocked": false,
+    "tool": "straight"
+   }
+  },
+  {
+   "object": "FST_jack_1",
+   "length_mm": 28.0,
+   "nut": {
+    "name": "FST_jack_nut_1",
+    "from_mm": 11.35,
+    "to_mm": 13.75,
+    "len_mm": 2.4
+   },
+   "nut_gap_mm": 0.0,
+   "engagement_mm": 2.4,
+   "thread_host": "FST_jack_nut_1",
+   "into_purchased": {},
+   "standoff_mm": 11.0,
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 0.0,
+    "blocked": false,
+    "tool": "straight"
+   }
+  },
+  {
+   "object": "FST_fw_bolt_0",
+   "length_mm": 18.6,
+   "nut": {
+    "name": "FST_fw_nut_0",
+    "from_mm": 18.95,
+    "to_mm": 21.35,
+    "len_mm": 2.4
+   },
+   "nut_gap_mm": 0.35,
+   "engagement_mm": 0.0,
+   "thread_host": "FST_fw_nut_0",
+   "into_purchased": {},
+   "standoff_mm": 0.0,
+   "access_best": null
+  },
+  {
+   "object": "FST_fw_bolt_2",
+   "length_mm": 18.6,
+   "nut": {
+    "name": "FST_fw_nut_2",
+    "from_mm": 18.95,
+    "to_mm": 21.35,
+    "len_mm": 2.4
+   },
+   "nut_gap_mm": 0.35,
+   "engagement_mm": 0.0,
+   "thread_host": "FST_fw_nut_2",
+   "into_purchased": {},
+   "standoff_mm": 0.0,
+   "access_best": null
+  },
+  {
+   "object": "FST_adapter_0",
+   "length_mm": 30.0,
+   "nut": {
+    "name": "FST_adapter_nut_0",
+    "from_mm": 27.45,
+    "to_mm": 29.85,
+    "len_mm": 2.4
+   },
+   "nut_gap_mm": 0.0,
+   "engagement_mm": 2.4,
+   "thread_host": "FST_adapter_nut_0",
+   "into_purchased": {
+    "BUY_battery": 2.5
+   },
+   "standoff_mm": 1.0,
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 14.0,
+    "blocked": false,
+    "tool": "straight"
+   }
+  },
+  {
+   "object": "FST_adapter_1",
+   "length_mm": 30.0,
+   "nut": {
+    "name": "FST_adapter_nut_1",
+    "from_mm": 27.45,
+    "to_mm": 29.85,
+    "len_mm": 2.4
+   },
+   "nut_gap_mm": 0.0,
+   "engagement_mm": 2.4,
+   "thread_host": "FST_adapter_nut_1",
+   "into_purchased": {
+    "BUY_battery": 2.5
+   },
+   "standoff_mm": 1.0,
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 14.0,
+    "blocked": false,
+    "tool": "straight"
+   }
+  },
+  {
+   "object": "FST_adapter_2",
+   "length_mm": 30.0,
+   "nut": {
+    "name": "FST_adapter_nut_2",
+    "from_mm": 27.45,
+    "to_mm": 29.85,
+    "len_mm": 2.4
+   },
+   "nut_gap_mm": 0.0,
+   "engagement_mm": 2.4,
+   "thread_host": "FST_adapter_nut_2",
+   "into_purchased": {
+    "BUY_battery": 2.5
+   },
+   "standoff_mm": 1.0,
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 14.0,
+    "blocked": false,
+    "tool": "straight"
+   }
+  },
+  {
+   "object": "FST_adapter_3",
+   "length_mm": 30.0,
+   "nut": {
+    "name": "FST_adapter_nut_3",
+    "from_mm": 27.45,
+    "to_mm": 29.85,
+    "len_mm": 2.4
+   },
+   "nut_gap_mm": 0.0,
+   "engagement_mm": 2.4,
+   "thread_host": "FST_adapter_nut_3",
+   "into_purchased": {
+    "BUY_battery": 2.5
+   },
+   "standoff_mm": 1.0,
+   "access_best": {
+    "pose": "home",
+    "reach_mm": 14.0,
+    "blocked": false,
+    "tool": "straight"
+   }
+  }
+ ],
+ "nuts": [
+  {
+   "object": "FST_jack_nut_0",
+   "bolt": "FST_jack_0",
+   "inside_purchased": {},
+   "exposed": false
+  },
+  {
+   "object": "FST_jack_nut_1",
+   "bolt": "FST_jack_1",
+   "inside_purchased": {},
+   "exposed": false
+  },
+  {
+   "object": "FST_fw_nut_0",
+   "bolt": "FST_fw_bolt_0",
+   "inside_purchased": {},
+   "exposed": false
+  },
+  {
+   "object": "FST_fw_nut_2",
+   "bolt": "FST_fw_bolt_2",
+   "inside_purchased": {},
+   "exposed": false
+  },
+  {
+   "object": "FST_adapter_nut_0",
+   "bolt": "FST_adapter_0",
+   "inside_purchased": {
+    "BUY_battery": 1.0
+   },
+   "exposed": false
+  },
+  {
+   "object": "FST_adapter_nut_1",
+   "bolt": "FST_adapter_1",
+   "inside_purchased": {
+    "BUY_battery": 1.0
+   },
+   "exposed": false
+  },
+  {
+   "object": "FST_adapter_nut_2",
+   "bolt": "FST_adapter_2",
+   "inside_purchased": {
+    "BUY_battery": 1.0
+   },
+   "exposed": false
+  },
+  {
+   "object": "FST_adapter_nut_3",
+   "bolt": "FST_adapter_3",
+   "inside_purchased": {
+    "BUY_battery": 1.0
+   },
+   "exposed": false
+  }
+ ],
+ "service": [
+  {
+   "op": "change the nip gap (BOM 5: no disassembly)",
+   "object": "FST_clamp_l",
+   "access": {
+    "home": {
+     "blocked": false,
+     "tool": "straight"
+    },
+    "feeder=60": {
+     "blocked": false,
+     "tool": "straight"
+    },
+    "hood=-5.71": {
+     "blocked": false,
+     "tool": "straight"
+    },
+    "hood=0.96": {
+     "blocked": false,
+     "tool": "straight"
+    },
+    "pan=-90": {
+     "blocked": false,
+     "tool": "straight"
+    },
+    "pan=90": {
+     "blocked": false,
+     "tool": "straight"
+    },
+    "tilt=45": {
+     "blocked": false,
+     "tool": "straight"
+    }
+   }
+  },
+  {
+   "op": "change the nip gap (BOM 5: no disassembly)",
+   "object": "FST_clamp_r",
+   "access": {
+    "home": {
+     "blocked": true,
+     "blocked_at_mm": 2.2,
+     "blocked_by": "PRT_yoke_arm_R",
+     "lkey_arc_deg": 0
+    },
+    "feeder=60": {
+     "blocked": true,
+     "blocked_at_mm": 2.2,
+     "blocked_by": "PRT_yoke_arm_R",
+     "lkey_arc_deg": 0
+    },
+    "hood=-5.71": {
+     "blocked": true,
+     "blocked_at_mm": 2.2,
+     "blocked_by": "PRT_yoke_arm_R",
+     "lkey_arc_deg": 0
+    },
+    "hood=0.96": {
+     "blocked": true,
+     "blocked_at_mm": 2.2,
+     "blocked_by": "PRT_yoke_arm_R",
+     "lkey_arc_deg": 0
+    },
+    "pan=-90": {
+     "blocked": true,
+     "blocked_at_mm": 2.2,
+     "blocked_by": "PRT_yoke_arm_R",
+     "lkey_arc_deg": 0
+    },
+    "pan=90": {
+     "blocked": true,
+     "blocked_at_mm": 2.2,
+     "blocked_by": "PRT_yoke_arm_R",
+     "lkey_arc_deg": 0
+    },
+    "tilt=45": {
+     "blocked": false,
+     "tool": "straight"
+    }
+   }
+  },
+  {
+   "op": "change the nip gap (BOM 5: no disassembly)",
+   "object": "FST_jack_0",
+   "access": {
+    "home": {
+     "blocked": false,
+     "tool": "straight"
+    },
+    "feeder=60": {
+     "blocked": false,
+     "tool": "straight"
+    },
+    "hood=-5.71": {
+     "blocked": false,
+     "tool": "straight"
+    },
+    "hood=0.96": {
+     "blocked": false,
+     "tool": "straight"
+    },
+    "pan=-90": {
+     "blocked": false,
+     "tool": "straight"
+    },
+    "pan=90": {
+     "blocked": false,
+     "tool": "straight"
+    },
+    "tilt=45": {
+     "blocked": false,
+     "tool": "straight"
+    }
+   }
+  },
+  {
+   "op": "change the nip gap (BOM 5: no disassembly)",
+   "object": "FST_jack_1",
+   "access": {
+    "home": {
+     "blocked": false,
+     "tool": "straight"
+    },
+    "feeder=60": {
+     "blocked": false,
+     "tool": "straight"
+    },
+    "hood=-5.71": {
+     "blocked": false,
+     "tool": "straight"
+    },
+    "hood=0.96": {
+     "blocked": false,
+     "tool": "straight"
+    },
+    "pan=-90": {
+     "blocked": false,
+     "tool": "straight"
+    },
+    "pan=90": {
+     "blocked": false,
+     "tool": "straight"
+    },
+    "tilt=45": {
+     "blocked": false,
+     "tool": "straight"
+    }
+   }
+  },
+  {
+   "op": "re-tighten the flywheel (BOM 5: tilt 45, cover off)",
+   "object": "FST_fw_bolt_0",
+   "access": {
+    "tilt=45": {
+     "blocked": true,
+     "blocked_at_mm": 18.5,
+     "blocked_by": "PRT_flywheel",
+     "lkey_arc_deg": 0
+    }
+   }
+  },
+  {
+   "op": "re-tighten the flywheel (BOM 5: tilt 45, cover off)",
+   "object": "FST_fw_bolt_2",
+   "access": {
+    "tilt=45": {
+     "blocked": true,
+     "blocked_at_mm": 18.5,
+     "blocked_by": "PRT_flywheel",
+     "lkey_arc_deg": 0
+    }
+   }
+  },
+  {
+   "op": "encoder (BOM 5: tilt 45)",
+   "object": "FST_enc_0",
+   "access": {
+    "tilt=45": {
+     "blocked": false,
+     "tool": "straight"
+    }
+   }
+  },
+  {
+   "op": "encoder (BOM 5: tilt 45)",
+   "object": "FST_enc_1",
+   "access": {
+    "tilt=45": {
+     "blocked": false,
+     "tool": "straight"
+    }
+   }
+  }
+ ],
+ "index": [
+  {
+   "name": "feeder_one_candy_per_cycle",
+   "joint": "PIV_feeder",
+   "sequence": [
+    0,
+    60,
+    0
+   ],
+   "windows": 2,
+   "open_ranges_deg": [
+    [
+     0.0,
+     6.0
+    ],
+    [
+     54.0,
+     60.0
+    ]
+   ],
+   "open_at_start": true,
+   "why": "BOM section 0: park 0, fire +60, return 0 must drop exactly one candy"
+  }
+ ],
+ "drop": [
+  {
+   "name": "feed_spout_to_tape",
+   "mode": "slide",
+   "rows": [
+    {
+     "pose": "tilt=0",
+     "rays": 29,
+     "first_hit": {
+      "PRT_flywheel": 29
+     },
+     "outcomes": {
+      "hit": 29
+     },
+     "stall_points": [],
+     "angle_deg": [
+      66.3,
+      85.3
+     ]
+    },
+    {
+     "pose": "tilt=15",
+     "rays": 29,
+     "first_hit": {
+      "PRT_flywheel": 29
+     },
+     "outcomes": {
+      "hit": 29
+     },
+     "stall_points": [],
+     "angle_deg": [
+      83.2,
+      88.5
+     ]
+    },
+    {
+     "pose": "tilt=22.5",
+     "rays": 29,
+     "first_hit": {
+      "PRT_flywheel": 29
+     },
+     "outcomes": {
+      "hit": 29
+     },
+     "stall_points": [],
+     "angle_deg": [
+      83.6,
+      89.0
+     ]
+    },
+    {
+     "pose": "tilt=30",
+     "rays": 29,
+     "first_hit": {
+      "PRT_flywheel": 29
+     },
+     "outcomes": {
+      "hit": 29
+     },
+     "stall_points": [],
+     "angle_deg": [
+      83.8,
+      88.3
+     ]
+    },
+    {
+     "pose": "tilt=45",
+     "rays": 29,
+     "first_hit": {
+      "PRT_flywheel": 29
+     },
+     "outcomes": {
+      "hit": 29
+     },
+     "stall_points": [],
+     "angle_deg": [
+      84.1,
+      87.9
+     ]
+    }
+   ]
+  }
+ ],
+ "distances": [
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "pose": "home",
+   "mm": 6.493,
+   "how": "along ray",
+   "min": 5.5,
+   "max": 7.0,
+   "why": "nip at BDC (bare rim to backplate) squeezes a 7 mm M&M over 0.5 mm tape",
+   "squeeze_mm": 1.01
+  }
+ ],
+ "stacks": [
+  {
+   "name": "magnet to sensor centring",
+   "limit": 0.3,
+   "worst_case": 0.55,
+   "rss": 0.287,
+   "terms": [
+    {
+     "what": "motor can in nacelle bore",
+     "tol": 0.2
+    },
+    {
+     "what": "encoder_jig in bore",
+     "tol": 0.1
+    },
+    {
+     "what": "encoder cap spigot",
+     "tol": 0.15
+    },
+    {
+     "what": "PCB on pegs",
+     "tol": 0.1
+    }
+   ],
+   "why": "MT6701 off-axis limit; datum chain from R2 #6"
+  }
+ ],
+ "slide": [
+  {
+   "object": "BUY_battery",
+   "members": [
+    "BUY_battery"
+   ],
+   "dir": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "dist": 130,
+   "blocked_at_mm": null,
+   "blocked_by": null,
+   "min_clearance_mm": 1.25,
+   "closest": "PRT_base_shell",
+   "pose": "home"
+  },
+  {
+   "object": "flywheel off along +X (BOM 5)",
+   "members": [
+    "FST_fw_bolt_0",
+    "FST_fw_bolt_2",
+    "FST_fw_nut_0",
+    "FST_fw_nut_2",
+    "PRT_flywheel"
+   ],
+   "dir": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "dist": 140,
+   "blocked_at_mm": null,
+   "blocked_by": null,
+   "min_clearance_mm": 1.0,
+   "closest": "PRT_launcher_body",
+   "pose": "tilt=45"
+  }
+ ],
+ "cables_exposed": [
+  {
+   "object": "CAB_bus_feeder",
+   "path_len": null,
+   "lead_len": null,
+   "exposed_samples": 139,
+   "samples": 1348,
+   "exposed_spots": [
+    {
+     "extent_mm": 38.8,
+     "center": [
+      21.0,
+      -83.5,
+      227.2
+     ],
+     "samples": 112
+    },
+    {
+     "extent_mm": 11.4,
+     "center": [
+      -106.7,
+      -7.5,
+      249.3
+     ],
+     "samples": 27
+    }
+   ]
+  }
+ ],
+ "interference_groups": [
+  {
+   "joints": [],
+   "poses": 1,
+   "pairs": 1049
+  },
+  {
+   "joints": [
+    "PIV_pan"
+   ],
+   "poses": 15,
+   "pairs": 1419
+  },
+  {
+   "joints": [
+    "PIV_feeder"
+   ],
+   "poses": 7,
+   "pairs": 117
+  },
+  {
+   "joints": [
+    "PIV_tilt"
+   ],
+   "poses": 21,
+   "pairs": 1263
+  },
+  {
+   "joints": [
+    "PIV_hood"
+   ],
+   "poses": 8,
+   "pairs": 99
+  },
+  {
+   "joints": [
+    "PIV_flywheel"
+   ],
+   "poses": 6,
+   "pairs": 198
+  },
+  {
+   "joints": [
+    "PIV_feeder",
+    "PIV_pan"
+   ],
+   "poses": 35,
+   "pairs": 105
+  },
+  {
+   "joints": [
+    "PIV_pan",
+    "PIV_tilt"
+   ],
+   "poses": 35,
+   "pairs": 1127
+  },
+  {
+   "joints": [
+    "PIV_hood",
+    "PIV_tilt"
+   ],
+   "poses": 42,
+   "pairs": 117
+  },
+  {
+   "joints": [
+    "PIV_flywheel",
+    "PIV_tilt"
+   ],
+   "poses": 42,
+   "pairs": 234
+  },
+  {
+   "joints": [
+    "PIV_feeder",
+    "PIV_tilt"
+   ],
+   "poses": 35,
+   "pairs": 99
+  },
+  {
+   "joints": [
+    "PIV_flywheel",
+    "PIV_hood"
+   ],
+   "poses": 48,
+   "pairs": 18
+  },
+  {
+   "joints": [
+    "PIV_hood",
+    "PIV_pan",
+    "PIV_tilt"
+   ],
+   "poses": 36,
+   "pairs": 105
+  },
+  {
+   "joints": [
+    "PIV_flywheel",
+    "PIV_pan",
+    "PIV_tilt"
+   ],
+   "poses": 36,
+   "pairs": 210
+  },
+  {
+   "joints": [
+    "PIV_feeder",
+    "PIV_hood",
+    "PIV_tilt"
+   ],
+   "poses": 36,
+   "pairs": 9
+  },
+  {
+   "joints": [
+    "PIV_feeder",
+    "PIV_flywheel",
+    "PIV_tilt"
+   ],
+   "poses": 36,
+   "pairs": 18
+  }
+ ]
+}

@@ -10,8 +10,8 @@ mm-launcher design/review loop, and the evidence behind every rule is in `docs/F
 | `templates/cad-loop.workflow.js` | Design/review loop for the Workflow tool: plan, then one build agent per subsystem, then finish, then review. Resumable. |
 | `components/` | Purchased-part data with sources (`components.json`) and Blender placeholders |
 | `tools/transcript/cc_transcript.py` | Digest Claude Code agent transcripts: time split, long generations, tokens, cache misses, Blender runs, images |
-| `tools/verify_all.sh` | Re-proves everything (about 1 minute, writes only under `/tmp/alex3d-verify`) |
-| `examples/` | `demo-turret` (clean and planted-bug builds); `mm-launcher-a1` (check config and archived blend for attempt 1) |
+| `tools/verify_all.sh` | Re-proves everything (about 3 minutes, writes only under `/tmp/alex3d-verify`) |
+| `examples/` | `demo-turret` (clean and planted-bug builds); `mm-launcher-a1`, `mm-launcher-a2` (check config, summary and archived blend per attempt) |
 
 ## Requirements
 
@@ -41,6 +41,7 @@ Project template: copy `skills/print-cad-blender/templates/project/` to `<projec
 S=~/code-stuff/alex-3d-skills/skills/print-cad-blender/scripts
 $S/cad build my/blender/build_assembly.py -- --render
 $S/cad check my/blender/model.blend my/blender/checks.json
+$S/cad check my/blender/model.blend my/blender/checks.json /tmp/cc.json --only fasteners,service   # 2-13 s subsets while iterating
 $S/cad q my/blender/model.blend sweep PRT_launcher PRT_hopper tilt 40 50 2.5
 $S/cad q my/blender/model.blend section x 21 /tmp/nip.png 900,25,185 120 --lentil "21,-8,196:0,0,1"
 $S/cad sheet my/stl /tmp/sheet.png

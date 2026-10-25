@@ -173,7 +173,9 @@ Subsystem results: ${JSON.stringify(builds.map(b => b && { s: b.subsystem, not_d
    plus the sections the brief asks for (${CAD} q ... section), and ${CAD} sheet ${HW}/stl ${dir(n)}/stl_sheet.png.
 3. Copy the final cadcheck.json to ${dir(n)}/cadcheck.json.
 4. Update ${HW}/BOM_AND_ASSEMBLY.md (assembly steps must match checks.json assembly_order) and append "Attempt ${n}" to ${HW}/DESIGN_LOG.md.
-   Every claim cites a cadcheck row or cad q line; quote coverage and not_checked.
+   Every claim cites a cadcheck row or cad q line; quote coverage and not_checked. Before writing a motion, timing or
+   service claim (index positions, "adjust without disassembly", "comes off at tilt 45"), add the matching
+   index_tests / service / slide_out entry to checks.json and re-run cad check (FINDINGS A2-F2, A2-F6).
 Return the evidence summary from ${dir(n)}/cadcheck.json, not your opinion of it.`
 
 const reviewPrompt = (n, prevReviewPath) => `
@@ -181,7 +183,9 @@ Review attempt ${n} of ${HW}. Follow ${REV}/SKILL.md exactly (rubric ${REV}/rubr
 Work on a copy of the .blend under /tmp. Write extra renders to ${dir(n)}/review/ (budget 12), your review to
 ${dir(n)}/review.md and the structured result to ${dir(n)}/review.json.
 ${prevReviewPath ? `Previous review: ${prevReviewPath}. Re-measure every previous issue and keep its id if it recurs.` : 'First review: number issues A' + n + '-01, A' + n + '-02, ...'}
-Mark tool_catchable=true when cadcheck or cad q could have flagged the issue before review.`
+Mark tool_catchable=true when cadcheck or cad q could have flagged the issue before review.
+For every motion, timing or service claim in the BOM, check that checks.json has an index_tests / service / slide_out
+entry that matches the documented values. If it is missing, add it to your copy of checks.json and run it (A2-F2).`
 
 const attempts = []
 let history = CONFIG.history.map(h => `#${h.n}: ${h.f}/${h.m}/${h.a}`).join(', ')

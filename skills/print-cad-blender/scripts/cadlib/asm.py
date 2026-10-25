@@ -204,7 +204,24 @@ def fastener(name, at, into, length, spec="M3_cap", joint=None, host=None, step=
     ob["fst_head"] = list(Minv @ Vector(at))
     ob["fst_dir"] = list((Minv.to_3x3() @ w).normalized())
     ob["fst_len"], ob["fst_d"], ob["fst_head_d"] = float(length), float(d), float(hd)
+    ob["fst_kind"] = "screw"
     PARTS[name].update(head=list(at), into=list(w), length=length, spec=spec)
+    return ob
+
+
+def nut(name, at, into, joint=None, af=None, h=None, step=None):
+    """M3 hex nut whose bearing face is at `at`, body extending along `into` (same frame as features.nut_trap).
+    Tagged fst_kind="nut", so cadcheck pairs it with the bolt on its axis and fails a bolt that stops short of it
+    (attempt 2: the M3 x 16 pinch bolts ended 0.36 mm before their nuts, FINDINGS A2-F3)."""
+    af = af or features.RULES["m3_nut_af"]
+    h = h or features.RULES["m3_nut_h"]
+    w = Vector(into).normalized()
+    r = af / 2 / math.cos(math.pi / 6)
+    ob = geom.cyl(name, (0, 0), r, 0, h, 'Z', n=6)
+    geom.xform(ob, features._frame(at, w))
+    ob = part(ob, name, 'FST', "screw", joint, part="M3 hex nut", step=step or "")
+    ob["fst_kind"] = "nut"
+    PARTS[name].update(face=list(at), into=list(w), nut_h=h)
     return ob
 
 

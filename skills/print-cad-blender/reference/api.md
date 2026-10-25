@@ -51,6 +51,7 @@ Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X
 | `part(ob, name, kind, color, joint=None, **info)` | `PRT` needs `stl, print_rot, orient, supports` (plus `infill`); `BUY` should give `mass_g, src`. Colours: `"pla_a"`, `"pla_b"`, `"buy"`, `"buy_metal"`, `"pcb"`, or an RGBA tuple. |
 | `R_ID, R_FLIP, R_PX_DOWN, R_NX_DOWN, R_PY_DOWN, R_NY_DOWN` | common `print_rot` values |
 | `fastener(name, at, into, length, spec="M3_cap", joint=None, host=None, step=None)` | `spec`: `M3_cap`, `M3_pan`, `M3_csk`, `M3_selftap_pan`, `M2_pan` |
+| `nut(name, at, into, joint=None, af=None, h=None, step=None)` | hex nut, bearing face at `at`; cadcheck checks the bolt on its axis reaches through it |
 | `cable(name, pts, r, color, joint=None, lead_len=None)` | stores `path_len`; cadcheck compares it with `lead_len` |
 | `write_manifest(path)` | parts, joints, fasteners, cables, features, params |
 

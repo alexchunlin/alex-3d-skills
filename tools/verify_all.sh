@@ -1,6 +1,6 @@
 #!/bin/sh
-# Re-prove every tool in this repo. Writes only under /tmp/alex3d-verify. About 2 minutes, run at nice 10.
-# The attempt-1 regression uses examples/mm-launcher-a1/mm_launcher_a1.blend.gz (the original 18:47 blend).
+# Re-prove every tool in this repo. Writes only under /tmp/alex3d-verify. About 3 minutes, run at nice 10.
+# The attempt regressions use examples/mm-launcher-a{1,2}/mm_launcher_a*.blend.gz (the blends the reviewers saw).
 #   sh tools/verify_all.sh            # HW defaults to the mm-launcher project (read-only; copied first)
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,10 +19,10 @@ $CAD build "$ROOT/examples/demo-turret/build.py" --out "$V/demo-clean" >/dev/nul
 $CAD check "$V/demo-clean/demo.blend" "$ROOT/examples/demo-turret/checks.json" "$V/demo-clean/cadcheck.json" >/dev/null
 set -- $(summ "$V/demo-clean/cadcheck.json"); [ "${1:-x}" = 0 ] && ok "demo clean: 0 fails" || bad "demo clean: ${1:-?} fails"
 
-# 2 demo, planted bugs: reversed screw, proud head in sweep, tilt into pan disc must all fail
+# 2 demo, planted bugs: reversed screw, proud head in sweep, tilt into pan disc, bolt short of its nut must all fail
 $CAD build "$ROOT/examples/demo-turret/build.py" --out "$V/demo-bug" --bug >/dev/null
 $CAD check "$V/demo-bug/demo.blend" "$ROOT/examples/demo-turret/checks.json" "$V/demo-bug/cadcheck.json" >/dev/null
-for pat in "FST_arm_0 head is inside" "PRT_barrel x FST_proud" "PRT_pan x PRT_barrel"; do
+for pat in "FST_arm_0 head is inside" "PRT_barrel x FST_proud" "PRT_pan x PRT_barrel" "FST_side stops 0.40 mm short"; do
   grep -q "$pat" "$V/demo-bug/cadcheck.json" && ok "demo bug caught: $pat" || bad "demo bug missed: $pat"
 done
 
@@ -46,10 +46,28 @@ if [ -f "$A1" ]; then
   $CAD q "$V/a1/mm_launcher.blend" dist PRT_feeder_disc FST_cap_R-1 --config "$ROOT/examples/mm-launcher-a1/checks.json" | grep -q '"mm": -27.2' \
     && ok "cadq: feeder disc x cap screw 27.2 mm3 (R1: 27.2)" || bad "cadq dist"
 fi
+# 4a attempt-2 regression: every R2 item a tool can see (FINDINGS A2-F1..F9), and no false fails left
+A2="$ROOT/examples/mm-launcher-a2/mm_launcher_a2.blend.gz"
+if [ -f "$A2" ]; then
+  mkdir -p "$V/a2"; gunzip -c "$A2" > "$V/a2/mm_launcher.blend"
+  $CAD check "$V/a2/mm_launcher.blend" "$ROOT/examples/mm-launcher-a2/checks.json" "$V/a2/cadcheck.json" >/dev/null
+  for pat in "FST_fw_bolt_0 stops 0.35 mm short of its nut" "FST_fw_bolt_0 cannot be driven: straight bit blocked by PRT_flywheel at 18.5 mm; L-key long leg clear over 0 deg" \
+             "FST_adapter_0 runs 2.5 mm into purchased part BUY_battery" "FST_adapter_nut_0 sits inside purchased part BUY_battery" \
+             "feeder_one_candy_per_cycle: 2 open windows" "FST_clamp_r reachable only at tilt=45" "1.01 mm rigid squeeze" \
+             "FST_jack_0 head stands 11.0 mm" "CAB_bus_feeder: about 11 mm of cable is visible"; do
+    grep -q "$pat" "$V/a2/cadcheck.json" && ok "A2 reproduces: $pat" || bad "A2 missing: $pat"
+  done
+  python3 -I -c "
+import json,sys; d=json.load(open(sys.argv[1]))
+f=d['summary']['fail_list']; drop=d['checks']['drop']['findings']
+bad=[x for x in f if not any(k in x for k in ('FST_fw_bolt','FST_adapter','feeder_one_candy'))]
+sys.exit(1 if (bad or drop or d['summary']['fails']!=15) else 0)" "$V/a2/cadcheck.json" \
+    && ok "A2: exactly the 15 R2-confirmed fails, slide tracer feeds 29/29 at every tilt" || bad "A2: unexpected fails or feed result"
+fi
 # 4b smoke: cadcheck runs on the live project blend (whatever attempt it is at); reports, never asserts
 if [ -f "$HW/blender/mm_launcher.blend" ]; then
   mkdir -p "$V/live"; cp "$HW/blender/mm_launcher.blend" "$V/live/"
-  $CAD check "$V/live/mm_launcher.blend" "$ROOT/examples/mm-launcher-a1/checks.json" "$V/live/cadcheck.json" >/dev/null
+  $CAD check "$V/live/mm_launcher.blend" "$ROOT/examples/mm-launcher-a2/checks.json" "$V/live/cadcheck.json" >/dev/null
   set -- $(summ "$V/live/cadcheck.json"); [ -n "${1:-}" ] && ok "live HW blend checked: $1 fails, $2 warns (see $V/live/cadcheck.json)" || bad "live HW blend check crashed"
 fi
 

@@ -3,7 +3,8 @@
     Blender -b --python build.py -- [--out /tmp/alex3d-demo] [--bug] [--render]
 
 --bug plants the attempt-1 foot-guns on purpose: a reversed screw, a screw head under the moving
-arm, and a tilt range that hits the base. cadcheck must flag all three.
+arm, and a tilt range that hits the base; and one from attempt 2: a through-bolt that stops short of its
+nut (A2-F3). cadcheck must flag all four.
 """
 import bpy, math, os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -45,10 +46,16 @@ for sx in (-1, 1):
 base = G.csg(base, sub=[cav])
 base = G.csg(base, add=bosses)
 cuts.append(G.cyl("pass", (0, 0), 4.0, BASE_H - WALL - 1, BASE_H + 1, 'Z'))   # cable pass-through
+SIDE_AT, SIDE_IN = (h, 20.0, 15.0), (-1, 0, 0)    # side-wall bolt with a nut inside the cavity
+cuts += F.screw_hole(SIDE_AT, SIDE_IN, 10, kind="clearance")
 base = G.csg(base, sub=cuts)
 A.part(base, "PRT_base", 'PRT', "pla_a", stl="base", print_rot=A.R_FLIP, orient="deck on the bed", supports="no", infill=15)
 for i, (sx, sy) in enumerate(((-1, -1), (-1, 1), (1, -1), (1, 1))):
     A.fastener("FST_floor_%d" % i, (sx * (h - 7), sy * (h - 7), 0.0), (0, 0, 1), 10, "M3_pan", host="PRT_base", step="close base")
+
+# bolt: wall 2.4 + nut 2.4 needs >= 4.8; the bug build uses 2 mm so the tip stops 0.4 mm short of the nut
+A.fastener("FST_side", SIDE_AT, SIDE_IN, 2 if BUG else 8, "M3_cap", step="close base")
+A.nut("FST_side_nut", (h - WALL, 20.0, 15.0), SIDE_IN, step="close base")
 
 # ---- pan disc on the deck (sits CLR above it), yoke arms on it
 pan = G.cyl("pan", (0, 0), PAN_R, BASE_H + CLR, BASE_H + CLR + PAN_T, 'Z')

@@ -1,13 +1,14 @@
 {
  "pass": false,
- "fails": 7,
- "warns": 8,
+ "fails": 8,
+ "warns": 9,
  "fail_list": [
   "interference: PRT_pan x PRT_barrel collide on different bodies: 136.8 mm3 at tilt=-50",
   "interference: PRT_barrel x FST_proud collide on different bodies: 38.5 mm3 at tilt=-45",
   "clearance: PRT_barrel to FST_proud only 0.29 mm across a joint at tilt=-40 (min 0.50; declare it under fits if it is a running fit)",
+  "fasteners: FST_side stops 0.40 mm short of its nut FST_side_nut: no thread engagement",
   "fasteners: FST_arm_0 head is inside ['PRT_arm_L'] (reversed, or a missing counterbore)",
-  "fasteners: FST_arm_0 cannot be driven: tool path blocked by PRT_arm_L at 0.5 mm (all 5 poses tried)",
+  "fasteners: FST_arm_0 cannot be driven: straight bit blocked by PRT_arm_L at 0.5 mm; L-key short leg blocked 0.5 mm out (elbow at 15.5) (all 5 poses tried)",
   "drop: muzzle_line_of_fire at tilt=-52.5: 4/13 rays first hit ['PRT_base'], not [None]",
   "drop: muzzle_line_of_fire at tilt=-50: 1/13 rays first hit ['PRT_base'], not [None]"
  ],
@@ -19,21 +20,23 @@
   "clearance: PRT_base to PRT_pan 0.50 mm at pan=-92.5",
   "clearance: PRT_base to PRT_barrel 0.65 mm at pan=92.5, tilt=-52.5",
   "clearance: PRT_base to FST_arm_1 0.90 mm at pan=92.5",
-  "fasteners: FST_proud: only 3.0 mm of thread in PRT_pan"
+  "fasteners: FST_proud: only 3.0 mm of thread in PRT_pan",
+  "cables: CAB_servo_bus: about 5 mm of cable is visible from outside around [0.0, 0.0, 37.5] (declare it under exposure.cables_ok if intended)"
  ],
  "coverage": [
   "parts: 5 printed objects (4 unique STLs): manifold, bed fit ['P1S', 'H2D'], overhang, wall probe, bed contact",
-  "interference/clearance: 14 objects in ['Printed', 'Purchased', 'Fasteners', 'Cables'], 146 pair-pose tests, joints swept ['PIV_pan', 'PIV_tilt'] with 2.5 deg overtravel",
-  "fasteners: 7 screws; head-buried, thread engagement, driver access (\u00d86 bit, 14 mm hand clearance) at 5 poses, parts present per assembly_order (4 steps)",
-  "drop: 1 tests (first-contact straight rays; no bounce/slide dynamics)",
+  "interference/clearance: 16 objects in ['Printed', 'Purchased', 'Fasteners', 'Cables'], 146 pair-pose tests, joints swept ['PIV_pan', 'PIV_tilt'] with 2.5 deg overtravel",
+  "fasteners: 8 screws, 1 nuts; head-buried, thread engagement (bolt-to-nut pairing), shanks/nuts inside purchased parts, head stand-off, protruding thread, access (\u00d86 bit to 14 mm hand clearance, else a 18/56 mm L-key with a 60 deg swing) at 5 poses, parts present per assembly_order (4 steps)",
+  "drop: 1 tests (first-contact straight rays)",
   "stability: CG and tip angle over 6 poses, footprint from static parts' lowest faces",
-  "cables: 1 routes, 1 with path length"
+  "cables: 1 routes, 1 with path length; exposure (>= 8 of 26 rays escape) at home pose"
  ],
  "not_checked": [
-  "fasteners: pilot/clearance hole diameters (use cadlib.features for those)",
+  "fasteners: service access (declare service ops: assembly-order access says nothing about re-adjusting a built machine)",
+  "fasteners: pilot/clearance hole diameters (use cadlib.features for those); wrench access to nuts",
   "stability: dynamic loads (recoil, pan acceleration), friction/sliding",
   "cables: bend radius, slack across joints, connector positions (review by section render)",
-  "not geometric: service/teardown steps, alignment jigs, aesthetics, BOM correctness"
+  "not geometric: teardown step count, alignment-jig datums (declare stacks), aesthetics, BOM correctness"
  ],
  "runtime_s": 0.5
 }

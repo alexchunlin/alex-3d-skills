@@ -1,0 +1,501 @@
+{
+ "_source": "Attempt-2 blend (HW/blender/mm_launcher.blend 20:27). Joints from build_assembly.py:58,868-879 and checks.json backplate_gap_mm; fits and order from BOM_AND_ASSEMBLY.md sections 0, 4, 5.",
+ "joints": {
+  "PIV_pan": {
+   "axis": "Z",
+   "lo": -90,
+   "hi": 90,
+   "step": 15
+  },
+  "PIV_tilt": {
+   "axis": "X",
+   "lo": 0,
+   "hi": 45,
+   "step": 2.5
+  },
+  "PIV_flywheel": {
+   "axis": "X",
+   "continuous": true,
+   "step": 60
+  },
+  "PIV_feeder": {
+   "axis": "Z",
+   "lo": 0,
+   "hi": 60,
+   "step": 15
+  },
+  "PIV_hood": {
+   "axis": "X",
+   "lo": -5.71,
+   "hi": 0.96,
+   "step": 1.5
+  }
+ },
+ "couplings": {
+  "PIV_pan_pinion": {
+   "to": "PIV_pan",
+   "ratio": -1
+  }
+ },
+ "allow": [
+  {
+   "a": "BUY_battery",
+   "b": "BUY_dewalt_adapter",
+   "why": "battery rail stem slides into the adapter"
+  },
+  {
+   "a": "BUY_servo_*",
+   "b": "BUY_horn_*",
+   "why": "spline inside horn hub"
+  },
+  {
+   "a": "BUY_motor",
+   "b": "PRT_flywheel",
+   "why": "motor shaft is modelled with the stator; it sits in the D-bore"
+  },
+  {
+   "a": "BUY_motor",
+   "b": "BUY_magnet",
+   "why": "magnet glued to the rear shaft end (rotor)"
+  },
+  {
+   "a": "FST_jack_*",
+   "b": "PRT_hood",
+   "why": "the jack screws set the backplate angle: in the model they stay put while PIV_hood sweeps, so overlap at other settings is not physical"
+  },
+  {
+   "a": "FST_adapter_*",
+   "b": "BUY_dewalt_adapter",
+   "why": "corner holes are not modelled in the adapter envelope (BOM step 2 drills them to 3.2)"
+  }
+ ],
+ "masses_g": {
+  "BUY_battery": 620,
+  "BUY_dewalt_adapter": 90,
+  "BUY_buck_12v": 180,
+  "BUY_motorgo_axis": 25,
+  "BUY_servo_controller": 30,
+  "BUY_servo_*": 66,
+  "BUY_horn_*": 4,
+  "BUY_motor": 200,
+  "BUY_magnet": 1,
+  "BUY_plink_encoder": 3,
+  "BUY_usbc_plug": 0
+ },
+ "fits": [
+  {
+   "a": "PRT_base_shell",
+   "b": "PRT_turntable",
+   "contact": true,
+   "why": "turntable bearing ring rides on the deck (plain thrust bearing)"
+  },
+  {
+   "a": "PRT_base_shell",
+   "b": "PRT_pan_hub",
+   "min_clearance": 0.2,
+   "why": "hub journal in deck hole"
+  },
+  {
+   "a": "PRT_yoke_arm_L",
+   "b": "PRT_nacelle",
+   "min_clearance": 0.1,
+   "why": "left tilt journal (nacelle)"
+  },
+  {
+   "a": "PRT_arm_cap_L",
+   "b": "PRT_nacelle",
+   "min_clearance": 0.1,
+   "why": "left tilt journal cap"
+  },
+  {
+   "a": "PRT_yoke_arm_R",
+   "b": "PRT_journal_plate",
+   "contact": true,
+   "why": "right tilt journal plus printed hard-stop lugs (contact at -3/+46)"
+  },
+  {
+   "a": "PRT_arm_cap_R",
+   "b": "PRT_journal_plate",
+   "min_clearance": 0.1,
+   "why": "right tilt journal cap"
+  },
+  {
+   "a": "PRT_servo_pocket_*",
+   "b": "BUY_horn_*",
+   "min_clearance": 0.2,
+   "why": "horn turns inside its pocket"
+  },
+  {
+   "a": "PRT_feeder_plate",
+   "b": "PRT_feeder_disc",
+   "min_clearance": 0.3,
+   "why": "feeder disc runs on the plate"
+  },
+  {
+   "a": "PRT_pan_hub",
+   "b": "PRT_pan_pinion",
+   "min_clearance": 0.1,
+   "why": "1:1 gear mesh"
+  },
+  {
+   "a": "FST_hinge",
+   "b": "PRT_hood",
+   "contact": true,
+   "why": "hinge axle through the backplate boss"
+  },
+  {
+   "a": "FST_clamp_*",
+   "b": "PRT_launcher_*",
+   "contact": true,
+   "why": "clamp-screw heads bear on the arc-slot faces (it is a clamp)"
+  },
+  {
+   "a": "PRT_launcher_body",
+   "b": "PRT_hood",
+   "min_clearance": 0.1,
+   "why": "backplate in its bay (0.5 offset nominal); UNVERIFIED: 0.14 mm measured at hood=-1.2"
+  }
+ ],
+ "drop_tests": [
+  {
+   "name": "feed_spout_to_tape",
+   "mode": "slide",
+   "stall_deg": 20,
+   "capture_mm": 0.5,
+   "emit": {
+    "frame": "PIV_pan",
+    "center": [
+     21,
+     0,
+     244.8
+    ],
+    "radius": 7.5,
+    "step": 2.5
+   },
+   "dir": [
+    0,
+    0,
+    -1
+   ],
+   "poses": {
+    "PIV_tilt": [
+     0,
+     15,
+     22.5,
+     30,
+     45
+    ]
+   },
+   "expect": {
+    "hit": [
+     "PRT_flywheel"
+    ],
+    "angle": {
+     "center": "PIV_flywheel",
+     "frame": "PIV_tilt",
+     "axis": "X",
+     "zero": "-Z",
+     "positive": "-Y",
+     "range": [
+      0,
+      135
+     ]
+    }
+   },
+   "why": "candy must first touch the tape where it moves down into the nip (D2 tracer: psi 0..135 behind BDC)"
+  }
+ ],
+ "index_tests": [
+  {
+   "name": "feeder_one_candy_per_cycle",
+   "joint": "PIV_feeder",
+   "sequence": [
+    0,
+    60,
+    0
+   ],
+   "step": 2,
+   "probe": {
+    "frame": "PIV_pan",
+    "center": [
+     21,
+     0,
+     267.0
+    ],
+    "dir": [
+     0,
+     0,
+     -1
+    ],
+    "radius": 3.0,
+    "depth": 23
+   },
+   "blockers": [
+    "PRT_feeder_disc",
+    "PRT_feeder_plate"
+   ],
+   "expect_windows": 1,
+   "why": "BOM section 0: park 0, fire +60, return 0 must drop exactly one candy"
+  }
+ ],
+ "slide_out": [
+  {
+   "object": "BUY_battery",
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": 130,
+   "step": 5,
+   "min_clearance": 1.5
+  },
+  {
+   "name": "flywheel off along +X (BOM 5)",
+   "objects": [
+    "PRT_flywheel",
+    "FST_fw_*"
+   ],
+   "ignore": [
+    "PRT_launcher_cover",
+    "FST_cover_*",
+    "FST_clamp_r"
+   ],
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": 140,
+   "step": 5,
+   "min_clearance": 1.0
+  }
+ ],
+ "distances": [
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21,
+     37,
+     132
+    ],
+    "dir": [
+     0,
+     0,
+     1
+    ]
+   },
+   "min": 5.5,
+   "max": 7.0,
+   "payload_mm": 7.0,
+   "tape_mm": 0.5,
+   "why": "nip at BDC (bare rim to backplate) squeezes a 7 mm M&M over 0.5 mm tape"
+  }
+ ],
+ "service": [
+  {
+   "op": "change the nip gap (BOM 5: no disassembly)",
+   "fasteners": [
+    "FST_clamp_*",
+    "FST_jack_*"
+   ]
+  },
+  {
+   "op": "re-tighten the flywheel (BOM 5: tilt 45, cover off)",
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "remove": [
+    "PRT_launcher_cover",
+    "FST_cover_*"
+   ],
+   "fasteners": [
+    "FST_fw_bolt_*"
+   ]
+  },
+  {
+   "op": "encoder (BOM 5: tilt 45)",
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "fasteners": [
+    "FST_enc_*"
+   ]
+  }
+ ],
+ "assembly_order": [
+  {
+   "step": "1-8 base",
+   "objects": [
+    "PRT_base_shell",
+    "BUY_dewalt_adapter",
+    "FST_adapter_*",
+    "BUY_motorgo_axis",
+    "BUY_usbc_plug",
+    "BUY_servo_pan",
+    "BUY_horn_pan",
+    "PRT_horn_adapter_pan",
+    "PRT_servo_pocket_pan",
+    "PRT_servo_clamp_pan",
+    "PRT_pan_pinion",
+    "PRT_pan_hub",
+    "BUY_buck_12v",
+    "BUY_servo_controller"
+   ]
+  },
+  {
+   "step": "9 floor",
+   "objects": [
+    "PRT_base_floor",
+    "FST_floor_*"
+   ]
+  },
+  {
+   "step": "10-12 pan stage",
+   "objects": [
+    "PRT_turntable",
+    "PRT_turntable_spine",
+    "PRT_yoke_arm_*",
+    "FST_foot_*"
+   ]
+  },
+  {
+   "step": "13-15 motor, magnet, encoder (bench)",
+   "bench": "launcher",
+   "objects": [
+    "BUY_magnet",
+    "BUY_motor",
+    "PRT_nacelle",
+    "BUY_plink_encoder",
+    "PRT_encoder_cap",
+    "FST_enc_*"
+   ]
+  },
+  {
+   "step": "16 nacelle to body (bench)",
+   "bench": "launcher",
+   "objects": [
+    "PRT_launcher_body",
+    "FST_motor_*",
+    "FST_nacelle_*"
+   ]
+  },
+  {
+   "step": "17 backplate, journal plate, hinge, jacks (bench)",
+   "bench": "launcher",
+   "objects": [
+    "PRT_hood",
+    "PRT_journal_plate",
+    "FST_jplate_*",
+    "FST_hinge",
+    "FST_jack_*"
+   ]
+  },
+  {
+   "step": "18 flywheel (bench)",
+   "bench": "launcher",
+   "objects": [
+    "PRT_flywheel",
+    "FST_fw_*"
+   ]
+  },
+  {
+   "step": "19 cover, clamp screws (bench)",
+   "bench": "launcher",
+   "objects": [
+    "PRT_launcher_cover",
+    "FST_cover_*",
+    "FST_clamp_*"
+   ]
+  },
+  {
+   "step": "20 pod into yoke, arm caps",
+   "merge": "launcher",
+   "objects": [
+    "PRT_arm_cap_*"
+   ]
+  },
+  {
+   "step": "21 tilt servo and housing",
+   "objects": [
+    "BUY_horn_tilt",
+    "PRT_horn_adapter_tilt",
+    "BUY_servo_tilt",
+    "PRT_servo_pocket_tilt",
+    "PRT_servo_clamp_tilt",
+    "PRT_tilt_servo_cover",
+    "FST_tilt_clamp_*"
+   ]
+  },
+  {
+   "step": "22-23 feeder servo under plate (bench)",
+   "bench": "plate",
+   "objects": [
+    "BUY_horn_feeder",
+    "PRT_horn_adapter_feeder",
+    "BUY_servo_feeder",
+    "PRT_servo_pocket_feeder",
+    "PRT_servo_clamp_feeder",
+    "PRT_feeder_plate"
+   ]
+  },
+  {
+   "step": "24 plate onto caps",
+   "merge": "plate",
+   "objects": [
+    "FST_cap_*"
+   ]
+  },
+  {
+   "step": "25 bonnet, arm cover",
+   "objects": [
+    "PRT_arm_cover_*"
+   ]
+  },
+  {
+   "step": "26 disc, hopper, lid",
+   "objects": [
+    "PRT_feeder_disc",
+    "PRT_hopper",
+    "PRT_hopper_lid"
+   ]
+  },
+  {
+   "step": "battery",
+   "objects": [
+    "BUY_battery"
+   ]
+  }
+ ],
+ "stacks": [
+  {
+   "name": "magnet to sensor centring",
+   "limit": 0.3,
+   "why": "MT6701 off-axis limit; datum chain from R2 #6",
+   "terms": [
+    {
+     "what": "motor can in nacelle bore",
+     "tol": 0.2
+    },
+    {
+     "what": "encoder_jig in bore",
+     "tol": 0.1
+    },
+    {
+     "what": "encoder cap spigot",
+     "tol": 0.15
+    },
+    {
+     "what": "PCB on pegs",
+     "tol": 0.1
+    }
+   ]
+  }
+ ]
+}

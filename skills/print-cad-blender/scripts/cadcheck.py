@@ -12,14 +12,23 @@ Checks (each one writes evidence into the JSON report, with an explicit `coverag
   interference  every pair in ALL four collections, swept over the joints that separate the two bodies,
                 including overtravel past each limit; contacts between different bodies are failures
   clearance     min distance between parts on different bodies over the same sweep
-  fasteners     head not buried, tip in material, driver access (ray bundle + open-space test) per pose
-  drop          ray-grid drop tests from config ("drop_tests") with landing angle windows
-  slide         slide-out sweeps from config ("slide_out")
-  distances     min/max distance assertions from config ("distances")
+  fasteners     head not buried, thread engagement (bolt-to-nut pairing), shanks or nuts inside purchased
+                parts, driver access (straight bit, then an L-key with a swing arc) per pose, including the
+                fastener's own continuous joints; head stand-off and protruding thread
+  service       tool access for service operations from config ("service"): whole assembly present,
+                listed parts removed, at the stated pose
+  drop          drop tests from config ("drop_tests"): straight rays, or mode "slide" (fall, slide on walls,
+                stall below stall_deg) with landing-angle windows
+  index         indexer timing from config ("index_tests"): open windows of a probe through a moving
+                disc over a motion cycle (one window = one candy per cycle)
+  slide         slide-out sweeps from config ("slide_out"), one object or a group
+  distances     min/max distance assertions from config ("distances"), optionally as a gap along a ray,
+                with payload squeeze and a declared compliant element
+  stacks        tolerance stacks from config ("stacks"): worst case and RSS against a limit
   stability     centre of mass and static tip angle over a coarse pose grid
-  cables        path length vs. lead length (when cables carry path_len / lead_len)
+  cables        path length vs. lead length, and exposed (visible from outside) cable length
 
-Evidence for the rules here: docs/FINDINGS.md A1-F1, F3, F4, F5, F9, F10, F11, F13, F14.
+Evidence for the rules here: docs/FINDINGS.md A1-F1, F3, F4, F5, F9, F10, F11, F13, F14 and A2-F1 to F9.
 """
 import bpy, bmesh, json, math, os, sys, time, fnmatch, itertools
 from mathutils import Vector, Matrix
@@ -46,7 +55,14 @@ DEFAULTS = {
     "vol_tol": 0.5,
     "moving_min_clearance": 0.5,
     "moving_warn_clearance": 1.0,
-    "fasteners": {"driver_r": 3.0, "hand_r": 14.0, "max_reach": 60.0, "max_reach_ext": 150.0},
+    "fasteners": {"driver_r": 3.0, "hand_r": 14.0, "max_reach": 60.0, "max_reach_ext": 150.0, "min_engagement": 4.0,
+                  # 2.5 mm hex key for M3 socket heads (ISO 2936 short leg ~20, long ~58): A2-F1
+                  "lkey_short": 18.0, "lkey_insert": 2.5, "lkey_long": 56.0, "lkey_r": 1.25, "lkey_swing_deg": 60.0,
+                  "max_standoff": 2.0, "max_protrusion": 3.0},
+    "service": [],
+    "index_tests": [],
+    "stacks": [],
+    "exposure": {"max_cable_mm": 5.0, "cables_ok": [], "min_escape": 8},  # 8/26 rays: R2's bare bus run scored 10-12, grooved runs 4-7
     "drop_tests": [],
     "slide_out": [],
     "distances": [],
@@ -96,6 +112,13 @@ for o in FASTENERS: KIND[o.name] = "FST"
 for o in CABLES: KIND[o.name] = "CAB"
 SOLIDS = PRINTED + PURCHASED
 ALL = SOLIDS + FASTENERS + CABLES
+
+
+def is_nut(o):
+    """Nuts (cadlib asm.nut sets fst_kind; otherwise the name says so). A2 modelled the first nuts: treating them
+    as screws gave 12 false fails ("head buried", "cannot be driven"), FINDINGS A2-V1."""
+    k = o.get("fst_kind")
+    return k == "nut" if k else "nut" in o.name.lower().replace("fst_", "", 1)
 
 
 def is_joint(o):
@@ -534,7 +557,7 @@ def pair_class(a, b):
         if kinds <= {"PRT", "BUY"}:
             return "solid"
         if kinds == {"FST"}:
-            return "fst_fst"
+            return None if (is_nut(a) or is_nut(b)) else "fst_fst"  # bolt through its nut: fastener check pairs them
         if "FST" in kinds and kinds & {"PRT", "BUY"}:
             return None  # threads bite into the part they hold; fastener check covers heads
         if kinds == {"CAB"}:
@@ -707,10 +730,26 @@ def perp_basis(d):
     return u, d.cross(u).normalized()
 
 
+def _ring(u, v, r, n=6):
+    return [(u * math.cos(k * 2 * math.pi / n) + v * math.sin(k * 2 * math.pi / n)) * r for k in range(n)]
+
+
+# 26 roughly even directions for "is this point visible from outside" (exposure) tests
+_SPH = [Vector((math.cos(2.39996 * i) * math.sqrt(1 - (1 - 2 * (i + 0.5) / 26) ** 2),
+                math.sin(2.39996 * i) * math.sqrt(1 - (1 - 2 * (i + 0.5) / 26) ** 2),
+                1 - 2 * (i + 0.5) / 26)) for i in range(26)]
+
+
+def escapes(tree, p, maxd=3000.0):
+    """How many of 26 directions leave the assembly without hitting a solid (0 = enclosed)."""
+    return sum(1 for d in _SPH if tree.ray_cast(p, d, maxd)[0] is None)
+
+
 def access(head, out, tree, solids_trees, fc):
-    """Drive a screw from `head` along `out`: ray bundle at driver radius until open space (hand_r) is reached."""
+    """Drive a screw from `head` along `out`: a straight bit (ray bundle at driver radius until open space of
+    hand_r is reached), else an L-key (short leg in the socket, long leg swung about the axis), FINDINGS A2-F1."""
     u, v = perp_basis(out)
-    rays = [Vector((0, 0, 0))] + [(u * math.cos(k * math.pi / 3) + v * math.sin(k * math.pi / 3)) * fc["driver_r"] for k in range(6)]
+    rays = [Vector((0, 0, 0))] + _ring(u, v, fc["driver_r"])
     start = head + out * 0.3
     hits = []
     for off in rays:
@@ -727,7 +766,7 @@ def access(head, out, tree, solids_trees, fc):
             break
         s += 2.0
     if depth is not None and blocked_at > depth:
-        return {"reach_mm": round(depth, 1), "blocked": False}
+        return {"reach_mm": round(depth, 1), "blocked": False, "tool": "straight"}
     who = None
     if blocked_at < 1e8:
         p = start + out * blocked_at
@@ -736,7 +775,39 @@ def access(head, out, tree, solids_trees, fc):
             r = t.find_nearest(p)
             if r[0] is not None and r[3] < best:
                 best, who = r[3], n
-    return {"reach_mm": None, "blocked": True, "blocked_at_mm": round(blocked_at, 1) if blocked_at < 1e8 else None, "blocked_by": who}
+    rec = {"reach_mm": None, "blocked": True, "blocked_at_mm": round(blocked_at, 1) if blocked_at < 1e8 else None, "blocked_by": who}
+    rec.update(lkey(head, out, u, v, tree, fc))
+    if rec["lkey_ok"]:
+        rec.update(blocked=False, tool="L-key", reach_mm=round(fc["lkey_short"] - fc["lkey_insert"], 1))
+    return rec
+
+
+def lkey(head, out, u, v, tree, fc):
+    """Hex key: the short leg runs along the screw axis to the elbow, the long leg is swung about the axis.
+    Returns the largest contiguous arc (deg) over which the long leg is clear for its full length."""
+    elbow_s = fc["lkey_short"] - fc["lkey_insert"]
+    kr = fc["lkey_r"]
+    start = head + out * 0.3
+    for off in [Vector((0, 0, 0))] + _ring(u, v, kr, 4):
+        h = tree.ray_cast(start + off, out, elbow_s + kr)
+        if h[0] is not None:
+            return {"lkey_ok": False, "lkey_arc_deg": 0, "lkey_why": "short leg blocked %.1f mm out (elbow at %.1f)" % (h[3], elbow_s)}
+    elbow = start + out * elbow_s
+    clear = []
+    for k in range(36):
+        a = math.radians(k * 10)
+        w = u * math.cos(a) + v * math.sin(a)
+        clear.append(all(tree.ray_cast(elbow + off, w, fc["lkey_long"])[0] is None for off in (Vector((0, 0, 0)), out * kr, -out * kr)))
+    if all(clear):
+        arc = 360
+    else:
+        best = run = 0
+        for c in clear + clear:
+            run = run + 1 if c else 0
+            best = max(best, run)
+        arc = max(0, min(best, 36) - 1) * 10
+    return {"lkey_ok": arc >= fc["lkey_swing_deg"], "lkey_arc_deg": arc,
+            "lkey_why": "long leg clear over %d deg (need %g)" % (arc, fc["lkey_swing_deg"])}
 
 
 def assembly_present():
@@ -779,60 +850,98 @@ def assembly_present():
     return out
 
 
+def fastener_poses():
+    """Home, each driver joint at its limits, and the fastener's own continuous joints every 60 deg
+    (you can turn a wheel to bring a screw round to the access window)."""
+    poses = [({}, "home")]
+    for jn, s in JOINTS.items():
+        if jn in COUPLE or s["axis"] is None:
+            continue
+        if s.get("continuous"):
+            if any(jn in joint_chain(o) for o in FASTENERS):
+                poses += [({jn: a}, pose_key({jn: a})) for a in (60, 120, 180, 240, 300)]
+            continue
+        if s["lo"] is None or s["hi"] is None:
+            continue
+        for a in (s["lo"], s["hi"]):
+            if abs(a - (s.get("home") or 0)) > 1e-6:
+                poses.append(({jn: a}, pose_key({jn: a})))
+    return poses
+
+
+def _verts_world(o, cap=60):
+    vs = [o.matrix_world @ v.co for v in o.data.vertices]
+    return vs[:: max(1, len(vs) // cap)]
+
+
+def _edge_samples(o, step=2.0, cap=1500):
+    """Points every `step` mm along the mesh edges: a tube along a polyline has vertices only at its corners."""
+    mw = o.matrix_world
+    vs = [mw @ v.co for v in o.data.vertices]
+    pts = list(vs)
+    for e in o.data.edges:
+        a, b = vs[e.vertices[0]], vs[e.vertices[1]]
+        n = int((b - a).length // step)
+        pts += [a + (b - a) * (k / (n + 1)) for k in range(1, n + 1)]
+    return pts[:: max(1, len(pts) // cap)]
+
+
+def head_height(o, head, d, sr):
+    """Bearing face offset from the head end. cadlib fasteners store the bearing face itself (0); for inferred
+    fasteners the head end is the top of the head, so measure how far the wider-than-shank section runs."""
+    if "fst_head" in o.keys():
+        return 0.0
+    hh = 0.0
+    for v in o.data.vertices:
+        w = o.matrix_world @ v.co - head
+        t = w.dot(d)
+        if (w - d * t).length > sr * 1.25 and t > hh:
+            hh = t
+    return hh
+
+
+def pair_nuts(geo, nuts):
+    """bolt name -> (nut name, t0, t1): nut extent along the bolt axis measured from the head (mm)."""
+    out = {}
+    for n, (head, tip, d, hr, sr) in geo.items():
+        L = (tip - head).length
+        best = None
+        for nut in nuts:
+            vs = [O[nut].matrix_world @ v.co for v in O[nut].data.vertices]
+            c = sum(vs, Vector()) / len(vs)
+            tc = (c - head).dot(d)
+            radial = ((c - head) - d * tc).length
+            if radial < sr + 1.0 and -5 < tc < L + 15 and (best is None or radial < best[0]):
+                ts = [(v - head).dot(d) for v in vs]
+                best = (radial, nut, min(ts), max(ts))
+        if best:
+            out[n] = best[1:]
+    return out
+
+
 def check_fasteners():
     fc = CFG["fasteners"]
     if not FASTENERS:
         REPORT["not_checked"].append("fasteners: Fasteners collection is empty; screws are not modelled")
         return
     rows = []
-    # poses: home plus each driver joint at its limits (coarse); access may need the mechanism moved
-    poses = [({}, "home")]
-    for jn, s in JOINTS.items():
-        if jn in COUPLE or s["axis"] is None or s.get("continuous") or s["lo"] is None:
-            continue
-        for a in (s["lo"], s["hi"]):
-            if abs(a - (s.get("home") or 0)) > 1e-6:
-                poses.append(({jn: a}, pose_key({jn: a})))
-    geo = {}
+    screws = [o for o in FASTENERS if not is_nut(o)]
+    nuts = [o.name for o in FASTENERS if is_nut(o)]
+    poses = fastener_poses()
     set_pose({})
-    for o in FASTENERS:
-        geo[o.name] = fastener_axis(o)
-    per = {o.name: {} for o in FASTENERS}
+    geo = {o.name: fastener_axis(o) for o in screws}
+    nut_of = pair_nuts(geo, nuts)
+    full_tree = scene_bvh(SOLIDS)
+    per = {o.name: {} for o in screws}
     present = assembly_present()
     for pose, pk in poses:
         set_pose(pose)
         trees = {o.name: (bvh_world(o), bbox_world(o)) for o in SOLIDS}
         tree_cache = {}
-        for o in FASTENERS:
+        for o in screws:
             head, tip, d, hr, sr = fastener_axis(o) if pose else geo[o.name]
             if not pose:
-                u, v = perp_basis(d)
-                L = (tip - head).length
-                # thread engagement: walk back from the tip, ring of points at 92% of the shank radius
-                ring = [(u * math.cos(k * math.pi / 3) + v * math.sin(k * math.pi / 3)) * sr * 0.92 for k in range(6)]
-                eng, host, s_ = 0.0, None, 0.5
-                while s_ < L - 0.5:
-                    c = tip - d * s_
-                    hits = {}
-                    for n, (t, bb) in trees.items():
-                        k = sum(1 for r in ring if inside(t, c + r, bb))
-                        if k >= 4:
-                            hits[n] = k
-                    if host is None and hits:
-                        host = max(hits, key=hits.get)
-                    if host is not None:
-                        if host in hits:
-                            eng += 0.5
-                        elif eng:
-                            break
-                    s_ += 0.5
-                # points inside the head (just behind its bearing face), on axis and at 80% radius
-                hring = [(u * math.cos(k * math.pi / 2) + v * math.sin(k * math.pi / 2)) * hr * 0.8 for k in range(4)]
-                head_pts = [head - d * 0.6 + r for r in hring] + [head - d * 0.6]
-                buried = sorted({n for n, (t, bb) in trees.items() for p in head_pts if inside(t, p, bb)})
-                per[o.name].update({"head": [round(c, 1) for c in head], "into": [round(c, 3) for c in d],
-                                    "length_mm": round(L, 1), "thread_host": host, "engagement_mm": eng,
-                                    "head_buried_in": buried, "body": body(o)})
+                per[o.name].update(survey_screw(o, head, tip, d, hr, sr, trees, nut_of.get(o.name), full_tree, fc))
             pres = present.get(o.name)
             key = frozenset(pres) if pres is not None else None
             if key not in tree_cache:
@@ -849,27 +958,181 @@ def check_fasteners():
         rows.append({"object": n, **r})
         if r["head_buried_in"]:
             finding("fasteners", "fail", "%s head is inside %s (reversed, or a missing counterbore)" % (n, r["head_buried_in"]), object=n)
-        if not r["thread_host"]:
+        nut = r.get("nut")
+        if nut:
+            if r["nut_gap_mm"] > 0:
+                finding("fasteners", "fail", "%s stops %.2f mm short of its nut %s: no thread engagement" % (n, r["nut_gap_mm"], nut["name"]), object=n)
+            elif r["engagement_mm"] < nut["len_mm"] - 0.3:
+                finding("fasteners", "fail" if r["engagement_mm"] < 0.5 * nut["len_mm"] else "warn",
+                        "%s engages only %.1f of %s's %.1f mm (the bolt should pass through the nut)" % (
+                            n, r["engagement_mm"], nut["name"], nut["len_mm"]), object=n)
+        elif not r["thread_host"]:
             finding("fasteners", "warn", "%s: no material grips the thread (floating screw, or every hole is clearance)" % n, object=n)
         elif r["engagement_mm"] < fc.get("min_engagement", 4.0):
             finding("fasteners", "warn", "%s: only %.1f mm of thread in %s" % (n, r["engagement_mm"], r["thread_host"]), object=n)
+        for b, mm in r["into_purchased"].items():
+            finding("fasteners", "fail", "%s runs %.1f mm into purchased part %s, which is not what it threads into%s" % (
+                n, mm, b, " (it has a nut)" if nut else ""), object=n, purchased=b)
+        if r["standoff_mm"] > fc["max_standoff"]:
+            finding("fasteners", "warn", "%s head stands %.1f mm off the part: exposed shank under the head" % (n, r["standoff_mm"]), object=n)
+        if r["protrusion_mm"] > fc["max_protrusion"] and r["tip_exposed"]:
+            finding("fasteners", "warn", "%s thread protrudes %.1f mm past the last part, visible from outside" % (n, r["protrusion_mm"]), object=n)
         if not ok:
             h = acc["home"]
-            finding("fasteners", "fail", "%s cannot be driven: tool path blocked by %s at %s mm (all %d poses tried)" % (
-                n, h.get("blocked_by"), h.get("blocked_at_mm"), len(acc)), object=n)
+            finding("fasteners", "fail", "%s cannot be driven: straight bit blocked by %s at %s mm; %s (all %d poses tried)" % (
+                n, h.get("blocked_by"), h.get("blocked_at_mm"), "L-key " + h.get("lkey_why", ""), len(acc)), object=n)
         elif "home" not in ok:
             finding("fasteners", "warn", "%s reachable only at %s (blocked at home pose)" % (n, best[0]), object=n)
         elif best[1]["reach_mm"] > fc["max_reach_ext"]:
             finding("fasteners", "fail", "%s sits %.0f mm deep" % (n, best[1]["reach_mm"]), object=n)
         elif best[1]["reach_mm"] > fc["max_reach"]:
             finding("fasteners", "warn", "%s needs a %.0f mm+ bit/extension (head %.0f mm below open space)" % (n, best[1]["reach_mm"] + 10, best[1]["reach_mm"]), object=n)
-    REPORT["checks"].setdefault("fasteners", {"findings": []})["rows"] = rows
-    REPORT["coverage"].append("fasteners: %d screws; head-buried, thread engagement, driver access (Ø%.0f bit, %.0f mm hand clearance) at %d poses, %s" % (
-        len(FASTENERS), 2 * fc["driver_r"], fc["hand_r"], len(poses),
+    nut_rows = check_nuts(nuts, nut_of, full_tree)
+    REPORT["checks"].setdefault("fasteners", {"findings": []}).update(rows=rows, nuts=nut_rows)
+    REPORT["coverage"].append("fasteners: %d screws, %d nuts; head-buried, thread engagement (bolt-to-nut pairing), shanks/nuts inside purchased parts, "
+                              "head stand-off, protruding thread, access (Ø%.0f bit to %.0f mm hand clearance, else a %.0f/%.0f mm L-key with a %g deg swing) at %d poses, %s" % (
+        len(screws), len(nuts), 2 * fc["driver_r"], fc["hand_r"], fc["lkey_short"], fc["lkey_long"], fc["lkey_swing_deg"], len(poses),
         "parts present per assembly_order (%d steps)" % len(CFG.get("assembly_order", [])) if CFG.get("assembly_order") else "ALL parts present (no assembly_order: later parts may block falsely)"))
     if not CFG.get("assembly_order"):
         REPORT["not_checked"].append("fasteners: assembly order (declare assembly_order so access is tested against the parts present at that step)")
-    REPORT["not_checked"].append("fasteners: pilot/clearance hole diameters (use cadlib.features for those)")
+    if not CFG.get("service"):
+        REPORT["not_checked"].append("fasteners: service access (declare service ops: assembly-order access says nothing about re-adjusting a built machine)")
+    REPORT["not_checked"].append("fasteners: pilot/clearance hole diameters (use cadlib.features for those); wrench access to nuts")
+
+
+def survey_screw(o, head, tip, d, hr, sr, trees, nut, full_tree, fc):
+    """Home-pose facts about one screw: thread host and engagement, same-body penetrations, head seating."""
+    u, v = perp_basis(d)
+    L = (tip - head).length
+    me = body(o)
+    same = {n: tb for n, tb in trees.items() if body(O[n]) == me}
+    ring = _ring(u, v, sr * 0.92)
+    # every same-body solid the shank runs through (ring at 92% of the shank radius inside it)
+    pen, s_ = {}, 0.25
+    while s_ < L:
+        c = head + d * s_
+        for n, (t, bb) in same.items():
+            if sum(1 for r in ring if inside(t, c + r, bb)) >= 4:
+                pen[n] = pen.get(n, 0.0) + 0.5
+        s_ += 0.5
+    # thread host: walk back from the tip
+    eng, host, s_ = 0.0, None, 0.5
+    while s_ < L - 0.5:
+        c = tip - d * s_
+        hits = {}
+        for n, (t, bb) in trees.items():
+            k = sum(1 for r in ring if inside(t, c + r, bb))
+            if k >= 4:
+                hits[n] = k
+        if host is None and hits:
+            host = max(hits, key=hits.get)
+        if host is not None:
+            if host in hits:
+                eng += 0.5
+            elif eng:
+                break
+        s_ += 0.5
+    rec = {}
+    if nut:
+        nn, t0, t1 = nut
+        rec["nut"] = {"name": nn, "from_mm": round(t0, 2), "to_mm": round(t1, 2), "len_mm": round(t1 - t0, 2)}
+        rec["nut_gap_mm"] = round(t0 - L, 2) if L < t0 else 0.0
+        host, eng = nn, max(0.0, min(L, t1) - max(0.0, t0))
+    into_buy = {n: round(mm, 1) for n, mm in pen.items() if KIND[n] == "BUY" and mm >= 1.0 and n != (None if nut else host) and not allowed(o.name, n)}
+    # head seated? Points just under the bearing face at 80% of head radius should be in material (any body: a
+    # clamp-screw head bears on the slot face of the part it clamps against)
+    hring = _ring(u, v, hr * 0.8, 4)
+    hh = head_height(o, head, d, sr)
+    standoff, s_ = None, hh + 0.3
+    while s_ < min(L, 40.0):
+        if sum(1 for r in hring for n, (t, bb) in trees.items() if inside(t, head + d * s_ + r, bb)) >= 2:
+            standoff = s_ - 0.3 - hh
+            break
+        s_ += 0.5
+    standoff = round(standoff if standoff is not None else min(L, 40.0) - hh, 1)
+    # head buried: just behind the bearing face, in a part on the same body (cross-body overlaps are interference's job)
+    head_pts = [head - d * 0.25 + r for r in hring] + [head - d * 0.25]
+    buried = sorted({n for n, (t, bb) in same.items() for p in head_pts if inside(t, p, bb)})
+    # thread past the last material (the nut counts as material)
+    if nut:
+        prot = max(0.0, L - nut[2])
+    else:
+        prot, s_ = L, 0.0
+        while s_ < L:
+            c = tip - d * s_
+            if any(sum(1 for r in ring if inside(t, c + r, bb)) >= 4 for t, bb in trees.values()):
+                prot = s_
+                break
+            s_ += 0.5
+    rec.update({"head": [round(c, 1) for c in head], "into": [round(c, 3) for c in d], "length_mm": round(L, 1),
+                "thread_host": host, "engagement_mm": round(eng, 2), "head_buried_in": buried, "body": me,
+                "passes_through": {n: round(mm, 1) for n, mm in pen.items()}, "into_purchased": into_buy,
+                "standoff_mm": standoff, "protrusion_mm": round(prot, 1),
+                "tip_exposed": prot > 0 and escapes(full_tree, tip + d * 0.3) >= CFG["exposure"]["min_escape"]})
+    return rec
+
+
+def check_nuts(nuts, nut_of, full_tree):
+    rows = []
+    paired = {v[0]: k for k, v in nut_of.items()}
+    for nn in nuts:
+        o = O[nn]
+        vs = [O[nn].matrix_world @ v.co for v in o.data.vertices]
+        c = sum(vs, Vector()) / len(vs)
+        pts = [c + (p - c) * 0.85 for p in vs[:: max(1, len(vs) // 30)]] + [c]
+        inside_buy = {}
+        for s in SOLIDS:
+            if KIND[s.name] != "BUY" or allowed(nn, s.name):
+                continue
+            t, bb = bvh_world(s), bbox_world(s)
+            k = sum(1 for p in pts if inside(t, p, bb))
+            if k >= 0.3 * len(pts):
+                inside_buy[s.name] = round(k / len(pts), 2)
+        row = {"object": nn, "bolt": paired.get(nn), "inside_purchased": inside_buy, "exposed": escapes(full_tree, c) >= CFG["exposure"]["min_escape"]}
+        rows.append(row)
+        if not row["bolt"]:
+            finding("fasteners", "warn", "%s has no bolt on its axis" % nn, object=nn)
+        for b, f in inside_buy.items():
+            finding("fasteners", "fail", "%s sits inside purchased part %s (%d%% of its volume samples)" % (nn, b, 100 * f), object=nn, purchased=b)
+    return rows
+
+
+def check_service():
+    """Tool access for service operations on the built machine (A2-F6: the right clamp screw could be fitted on the
+    bench but not re-adjusted at tilt 0). op = {"op", "fasteners": [globs], "remove": [globs], "pose": {...}}."""
+    ops = CFG.get("service") or []
+    if not ops:
+        return
+    fc = CFG["fasteners"]
+    rows = []
+    for op in ops:
+        removed = {o.name for o in ALL if any(fnmatch.fnmatch(o.name, g) for g in op.get("remove", []))}
+        fsts = [o for o in FASTENERS if not is_nut(o) and o.name not in removed and any(fnmatch.fnmatch(o.name, g) for g in op["fasteners"])]
+        poses = [(op["pose"], pose_key(op["pose"]))] if "pose" in op else [p for p in fastener_poses() if not any(JOINTS[j].get("continuous") for j in p[0])]
+        res = {o.name: {} for o in fsts}
+        for pose, pk in poses:
+            set_pose(pose)
+            solids = [o for o in SOLIDS if o.name not in removed]
+            tree = scene_bvh(solids)
+            trees = {o.name: bvh_world(o) for o in solids}
+            for o in fsts:
+                head, tip, d, hr, sr = fastener_axis(o)
+                res[o.name][pk] = access(head, -d, tree, trees, fc)
+        set_pose({})
+        for n, acc in res.items():
+            ok = [pk for pk, a in acc.items() if not a["blocked"]]
+            first = poses[0][1]
+            rows.append({"op": op["op"], "object": n, "access": acc})
+            if not ok:
+                a = acc[first]
+                finding("service", "fail", "'%s': %s cannot be reached (straight bit blocked by %s at %s mm; L-key %s) at %s" % (
+                    op["op"], n, a.get("blocked_by"), a.get("blocked_at_mm"), a.get("lkey_why"), ", ".join(acc)), object=n, op=op["op"])
+            elif first not in ok:
+                a = acc[first]
+                finding("service", "warn", "'%s': %s reachable only at %s (at %s blocked by %s %s mm out)" % (
+                    op["op"], n, ", ".join(ok), first, a.get("blocked_by"), a.get("blocked_at_mm")), object=n, op=op["op"])
+    REPORT["checks"].setdefault("service", {"findings": []})["rows"] = rows
+    REPORT["coverage"].append("service: %d ops, %d screw accesses with the built assembly present" % (len(ops), len(rows)))
 
 
 # ------------------------------------------------------------------ drop tests
@@ -880,6 +1143,96 @@ def frame_point(frame, p_home, home_mats):
     return O[frame].matrix_world @ home_mats[frame].inverted() @ Vector(p_home)
 
 
+def _axis(spec):
+    sg = -1.0 if spec.startswith("-") else 1.0
+    return "XYZ".index(spec[-1]), sg
+
+
+def landing_angle(ang, point):
+    """Angle of `point` about ang.center in ang.frame coordinates, from the `zero` axis toward `positive`
+    (either may carry a sign, e.g. zero "-Z" = bottom dead centre)."""
+    c = O[ang["center"]].matrix_world.translation
+    F = O[ang.get("frame", ang["center"])].matrix_world.to_3x3()
+    loc = F.inverted() @ (point - c)
+    zk, zs = _axis(ang.get("zero", "Z"))
+    pk, ps = _axis(ang.get("positive", "-Y"))
+    return math.degrees(math.atan2(ps * loc[pk], zs * loc[zk]))
+
+
+def slide_trace(p, g, walls, targets, T):
+    """Fall along g; on a wall, slide down its slope; stall below stall_deg. Ported from the attempt-2 designer's
+    tracer (HW/blender/checks.py:395 trace_drops), generalised to any target objects.
+    Returns (outcome, point, target): outcome is "hit", "stall", "lost" or "max_steps"."""
+    cap, pay = T.get("capture_mm", 0.5), T.get("payload_mm", 7.0)
+    stall = T.get("stall_deg", 20.0)
+
+    def near_target(q, within):
+        best = None
+        for n, t in targets.items():
+            r = t.find_nearest(q, within)
+            if r[0] is not None and (best is None or r[3] < best[0]):
+                best = (r[3], n, r[0])
+        return best
+
+    def visible(q, tp):
+        w = tp - q
+        L = w.length
+        return L < 0.2 or walls.ray_cast(q + w.normalized() * 0.1, w.normalized(), L - 0.2)[0] is None
+
+    P, mode, n = p.copy(), "fall", None
+    for _ in range(900):
+        if mode == "fall":
+            h = walls.ray_cast(P, g, T.get("max_mm", 400))
+            hit_d = h[3] if h[0] is not None else T.get("max_mm", 400)
+            th = None
+            for nm, t in targets.items():
+                r = t.ray_cast(P, g, hit_d)
+                if r[0] is not None and (th is None or r[3] < th[0]):
+                    th = (r[3], nm, r[0])
+            s = 0.0
+            while th is None and s < hit_d:     # near miss: passes within capture of the target surface
+                q = near_target(P + g * s, cap)
+                if q:
+                    th = (s, q[1], q[2])
+                s += 0.4
+            if th:
+                return "hit", th[2], th[1]
+            if h[0] is None:
+                return "lost", P + g * hit_d, None
+            n = h[1].normalized()
+            if n.dot(g) > 0:
+                n = -n
+            P = h[0] + n * 0.05
+            mode = "slide"
+            continue
+        d = g - g.dot(n) * n
+        if d.length < 1e-6:
+            return "stall", P, None
+        d.normalize()
+        q = near_target(P, pay)
+        if q and visible(P, q[2]):
+            return "hit", q[2], q[1]
+        if math.degrees(math.asin(max(-1.0, min(1.0, d.dot(g))))) < stall:
+            return "stall", P, None
+        hw = walls.ray_cast(P, d, 1.0)
+        if hw[0] is not None:
+            n2 = hw[1].normalized()
+            if n2.dot(d) > 0:
+                n2 = -n2
+            P, n = hw[0] + n2 * 0.05, n2
+            continue
+        Pn = P + d * 1.0
+        ha = walls.ray_cast(Pn + n * 0.8, -n, 2.5)
+        if ha[0] is not None:
+            n2 = ha[1].normalized()
+            if n2.dot(n) < 0:
+                n2 = -n2
+            P, n = ha[0] + n2 * 0.05, n2
+        else:
+            P, mode = Pn, "fall"
+    return "max_steps", P, None
+
+
 def check_drop():
     tests = CFG["drop_tests"]
     if not tests:
@@ -888,7 +1241,10 @@ def check_drop():
     set_pose({})
     home_mats = {n: O[n].matrix_world.copy() for n in JOINTS}
     out = []
+    modes = set()
     for T in tests:
+        mode = T.get("mode", "ray")
+        modes.add(mode)
         em = T["emit"]
         g = Vector(T.get("dir", [0, 0, -1])).normalized()
         poses = []
@@ -903,65 +1259,141 @@ def check_drop():
         u, v = perp_basis(n_e.normalized())
         offs = [(i, j) for i in frange(-r_emit, r_emit, st) for j in frange(-r_emit, r_emit, st) if i * i + j * j <= r_emit * r_emit + 1e-6]
         exp = T.get("expect", {})
+        want_hit = exp.get("hit")
+        ang = exp.get("angle")
         rows = []
         for pose in poses:
             set_pose(pose)
-            trees = {o.name: (bvh_world(o), o) for o in SOLIDS + FASTENERS if o.name not in T.get("ignore", [])}
-            hits = {}
-            angles = []
+            objs = [o for o in SOLIDS + FASTENERS if o.name not in T.get("ignore", [])]
+            if mode == "slide":
+                tnames = [o.name for o in objs if want_hit and any(fnmatch.fnmatch(o.name, w) for w in want_hit if w)]
+                walls = scene_bvh([o for o in objs if o.name not in tnames])
+                targets = {n: bvh_world(O[n]) for n in tnames}
+            else:
+                trees = {o.name: (bvh_world(o), o) for o in objs}
+            hits, angles, outcomes, stalls = {}, [], {}, []
             for (i, j) in offs:
                 p_home = Vector(em["center"]) + u * i + v * j
                 p = frame_point(em.get("frame"), p_home, home_mats)
-                best = None
-                for n, (t, o) in trees.items():
-                    h = t.ray_cast(p, g, T.get("max_mm", 400))
-                    if h[0] is not None and (best is None or h[3] < best[0]):
-                        best = (h[3], n, h[0])
-                name = best[1] if best else None
+                if mode == "slide":
+                    oc, pt, name = slide_trace(p, g, walls, targets, T)
+                    outcomes[oc] = outcomes.get(oc, 0) + 1
+                    if oc == "stall":
+                        stalls.append([round(c, 1) for c in pt])
+                    best = (0, name, pt) if oc == "hit" else None
+                    if oc != "hit":
+                        name = oc
+                else:
+                    best = None
+                    for n, (t, o) in trees.items():
+                        h = t.ray_cast(p, g, T.get("max_mm", 400))
+                        if h[0] is not None and (best is None or h[3] < best[0]):
+                            best = (h[3], n, h[0])
+                    name = best[1] if best else None
                 hits[name] = hits.get(name, 0) + 1
-                ang = exp.get("angle")
-                if best and ang and name in exp.get("hit", [name]):
-                    c = O[ang["center"]].matrix_world.translation
-                    F = O[ang.get("frame", ang["center"])].matrix_world.to_3x3()
-                    loc = F.inverted() @ (best[2] - c)
-                    ax = "XYZ".index(ang.get("axis", "X"))
-                    zero = "XYZ".index(ang.get("zero", "Z"))
-                    pos_s = ang.get("positive", "-Y")
-                    sg = -1 if pos_s.startswith("-") else 1
-                    pk = "XYZ".index(pos_s[-1])
-                    angles.append(math.degrees(math.atan2(sg * loc[pk], loc[zero])))
+                if best and ang and name in (want_hit or [name]):
+                    angles.append(landing_angle(ang, best[2]))
             row = {"pose": pose_key(pose), "rays": len(offs), "first_hit": hits}
+            if mode == "slide":
+                row.update(outcomes=outcomes, stall_points=stalls[:5])
             if angles:
                 row["angle_deg"] = [round(min(angles), 1), round(max(angles), 1)]
             rows.append(row)
-            want_hit = exp.get("hit")
             bad = sum(c for n, c in hits.items() if want_hit and n not in want_hit)
             if bad:
-                finding("drop", "fail", "%s at %s: %d/%d rays first hit %s, not %s" % (
-                    T["name"], row["pose"], bad, len(offs), sorted(n for n in hits if n not in want_hit), want_hit), test=T["name"], pose=row["pose"])
-            if angles and exp.get("angle", {}).get("range"):
-                lo, hi = exp["angle"]["range"]
+                finding("drop", "fail", "%s at %s: %d/%d rays %s %s, not %s" % (
+                    T["name"], row["pose"], bad, len(offs), "end at" if mode == "slide" else "first hit",
+                    sorted(str(n) for n in hits if n not in want_hit), want_hit), test=T["name"], pose=row["pose"])
+            if angles and ang and ang.get("range"):
+                lo, hi = ang["range"]
                 if min(angles) < lo or max(angles) > hi:
                     finding("drop", "fail", "%s at %s: lands %.0f..%.0f deg, window %g..%g" % (
                         T["name"], row["pose"], min(angles), max(angles), lo, hi), test=T["name"], pose=row["pose"])
-        out.append({"name": T["name"], "rows": rows})
+        out.append({"name": T["name"], "mode": mode, "rows": rows})
     set_pose({})
     REPORT["checks"].setdefault("drop", {"findings": []})["tests"] = out
-    REPORT["coverage"].append("drop: %d tests (first-contact straight rays; no bounce/slide dynamics)" % len(tests))
+    REPORT["coverage"].append("drop: %d tests (%s)" % (len(tests), ", ".join(
+        {"ray": "first-contact straight rays", "slide": "fall + slide on walls, no bounce or rolling"}.get(m, m) for m in sorted(modes))))
+
+
+def check_index():
+    """Indexer timing (A2-F2: the documented 0 -> 60 -> 0 feeder stroke had a pocket over the outlet at both ends,
+    so every fire command dropped two candies). A probe bundle is cast through the moving disc at the outlet while the
+    joint runs the motion `sequence`; each maximal run of "open" poses is one window (one release)."""
+    tests = CFG.get("index_tests") or []
+    if not tests:
+        return
+    set_pose({})
+    home_mats = {n: O[n].matrix_world.copy() for n in JOINTS}
+    rows = []
+    for T in tests:
+        pr = T["probe"]
+        g = Vector(pr.get("dir", [0, 0, -1])).normalized()
+        u, v = perp_basis(g)
+        offs = [Vector((0, 0, 0))] + _ring(u, v, pr.get("radius", 3.0))
+        seq = T["sequence"]
+        angs = []
+        for a, b in zip(seq, seq[1:]):
+            n = max(1, int(math.ceil(abs(b - a) / T.get("step", 2.0))))
+            angs += [a + (b - a) * k / n for k in range(n)]
+        angs.append(seq[-1])
+        state = []
+        for a in angs:
+            pose = dict(T.get("pose", {}), **{T["joint"]: a})
+            set_pose(pose)
+            trees = [bvh_world(O[n]) for n in T["blockers"]]
+            c = frame_point(pr.get("frame"), Vector(pr["center"]), home_mats)
+            state.append(all(all(t.ray_cast(c + o, g, pr.get("depth", 30))[0] is None for t in trees) for o in offs))
+        set_pose({})
+        cyc = seq[0] == seq[-1]
+        runs, prev = [], False   # each run = the joint angles visited while open
+        for a, s in zip(angs, state):
+            if s and not prev:
+                runs.append([])
+            if s:
+                runs[-1].append(a)
+            prev = s
+        if cyc and len(runs) > 1 and state[0] and state[-1]:
+            runs[0] += runs.pop()   # a window spanning the cycle start is one window
+        runs = [(min(r), max(r)) for r in runs]
+        row = {"name": T["name"], "joint": T["joint"], "sequence": seq, "windows": len(runs),
+               "open_ranges_deg": [[round(x, 1), round(y, 1)] for x, y in runs], "open_at_start": state[0], "why": T.get("why")}
+        rows.append(row)
+        want = T.get("expect_windows", 1)
+        if len(runs) != want:
+            finding("index", "fail", "%s: %d open windows over %s on %s (want %d), open at %s deg%s" % (
+                T["name"], len(runs), seq, T["joint"], want, row["open_ranges_deg"], "; open at the park position" if state[0] else ""), **row)
+        elif state[0]:
+            finding("index", "warn", "%s: the park position %g deg is already open over the outlet" % (T["name"], seq[0]), **row)
+    REPORT["checks"].setdefault("index", {"findings": []})["rows"] = rows
+    REPORT["coverage"].append("index: %d indexer timing tests (probe through the moving parts over the motion sequence)" % len(tests))
 
 
 # ------------------------------------------------------------------ slide-out, distances
 
 def check_slide():
+    """Slide-out sweeps. {"object": name} or {"objects": [globs]} moves as one group (the attempt-2 designer's
+    service sweeps: flywheel plus its bolts, cover, encoder cap), with "ignore" for parts already removed."""
     for S in CFG["slide_out"]:
         set_pose(S.get("pose", {}))
-        ob = O[S["object"]]
+        globs = S.get("objects") or [S["object"]]
+        grp = [o for o in ALL if KIND[o.name] != "CAB" and any(fnmatch.fnmatch(o.name, g) for g in globs)]
+        gnames = {o.name for o in grp}
+        ign = {o.name for o in ALL if any(fnmatch.fnmatch(o.name, g) for g in S.get("ignore", []))}
+        label = S.get("name") or (grp[0].name if len(grp) == 1 else "+".join(globs))
         d = Vector(S["dir"]).normalized()
-        others = {o.name: bvh_world(o) for o in SOLIDS if o.name != ob.name and not allowed(o.name, ob.name)}
-        bm0 = world_bm(ob)
+        others = {o.name: bvh_world(o) for o in SOLIDS if o.name not in gnames | ign and not any(allowed(o.name, g) for g in gnames)}
+        bm0 = bmesh.new()
+        for o in grp:
+            t = world_bm(o)
+            me = bpy.data.meshes.new("_s")
+            t.to_mesh(me)
+            t.free()
+            bm0.from_mesh(me)
+            bpy.data.meshes.remove(me)
         free_until, blocker = None, None
         minclr = (1e9, None)
-        M0 = ob.matrix_world.copy()
+        M0 = {o.name: o.matrix_world.copy() for o in grp}
         for s in frange(0, S["dist"], S.get("step", 5)):
             bm = bm0.copy()
             bmesh.ops.translate(bm, verts=bm.verts, vec=d * s)
@@ -971,10 +1403,12 @@ def check_slide():
             hit = []
             for n, ot in others.items():
                 if t.overlap(ot):
-                    ob.matrix_world = Matrix.Translation(d * s) @ M0
+                    for o in grp:
+                        o.matrix_world = Matrix.Translation(d * s) @ M0[o.name]
                     bpy.context.view_layer.update()
-                    vol, _, _ = inter_volume(ob, O[n])
-                    ob.matrix_world = M0
+                    vol = sum(inter_volume(o, O[n])[0] for o in grp)
+                    for o in grp:
+                        o.matrix_world = M0[o.name]
                     bpy.context.view_layer.update()
                     if vol >= CFG["vol_tol"]:
                         hit.append(n)
@@ -987,30 +1421,82 @@ def check_slide():
                     if r[0] is not None and r[3] < minclr[0]:
                         minclr = (r[3], n)
         bm0.free()
-        rec = {"object": ob.name, "dir": list(d), "dist": S["dist"], "blocked_at_mm": free_until, "blocked_by": blocker,
-               "min_clearance_mm": round(minclr[0], 2) if minclr[1] else None, "closest": minclr[1]}
+        rec = {"object": label, "members": sorted(gnames), "dir": list(d), "dist": S["dist"], "blocked_at_mm": free_until, "blocked_by": blocker,
+               "min_clearance_mm": round(minclr[0], 2) if minclr[1] else None, "closest": minclr[1], "pose": pose_key(S.get("pose", {}))}
         REPORT["checks"].setdefault("slide", {"findings": []}).setdefault("rows", []).append(rec)
         if blocker:
-            finding("slide", "fail", "%s slide-out blocked by %s at %g mm" % (ob.name, blocker, free_until), **rec)
+            finding("slide", "fail", "%s slide-out blocked by %s at %g mm" % (label, blocker, free_until), **rec)
         elif minclr[1] and minclr[0] < S.get("min_clearance", 1.5):
-            finding("slide", "warn", "%s slides out but with only %.2f mm to %s" % (ob.name, minclr[0], minclr[1]), **rec)
+            finding("slide", "warn", "%s slides out but with only %.2f mm to %s" % (label, minclr[0], minclr[1]), **rec)
     set_pose({})
     if CFG["slide_out"]:
         REPORT["coverage"].append("slide: %d slide-out sweeps" % len(CFG["slide_out"]))
 
 
+def ray_gap(D, home_mats):
+    """Gap along a line: from `origin` (frame coords) cast +dir to the first face of b and -dir to the first face of a."""
+    R = D["ray"]
+    o = frame_point(R.get("frame"), Vector(R["origin"]), home_mats)
+    F = O[R["frame"]].matrix_world.to_3x3() @ home_mats[R["frame"]].to_3x3().inverted() if R.get("frame") else Matrix.Identity(3)
+    w = (F @ Vector(R["dir"])).normalized()
+    hb = bvh_world(O[D["b"]]).ray_cast(o, w, 500)
+    ha = bvh_world(O[D["a"]]).ray_cast(o, -w, 500)
+    if hb[0] is None or ha[0] is None:
+        return None, o
+    return ha[3] + hb[3], o
+
+
 def check_distances():
+    set_pose({})
+    home_mats = {n: O[n].matrix_world.copy() for n in JOINTS}
     for D in CFG["distances"]:
         poses = D.get("poses", [D.get("pose", {})])
         for pose in poses:
             set_pose(pose)
             a, b = O[D["a"]], O[D["b"]]
-            d, p = min_dist(a, b, bvh_world(a), bvh_world(b))
-            rec = {"a": a.name, "b": b.name, "pose": pose_key(pose), "mm": round(d, 3), "min": D.get("min"), "max": D.get("max"), "why": D.get("why")}
+            if D.get("ray"):
+                d, p = ray_gap(D, home_mats)
+                how = "along ray"
+            else:
+                d, p = min_dist(a, b, bvh_world(a), bvh_world(b))
+                how = "nearest"
+            rec = {"a": a.name, "b": b.name, "pose": pose_key(pose), "mm": round(d, 3) if d is not None else None, "how": how,
+                   "min": D.get("min"), "max": D.get("max"), "why": D.get("why")}
             REPORT["checks"].setdefault("distances", {"findings": []}).setdefault("rows", []).append(rec)
+            if d is None:
+                finding("distances", "fail", "%s to %s: the ray missed one of them at %s" % (a.name, b.name, rec["pose"]), **rec)
+                continue
             if (D.get("min") is not None and d < D["min"]) or (D.get("max") is not None and d > D["max"]):
-                finding("distances", "fail", "%s to %s = %.2f mm at %s, wanted %s..%s (%s)" % (a.name, b.name, d, rec["pose"], D.get("min"), D.get("max"), D.get("why", "")), **rec)
+                finding("distances", "fail", "%s to %s = %.2f mm (%s) at %s, wanted %s..%s (%s)" % (a.name, b.name, d, how, rec["pose"], D.get("min"), D.get("max"), D.get("why", "")), **rec)
+            if D.get("payload_mm"):
+                # A2-F4: a rigid 1 mm squeeze on a hard candy; thickness varies +-0.5 mm, so something must yield
+                sq = D["payload_mm"] - (d - D.get("tape_mm", 0.0))
+                rec["squeeze_mm"] = round(sq, 2)
+                if sq <= 0:
+                    finding("distances", "fail", "%s to %s: payload %.1f mm is not gripped (gap %.2f after %.1f mm liner)" % (
+                        a.name, b.name, D["payload_mm"], d - D.get("tape_mm", 0.0), D.get("tape_mm", 0.0)), **rec)
+                elif not D.get("compliant"):
+                    finding("distances", "warn", "%s to %s: %.2f mm rigid squeeze on a %.1f mm payload; name the part that yields (spring, flexure) under 'compliant' or the nip slips or crushes as the payload varies" % (
+                        a.name, b.name, sq, D["payload_mm"]), **rec)
     set_pose({})
+
+
+def check_stacks():
+    """Tolerance stacks (A2-F7: the magnet jig referenced the nacelle bore, 0.55-0.75 mm worst case vs 0.3 allowed).
+    {"name", "limit": mm, "terms": [{"what", "tol": +-mm}]}: worst case = sum, RSS = root of the sum of squares."""
+    rows = []
+    for S in CFG.get("stacks") or []:
+        tols = [abs(float(t["tol"])) for t in S["terms"]]
+        wc, rss = sum(tols), math.sqrt(sum(t * t for t in tols))
+        row = {"name": S["name"], "limit": S["limit"], "worst_case": round(wc, 3), "rss": round(rss, 3), "terms": S["terms"], "why": S.get("why")}
+        rows.append(row)
+        if rss > S["limit"]:
+            finding("stacks", "fail", "%s: RSS %.2f mm > %.2f (worst case %.2f); shorten the datum chain" % (S["name"], rss, S["limit"], wc), **row)
+        elif wc > S["limit"]:
+            finding("stacks", "warn", "%s: worst case %.2f mm > %.2f (RSS %.2f)" % (S["name"], wc, S["limit"], rss), **row)
+    if rows:
+        REPORT["checks"].setdefault("stacks", {"findings": []})["rows"] = rows
+        REPORT["coverage"].append("stacks: %d tolerance stacks (declared terms only)" % len(rows))
 
 
 # ------------------------------------------------------------------ stability
@@ -1100,15 +1586,36 @@ def check_stability():
 
 def check_cables():
     rows = []
+    ex = CFG["exposure"]
+    set_pose({})
+    tree = scene_bvh(SOLIDS) if CABLES else None
     for o in CABLES:
         L = o.get("path_len")
         lead = o.get("lead_len") or next((v for k, v in CFG["cable_leads"].items() if fnmatch.fnmatch(o.name, k)), None)
-        rows.append({"object": o.name, "path_len": L, "lead_len": lead})
+        # exposed run (A2-F8: 10 mm of feeder bus bare above the left bonnet): sample the tube, count escaping rays
+        pts = _edge_samples(o, 2.0, 1200)
+        exp = [p for p in pts if escapes(tree, p) >= ex["min_escape"]]
+        clusters = []   # single-linkage at 6 mm, so separate bare spots are reported separately
+        for p in exp:
+            near = [c for c in clusters if any((p - q).length < 6.0 for q in c)]
+            merged = [p] + [q for c in near for q in c]
+            clusters = [c for c in clusters if c not in near] + [merged]
+        spots = []
+        for c in clusters:
+            lo = Vector([min(q[k] for q in c) for k in range(3)])
+            hi = Vector([max(q[k] for q in c) for k in range(3)])
+            spots.append({"extent_mm": round((hi - lo).length, 1), "center": [round(x, 1) for x in (lo + hi) / 2], "samples": len(c)})
+        spots.sort(key=lambda r: -r["extent_mm"])
+        rows.append({"object": o.name, "path_len": L, "lead_len": lead, "exposed_samples": len(exp), "samples": len(pts), "exposed_spots": spots})
         if L is not None and lead is not None and L > lead:
             finding("cables", "fail", "%s route is %.0f mm but the lead is %.0f mm" % (o.name, L, lead), object=o.name)
+        for sp in spots:
+            if sp["extent_mm"] > ex["max_cable_mm"] and not any(fnmatch.fnmatch(o.name, g) for g in ex["cables_ok"]):
+                finding("cables", "warn", "%s: about %.0f mm of cable is visible from outside around %s (declare it under exposure.cables_ok if intended)" % (
+                    o.name, sp["extent_mm"], sp["center"]), object=o.name, **sp)
     REPORT["checks"].setdefault("cables", {"findings": []})["rows"] = rows
     have = sum(1 for r in rows if r["path_len"] is not None)
-    REPORT["coverage"].append("cables: %d routes, %d with path length" % (len(rows), have))
+    REPORT["coverage"].append("cables: %d routes, %d with path length; exposure (>= %d of 26 rays escape) at home pose" % (len(rows), have, ex["min_escape"]))
     REPORT["not_checked"].append("cables: bend radius, slack across joints, connector positions (review by section render)")
 
 
@@ -1119,8 +1626,8 @@ def main():
         len(PRINTED), len(PURCHASED), len(FASTENERS), len(CABLES),
         {n: (s["axis"], s["lo"], s["hi"]) for n, s in JOINTS.items()}))
     for name, fn in (("parts", check_parts), ("interference", check_interference), ("fasteners", check_fasteners),
-                     ("drop", check_drop), ("slide", check_slide), ("distances", check_distances),
-                     ("stability", check_stability), ("cables", check_cables)):
+                     ("service", check_service), ("drop", check_drop), ("index", check_index), ("slide", check_slide),
+                     ("distances", check_distances), ("stacks", check_stacks), ("stability", check_stability), ("cables", check_cables)):
         if want(name) or (name == "interference" and want("clearance")):
             t = time.time()
             fn()
@@ -1128,7 +1635,7 @@ def main():
             log("%s done" % name)
     if not CABLES:
         REPORT["not_checked"].append("cables: Cables collection empty")
-    REPORT["not_checked"].append("not geometric: service/teardown steps, alignment jigs, aesthetics, BOM correctness")
+    REPORT["not_checked"].append("not geometric: teardown step count, alignment-jig datums (declare stacks), aesthetics, BOM correctness")
     REPORT["summary"] = {"pass": not FAILS, "fails": len(FAILS), "warns": len(WARNS), "fail_list": FAILS, "warn_list": WARNS[:60],
                          "coverage": REPORT["coverage"], "not_checked": REPORT["not_checked"], "runtime_s": round(time.time() - T0, 1)}
     os.makedirs(os.path.dirname(os.path.abspath(OUT)), exist_ok=True)
