@@ -281,7 +281,7 @@ why `SKILL.md` now says to turn every motion, timing or service claim into a che
 F2 (a major) and F6 were confident BOM prose that nothing had executed. The designer's log says "park at 0 deg
 (pocket A under the hopper)", while the pocket is over the outlet at 0.
 
-**Baseline false fails, fixed this run (A2-V1).** The `f593896` cadcheck gave 34 fails on A2, and 28 were false or
+**False fails in the earlier cadcheck, fixed this run (A2-V1).** The `f593896` cadcheck gave 34 fails on A2, and 28 were false or
 config artefacts:
 - 12: nuts treated as screws ("head buried", "cannot be driven").
 - 6: bolt × nut overlaps counted as interference.
