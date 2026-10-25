@@ -81,3 +81,7 @@ The CAD loop produces a new attempt (design plus review) about every 60-90 min. 
 
 ## Printer safety
 **Hard rule (user, 2026-10-24):** never run Bambu Studio, OrcaSlicer or any slicer binary, never read ~/Library/Application Support/BambuStudio, and never contact a printer or any network service. Print time and filament are estimates computed from geometry only. Don't build tools that invoke slicers.
+
+
+## Printer safety, revised (user, 2026-10-25)
+The blanket "never run any slicer binary" rule above is replaced. Slicers may be run **only through the skill's `cad slice` tool** (see `docs/tasks/2026-10-25-printability-and-slicing.md`): isolated temp data dir, no network, never send to a printer, never read or write the user's slicer settings, and one guarded smoke test per slicer with no automatic retries after a crash. Contacting printers or the network remains forbidden.

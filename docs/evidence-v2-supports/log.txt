@@ -1,0 +1,51 @@
+00:02.382  io.stl           | WARNING Removed 248 degenerate triangles during import
+00:02.582  io.stl           | WARNING Removed 4 degenerate triangles during import
+00:02.700  io.stl           | WARNING Removed 32 degenerate triangles during import
+00:02.816  io.stl           | WARNING Removed 16 degenerate triangles during import
+00:02.865  io.stl           | WARNING Removed 12 degenerate triangles during import
+00:02.865  io.stl           | WARNING Removed 2 duplicate triangles during import
+00:03.111  io.stl           | WARNING Removed 24 degenerate triangles during import
+00:03.230  io.stl           | WARNING Removed 4 degenerate triangles during import
+00:03.285  io.stl           | WARNING Removed 84 degenerate triangles during import
+00:03.350  io.stl           | WARNING Removed 4 degenerate triangles during import
+00:03.413  io.stl           | WARNING Removed 8 degenerate triangles during import
+00:03.469  io.stl           | WARNING Removed 16 degenerate triangles during import
+Blender 5.1.2 (hash ec6e62d40fa9 built 2026-05-19 01:30:33)
+Timer 'STL Import' took 2.02 ms
+Timer 'STL Import' took 1.09 ms
+Timer 'STL Import' took 3.22 ms
+Timer 'STL Import' took 3.25 ms
+Timer 'STL Import' took 2.27 ms
+Timer 'STL Import' took 0.87 ms
+Timer 'STL Import' took 6.62 ms
+Timer 'STL Import' took 3.67 ms
+Timer 'STL Import' took 2.79 ms
+Timer 'STL Import' took 3.07 ms
+Timer 'STL Import' took 4.23 ms
+Timer 'STL Import' took 1.10 ms
+Timer 'STL Import' took 1.10 ms
+Timer 'STL Import' took 2.15 ms
+Timer 'STL Import' took 2.18 ms
+Timer 'STL Import' took 4.71 ms
+Timer 'STL Import' took 1.41 ms
+Timer 'STL Import' took 12.04 ms
+Timer 'STL Import' took 2.04 ms
+Timer 'STL Import' took 3.03 ms
+Timer 'STL Import' took 2.41 ms
+Timer 'STL Import' took 2.60 ms
+Timer 'STL Import' took 2.68 ms
+Timer 'STL Import' took 0.73 ms
+Timer 'STL Import' took 0.55 ms
+Timer 'STL Import' took 0.57 ms
+Timer 'STL Import' took 0.95 ms
+Timer 'STL Import' took 2.41 ms
+Timer 'STL Import' took 1.14 ms
+Timer 'STL Import' took 0.95 ms
+Timer 'STL Import' took 1.41 ms
+Timer 'STL Import' took 1.53 ms
+Timer 'STL Import' took 0.79 ms
+Timer 'STL Import' took 0.93 ms
+Timer 'STL Import' took 0.92 ms
+Timer 'STL Import' took 2.93 ms
+
+Blender quit
