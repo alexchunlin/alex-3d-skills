@@ -236,6 +236,12 @@ def usage_totals(tr: Transcript) -> dict:
         tot["cache_read"] += u.get("cache_read_input_tokens", 0) or 0
         tot["output"] += u.get("output_tokens", 0) or 0
         tot["thinking"] += (u.get("output_tokens_details") or {}).get("thinking_tokens", 0) or 0
+    # Some calls never get their final usage line (stream ended early): usage then holds the streaming-start
+    # values (output_tokens ~8, no output_tokens_details). Estimate their thinking from thinkingDurationMs at
+    # the rate measured on complete calls of the same transcript (88-95 tok/s on the mm-launcher run, A2-T5).
+    inc = incomplete_usage(tr)
+    tot["incomplete_calls"] = len(inc)
+    tot["est_missing_output"] = sum(e for _, e in inc)
     misses = [a for a in tr.api_calls[1:] if not (a.usage or {}).get("cache_read_input_tokens")
               and ((a.usage or {}).get("cache_creation_input_tokens") or 0) > 20000]
     tot["cache_misses"] = len(misses)
@@ -243,6 +249,18 @@ def usage_totals(tr: Transcript) -> dict:
     tot["max_context"] = max(((a.usage or {}).get("input_tokens", 0) + (a.usage or {}).get("cache_read_input_tokens", 0)
                               + (a.usage or {}).get("cache_creation_input_tokens", 0) for a in tr.api_calls), default=0)
     return tot
+
+
+THINK_TOK_PER_S = 92.0  # fallback rate when a transcript has no complete long-thinking call
+
+
+def incomplete_usage(tr: Transcript) -> list[tuple["ApiCall", int]]:
+    """(call, estimated output tokens) for calls whose final usage line is missing and that thought >= 5 s."""
+    good = [a for a in tr.api_calls if (a.usage or {}).get("output_tokens_details") and a.thinking_ms > 60000]
+    ms = sum(a.thinking_ms for a in good)
+    rate = (sum(a.usage["output_tokens_details"].get("thinking_tokens", 0) for a in good) / (ms / 1000)) if ms else THINK_TOK_PER_S
+    return [(a, int(rate * a.thinking_ms / 1000)) for a in tr.api_calls
+            if not (a.usage or {}).get("output_tokens_details") and a.thinking_ms >= 5000]
 
 
 def is_blender(tc: ToolCall) -> bool:
@@ -312,7 +330,9 @@ def long_gaps(tr: Transcript, min_s: float = 120) -> list[dict]:
             u = a.usage or {}
             names = [next((t.name for t in tr.tools if t.id == i), "?") for i in a.tool_ids]
             first = next((t for t in tr.tools if a.tool_ids and t.id == a.tool_ids[0]), None)
-            out.append({"t": a.t_first, "gap_s": round(a.gen_s), "thinking_s": round(a.thinking_ms / 1000), "output_tokens": u.get("output_tokens"),
+            est = dict((id(c), e) for c, e in incomplete_usage(tr)).get(id(a))
+            out.append({"t": a.t_first, "gap_s": round(a.gen_s), "thinking_s": round(a.thinking_ms / 1000),
+                        "output_tokens": u.get("output_tokens") if est is None else f"~{est} (est)",
                         "thinking_tokens": (u.get("output_tokens_details") or {}).get("thinking_tokens"),
                         "tool_input_chars": a.tool_input_chars, "tools": names,
                         "what": first.brief(90) if first else f"text {a.text_chars} chars"})
@@ -374,6 +394,9 @@ def cmd_summary(tr: Transcript, a) -> None:
           f"(blender {d['blender_time_min']}) ; {u['api_calls']} API calls")
     print(f"tokens: out {u['output']:,} (thinking {u['thinking']:,}) ; cache_read {u['cache_read']:,} ; "
           f"cache_write {u['cache_creation']:,} ; uncached in {u['input']:,} ; peak context {u['max_context']:,}")
+    if u["incomplete_calls"]:
+        print(f"WARNING: {u['incomplete_calls']} call(s) have no final usage line; out/thinking above are short by "
+              f"~{u['est_missing_output']:,} tokens (estimated from thinking time)")
     print(f"prompt-cache misses after a long gap: {u['cache_misses']} (re-wrote {u['cache_miss_rewrite_tokens']:,} tokens)")
     print("tools:", ", ".join(f"{k} {v}" for k, v in sorted(d["tool_counts"].items(), key=lambda x: -x[1])))
     print(f"blender runs {d['blender_runs']} (failed {d['blender_failures']}) ; bash failures {len(d['bash_failures'])}")
@@ -530,9 +553,9 @@ def cmd_workflow(_tr, a) -> None:
         r = results.get(tr.agent_id) or {}
         score = "/".join(str(r[k]) for k in ("functionality", "manufacturability", "aesthetics") if k in r)
         rows.append((d["start"] or "", d["label"] or "?", tr.agent_id, d["wall_min"], d["model_time_min"], d["tool_time_min"],
-                     u["api_calls"], u["output"], u["thinking"], u["cache_read"], u["cache_creation"], u["max_context"],
+                     u["api_calls"], u["output"] + u["est_missing_output"], u["thinking"] + u["est_missing_output"], u["cache_read"], u["cache_creation"], u["max_context"],
                      d["images_read"], d["blender_runs"], score or ("done" if r else "running/none")))
-    print("start                label        agent              wall  model tools calls   out_tok  think_tok   cache_rd  cache_wr  peak_ctx imgs bl  result")
+    print("(out_tok/think_tok include estimates for calls with no final usage line)\nstart                label        agent              wall  model tools calls   out_tok  think_tok   cache_rd  cache_wr  peak_ctx imgs bl  result")
     for r in sorted(rows):
         print(f"{r[0]:<20} {r[1]:<12} {r[2]:<18} {r[3]:>5} {r[4]:>6} {r[5]:>5} {r[6]:>5} {r[7]:>9,} {r[8]:>10,} {r[9]:>10,} {r[10]:>9,} {r[11]:>9,} {r[12]:>4} {r[13]:>3}  {r[14]}")
 

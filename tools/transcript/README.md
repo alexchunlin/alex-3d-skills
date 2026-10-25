@@ -23,6 +23,10 @@ How the numbers are computed:
 - **tokens** come from `message.usage` of the last line of each `requestId` (lines are per content block
   and repeat the usage). `cache_r 0` with a large `cache_w` on a later call means the prompt cache
   expired (5 min TTL) during a long generation and the whole context was re-written.
+- **incomplete calls**: a call whose stream ended without its final usage line keeps the streaming-start usage
+  (`output_tokens` about 8, no `output_tokens_details`). `summary` warns and estimates the missing tokens from
+  `thinkingDurationMs`, at the rate measured on complete calls (88-95 tok/s on the mm-launcher run); `workflow` adds the
+  estimate. D2's 12-min call at 0:36 was one (about 70k tokens, FINDINGS A2-T5).
 - **images** are the bytes actually sent to the model (the Read tool downsizes PNGs; a 2 MB render
   arrives as ~100-170 KB).
 - **Blender runs** are Bash calls whose command invokes the Blender binary.
