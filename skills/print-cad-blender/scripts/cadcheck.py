@@ -214,9 +214,11 @@ ALL = SOLIDS + FASTENERS + CABLES
 # modelled on one body at one setting that ride on another in use (A3: the nip thumbwheel and its nut sit on the pod
 # in the model but ride on the backplate stud; swept as fixed they gave 4 false fails, FINDINGS A3-V1).
 bpy.context.view_layer.update()
+CARRIED = {}    # name -> original parent, so a tool that saves the blend (cadq route --save) can undo the carry
 for _g, _piv in CFG["carry"].items():
     for _o in [x for x in ALL if fnmatch.fnmatch(x.name, _g)]:
         _mw = _o.matrix_world.copy()
+        CARRIED.setdefault(_o.name, _o.parent)
         _o.parent = O[_piv]
         _o.matrix_world = _mw
 bpy.context.view_layer.update()
@@ -442,8 +444,9 @@ def tmpcoll():
     return _TMPC
 
 
-def inter_volume(a, b):
-    """Intersection volume (mm^3) and region bbox using a world-space copy; Manifold when both are manifold."""
+def inter_volume(a, b, _swapped=False):
+    """Intersection volume (mm^3) and region bbox using a world-space copy; Manifold when both are manifold,
+    else EXACT in both operand orders, keeping the smaller."""
     def wcopy(o):
         me = bpy.data.meshes.new(o.name + "_w")
         bm = world_bm(o)
@@ -473,6 +476,12 @@ def inter_volume(a, b):
         bpy.data.objects.remove(o)
         bpy.data.meshes.remove(d)
     bpy.data.meshes.remove(me)
+    if solver == 'EXACT' and not _swapped:
+        # EXACT with a non-manifold cutter can return the cutter's whole volume: A1-A3's hand-made CAB_12v_ctrl tube
+        # (open cap rings) gave 1331.9 mm3 "through BUY_servo_controller", its own volume; the other order gives 38.0
+        v2, region2, _ = inter_volume(b, a, _swapped=True)
+        if v2 < v:
+            return v2, region2, solver
     return v, region, solver
 
 

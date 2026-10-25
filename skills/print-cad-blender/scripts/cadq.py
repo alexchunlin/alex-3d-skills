@@ -13,6 +13,10 @@ Commands
   render OUT.png CAMX,CAMY,CAMZ TX,TY,TZ [--ortho S] [--lens L]
   printcheck PART                     layer support check of one printed part (its exported STL if on disk, else the
                                       model in print orientation): one line per bridge / cantilever / island region
+  route CAB_a[,CAB_b] [--via 'X,Y,Z[@DX,DY,DZ[:LEN]][>PIV_x];...'] [--clearance C] [--cell H] [--bend R]
+        [--from X,Y,Z --to X,Y,Z] [--save OUT.blend] [--json OUT.json]
+                                      re-route existing cables (cadlib.route) between their own endpoints and
+                                      compare with the hand route: length, overlap mm3, visible mm, bend radius
   --lentil X,Y,Z[:NX,NY,NZ][;...]     (with section/render) M&M-size markers (normal = thickness axis, default 0,0,1)
 
 Prints one JSON object per result line prefixed with CADQ, so agents can grep it. `cad q` with no arguments prints
@@ -80,6 +84,136 @@ def distance(a, b):
             return -v, region
     d, p = C.min_dist(a, b, ta, tb)
     return d, [round(c, 2) for c in p] if p else None
+
+
+def overlaps(ob):
+    """{solid: mm3} for the solids and fasteners a cable object overlaps at the current pose (cadcheck's volume)."""
+    out, tc, bc = {}, C.bvh_world(ob), C.bbox_world(ob)
+    for s in C.SOLIDS + C.FASTENERS:
+        if C.bb_gap(bc, C.bbox_world(s)) <= 0.01 and tc.overlap(C.bvh_world(s)):
+            v = C.inter_volume(ob, s)[0]
+            if v >= 0.01:
+                out[s.name] = round(v, 1)
+    return out
+
+
+def boxes(s):
+    return [tuple(tuple(float(x) for x in c.split(",")) for c in b.split(":")) for b in str(s).split(";") if b]
+
+
+def route_cmd():
+    """route CAB_a[,CAB_b] [--from X,Y,Z --to X,Y,Z] [--via 'X,Y,Z[@DX,DY,DZ[:LEN]][>PIV_x];...'] [--r R]
+    [--clearance C] [--cell H] [--bend R] [--margin M] [--w_open W] [--w_exposed W] [--w_turn W]
+    [--prefer 'x0,y0,z0:x1,y1,z1;...'] [--avoid ...] [--save OUT.blend] [--json OUT.json]
+    Re-routes existing cables between their own endpoints (or --from/--to), compares with the hand route
+    (length, overlap volume, visible length, corners) and with --save writes a copy with the new geometry."""
+    import time as _t
+    from cadlib import route as RT, asm
+    num = {k: float(FLAGS[k]) for k in ("clearance", "cell", "margin", "w_open", "w_exposed", "w_turn", "lead_in") if k in FLAGS}
+    if "bend" in FLAGS:
+        num["bend_r"] = float(FLAGS["bend"])
+    for k in ("prefer", "avoid"):
+        if k in FLAGS:
+            num[k] = boxes(FLAGS[k])
+    if "no-exposure" in FLAGS:
+        num["exposure"] = False
+    via = []
+    for v in str(FLAGS.get("via", "")).split(";"):
+        if not v:
+            continue
+        spec = {}
+        if ">" in v:
+            v, spec["joint"] = v.split(">")
+        if "@" in v:
+            v, d = v.split("@")
+            if ":" in d:
+                d, spec["len"] = d.split(":")
+                spec["len"] = float(spec["len"])
+            spec["dir"] = tuple(vec(d))
+        spec["at"] = tuple(vec(v))
+        via.append(spec)
+    C.set_pose({})
+    tv = C.scene_bvh(C.SOLIDS)
+    rows = []
+    for nm in POS[1].split(","):
+        ob = obj(nm)
+        path, rad = RT.path_of(ob)
+        if path is None and not ("from" in FLAGS and "to" in FLAGS):
+            sys.exit("cadq: cannot read the path of %s; give --from and --to" % ob.name)
+        a = vec(FLAGS["from"]) if "from" in FLAGS else Vector(path[0])
+        b = vec(FLAGS["to"]) if "to" in FLAGS else Vector(path[-1])
+        r = float(FLAGS.get("r", rad or 1.5))
+        jb = C.body(ob)
+        opt = dict(RT.DEFAULTS, **num)
+
+        def stats(pts):
+            pts = [Vector(p) for p in pts]
+            ex = 0.0
+            for i in range(len(pts) - 1):
+                L = (pts[i + 1] - pts[i]).length
+                m = max(1, int(math.ceil(L / 2.0)))
+                ex += sum(L / m for s in range(m) if RT.exposed(tv, pts[i].lerp(pts[i + 1], (s + 0.5) / m), opt))
+            corners = sum(1 for i in range(1, len(pts) - 1) if RT._turn(pts, i) > 1.0)
+            return {"length_mm": round(RT._plen(pts), 1), "exposed_mm": round(ex, 1), "corners": corners}
+        before = dict(stats(path) if path else {}, overlap_mm3=overlaps(ob))
+        t0 = _t.time()
+        res = RT.route(a, b, r, via=via, joint=None if jb == "static" else jb, obstacles=C.SOLIDS + C.FASTENERS,
+                       joints=C.JOINTS, couplings=C.COUPLE, **num)
+        dt = _t.time() - t0
+        row = {"cable": ob.name, "r": round(r, 2), "from": list(a), "to": list(b), "hand": before, "routed": res, "route_s": round(dt, 1)}
+        if "save" in FLAGS:
+            made = []
+            for k, pc in enumerate(res["pieces"]):
+                me = asm.tube_mesh(ob.name, pc["pts"], r)
+                if k == 0:
+                    tgt = ob
+                else:
+                    tgt = C.O.new("%s_%d" % (ob.name, k), me)
+                    for c in ob.users_collection:
+                        c.objects.link(tgt)
+                    if pc["joint"] != "static":
+                        tgt.parent = C.O[pc["joint"]]
+                        tgt.matrix_parent_inverse = tgt.parent.matrix_world.inverted()
+                    C.KIND[tgt.name] = "CAB"
+                    bpy.context.view_layer.update()
+                me.transform(tgt.matrix_world.inverted())
+                for m in ob.data.materials:
+                    me.materials.append(m)
+                old = tgt.data
+                tgt.data = me
+                if k == 0:
+                    bpy.data.meshes.remove(old)
+                Minv = tgt.matrix_world.inverted()
+                tgt["path"] = [float(c) for p in pc["pts"] for c in (Minv @ Vector(p))]
+                tgt["r"], tgt["path_len"] = float(r), float(RT._plen(pc["pts"]))
+                C.MANIFOLD_OK.pop(tgt.name, None)
+                made.append(tgt)
+            row["after_overlap_mm3"] = {t.name: overlaps(t) for t in made}
+        rows.append(row)
+        emit(cable=ob.name, hand_mm=before.get("length_mm"), routed_mm=res["length_mm"], hand_overlap_mm3=round(sum(before["overlap_mm3"].values()), 1),
+             after_overlap_mm3=round(sum(v for d in row.get("after_overlap_mm3", {}).values() for v in d.values()), 1) if "save" in FLAGS else None,
+             min_clearance=res["min_clearance_mm"], bend_r_min=res["bend_r_min"], sharp=res["sharp_corners"],
+             hand_exposed_mm=before.get("exposed_mm"), exposed_mm=res["exposed_mm"], stubs=res["stubs"], slack=res["slack"], s=round(dt, 1))
+    if "json" in FLAGS:
+        with open(FLAGS["json"], "w") as f:
+            json.dump(rows, f, indent=1, default=str)
+    if "save" in FLAGS:
+        out = os.path.abspath(FLAGS["save"])
+        if out == os.path.abspath(bpy.data.filepath):
+            sys.exit("cadq: --save must not overwrite the input blend")
+        for n, p in C.CARRIED.items():       # undo cadcheck's carry re-parenting before writing the copy
+            o = C.O[n]
+            mw = o.matrix_world.copy()
+            o.parent = p
+            o.matrix_world = mw
+        for cn in ("CADCHECK_TMP", "TMP"):
+            c = bpy.data.collections.get(cn)
+            if c:
+                for o in list(c.objects):
+                    bpy.data.objects.remove(o)
+                bpy.data.collections.remove(c)
+        bpy.ops.wm.save_as_mainfile(filepath=out, copy=True)
+        emit(saved=out)
 
 
 def usage_of(c):
@@ -159,10 +293,12 @@ try:
         for g in res["regions"]:
             if g["status"] != "ok" or "--all" in A:
                 emit(**{k: v for k, v in g.items() if not k.startswith("_")})
+    elif cmd == "route":
+        route_cmd()
     else:
         usage_of(cmd)
 except (IndexError, ValueError) as e:
-    if cmd not in ("list", "dist", "sweep", "ray", "inside", "section", "render", "printcheck"):
+    if cmd not in ("list", "dist", "sweep", "ray", "inside", "section", "render", "printcheck", "route"):
         raise
     print("cadq: %s: %s" % (cmd, e))
     usage_of(cmd)
