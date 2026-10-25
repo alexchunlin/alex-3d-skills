@@ -1,29 +1,34 @@
-# Status (updated 2026-10-24, after the initial harvest of attempt 1)
+# Status (updated 2026-10-24, after the revision run for attempt 2)
 
 ## Ingested
-- Attempt 1: D1 `agent-af2e15ae070705e95`, R1 `agent-a4e34520e7cf12eb4` (wf_26e26b28-15e), killed D0 `agent-a0e1dc96a1cba327c` (wf_ebc9f356-a79), and `HW/renders/attempt-1/`.
-- D2 `agent-a6815d61faa83f67e` only up to 19:30 (first 24 min: one 17 min thinking block, no geometry yet). **The next run must re-ingest D2 from the start**, plus R2.
+- Attempt 1: D1 `agent-af2e15ae070705e95`, R1 `agent-a4e34520e7cf12eb4`, killed D0 `agent-a0e1dc96a1cba327c` (wf_ebc9f356-a79), `HW/renders/attempt-1/`.
+- Attempt 2: D2 `agent-a6815d61faa83f67e` (complete, 82.8 min), R2 `agent-a49e56a72136dd0ee` (14.2 min, 6/5/6), `HW/renders/attempt-2/`, and the 20:27 blend (archived).
+- **Not ingested:** D3 `agent-a16a800e7f34fb0ab` (started 20:43). The next run takes D3 and R3 from the start.
 
-## What exists, and what is proven (`sh tools/verify_all.sh`: 17/17 pass, about 1 min)
+## What exists, and what is proven (`sh tools/verify_all.sh`: 28/28 pass, about 3 min)
 
 | Piece | Proven by |
 |---|---|
-| `tools/transcript/cc_transcript.py` (summary, timeline, usage, thinking, grep, workflow, ...) | numbers in FINDINGS attempt 1 |
-| `skills/print-cad-blender`: cadlib, cadcheck, cadq, `cad` wrapper, project template, references | A1 regression reproduces R1's 7 key findings; demo clean = 0 fails; demo `--bug` catches 3/3; template = 0 fails |
-| `skills/cad-design-review` (protocol, rubric anchors, checklist) | **not exercised by a real reviewer yet** |
-| `templates/cad-loop.workflow.js` | stub dry-run only (`tools/test_workflow_template.py`); **never run with real agents** |
-| `components/` (11 placeholders + data with sources) | all build closed |
-| `examples/mm-launcher-a1/` (checks.json, archived blend .gz, summary) | regression fixture |
+| `tools/transcript/cc_transcript.py` | FINDINGS A1 and A2 tables. It now estimates calls that have no final usage line (A2-T5). |
+| `skills/print-cad-blender`: cadlib (now with `asm.nut`), cadcheck, cadq, `cad` (passes `--only`/`--quick`), template, references | A1 regression: 7 R1 findings. A2 regression: 9 R2 findings, and exactly the 15 R2-confirmed fails (no false fails). Demo clean has 0 fails; demo `--bug` catches 4/4. Template has 0 fails. |
+| cadcheck additions this run | bolt-to-nut pairing, shank or nut inside purchased parts, L-key access, continuous-joint poses, head stand-off, protrusion, `service` ops, `index_tests`, `drop_tests` `mode: slide`, group `slide_out`, `distances.ray` with payload and compliance, `stacks`, cable exposure |
+| `skills/cad-design-review` | updated checklist; **still not exercised by a real reviewer** |
+| `templates/cad-loop.workflow.js` | dry run only; **never run with real agents**. Designer and reviewer now get the claims-to-checks rule. |
+| `examples/mm-launcher-a1/`, `examples/mm-launcher-a2/` | config, summary and archived blend per attempt |
+
+## Key numbers
+- Per attempt: A1 82.6 min, 481k output tokens, 5/6/5. A2 97.0 min, 520k output tokens, 6/5/6. At about 1 score point per attempt, the loop will not reach 9/9/9 in 8 attempts.
+- cadcheck on A2: before this run, 34 fails, 28 of them false. After, 15 fails, all R2-confirmed. 8 of 10 R2 issues are flagged, and 5 of those come from geometry alone. Full run 58 s.
 
 ## Known gaps
-- cadcheck: no cable bend-radius or slack check, no service-access (teardown count) check, and the drop test is straight rays (no bounce or slide). The 4 "new, unconfirmed" A1 warns in FINDINGS need a human or reviewer look.
-- cadlib: no snap-fit or fillet helper beyond the angle-limited bevel. Aesthetics (R1 #16-17) is not addressed by tooling. build123d is not measured.
-- The live loop still runs the old prompts. Nothing in it points at these skills, so attempt 2 and later can only be compared against the tools, not helped by them.
-- The live HW blend at 20:03 (attempt-2 work in progress) runs under cadcheck with the A1 config: 59 fails / 70 warns. That config does not know A2's new joints or fits, so the number means nothing until an A2 config exists.
+- Three of the A2 catches (index, nip squeeze, service) need config entries that restate BOM claims. The tooling helps only if the designer writes them. Nothing checks yet that every BOM claim has an entry; that is a reviewer checklist item.
+- `stacks` is arithmetic on declared terms only. Form language and proportions are not tooling problems.
+- Not checked: nut wrench access, cable bend radius and slack, teardown screw count. The slide tracer has no bounce or rolling.
+- Six new unconfirmed A2 candidates are listed in FINDINGS (backplate bay 0.14 mm, hinge 2.0 mm thread, servo lead 39 mm visible, and others). R3 can confirm or refute them.
+- The live loop still runs its own prompts, so the tools have not helped any attempt yet.
 
-## Next (revision run for attempt 2)
-1. `cc_transcript.py workflow WF/wf_26e26b28-15e`, then `summary` and `thinking --min-s 300` on D2 and R2. Record time and tokens per attempt, and whether A1-T1 (upfront thinking) and A1-T4 (cache misses) recur.
-2. Write `examples/mm-launcher-a2/checks.json`: joints from the A2 blend (`cad q ... list`), fits, assembly order from the A2 BOM. Run cadcheck on a copy of the A2 blend.
-3. Score the tools: for each R2 issue, did cadcheck/cadq flag it before review? Record it as a recurring table in FINDINGS (issue, A1 status, A2 status, tool-catchable, caught).
-4. Fix the cadcheck false positives or misses this reveals. Re-run `verify_all.sh`. Add an A2 regression if it is cheap.
-5. Ask the user whether to switch the live loop to `templates/cad-loop.workflow.js` with `start_attempt` = next. That is their call, because it changes a running process.
+## Next (revision run for attempt 3)
+1. Run `cc_transcript.py workflow WF/wf_26e26b28-15e`, then `summary` and `thinking --min-s 300` on D3 and R3. Check whether A2-T1 (36 min of upfront thinking) and A2-T4 (cache misses) recur.
+2. Copy the A3 blend to `/tmp/alex3d-a3`. Start from `examples/mm-launcher-a2/checks.json`, update the joints, fits, order, service and index entries from the A3 BOM, and run `cad check`. Score each R3 issue as caught, partial or missed, in the same table format as A2.
+3. Check whether R3 confirms or refutes the six A2 candidates. Fix the cadcheck false positives or misses this shows. Archive the A3 blend only if it adds new regression patterns (each blend is about 6 MB in git).
+4. **Ask the user** whether to switch the live loop to `templates/cad-loop.workflow.js`, or to point the existing loop's prompts at `skills/` and `cad check`. This changes a running process, so it is their call. The A2 data says that is where the remaining gain is.

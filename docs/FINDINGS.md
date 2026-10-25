@@ -9,7 +9,8 @@ Sources are abbreviated:
 - `D1` = designer attempt 1, `WF/wf_26e26b28-15e/agent-af2e15ae070705e95.jsonl`
 - `R1` = reviewer attempt 1, `WF/wf_26e26b28-15e/agent-a4e34520e7cf12eb4.jsonl`
 - `D0` = the killed designer, `WF/wf_ebc9f356-a79/agent-a0e1dc96a1cba327c.jsonl`
-- `D2` = designer attempt 2 (still running at harvest time), `WF/wf_26e26b28-15e/agent-a6815d61faa83f67e.jsonl`
+- `D2` = designer attempt 2, `WF/wf_26e26b28-15e/agent-a6815d61faa83f67e.jsonl`
+- `R2` = reviewer attempt 2, `WF/wf_26e26b28-15e/agent-a49e56a72136dd0ee.jsonl`
 
 Timestamps like `D1 0:17:41` are elapsed time from the agent's first message, as printed by
 `tools/transcript/cc_transcript.py timeline`. All numbers below come from that tool unless stated otherwise.
@@ -22,10 +23,12 @@ Timestamps like `D1 0:17:41` are elapsed time from the agent's first message, as
 
 | Agent | Wall | Model time | Tool time (Blender) | API calls | Output tok (thinking) | Cache read | Cache write | Peak context | Images read | Result |
 |---|---|---|---|---|---|---|---|---|---|---|
-| D0 (killed) | 43.6 min | 38.5 | 0.1 (0.1) | 13 | 193k (186k) | 0.5M | 0.41M | 237k | 9 | 6 KB plan only |
+| D0 (killed) | 43.6 min | 38.5 | 0.1 (0.1) | 13 | 215k (208k)¹ | 0.5M | 0.41M | 237k | 9 | 6 KB plan only |
 | D1 | 64.0 min | 61.6 | 2.4 (2.3) | 60 | 378k (255k) | 19.2M | 0.91M | 522k | 29 | 35 parts, 84 KB script |
 | R1 | 18.6 min | 18.2 | 0.4 (0.3) | 42 | 103k (71k) | 7.6M | 0.31M | 313k | 33 | 5 / 6 / 5 |
 | D2 (first 24 min) | 24.1+ | 24.0 | 0.1 | 13 | 134k (131k) | 1.0M | 0.38M | 245k | 10 | running |
+
+¹ Corrected in the attempt-2 run: one 233 s call had no final usage line, so the first harvest counted 5 output tokens for it (A2-T5).
 
 ### Time and token sinks
 
@@ -174,3 +177,175 @@ All runs are on copies: `/tmp/alex3d-a1` (attempt-1 outputs), plus the archived 
 4. A reviewer rubric with anchors and an evidence checklist (reviewer quality).
 5. An orchestration template with checkpoints, milestones, progress files and short generation steps (A1-T1, T4, T9).
 6. **No** Blender daemon or MCP server: the measured cold start is 0.7 s (A1-T2).
+
+---
+
+## Attempt 2 (harvested 2026-10-24, revision run)
+
+Inputs: the D2 and R2 journal results, the D2 and R2 transcripts, `HW/renders/attempt-2/` (review.md, checks.json,
+review/checks_rerun.json, 33 PNGs), and the 20:27 blend R2 reviewed. That blend is archived as
+`examples/mm-launcher-a2/mm_launcher_a2.blend.gz`. D3 (`agent-a16a800e7f34fb0ab`) was 0.6 min old and is not ingested.
+The live loop still runs its own prompts, so nothing from this repo reached D2 or R2. The tool numbers below are what
+the tools would have reported, not what the agents saw.
+
+### Per-agent and per-attempt cost
+
+| Agent | Wall | Model time | Tool time (Blender) | API calls | Output tok (thinking) | Cache read | Cache write | Peak context | Images read | Result |
+|---|---|---|---|---|---|---|---|---|---|---|
+| D2 | 82.8 min | 72.3 | 10.5 (10.4) | 74 | 443k (305k)² | 31.9M | 1.36M | 698k | 32 | 33 printed parts, 54 fasteners, 111 KB script, 32 KB checks.py |
+| R2 | 14.2 min | 13.3 | 1.0 (0.9) | 37 | 77k (49k) | 6.0M | 0.30M | 298k | 34 | 6 / 5 / 6 |
+
+| Attempt | Design + review wall | Output tokens | Cache read | Scores F/M/A (sum) |
+|---|---|---|---|---|
+| 1 | 64.0 + 18.6 = 82.6 min | 481k | 26.8M | 5/6/5 (16) |
+| 2 | 82.8 + 14.2 = 97.0 min | 520k | 37.9M | 6/5/6 (17) |
+
+² 372.6k reported plus about 70k estimated for the `0:24:00 → 0:36:12` call, whose final usage line never arrived (A2-T5).
+
+**The loop is not converging fast enough.** R2 marks 12 of 18 R1 issues FIXED and 6 PARTIAL, but it raises 10 new
+ones, including a new blocker. The new issues fall in the same classes as A1's: tool access, fastener length and
+placement, indexer behaviour, alignment datums. One point of total score per attempt, at 97 min per attempt, does not
+reach 9/9/9 within the 8-attempt budget.
+
+### Time and token sinks (do they recur?)
+
+**A2-T1. Upfront thinking recurs (A1-T1).** D2 spent 36 min, 44% of its wall time, before writing its first new file.
+That was three thinking blocks: 17.1 min (`D2 0:00:48 → 0:17:56`, 96k thinking tokens), 5.6 min (`→ 0:24:00`, 32k) and
+12.1 min (`→ 0:36:12`, about 68k). The content (`thinking --min-s 300`) was the drop trajectory in the tilted launcher
+frame worked out by hand. That repeats A1-T3, and it ended in an architecture change from an overshot to an
+undershot wheel. Only then did D2 write a 2D feasibility script (`/tmp/mmwork/geo2d.py`, `#22`). The `slide` drop mode
+built this run answers "where does it land at tilt θ" in 0.8 s for 5 tilts × 29 rays. A designer who can call it can
+test a topology instead of deriving it.
+
+**A2-T2. Blender time is up but still not the bottleneck (A1-T2 holds).** It went from 2.4 to 10.4 min (12.6% of wall)
+over 14 rebuild-and-check cycles at 37-50 s each (`D2 #53-#94`). D2's own checks.py grew to sweeps, a tracer and
+service sweeps. A full cadcheck run on this 119-object blend takes 58 s (interference 41 s, fasteners 11 s); `cad check
+... --only fasteners,cables` takes 13 s. A daemon would still save only the 0.7 s cold start per call.
+
+**A2-T3. D2 avoided the 84 KB single Write itself (A1-T7 partly fixed).** It wrote three chunks (9.6, 37.6 and
+42.8 KB in `#27`, `#32` and `#33`, about 2.5-3.5 min each) and reused unchanged A1 code by slicing the old file
+(`#23`, `#31`). No edit failed this time. It still rewrote checks.py whole (30 KB in `#46`), and the build script grew
+from 84 to 111 KB.
+
+**A2-T4. Cache misses recur (A1-T4).** Three misses re-wrote 869k tokens (`D2 0:18:18` 242k, `0:36:12` 278k, `0:36:22`
+350k). The last two are 10 s apart. The 12-min call before them ended without a final usage line, and the next call
+found no cache either.
+
+**A2-T5. Extractor bug, fixed.** Calls whose stream ends without a final usage line keep the streaming-start usage
+(`output_tokens` ≈ 8, no `output_tokens_details`). D2 had 2 such calls and D0 had 1. `cc_transcript.py` now estimates
+their thinking from `thinkingDurationMs`, at the rate measured on complete calls in the same transcript (88-95
+tokens/s across all five agents). `summary` prints a warning, and `workflow` includes the estimate.
+
+**A2-T6. Reviewer cost fell, but code reading recurs (A1-T8).** R2 took 14.2 min, with no cache misses and no
+generation over 120 s. The time split:
+- 0:00-1:07: read 23 designer renders.
+- 1:14-5:42: read the build and check code (11 calls, about 4.5 min).
+- 6:12-9:42: 7 ad-hoc measurement scripts (`/tmp/mmrev/*.py`).
+- 10:33-12:39: renders and looking at them.
+- 13:30: wrote the review.
+
+Every one of the 7 scripts now has a cadcheck block: nip rays → `distances.ray`; pinch bolts → bolt-to-nut pairing;
+L-key → access `lkey`; battery, USB and drop column → `slide_out` / `drop`; same-pivot fasteners → `into_purchased`;
+feeder pockets → `index_tests`; encoder → `stacks`. The code reading remains because D2 wrote no manifest (it doesn't
+use cadlib).
+
+**A2-T7. Images stay minor (A1-T6 holds).** 32 + 34 reads, which reached the model as 3.7 + 4.0 MB. R2 read all 23
+designer renders within the first 67 s.
+
+### Foot-guns (R2), and whether cadcheck catches them
+
+"Before" is cadcheck at `f593896` (the attempt-1 harvest) on the A2 blend with `examples/mm-launcher-a2/checks.json`.
+"After" is this run. Both runs: `/tmp/alex3d-a2/cadcheck_baseline.json` and `cadcheck_final.json`.
+
+| ID | R2 issue | Before | After | Needs a declaration? |
+|---|---|---|---|---|
+| A2-F1 | **Blocker:** a 2.5 mm L-key can't reach the flywheel pinch bolts (R2 #1) | fail, straight bit blocked at 18.5 mm (right for the wrong reason) | fail: straight bit blocked at 18.5 mm, L-key arc 0° (need 60); service op fails at tilt 45 too | no |
+| A2-F2 | The documented 0 → 60 → 0 feeder index drops two candies (R2 #2) | not checked | fail: 2 windows (0-6°, 54-60°), open at park | yes: `index_tests` from BOM §0 |
+| A2-F3 | M3 x 16 pinch bolts end 0.36 mm short of their nuts (R2 #3) | warn "no material grips the thread" | fail: stops 0.35 mm short of `FST_fw_nut_0` | no |
+| A2-F4 | Rigid 1 mm nip squeeze, nothing yields (R2 #4) | false fail: nearest distance 5.49 mm is flange to plate | warn: gap along the BDC ray 6.49 mm (R2: 6.5), squeeze 1.01 mm, no `compliant` part | yes: the ray and payload |
+| A2-F5 | Adapter through-bolts and nuts inside the battery envelope (R2 #5) | partial: nuts "head inside BUY_battery" (wrong message); bolts skipped as same-body FST/BUY, the same blind spot as D2's checks.py | fail: 4 bolts 2.5 mm into `BUY_battery`, 4 nuts 100% inside | no |
+| A2-F6 | Right clamp screw blocked at tilt 0, so "gap change needs no disassembly" is false (R2 #7) | not checked (on the bench it is reachable) | warn: reachable only at tilt 45, blocked by `PRT_yoke_arm_R` 2.2 mm out (R2: about 2.5) | yes: `service` op from BOM §5 |
+| A2-F7 | Magnet jig datum chain 0.55-0.75 mm vs 0.3 (R2 #6) | not checked | warn: worst case 0.55 > 0.30, RSS 0.29 | yes, all of it: I wrote the terms from R2, so this is a calculator, not a detection |
+| A2-F8 | 10 mm of feeder bus bare above the left bonnet (R2 #8) | not checked | warn: 11 mm visible at (-107, -8, 249) | no |
+| A2-F9 | Jack screws and lock nuts hang under the pod (R2 #9) | not checked | warn: head stand-off 11 mm on both jacks | no |
+| - | Pieces don't share a form language (R2 #10) | - | - | not tool-catchable |
+
+After this run, 8 of the 10 R2 issues produce a fail or warn naming the right objects and close to R2's numbers
+(A2-F7 only once declared; #10 is out of scope). Five fire from geometry alone: F1, F3, F5, F8 and F9. Three need a
+config entry that restates a BOM claim: F2 (BOM §0 index), F4 (nip line and payload) and F6 (BOM §5 service). That is
+why `SKILL.md` now says to turn every motion, timing or service claim into a check before writing it into the BOM.
+F2 (a major) and F6 were confident BOM prose that nothing had executed. The designer's log says "park at 0 deg
+(pocket A under the hopper)", while the pocket is over the outlet at 0.
+
+**Baseline false fails, fixed this run (A2-V1).** The `f593896` cadcheck gave 34 fails on A2, and 28 were false or
+config artefacts:
+- 12: nuts treated as screws ("head buried", "cannot be driven").
+- 6: bolt × nut overlaps counted as interference.
+- 1: a flush countersunk head "inside" the feeder disc, which runs 0.3-0.6 mm above it. The head probe moved from
+  0.6 to 0.25 mm and to same-body parts.
+- 5: straight-ray feed fails on a chute the candy slides down.
+- 4: config (jack screws modelled fixed while the backplate sweeps, clamp-screw contacts, a nearest-distance nip).
+
+After the fixes, the 15 remaining fails are all R2-confirmed. They are per object: 12 fastener fails cover A2-F1, F3
+and F5, plus 2 service fails and 1 index fail. Runtime is 58 s.
+
+**New, unconfirmed by R2** (the next reviewer should confirm or refute each with a section):
+- Backplate-to-bay clearance is 0.14 mm at hood -1.2°. The bay is a union of translated, not rotated, plate outlines
+  (`D2 0:36:12` thinking).
+- `FST_hinge` has only 2.0 mm of thread in `PRT_journal_plate`.
+- 39 mm of the feeder-servo lead is visible under the plate around (21, -84, 227).
+- Foot screws need a 130 mm+ driver (A1 carry-over).
+- `CAB_12v_ctrl` runs 1332 mm³ through the servo-controller envelope (A1 carry-over).
+- Battery slide-out minimum is 1.25 mm, where R2 measured 2.0 all round.
+
+### Recurrence across attempts
+
+| Class | A1 | A2 | Tool now |
+|---|---|---|---|
+| Payload path never simulated | A1-F1 blocker | FIXED: D2 wrote its own tracer | `drop_tests` `mode: slide` (port of D2's tracer) |
+| Working condition at the nip | A1-F2 no squeeze | A2-F4 rigid squeeze | `distances` `ray` + `payload_mm` + `compliant` |
+| Fasteners left out of the checks, and overclaiming | A1-F3, F10, F14 | A2-F5: D2's checks.py skips same-pivot FST vs BUY and reported "all_pass: true, 0 unintended interferences" | shank or nut inside a purchased part; `coverage` list |
+| Screws you can't drive | A1-F4, F11 | A2-F1 (blocker again), A2-F6 | L-key access, `service` ops, continuous-joint poses |
+| Indexer behaviour | A1 R1 #9 (undocumented index) | A2-F2 (documented index double-feeds) | `index_tests` |
+| Alignment datum | A1-F7 (no jig) | A2-F7 (jig, weak datum) | `stacks` (declared) |
+| Tilt margin | A1-F5 | FIXED: hard stops at -3 / +46 | overtravel warns show the stop contact at 47.5 |
+| Rubbing faces | A1-F9 | FIXED (0.5 mm); D2's checks still count and ignore 61 zero-volume contacts | contacts across joints fail unless declared |
+| Cables | A1-F12 (routes) | routes FIXED; A2-F8 bare run | cable exposure |
+| Visible hardware | (aesthetics 5) | A2-F9 | head stand-off, protruding thread |
+
+### What worked (A2)
+
+- D2's drop tracer (fall, slide, stall below 20°; `HW/blender/checks.py:395`) is now cadcheck `drop_tests`
+  `"mode": "slide"`. On the same blend it gives 29/29 rays on the tape at psi 66-89°, against D2's 37/37 at 65-85°. The
+  ray grids differ (29 vs 37 starts), and capture counts any face of `PRT_flywheel`.
+- D2's service sweeps (move a group, ignore removed parts) are now `slide_out` with `objects` / `ignore` / `pose`. They
+  reproduce "flywheel off 140 mm along +X at tilt 45: clear".
+- D2 timed the A1 build before rewriting it (`#21`) and reused unchanged code by slicing the old file (`#23`, `#31`).
+- R2's previous-issue table (18 rows, FIXED / PARTIAL / NOT FIXED) made progress auditable. The loop prompt already
+  asks for it, and `templates/cad-loop.workflow.js` keeps it.
+- R2's L-key sweep used real key dimensions (18 mm short leg, 60° swing), and its feeder-pocket check was done at the
+  **documented** stroke ends. Both are now checks with the same parameters.
+
+### Reviewer quality (A2)
+
+- The anchors held: one blocker capped M at 6, and R2 scored it 5. F went 5 → 6 with 3 majors, A went 5 → 6.
+- R2's evidence is numeric for 9 of 10 issues. Two numbers disagree slightly with cadcheck: clamp-screw clearance 2.5
+  vs 2.2 mm, and battery clearance 2.0 vs 1.25 mm.
+- Noise: aesthetics still has no anchors for form language (R2 #10), and that one issue could move A by a point.
+
+### Why not the existing code (A2 additions)
+
+- **D2's checks.py tracer:** hard-wired to the launcher frame (`B.W_P`, `B.WHEEL_R`, `launcher_frame()`) and fixed
+  start offsets. The port takes target objects and an angle spec from config and gives the same verdict (table above).
+- **D2's fastener cross-pivot check:** checks only fasteners against other pivots. It has no same-pivot FST-vs-BUY check, no
+  nut pairing and no tool access, so it misses A2-F1, F3, F5 and F6 on the blend it ran on (R2 re-ran it: "same
+  results as the designer's: 0 unintended interferences").
+- **cadcheck at f593896:** the "before" column above. Config alone could not express nuts, L-keys, service ops,
+  indexers or slide feeds. Each needed code (about 450 lines in `cadcheck.py`).
+
+### Verification of this run
+
+- `tools/verify_all.sh`: 28/28 passed in 2:43. That includes the A1 regression (unchanged) and a new A2 regression: 9
+  patterns plus "exactly the 15 R2-confirmed fails, and the slide tracer feeds 29/29 at every tilt".
+- The demo turret gained a bolt with a nut: through in the clean build, 0.40 mm short in `--bug` (caught).
+- `cc_transcript.py workflow` on both runs. D0 was corrected from 193k to 215k output tokens.
