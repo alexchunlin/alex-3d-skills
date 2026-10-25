@@ -35,6 +35,13 @@ Severity:
 - parting lines aligned between adjacent parts
 - two PLA colours used to mean something (for example structure vs. moving parts)
 - 9 needs every item true. Each failed item costs a point from 10, and an "unfinished" element in a hero view (a notch, a stray boss) caps the score at 6.
+- Form language anchors (principles DP1-DP7 in `print-cad-blender/reference/design-principles.md`). The score is the **lower** of the item count above and the lowest anchor below whose condition holds. Cite the DP number in each aesthetics issue.
+  - 5: no declared detail set (edge breaks or radii vary), **and** a hero view shows an unfinished cut or a bare purchased part (motor can, PCB edge, leads).
+  - 6: the detail set holds, but each subsystem has its own section and corner treatment, so the machine reads as separate boxes. Or a major mass sits more than about 60 mm behind or outboard of the main axis.
+  - 7: arms, housings and shrouds share one section and the detail set, but one element is out of family: an oversized plain disc, the accent colour on a part without its role, or a joint line that steps instead of continuing.
+  - 8: one minor out-of-family detail. Nothing a viewer notices in the iso view.
+  - 9: every one of DP1-DP7 holds in the iso views and both close-ups.
+- Attempt 1 scored 5: edge breaks 0.6-1.5 mm and radii 4-16 mm, a sweep-cut V-notch, and an exposed motor can and leads (R1 #16, #17). Attempts 2 and 3 scored 6: a 1.0 mm edge break and R6 throughout, but "a kit of boxes", with the hopper up to 118 mm behind the pan axis (R2 #10, R3 #4). No v1 attempt reached 7, so the 7-9 anchors come from the reviewers' fixes. Revise them after the first v2 reviews.
 
 ## review.md format
 

@@ -72,5 +72,6 @@ It also lists what it did **not** check (teardown count, slack across joints, wr
 
 - `reference/api.md`: cadlib functions and their arguments. Read it before writing the first part.
 - `reference/checks-config.md`: `checks.json` schema (joints, carry, fits and contact_normal, allow, captive fasteners, assembly_order with nested bench merges, service, drop_tests, index_tests, slide_out (with expected stops), distances, payload_fit, sightlines, stacks, flexures, exposure, masses, accepted_warns) plus `--only`/`--overlay`. Read it when cadcheck flags something you designed on purpose, **before** reading cadcheck.py: v2 A1 agents spent minutes in the source on bench merges and slide semantics.
+- `reference/design-principles.md`: what to build. It covers form language (one radius set, a shared section, continuing lines, colour roles, hidden hardware, compact masses) and the recurring mechanism classes. Read it at the plan checkpoint, and write the declared set into the design log before you model the first visible part.
 - `reference/footguns.md`: the mistakes from attempts 1-3 and the check that catches each. Read it before declaring a subsystem done.
 - PLA rules (pilot 2.5, clearance 3.4, nut 5.7 AF, fits, bridge 25 mm): `cadlib/features.py RULES`.
