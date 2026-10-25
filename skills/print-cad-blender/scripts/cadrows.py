@@ -2,6 +2,7 @@
 
     cad rows [cadcheck.json] [REGEX] [--check distances,drop] [--findings] [--max N]
     cad rows manifest.json [REGEX]                       # parts, fasteners, cables, joints, params
+    cad rows checks.json [REGEX] [--check allow,stacks]  # config rows: allow, fits, distances, stacks, slide_out, ...
 
 REGEX filters the printed lines (case-insensitive), e.g. `cad rows v2-A2`, `cad rows "hood.*flywheel"`,
 `cad rows manifest.json FST_nip`. --findings prints the fails and warns with their accepted status instead of rows.
@@ -27,6 +28,9 @@ def short(v, n=60):
             return "[" + ",".join(short(x) for x in v) + "]"
         if len(v) <= 3 and all(isinstance(x, list) and len(x) <= 3 for x in v):
             return "[" + ",".join(short(x) for x in v) + "]"
+        if all(isinstance(x, list) and len(x) == 3 and all(isinstance(c, (int, float)) for c in x) for x in v):
+            # points (drop stall_points): the first few, so a stall is located without a dump script (v2 A5 launcher)
+            return "[" + ",".join(short(x) for x in v[:3]) + (",... %d pts]" % len(v) if len(v) > 3 else "]")
         if all(isinstance(x, list) and len(x) == 2 and not isinstance(x[1], (dict, list)) for x in v):
             # a swept ray's profile [[deg, mm], ...]: print it, it is the point of the row
             return " ".join("%s:%s" % (short(x[0]), "-" if x[1] is None else short(x[1])) for x in v)
@@ -95,6 +99,21 @@ def manifest_rows(m):
         yield "param  %s = %s" % (k, short(v, 120))
 
 
+def config_rows(c, checks):
+    """checks.json: one line per row of each list section (V2R5 read allow, slide_out, stacks and band rows with
+    json.load snippets, FINDINGS V2A5-T4)."""
+    for sec, val in c.items():
+        if checks and sec not in checks:
+            continue
+        if isinstance(val, list):
+            for r in val:
+                yield row_line(sec, r) if isinstance(r, dict) else "%-12s %s" % (sec, short(r, 120))
+        elif isinstance(val, dict) and sec not in ("_about",):
+            yield "%-12s %s" % (sec, short(val, 200))
+        elif not sec.startswith("_"):
+            yield "%-12s %s" % (sec, short(val, 120))
+
+
 def main(argv):
     if any(a in ("-h", "--help") for a in argv):
         print(__doc__)
@@ -118,6 +137,8 @@ def main(argv):
     checks = set(vals.get("--check", "").split(",")) - {""}
     if "units" in d and "parts" in d:
         lines = manifest_rows(d)
+    elif "checks" not in d and "summary" not in d:
+        lines = config_rows(d, checks)
     elif "--findings" in flags:
         lines = report_findings(d, checks)
     else:

@@ -4,7 +4,7 @@
 #   cad check  model.blend [checks.json] [out.json] [--only a,b] [--quick]  run cadcheck (short summary, writes JSON)
 #   cad q      model.blend <cadq command ...>        one-shot measurement (`cad q` alone lists the commands)
 #   cad py     -c "import params as P; print(P.X)" | script.py [args]   Python with bpy + cadlib + ./ and ./parts on the path
-#   cad rows   [cadcheck.json|manifest.json] [REGEX] [--check a,b] [--findings]   one line per row; grep, don't json.load
+#   cad rows   [cadcheck.json|manifest.json|checks.json] [REGEX] [--check a,b] [--findings]   one line per row; grep, don't json.load
 #   cad bom    BOM_AND_ASSEMBLY.md manifest.json      BOM fastener table vs the model: size, length, head, count, stock
 #   cad sheet  stl_dir out.png                       STL contact sheet in print orientation
 # BLENDER overrides the Blender binary. Runs at nice 10 so a parallel CAD loop keeps its CPU.
@@ -31,8 +31,11 @@ case "$cmd" in
          # (v2 A1: `cad check m.blend c.json --only ...` wrote a file called --only, FINDINGS V2A1-T4)
          c=""; case "${1:-}" in ""|--*) ;; *) c="$1"; shift ;; esac
          o="$(dirname "$b")/cadcheck.json"; case "${1:-}" in ""|--*) ;; *) o="$1"; shift ;; esac
+         # an explicit `--out X` among the flags wins over the default (v2 A5 precheck overwrote cadcheck.json, V2A5-T1)
+         for a in "$@"; do [ "$a" = "--out" ] && o=""; done
+         [ -n "$o" ] && set -- --out "$o" "$@"
          # anything after OUT passes through, e.g. --only fasteners,service --quick
-         if [ -n "$c" ]; then run "$b" --python "$HERE/cadcheck.py" -- --config "$c" --out "$o" "$@"; else run "$b" --python "$HERE/cadcheck.py" -- --out "$o" "$@"; fi ;;
+         if [ -n "$c" ]; then run "$b" --python "$HERE/cadcheck.py" -- --config "$c" "$@"; else run "$b" --python "$HERE/cadcheck.py" -- "$@"; fi ;;
   q) case "${1:-}" in ""|-h|--help|help) sed -n '/^"""/,/^"""/p' "$HERE/cadq.py" | sed '1s/^"""//;$d'; exit 0 ;; esac
      b="$1"; shift; run "$b" --python "$HERE/cadq.py" -- "$@" | grep -E '^CADQ|Error|cadq:' ;;
   py) # Python with bpy, cadlib and the project on sys.path: evaluate params or pure-geometry helpers without a build

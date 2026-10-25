@@ -52,6 +52,9 @@ IDs point into `<repo>/docs/FINDINGS.md`. "Caught" means cadcheck or cadq flags 
 | V2A3-F3 | A 150 mm lead routed to a bore, "continued" 430 mm through other routes no BOM row bought | `cable_chains` row; junction warn on cable ends that meet with no connector | yes with the chain row: 514 mm against 150 |
 | V2A3-F5, F6 | BOM stud M3 x 20 hex against a modelled M3_cap x 16; an M3 x 9 (not stocked) | `cad bom`; stock-length warn in `fasteners` | yes: both |
 | V2A3-T6 | Gate open state outside every sweep (no slide joint); detent `ignore`d in the gate slide | `asm.joint(prismatic=True)`; slide `flex` bound | yes on `examples/slide-gate` |
+| V2A4-F1, V2A5-F2 | Passage gap checked at a few stations (BDC in A4; psi 50..80 in A5, real minimum at psi 90) | `distances` ray `sweep` | yes: A4 3 fails at psi 80; A5 one row gives V2R5's 8.099 at psi 90 |
+| V2A5-F1 | Detent tab 0.322 from the jar band (row `min` 0.3; the band stack typed "designed clearance 3.0") | `stacks` with `between` | yes: the designer's own terms, RSS 1.31 > 0.322, names the detent |
+| V2A5-F6 | Open `allow` on a riding detent hides any deeper clash in the gate sweep | `allow` `max_mm3`; `summary.unbounded_allows` | yes: listed; bounded at 0.1 it fails at 0.43 mm³ |
 
 **Rule from v2 A1:** 0 fails is not done. Read every warn on your objects: fix it, or list it under `accepted_warns`
 with a reason. Three of the first v2 reviewer's twelve issues were warns in the designer's own hand-off.

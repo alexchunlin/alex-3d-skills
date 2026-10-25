@@ -1,0 +1,8 @@
+{"distances": [
+ {"a": "PRT_hood", "b": "PRT_flywheel", "min": "=NIP_PASS",
+  "ray": {"frame": "PIV_tilt", "origin": [21.0, 37.0, 132.0], "dir": [0, 0, 1],
+          "sweep": {"center": [21.0, 37.0, 170.0], "axis": [-1, 0, 0], "from": 0, "to": 110, "step": 2}},
+  "poses": [{"PIV_hood": "=HOOD_HI", "PIV_nip_lift": "=-HOOD_LEAF_LIFT"}, {"PIV_hood": 0, "PIV_nip_lift": "=-HOOD_LEAF_LIFT"},
+            {"PIV_hood": "=HOOD_STATIC_LO", "PIV_nip_lift": "=-HOOD_LEAF_LIFT"}],
+  "why": "v2 A5: the designer's 5 entry-arc rows (psi 50..80) and V2R5's 9 hand rows (psi 10..102) as one swept row per setting"}
+]}

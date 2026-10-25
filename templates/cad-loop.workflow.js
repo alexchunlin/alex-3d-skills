@@ -162,7 +162,12 @@ review/review_rows.json, if any, can be merged as is). Every adjuster joint gets
 its travel, with any spring at full deflection (V2A1-F1, V2A2-F1). Write payload sizes and gaps as "=EXPR" over params.py at
 the declared extremes ("min": "=MM_T[1] + TAPE_T"), not as typed nominals (V2A3-F1). A gap the payload passes through
 along an arc or a chute is a ray row with "sweep" over the whole passage, not one station: v2 A4's nip rows sat at BDC and
-passed while the entry arc was 7.50 (V2A4-F1). Run the new rows on the CURRENT model.blend before
+passed while the entry arc was 7.50 (V2A4-F1). A clearance to a toleranced purchased part is a "stacks" row with
+"between" (the limit is the measured gap): v2 A5's band stack typed 3.0 while a detent tab sat 0.322 off the band (V2A5-F1).
+If the plan changes a shared params.py value (a profile constant, an interface), try it first: copy ${HW}/blender to
+/tmp, make the change there, cad build, and cad check --only drop,distances,sightlines; plan around what fails. v2 A5's
+planner predicted PSI_C 45 analytically, the params builder then hit 14 drop fails, and the launcher builder spent 30 min
+redesigning the profile (V2A5-T2). Run the new rows on the CURRENT model.blend before
 any geometry changes: each must fail there, or it would not have caught the issue. Record the count in progress.md (v2
 A2's planner did this unprompted: 12 F on the attempt-1 model, 0 F at hand-off). Write the plan to ${dir(n)}/progress.md
 under "## Plan".${CONFIG.parallel_builds ? `

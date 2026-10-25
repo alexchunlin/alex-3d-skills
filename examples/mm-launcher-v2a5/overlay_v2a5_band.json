@@ -1,0 +1,48 @@
+{
+ "stacks": [
+  {
+   "name": "jar band clears its nearest neighbour (the designer's band stack, measured)",
+   "between": [
+    "BUY_jar_band",
+    "*"
+   ],
+   "poses": [
+    {},
+    {
+     "PIV_jar": 30
+    }
+   ],
+   "terms": [
+    {
+     "what": "glass thread / band (nominal jar)",
+     "tol": 1.0
+    },
+    {
+     "what": "adapter disc in the band",
+     "tol": 0.75
+    },
+    {
+     "what": "spout in the valve bore",
+     "tol": 0.15
+    },
+    {
+     "what": "valve in the socket",
+     "tol": 0.3
+    },
+    {
+     "what": "bayonet lug in its slot",
+     "tol": 0.2
+    }
+   ],
+   "why": "v2 A5 review A5-01: the designer's band stack typed limit 3.0 ('designed radial clearance'); the detent tab is 0.322 from the band"
+  }
+ ],
+ "allow": [
+  {
+   "a": "PRT_gate_detent",
+   "b": "PRT_jar_gate",
+   "max_mm3": 0.1,
+   "why": "planted: bound below the detent's 0.43 mm3 ride"
+  }
+ ]
+}

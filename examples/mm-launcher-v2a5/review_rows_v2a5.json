@@ -1,0 +1,533 @@
+{
+ "distances": [
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": "=NIP_PASS",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     30.401,
+     132.577
+    ],
+    "dir": [
+     0.0,
+     0.1736,
+     0.9848
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    }
+   ],
+   "why": "review A5 (A2-01 re-measure): bare gap at FULL leaf lift on the entry arc at psi 10 (outside the designer's psi 50..80 rows), 3 settings, >= NIP_PASS"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": "=NIP_PASS",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     24.003,
+     134.292
+    ],
+    "dir": [
+     0.0,
+     0.342,
+     0.9397
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    }
+   ],
+   "why": "review A5 (A2-01 re-measure): bare gap at FULL leaf lift on the entry arc at psi 20 (outside the designer's psi 50..80 rows), 3 settings, >= NIP_PASS"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": "=NIP_PASS",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     18.0,
+     137.091
+    ],
+    "dir": [
+     0.0,
+     0.5,
+     0.866
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    }
+   ],
+   "why": "review A5 (A2-01 re-measure): bare gap at FULL leaf lift on the entry arc at psi 30 (outside the designer's psi 50..80 rows), 3 settings, >= NIP_PASS"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": "=NIP_PASS",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     12.574,
+     140.89
+    ],
+    "dir": [
+     0.0,
+     0.6428,
+     0.766
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    }
+   ],
+   "why": "review A5 (A2-01 re-measure): bare gap at FULL leaf lift on the entry arc at psi 40 (outside the designer's psi 50..80 rows), 3 settings, >= NIP_PASS"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": "=NIP_PASS",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     -0.855,
+     166.688
+    ],
+    "dir": [
+     0.0,
+     0.9962,
+     0.0872
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    }
+   ],
+   "why": "review A5 (A2-01 re-measure): bare gap at FULL leaf lift on the entry arc at psi 85 (outside the designer's psi 50..80 rows), 3 settings, >= NIP_PASS"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": "=NIP_PASS",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     -1.0,
+     170.0
+    ],
+    "dir": [
+     0.0,
+     1.0,
+     0.0
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    }
+   ],
+   "why": "review A5 (A2-01 re-measure): bare gap at FULL leaf lift on the entry arc at psi 90 (outside the designer's psi 50..80 rows), 3 settings, >= NIP_PASS"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": "=NIP_PASS",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     -0.907,
+     172.651
+    ],
+    "dir": [
+     0.0,
+     0.9976,
+     -0.0698
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    }
+   ],
+   "why": "review A5 (A2-01 re-measure): bare gap at FULL leaf lift on the entry arc at psi 94 (outside the designer's psi 50..80 rows), 3 settings, >= NIP_PASS"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": "=NIP_PASS",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     -0.63,
+     175.289
+    ],
+    "dir": [
+     0.0,
+     0.9903,
+     -0.1392
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    }
+   ],
+   "why": "review A5 (A2-01 re-measure): bare gap at FULL leaf lift on the entry arc at psi 98 (outside the designer's psi 50..80 rows), 3 settings, >= NIP_PASS"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": "=NIP_PASS",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     -0.17,
+     177.901
+    ],
+    "dir": [
+     0.0,
+     0.9781,
+     -0.2079
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    }
+   ],
+   "why": "review A5 (A2-01 re-measure): bare gap at FULL leaf lift on the entry arc at psi 102 (outside the designer's psi 50..80 rows), 3 settings, >= NIP_PASS"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": 5.5,
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     37.0,
+     132.0
+    ],
+    "dir": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI"
+    },
+    {
+     "PIV_hood": 0.0
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO"
+    }
+   ],
+   "why": "review A5: REST gap profile at psi 0, 3 settings (where the nominal 7.0 / max 7.5 candy on tape is first gripped)"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": 5.5,
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     7.89,
+     145.574
+    ],
+    "dir": [
+     0.0,
+     0.766,
+     0.6428
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI"
+    },
+    {
+     "PIV_hood": 0.0
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO"
+    }
+   ],
+   "why": "review A5: REST gap profile at psi 50, 3 settings (where the nominal 7.0 / max 7.5 candy on tape is first gripped)"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": 5.5,
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     1.292,
+     157.003
+    ],
+    "dir": [
+     0.0,
+     0.9397,
+     0.342
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI"
+    },
+    {
+     "PIV_hood": 0.0
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO"
+    }
+   ],
+   "why": "review A5: REST gap profile at psi 70, 3 settings (where the nominal 7.0 / max 7.5 candy on tape is first gripped)"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": 5.5,
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     -0.855,
+     166.688
+    ],
+    "dir": [
+     0.0,
+     0.9962,
+     0.0872
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI"
+    },
+    {
+     "PIV_hood": 0.0
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO"
+    }
+   ],
+   "why": "review A5: REST gap profile at psi 85, 3 settings (where the nominal 7.0 / max 7.5 candy on tape is first gripped)"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": 5.5,
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     -1.0,
+     170.0
+    ],
+    "dir": [
+     0.0,
+     1.0,
+     0.0
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI"
+    },
+    {
+     "PIV_hood": 0.0
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO"
+    }
+   ],
+   "why": "review A5: REST gap profile at psi 90, 3 settings (where the nominal 7.0 / max 7.5 candy on tape is first gripped)"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": 5.5,
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     -0.907,
+     172.651
+    ],
+    "dir": [
+     0.0,
+     0.9976,
+     -0.0698
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI"
+    },
+    {
+     "PIV_hood": 0.0
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO"
+    }
+   ],
+   "why": "review A5: REST gap profile at psi 94, 3 settings (where the nominal 7.0 / max 7.5 candy on tape is first gripped)"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "BUY_tape",
+   "min": "=MM_T[1]",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     -0.423,
+     163.401
+    ],
+    "dir": [
+     0.0,
+     0.9848,
+     0.1736
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    }
+   ],
+   "why": "review A5: hood to the modelled tape surface at psi 80, min stop, leaf solid: the 7.5 candy must pass the tape, not the land"
+  },
+  {
+   "a": "BUY_jar_band",
+   "b": "PRT_gate_detent",
+   "min": 0.7,
+   "pose": {},
+   "why": "review A5 (A5-01): brief 1 says nothing may rely on jar/band tolerances tighter than +/-1 (band OD 73.5 +/-1 = R36.75 +/-0.5); on the 45 deg tab chamfer +0.5 radial is 0.354 normal, so the nominal gap needs >= 0.354 + 0.3 = 0.65. The housing/crown rows use min 2.0 for the same band"
+  }
+ ],
+ "stacks": [
+  {
+   "name": "review A5-01: jar band clears the gate detent tab (0.322 normal on the 45 deg chamfer = 0.455 radial at nominal); the clip rides the valve on the adapter spout, so the band-housing stack terms apply",
+   "limit": 0.455,
+   "terms": [
+    {
+     "what": "glass thread / band (nominal jar)",
+     "tol": 1.0
+    },
+    {
+     "what": "adapter disc in the band",
+     "tol": 0.75
+    },
+    {
+     "what": "spout in the valve bore",
+     "tol": 0.15
+    }
+   ]
+  }
+ ]
+}

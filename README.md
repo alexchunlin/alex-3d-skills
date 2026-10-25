@@ -47,7 +47,7 @@ $S/cad q my/blender/model.blend sweep PRT_launcher PRT_hopper tilt 40 50 2.5
 $S/cad q my/blender/model.blend section x 21 /tmp/nip.png 900,25,185 120 --lentil "21,-8,196:0,0,1"
 $S/cad q                                   # every cad q command
 (cd my/blender && $S/cad py -c "import params as P; print(P.HOOD_HI)")   # project Python with bpy + cadlib
-$S/cad rows my/blender/cadcheck.json "hood.*flywheel"   # one line per report row; manifest.json works too (no Blender)
+$S/cad rows my/blender/cadcheck.json "hood.*flywheel"   # one line per report row; manifest.json and checks.json work too (no Blender)
 $S/cad bom my/BOM_AND_ASSEMBLY.md my/blender/manifest.json   # BOM fastener table vs the model
 $S/cad sheet my/stl /tmp/sheet.png
 python3 -I tools/transcript/cc_transcript.py workflow ~/.claude/projects/<proj>/<session>/subagents/workflows/wf_XXXX

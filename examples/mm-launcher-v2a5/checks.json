@@ -1,0 +1,2732 @@
+{
+ "_about": "v2 checks. Every geometric v1 review issue has a row here; the id in each 'why' points into ../renders/attempt-N/review.md (A1-#n, A2-#n, A3-Xn). Object names follow DESIGN_LOG.md 'v2 naming'. distances.a/b are exact names. Attempt 2: rows tagged v2-A1-NN close issues from ../renders/attempt-1/review.md. PIV_hood values in rows: +1.315 = gap 5.3 (printed min-gap stop, HOOD_HI), -0.558 = gap 7.0 (thumbwheel stop-sleeve static max); keep them in sync with params.solve_eps if NIP_SET changes. Attempt 3: rows tagged v2-A2-NN close issues from ../renders/attempt-2/review.md. NEW PIV_hood values: +0.327 = gap 6.2 (HOOD_GAP_MIN raised 5.3 -> 6.2 for A2-01, printed min-gap stop, HOOD_HI), -0.558 = gap 7.0 (static max, unchanged); PIV_nip_lift -1.493 = the leaf stack goes solid against the cover roof (LEAF_PAD_H + LEAF_T = 4.5 between thumbwheel and roof). Nip rays are framed in PIV_hood (A2-04: the PIV_tilt-framed y37 ray slipped past the hood lip at full lift). Attempt 4: rows tagged v2-A3-NN close issues from ../renders/attempt-3/review.md. NEW PIV_nip_lift limit -2.190 = leaf solid with LEAF_TRAVEL 2.2 (A3 1.5 -> -1.493); LEAF_T 2.5 -> 2.3, so thumbwheel top to cover roof along the stud axis is 6.5 at rest and LEAF_PAD_H + LEAF_T = 4.3 solid; PIV_hood range unchanged at the static settings (+0.327 = gap 6.2, -0.558 = gap 7.0), HOOD_LO = -2.748. POCKET_D 13.9 -> 13.75 (payload_fit rows). CAB_encoder lead_len is the launcher-side budget of the one-piece 550 encoder lead: 550 - CAB_launcher_bundle - CAB_launcher_base path - 5 spare (params ENC_LEAD, finish.py writes it; about 115 at A3 path lengths). Attempt 5: rows tagged v2-A4-NN close issues from ../renders/attempt-4/review.md. PIV_gate is a prismatic joint (0 closed .. 52 open notch, stops -0.4 / 52.35). cable_junctions_ok CAB_bus_* (finish step): the three Hiwonder bus leads (a parallel 3-wire bus) end in one 3-way bus junction on the pan axis at (0, 0, 76), inside the hub bore (BOM item 14a); the CAB_bus_* x CAB_launcher_* pairs there are different conductors drawn to the same axis point. CAB_launcher_bundle -> CAB_launcher_base is one wire per conductor (cable_chains: encoder signal, phase conductors).",
+ "overtravel_deg": 2.5,
+ "moving_min_clearance": 0.5,
+ "moving_warn_clearance": 1.0,
+ "allow": [
+  {
+   "a": "BUY_servo_*",
+   "b": "BUY_horn_*",
+   "why": "spline inside the horn hub"
+  },
+  {
+   "a": "BUY_motor",
+   "b": "PRT_flywheel",
+   "why": "motor shaft (modelled with the stator) sits in the clamping D-bore"
+  },
+  {
+   "a": "BUY_motor",
+   "b": "BUY_magnet",
+   "why": "magnet glued to the rear shaft end"
+  },
+  {
+   "a": "BUY_battery",
+   "b": "BUY_dewalt_adapter",
+   "why": "battery rail stem slides into the adapter"
+  },
+  {
+   "a": "FST_adapter_*",
+   "b": "BUY_dewalt_adapter",
+   "why": "self-tap M3 into the adapter's own corner holes (not modelled in the envelope)"
+  },
+  {
+   "a": "BUY_horn_*",
+   "b": "PRT_*horn_adapter",
+   "why": "horn disc sits in its 1.0 mm recess"
+  },
+  {
+   "a": "BUY_horn_feeder",
+   "b": "PRT_feeder_pinion",
+   "why": "horn disc sits in the pinion recess"
+  },
+  {
+   "a": "PRT_nip_leaf",
+   "b": "PRT_nip_wheel",
+   "why": "leaf drawn in its free (as-printed, flat) state: the two pads stand LEAF_PRE 1.2 into the thumbwheel top = the ~9 N preload (A3-M1)"
+  },
+  {
+   "a": "FST_nip_stud",
+   "b": "PRT_nip_wheel",
+   "why": "stud threads through the thumbwheel's captive nut; the wheel rides the stud, drawn static at the 6.5 setting, so the stud's swing shows as overlap in its bore"
+  },
+  {
+   "a": "FST_nip_stud",
+   "b": "FST_tw_nut",
+   "why": "stud runs in the thumbwheel's captive nut (thread); the nut is drawn static at the 6.5 setting"
+  },
+  {
+   "a": "BUY_tape",
+   "b": "PRT_flywheel",
+   "why": "v2-A4 launcher step: hockey tape wrapped on the R35 land (TAPE_T 0.5), coincident with it by design"
+  },
+  {
+   "a": "PRT_gate_detent",
+   "b": "PRT_jar_gate",
+   "why": "v2-A4 (attempt 5): the detent rides the blade between the notches, 0.43 mm3 < vol_tol 0.5 (review 4 probe at PIV_gate +13..39) with 0.4 of beam lift; its motion is proved by the gate slide_out rows' flex bound and the beam by the flexures row. Seated 0.10 at PIV_gate 0 and 52 (distances rows)"
+  }
+ ],
+ "fits": [
+  {
+   "a": "PRT_base_shell",
+   "b": "PRT_turntable",
+   "contact": true,
+   "why": "v2-A2-04: thrust ring face on the deck (contact on +-Z faces only); the R20/R20.3 hub journal in the deck hole is measured against 0.1",
+   "contact_normal": [
+    0,
+    0,
+    1
+   ],
+   "min_clearance": 0.1
+  },
+  {
+   "a": "PRT_base_shell",
+   "b": "PRT_thrust_ring",
+   "contact": true,
+   "why": "thrust ring rides with the turntable and slides on the deck top"
+  },
+  {
+   "a": "PRT_base_*",
+   "b": "PRT_pan_pinion",
+   "min_clearance": 0.2,
+   "why": "pinion turns in its deck opening"
+  },
+  {
+   "a": "PRT_turntable",
+   "b": "PRT_pan_pinion",
+   "min_clearance": 0.1,
+   "why": "1:1 hub gear mesh"
+  },
+  {
+   "a": "PRT_hub_gear",
+   "b": "PRT_pan_pinion",
+   "min_clearance": 0.1,
+   "why": "1:1 hub gear mesh (gear screwed up into the hub)"
+  },
+  {
+   "a": "PRT_post_L",
+   "b": "PRT_nacelle",
+   "min_clearance": 0.1,
+   "why": "left tilt journal R15 in R15.2 bore"
+  },
+  {
+   "a": "PRT_beam",
+   "b": "PRT_nacelle",
+   "min_clearance": 0.1,
+   "why": "beam tongue closes the left journal U-slot"
+  },
+  {
+   "a": "PRT_post_R",
+   "b": "PRT_journal_plate",
+   "contact": true,
+   "why": "right journal + printed hard-stop lugs touch at -3 / +46 (A1-#5)"
+  },
+  {
+   "a": "PRT_beam",
+   "b": "PRT_journal_plate",
+   "min_clearance": 0.1,
+   "why": "beam tongue closes the right journal U-slot"
+  },
+  {
+   "a": "PRT_post_R",
+   "b": "PRT_tilt_horn_adapter",
+   "min_clearance": 0.2,
+   "why": "horn adapter turns in the post's inner-wall hole"
+  },
+  {
+   "a": "BUY_servo_tilt",
+   "b": "PRT_tilt_horn_adapter",
+   "min_clearance": 0.2,
+   "why": "adapter face runs 0.3 off the servo case"
+  },
+  {
+   "a": "BUY_servo_tilt",
+   "b": "BUY_horn_tilt",
+   "min_clearance": 0.0,
+   "why": "horn on the spline"
+  },
+  {
+   "a": "PRT_feeder_housing",
+   "b": "PRT_feeder_disc",
+   "min_clearance": 0.3,
+   "why": "disc runs on the housing floor under the gear-ring lip"
+  },
+  {
+   "a": "PRT_feeder_housing",
+   "b": "PRT_feeder_pinion",
+   "min_clearance": 0.3,
+   "why": "pinion in its chamber"
+  },
+  {
+   "a": "PRT_feeder_disc",
+   "b": "PRT_feeder_pinion",
+   "min_clearance": 0.1,
+   "why": "gear mesh 44:30"
+  },
+  {
+   "a": "PRT_feeder_housing",
+   "b": "PRT_jar_gate",
+   "min_clearance": 0.3,
+   "why": "gate handle stub passes over the housing top as the jar twists"
+  },
+  {
+   "a": "PRT_feeder_crown",
+   "b": "PRT_feeder_disc",
+   "min_clearance": 0.3,
+   "why": "disc land R31 journals in the crown bore R31.3; gear band under the lip (cavity R35, 0.3 below the lip)"
+  },
+  {
+   "a": "PRT_feeder_crown",
+   "b": "PRT_feeder_pinion",
+   "min_clearance": 0.3,
+   "why": "pinion in its chamber R24.3"
+  },
+  {
+   "a": "PRT_feeder_crown",
+   "b": "PRT_jar_valve",
+   "contact": true,
+   "why": "bayonet lugs bear on the L-slot leg floors (jar weight) and twist 30 deg; valve skirt 0.3 inside the chamber bore"
+  },
+  {
+   "a": "PRT_feeder_crown",
+   "b": "PRT_jar_gate",
+   "min_clearance": 0.3,
+   "why": "gate blade and tab pass over the crown top as the jar twists"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_launcher_body",
+   "min_clearance": 0.5,
+   "why": "backplate swings in its bay; >=0.5 down to the min-gap stop (v2-A1-01: was 0.46 at gap 5.5, contact at hood +3.5)"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_journal_plate",
+   "min_clearance": 0.3,
+   "why": "backplate swings next to the journal plate"
+  },
+  {
+   "a": "FST_hinge",
+   "b": "PRT_hood",
+   "contact": true,
+   "why": "hinge axle through the backplate boss"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_nip_wheel",
+   "why": "v2-A2-04: hood and thumbwheel never come within 5.7 over the hood range (review sweep); a contact fit would hide a future rub",
+   "min_clearance": 0.5
+  },
+  {
+   "a": "PRT_hood",
+   "b": "FST_nip_stud",
+   "contact": true,
+   "why": "stud head in the backplate's hex pocket"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_nip_stop",
+   "contact": true,
+   "why": "v2-A1-01 printed min-gap hard stop: hood back face lands on it at gap 6.2 (PIV_hood hi +0.327 since v2-A2-01; was gap 5.3 in A2), broad face away from the chute entry"
+  },
+  {
+   "a": "PRT_nip_stop_sleeve",
+   "b": "PRT_nip_wheel",
+   "contact": true,
+   "why": "v2-A1-01 static max-gap stop: thumbwheel bottoms on the stud sleeve at gap 7.0"
+  },
+  {
+   "a": "PRT_nip_stop_sleeve",
+   "b": "FST_tw_nut",
+   "min_clearance": 0.5,
+   "why": "v2-A3 finish: at the gap-7.0 stop the sleeve end bears on the thumbwheel face round the AF 5.7 trap and the captive nut sits 0.8 back in the trap (cad q dist at PIV_hood -0.558: 0.805); a declared 0.5 floor instead of the generic 1.0 warn"
+  },
+  {
+   "a": "PRT_launcher_cover",
+   "b": "PRT_hood",
+   "min_clearance": 0.45,
+   "why": "v2-A3 finish: the hood's +X face runs 0.50 off the wheel-side cover over the whole hood range (cad q sweep PIV_hood -3.06..2.83: 0.50 at every step), the same 0.5 side gap as hood x body"
+  },
+  {
+   "a": "PRT_launcher_body",
+   "b": "PRT_nip_wheel",
+   "contact": true,
+   "why": "v2-A1-01 (launcher step) thumbwheel seat on the guard land: the thumbwheel rides PIV_nip_lift and lifts off it only when a jam opens the hood against the leaf"
+  },
+  {
+   "a": "PRT_jar_valve",
+   "b": "PRT_jar_gate",
+   "min_clearance": 0.3,
+   "why": "v2-A4 (attempt 5) PIV_gate slide: the blade runs 0.35 over the valve floor (GATE_Z) and 0.4 inside the cheeks (CHEEK_Y); its -X end meets the -X cheek face (GATE_SLOT_X0) at PIV_gate -0.4, the closed stop (distances row)"
+  },
+  {
+   "a": "PRT_jar_adapter",
+   "b": "PRT_jar_gate",
+   "min_clearance": 0.3,
+   "why": "v2-A4 (attempt 5) PIV_gate slide: the blade runs 0.35 under the spout bottom (ADAPTER_SPOUT_Z0) and its stop lug 0.35 (GATE_STOP_CLR) inside the spout-tip notches; the lug meets the +X shoulder at 52.35, the open stop (distances row)"
+  }
+ ],
+ "assembly_order": [
+  {
+   "step": "1 base shell upside down: adapter into its fence, M3 x 20 self-tappers from the deck top",
+   "objects": [
+    "PRT_base_shell",
+    "BUY_dewalt_adapter",
+    "FST_adapter_*"
+   ]
+  },
+  {
+   "step": "1a pan drive on the bench: horn screwed into the pinion recess",
+   "bench": "pandrive",
+   "objects": [
+    "PRT_pan_pinion",
+    "BUY_horn_pan",
+    "FST_pinion_?"
+   ]
+  },
+  {
+   "step": "1b pan drive on the bench: servo into the pocket + clamp, pinion onto the spline, centre screw through the pinion",
+   "bench": "pandrive",
+   "objects": [
+    "PRT_pan_servo_*",
+    "BUY_servo_pan",
+    "FST_panclamp_*",
+    "FST_pinion_ctr"
+   ]
+  },
+  {
+   "step": "1c pan drive onto the deck posts",
+   "merge": "pandrive",
+   "objects": [
+    "FST_panservo_*"
+   ]
+  },
+  {
+   "step": "2a floor plate on the bench: partition, MotorGo on its standoffs",
+   "bench": "floor",
+   "objects": [
+    "PRT_base_floor",
+    "PRT_base_partition",
+    "FST_partition_*",
+    "BUY_motorgo_axis",
+    "FST_mg_*"
+   ]
+  },
+  {
+   "step": "2b floor plate on the bench: buck, servo controller",
+   "bench": "floor",
+   "objects": [
+    "BUY_buck_12v",
+    "FST_buck_*",
+    "BUY_servo_controller",
+    "FST_ctrl_*"
+   ]
+  },
+  {
+   "step": "2c turntable on the bench: groove cap, posts from the turntable underside",
+   "bench": "turntable",
+   "objects": [
+    "PRT_turntable",
+    "PRT_groove_cap",
+    "FST_gcap_*",
+    "PRT_post_L",
+    "PRT_post_R",
+    "FST_post_*"
+   ]
+  },
+  {
+   "step": "2d thrust ring on the hub, turntable assembly into the deck hole; hub gear meshed under the deck and screwed up into the hub (floor still off)",
+   "merge": "turntable",
+   "objects": [
+    "PRT_thrust_ring",
+    "PRT_hub_*",
+    "FST_hub_*",
+    "FST_tt_*"
+   ]
+  },
+  {
+   "step": "3 floor into the shell, cables; v2-A2-02 launcher base lead (phase + encoder) from the MotorGo to the hub with its U-loop under the hub gear",
+   "merge": "floor",
+   "objects": [
+    "FST_floor_*",
+    "CAB_12v*",
+    "CAB_uart*",
+    "CAB_usb*",
+    "CAB_bus_pan*",
+    "BUY_usbc_plug",
+    "CAB_launcher_base*",
+    "PRT_cable_clip*",
+    "FST_clip_*"
+   ]
+  },
+  {
+   "step": "6a pod on the bench: motor into the nacelle bore (crush ribs), body onto the nacelle plate; motor + nacelle screws from inside the guard; phase leads into the journal bore",
+   "bench": "pod",
+   "objects": [
+    "PRT_nacelle",
+    "PRT_launcher_body",
+    "BUY_motor",
+    "FST_motor_*",
+    "FST_nacelle_*",
+    "CAB_phase_*"
+   ]
+  },
+  {
+   "step": "6b magnet glued on the rear shaft with the jig (spigot in the 8 mm access hole); Plink on the cap pegs; encoder cap into the bore",
+   "bench": "pod",
+   "objects": [
+    "BUY_magnet",
+    "BUY_plink_encoder",
+    "PRT_encoder_cap",
+    "FST_enc_*",
+    "CAB_encoder*"
+   ]
+  },
+  {
+   "step": "6c hex stud head (M3 x 16 hex head ISO 4017, AF 5.5 x 2.0) dropped into the backplate pocket (captive hex, never driven); v2-A1-01 nip stop pad into its pocket under the muzzle floor, 1 x M3 x 6 up from the skin",
+   "bench": "pod",
+   "objects": [
+    "FST_nip_stud",
+    "PRT_nip_stop",
+    "FST_nipstop"
+   ]
+  },
+  {
+   "step": "6d backplate into its bay, journal plate on (3 csk), hinge axle through wall + boss + plate into its trapped nut",
+   "bench": "pod",
+   "objects": [
+    "PRT_hood",
+    "PRT_journal_plate",
+    "FST_jp_*",
+    "FST_hinge",
+    "FST_hinge_nut"
+   ]
+  },
+  {
+   "step": "6e stop sleeve over the stud, thumbwheel onto the stud (set the gap), leaf screwed under the nip cover from outside, cover onto the land",
+   "bench": "pod",
+   "objects": [
+    "PRT_nip_wheel",
+    "FST_tw_*",
+    "PRT_nip_leaf",
+    "PRT_nip_cover",
+    "FST_leaf_*",
+    "FST_nipcover_*",
+    "PRT_nip_stop_sleeve"
+   ]
+  },
+  {
+   "step": "6f flywheel onto the D-shaft, two pinch bolts through their nuts (L-key from +X)",
+   "bench": "pod",
+   "objects": [
+    "PRT_flywheel",
+    "FST_fw_*",
+    "BUY_tape"
+   ]
+  },
+  {
+   "step": "6g wheel-side cover (4 csk)",
+   "bench": "pod",
+   "objects": [
+    "PRT_launcher_cover",
+    "FST_cover_*"
+   ]
+  },
+  {
+   "step": "7 pod drops into the post U-slots, held nose-up about 20 deg (v2-A1-06)",
+   "merge": "pod",
+   "objects": []
+  },
+  {
+   "step": "8a tilt drive on the bench: horn screwed to the adapter",
+   "bench": "tiltdrive",
+   "objects": [
+    "PRT_tilt_horn_adapter",
+    "BUY_horn_tilt",
+    "FST_tilt_horn_?"
+   ]
+  },
+  {
+   "step": "8b tilt drive on the bench: adapter + horn onto the servo spline, centre screw through the 6.5 key hole",
+   "bench": "tiltdrive",
+   "objects": [
+    "BUY_servo_tilt",
+    "FST_tilt_horn_ctr"
+   ]
+  },
+  {
+   "step": "8 tilt servo + horn adapter slide in -X through the right post (key into the journal-plate socket), cover",
+   "merge": "tiltdrive",
+   "objects": [
+    "PRT_post_R_cover",
+    "FST_postcover_*",
+    "CAB_bus_tilt*"
+   ]
+  },
+  {
+   "step": "9 beam closes the journal U-slots",
+   "objects": [
+    "PRT_beam",
+    "FST_beam_*",
+    "CAB_launcher*"
+   ]
+  },
+  {
+   "step": "10a feeder drive on the bench: horn screwed into the pinion recess (M2 x 8)",
+   "bench": "feeder",
+   "objects": [
+    "PRT_feeder_pinion",
+    "BUY_horn_feeder",
+    "FST_fhorn_?"
+   ]
+  },
+  {
+   "step": "10b crown upside down: pinion + horn in from below; then servo #3 into its pocket from the top, spline pressed into the horn (v2-A1-04: no centre screw; the lobe cover in 10d holds the servo down)",
+   "bench": "feeder",
+   "objects": [
+    "PRT_feeder_crown",
+    "BUY_servo_feeder"
+   ]
+  },
+  {
+   "step": "10c disc in from below (band meshes with the pinion), floor plate on with 2 csk from below",
+   "bench": "feeder",
+   "objects": [
+    "PRT_feeder_disc",
+    "PRT_feeder_housing",
+    "FST_fplate_*"
+   ]
+  },
+  {
+   "step": "10d feeder upright: bus into the channel, servo cover (2 csk)",
+   "bench": "feeder",
+   "objects": [
+    "PRT_feeder_cover",
+    "FST_fcover_*",
+    "CAB_bus_feeder*"
+   ]
+  },
+  {
+   "step": "11 feeder onto the beam",
+   "merge": "feeder",
+   "objects": [
+    "FST_feedmount_*"
+   ]
+  },
+  {
+   "step": "12 jar on the bench: adapter in the band, gate laid closed on the valve floor (stop lug up), valve onto the spout (the spout tip captures the lug; v2-A1-09); v2-A2-A1-09 detent clip screwed on the +Y cheek, bump dropped into the closed notch",
+   "bench": "jar",
+   "objects": [
+    "BUY_jar",
+    "BUY_jar_band",
+    "BUY_mm_fill",
+    "PRT_jar_adapter",
+    "PRT_jar_valve",
+    "PRT_jar_gate",
+    "FST_valve_*",
+    "PRT_gate_detent",
+    "FST_detent_*"
+   ]
+  },
+  {
+   "step": "13 jar onto the feeder: drop in at +30, twist to 0",
+   "merge": "jar",
+   "objects": []
+  },
+  {
+   "step": "14 battery slides onto the adapter rail +X -> -X (last; BOM step 14)",
+   "objects": [
+    "BUY_battery"
+   ]
+  }
+ ],
+ "fasteners": {
+  "min_engagement": 4.0,
+  "max_standoff": 2.0,
+  "max_protrusion": 3.0
+ },
+ "service": [
+  {
+   "op": "v2-A1-02 replace the nip leaf: nip cover off at tilt 45 (gap is set through the finger slot with the cover ON)",
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "fasteners": [
+    "FST_nipcover_*",
+    "FST_leaf_*"
+   ],
+   "remove": []
+  },
+  {
+   "op": "pod cover off for tape / flywheel (A1-#6)",
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "fasteners": [
+    "FST_cover_*"
+   ]
+  },
+  {
+   "op": "re-tighten the flywheel pinch bolts, cover off (A2-#1)",
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "remove": [
+    "PRT_launcher_cover",
+    "FST_cover_*"
+   ],
+   "fasteners": [
+    "FST_fw_bolt_*"
+   ]
+  },
+  {
+   "op": "encoder cap off (A1-#7)",
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "fasteners": [
+    "FST_enc_*"
+   ]
+  },
+  {
+   "op": "tilt servo swap: right post cover off",
+   "fasteners": [
+    "FST_postcover_*"
+   ]
+  },
+  {
+   "op": "v2-A1-04 feeder servo swap: lobe cover off (2 screws), servo lifts +Z off the horn (no centre screw)",
+   "fasteners": [
+    "FST_fcover_*"
+   ]
+  },
+  {
+   "op": "base floor off",
+   "fasteners": [
+    "FST_floor_*"
+   ]
+  },
+  {
+   "op": "v2-A1-04 feeder servo swap: any screw holding the horn to the spline must be reachable with only the lobe cover off (A1: FST_fhorn_ctr blocked by the housing at 8 mm; attempt 2 deletes it, so this row must match nothing)",
+   "fasteners": [
+    "FST_fhorn_ctr"
+   ],
+   "remove": [
+    "PRT_feeder_cover",
+    "FST_fcover_*"
+   ],
+   "pose": {}
+  }
+ ],
+ "drop_tests": [
+  {
+   "name": "outlet_to_descending_rear_tape (A1-#1, A1-#9, A3-F1)",
+   "mode": "slide",
+   "stall_deg": 28,
+   "capture_mm": 0.5,
+   "payload_mm": 7.0,
+   "emit": {
+    "frame": "PIV_pan",
+    "center": [
+     21.0,
+     0.0,
+     262.5
+    ],
+    "normal": [
+     0,
+     0,
+     1
+    ],
+    "radius": 6.5,
+    "step": 2
+   },
+   "dir": [
+    0,
+    0,
+    -1
+   ],
+   "poses": {
+    "PIV_tilt": [
+     0,
+     15,
+     22.5,
+     30,
+     40,
+     45,
+     46
+    ]
+   },
+   "expect": {
+    "hit": [
+     "PRT_flywheel",
+     "BUY_tape"
+    ],
+    "angle": {
+     "center": "PIV_flywheel",
+     "frame": "PIV_tilt",
+     "axis": "X",
+     "zero": "-Z",
+     "positive": "-Y",
+     "range": [
+      0,
+      112
+     ]
+    }
+   },
+   "home_only_ok": {
+    "PIV_hood": "both hood stops x tilt -3/0/22.5/45/46 are the v2-A2-01 rows below",
+    "PIV_nip_lift": "see the v2-A2-01 rows: the leaf lifts only while a candy is in the nip"
+   }
+  },
+  {
+   "name": "v2-A2-01/A2-05 drop at the min-gap stop (gap 6.2)",
+   "mode": "slide",
+   "stall_deg": 28,
+   "capture_mm": 0.5,
+   "payload_mm": 7.0,
+   "emit": {
+    "frame": "PIV_pan",
+    "center": [
+     21.0,
+     0.0,
+     262.5
+    ],
+    "normal": [
+     0,
+     0,
+     1
+    ],
+    "radius": 6.5,
+    "step": 2
+   },
+   "dir": [
+    0,
+    0,
+    -1
+   ],
+   "poses": {
+    "PIV_tilt": [
+     -3,
+     0,
+     22.5,
+     45,
+     46
+    ],
+    "PIV_hood": [
+     0.327
+    ]
+   },
+   "expect": {
+    "hit": [
+     "PRT_flywheel",
+     "BUY_tape"
+    ],
+    "angle": {
+     "center": "PIV_flywheel",
+     "frame": "PIV_tilt",
+     "axis": "X",
+     "zero": "-Z",
+     "positive": "-Y",
+     "range": [
+      0,
+      112
+     ]
+    }
+   },
+   "home_only_ok": {
+    "PIV_nip_lift": "the leaf lifts only while a candy is in the nip; the next candy drops with the leaf at rest (one candy per fire, index_tests). Attempt-3 precheck: with the leaf held fully lifted 13-31/31 rays stall on the opened plate, which is the rig's 'stall at 10-12 mm' regime, not an operating state. The full-lift case is covered by the v2-A2-01 gap rows"
+   }
+  },
+  {
+   "name": "v2-A2-01 drop at the thumbwheel max (gap 7.0)",
+   "mode": "slide",
+   "stall_deg": 28,
+   "capture_mm": 0.5,
+   "payload_mm": 7.0,
+   "emit": {
+    "frame": "PIV_pan",
+    "center": [
+     21.0,
+     0.0,
+     262.5
+    ],
+    "normal": [
+     0,
+     0,
+     1
+    ],
+    "radius": 6.5,
+    "step": 2
+   },
+   "dir": [
+    0,
+    0,
+    -1
+   ],
+   "poses": {
+    "PIV_tilt": [
+     -3,
+     0,
+     22.5,
+     45,
+     46
+    ],
+    "PIV_hood": [
+     -0.558
+    ]
+   },
+   "expect": {
+    "hit": [
+     "PRT_flywheel",
+     "BUY_tape"
+    ],
+    "angle": {
+     "center": "PIV_flywheel",
+     "frame": "PIV_tilt",
+     "axis": "X",
+     "zero": "-Z",
+     "positive": "-Y",
+     "range": [
+      0,
+      112
+     ]
+    }
+   },
+   "home_only_ok": {
+    "PIV_nip_lift": "the leaf lifts only while a candy is in the nip; the next candy drops with the leaf at rest (one candy per fire, index_tests). Attempt-3 precheck: with the leaf held fully lifted 13-31/31 rays stall on the opened plate, which is the rig's 'stall at 10-12 mm' regime, not an operating state. The full-lift case is covered by the v2-A2-01 gap rows"
+   }
+  },
+  {
+   "name": "v2-A3-A2-01 thick candy (MM_T max 7.5) drop at both hood stops (review A3 row)",
+   "mode": "slide",
+   "stall_deg": 28,
+   "capture_mm": 0.5,
+   "payload_mm": 7.5,
+   "emit": {
+    "frame": "PIV_pan",
+    "center": [
+     21.0,
+     0.0,
+     262.5
+    ],
+    "normal": [
+     0,
+     0,
+     1
+    ],
+    "radius": 6.5,
+    "step": 2
+   },
+   "dir": [
+    0,
+    0,
+    -1
+   ],
+   "poses": {
+    "PIV_tilt": [
+     -3,
+     0,
+     45,
+     46
+    ],
+    "PIV_hood": [
+     0.327,
+     -0.558
+    ]
+   },
+   "expect": {
+    "hit": [
+     "PRT_flywheel",
+     "BUY_tape"
+    ],
+    "angle": {
+     "center": "PIV_flywheel",
+     "frame": "PIV_tilt",
+     "axis": "X",
+     "zero": "-Z",
+     "positive": "-Y",
+     "range": [
+      0,
+      112
+     ]
+    }
+   },
+   "home_only_ok": {
+    "PIV_nip_lift": "leaf at rest between candies (designer's reason, agreed)"
+   }
+  }
+ ],
+ "index_tests": [
+  {
+   "name": "feeder_fire_plus60_one_candy (A2-#2)",
+   "joint": "PIV_feeder",
+   "sequence": [
+    0,
+    60,
+    0
+   ],
+   "step": 2,
+   "probe": {
+    "frame": "PIV_pan",
+    "center": [
+     21.0,
+     0.0,
+     271.0
+    ],
+    "dir": [
+     0,
+     0,
+     -1
+    ],
+    "radius": 3,
+    "depth": 11
+   },
+   "blockers": [
+    "PRT_feeder_disc",
+    "PRT_feeder_housing"
+   ],
+   "expect_windows": 1
+  },
+  {
+   "name": "feeder_fire_minus60_one_candy (A2-#2)",
+   "joint": "PIV_feeder",
+   "sequence": [
+    0,
+    -60,
+    0
+   ],
+   "step": 2,
+   "probe": {
+    "frame": "PIV_pan",
+    "center": [
+     21.0,
+     0.0,
+     271.0
+    ],
+    "dir": [
+     0,
+     0,
+     -1
+    ],
+    "radius": 3,
+    "depth": 11
+   },
+   "blockers": [
+    "PRT_feeder_disc",
+    "PRT_feeder_housing"
+   ],
+   "expect_windows": 1
+  },
+  {
+   "name": "feeder_column_never_open_to_outlet (baffle over the outlet sector, A2-#2)",
+   "joint": "PIV_feeder",
+   "sequence": [
+    0,
+    60,
+    0,
+    -60,
+    0
+   ],
+   "step": 2,
+   "probe": {
+    "frame": "PIV_pan",
+    "center": [
+     21.0,
+     0.0,
+     287.5
+    ],
+    "dir": [
+     0,
+     0,
+     -1
+    ],
+    "radius": 3,
+    "depth": 27.5
+   },
+   "blockers": [
+    "PRT_feeder_disc",
+    "PRT_feeder_housing",
+    "PRT_feeder_crown",
+    "PRT_jar_valve"
+   ],
+   "expect_windows": 0
+  },
+  {
+   "name": "v2 column never open, jar drifted 5 deg (no detent)",
+   "joint": "PIV_feeder",
+   "sequence": [
+    0,
+    60,
+    0,
+    -60,
+    0
+   ],
+   "step": 2,
+   "probe": {
+    "frame": "PIV_pan",
+    "center": [
+     21.0,
+     0.0,
+     287.5
+    ],
+    "dir": [
+     0,
+     0,
+     -1
+    ],
+    "radius": 3,
+    "depth": 27.5
+   },
+   "blockers": [
+    "PRT_feeder_disc",
+    "PRT_feeder_housing",
+    "PRT_feeder_crown",
+    "PRT_jar_valve"
+   ],
+   "expect_windows": 0,
+   "pose": {
+    "PIV_jar": 5
+   }
+  },
+  {
+   "name": "v2 column never open, jar drifted 10 deg (no detent)",
+   "joint": "PIV_feeder",
+   "sequence": [
+    0,
+    60,
+    0,
+    -60,
+    0
+   ],
+   "step": 2,
+   "probe": {
+    "frame": "PIV_pan",
+    "center": [
+     21.0,
+     0.0,
+     287.5
+    ],
+    "dir": [
+     0,
+     0,
+     -1
+    ],
+    "radius": 3,
+    "depth": 27.5
+   },
+   "blockers": [
+    "PRT_feeder_disc",
+    "PRT_feeder_housing",
+    "PRT_feeder_crown",
+    "PRT_jar_valve"
+   ],
+   "expect_windows": 0,
+   "pose": {
+    "PIV_jar": 10
+   }
+  },
+  {
+   "name": "v2 column never open, jar drifted 15 deg (no detent)",
+   "joint": "PIV_feeder",
+   "sequence": [
+    0,
+    60,
+    0,
+    -60,
+    0
+   ],
+   "step": 2,
+   "probe": {
+    "frame": "PIV_pan",
+    "center": [
+     21.0,
+     0.0,
+     287.5
+    ],
+    "dir": [
+     0,
+     0,
+     -1
+    ],
+    "radius": 3,
+    "depth": 27.5
+   },
+   "blockers": [
+    "PRT_feeder_disc",
+    "PRT_feeder_housing",
+    "PRT_feeder_crown",
+    "PRT_jar_valve"
+   ],
+   "expect_windows": 0,
+   "pose": {
+    "PIV_jar": 15
+   }
+  }
+ ],
+ "slide_out": [
+  {
+   "name": "battery out +X past every fastener (A3-M2, A2-#5, A1-#13)",
+   "object": "BUY_battery",
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": 120,
+   "step": 5,
+   "min_clearance": 1.0
+  },
+  {
+   "name": "flywheel off +X at tilt 45, cover removed (A1-#6, A1-#18)",
+   "objects": [
+    "PRT_flywheel",
+    "FST_fw_*",
+    "BUY_tape"
+   ],
+   "ignore": [
+    "PRT_launcher_cover",
+    "FST_cover_*",
+    "BUY_motor"
+   ],
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": 140,
+   "step": 5
+  },
+  {
+   "name": "pod cover off forward at tilt 45 (A1-#6) (screws out first) [0.00 is the seat / parting face it slides off]",
+   "objects": [
+    "PRT_launcher_cover"
+   ],
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "dist": 90,
+   "step": 5,
+   "ignore": [
+    "FST_cover_*"
+   ],
+   "min_clearance": 0.0
+  },
+  {
+   "name": "encoder cap off -X at tilt 45 (A1-#7) (screws out first) [0.00 is the seat / parting face it slides off]",
+   "objects": [
+    "PRT_encoder_cap",
+    "BUY_plink_encoder"
+   ],
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "dir": [
+    -1,
+    0,
+    0
+   ],
+   "dist": 15,
+   "step": 1,
+   "ignore": [
+    "FST_enc_*"
+   ],
+   "min_clearance": 0.0
+  },
+  {
+   "name": "nip cover + leaf off, down at tilt 45 (cover faces down there; at tilt 0 it sits over the turntable) (A3-M1 leaf replaceable) (screws out first) [0.00 is the seat / parting face it slides off]",
+   "objects": [
+    "PRT_nip_cover",
+    "PRT_nip_leaf",
+    "FST_leaf_*"
+   ],
+   "dir": [
+    0,
+    0,
+    -1
+   ],
+   "dist": 30,
+   "step": 2,
+   "ignore": [
+    "FST_nipcover_*"
+   ],
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "min_clearance": 0.0
+  },
+  {
+   "name": "jar group lifts off when unlocked (brief 1: refill) [0.00 is the seat / parting face it slides off]",
+   "objects": [
+    "BUY_jar",
+    "BUY_jar_band",
+    "BUY_mm_fill",
+    "PRT_jar_adapter",
+    "PRT_jar_valve",
+    "PRT_jar_gate",
+    "FST_valve_*",
+    "PRT_gate_detent",
+    "FST_detent_*"
+   ],
+   "pose": {
+    "PIV_jar": 30
+   },
+   "dir": [
+    0,
+    0,
+    1
+   ],
+   "dist": 60,
+   "step": 2,
+   "min_clearance": 0.0
+  },
+  {
+   "name": "v2-A1-09/A2 gate opens +X 52 inside its own guides; v2-A4: the detent clip rides the blade on flex (<= 1.0 mm3; review probe -0.43 mm3 at +13..39), no longer ignored. min_clearance 0.05: the clip plate rides 0.1 over the blade wherever the bump sits in a notch (A4 precheck 0.08 at the open notch; detent seated row 0.10)",
+   "object": "PRT_jar_gate",
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": 52,
+   "step": 2,
+   "min_clearance": 0.05,
+   "flex": {
+    "PRT_gate_detent": 1.0
+   }
+  },
+  {
+   "name": "tilt servo out +X through the right post (no pod removal; guided by its 0.3 clamp pocket)",
+   "objects": [
+    "BUY_servo_tilt",
+    "BUY_horn_tilt",
+    "PRT_tilt_horn_adapter",
+    "FST_tilt_horn_*"
+   ],
+   "ignore": [
+    "PRT_post_R_cover",
+    "FST_postcover_*"
+   ],
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": 60,
+   "step": 5,
+   "min_clearance": 0.25
+  },
+  {
+   "name": "v2-A1-06 step 7 reversed: pod lifts +Z out of the post U-slots, nose-up 20 deg",
+   "objects": [
+    "PRT_nacelle",
+    "PRT_launcher_body",
+    "PRT_launcher_cover",
+    "PRT_journal_plate",
+    "PRT_encoder_cap",
+    "PRT_hood",
+    "PRT_nip_*",
+    "PRT_flywheel",
+    "BUY_motor",
+    "BUY_magnet",
+    "BUY_plink_encoder",
+    "FST_motor_*",
+    "FST_nacelle_*",
+    "FST_enc_*",
+    "FST_jp_*",
+    "FST_hinge*",
+    "FST_nip_*",
+    "FST_tw_*",
+    "FST_leaf_*",
+    "FST_nipcover_*",
+    "FST_fw_*",
+    "FST_cover_*",
+    "CAB_phase_*",
+    "CAB_encoder*",
+    "BUY_tape"
+   ],
+   "ignore": [
+    "PRT_beam",
+    "FST_beam_*",
+    "PRT_feeder_*",
+    "PRT_jar_*",
+    "BUY_jar*",
+    "BUY_mm_fill",
+    "FST_feedmount_*",
+    "FST_fplate_*",
+    "FST_fcover_*",
+    "FST_valve_*",
+    "PRT_gate_detent",
+    "FST_detent_*",
+    "FST_fhorn_*",
+    "BUY_servo_feeder",
+    "BUY_horn_feeder",
+    "CAB_bus_feeder*",
+    "CAB_launcher*",
+    "BUY_servo_tilt",
+    "BUY_horn_tilt",
+    "PRT_tilt_horn_adapter",
+    "FST_tilt_horn_*",
+    "PRT_post_R_cover",
+    "FST_postcover_*",
+    "CAB_bus_tilt*"
+   ],
+   "pose": {
+    "PIV_tilt": 20
+   },
+   "dir": [
+    0,
+    0,
+    1
+   ],
+   "dist": 150,
+   "step": 2,
+   "min_clearance": 0.1
+  },
+  {
+   "name": "v2-A1-04 feeder servo lifts +Z off the horn after the lobe cover (horn + pinion stay; no centre screw); servo flange rests on the crown pocket floor (0.00 is that resting face)",
+   "objects": [
+    "BUY_servo_feeder"
+   ],
+   "ignore": [
+    "PRT_feeder_cover",
+    "FST_fcover_*",
+    "CAB_bus_feeder*"
+   ],
+   "dir": [
+    0,
+    0,
+    1
+   ],
+   "dist": 60,
+   "step": 2,
+   "min_clearance": 0.0
+  },
+  {
+   "name": "v2-A2 feeder lobe cover lifts +Z, 2 screws out (the removal behind the servo-swap service ops)",
+   "objects": [
+    "PRT_feeder_cover"
+   ],
+   "ignore": [
+    "FST_fcover_*",
+    "CAB_bus_feeder*"
+   ],
+   "dir": [
+    0,
+    0,
+    1
+   ],
+   "dist": 40,
+   "step": 2,
+   "min_clearance": 0.0
+  },
+  {
+   "name": "v2-A3-A3-03 base floor plate with its electronics drops -Z after the 8 floor screws (BOM service 'Base floor'; review A3 row) [0.00 is the seat]",
+   "objects": [
+    "PRT_base_floor",
+    "PRT_base_partition",
+    "FST_partition_*",
+    "BUY_motorgo_axis",
+    "FST_mg_*",
+    "BUY_buck_12v",
+    "FST_buck_*",
+    "BUY_servo_controller"
+   ],
+   "ignore": [
+    "FST_floor_*",
+    "CAB_*",
+    "BUY_usbc_plug"
+   ],
+   "dir": [
+    0,
+    0,
+    -1
+   ],
+   "dist": 40,
+   "step": 2,
+   "min_clearance": 0.0
+  },
+  {
+   "name": "v2-A4 gate open stop: the blade's stop lug meets the adapter shoulder at +52 + GATE_STOP_CLR (52.35). NOTE: slide_out 'step' is the sweep increment in mm, 0.5 here; the other gate rows' 'step': 2 sweeps every 2 mm",
+   "object": "PRT_jar_gate",
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": 53.5,
+   "step": 0.5,
+   "min_clearance": 0.0,
+   "flex": {
+    "PRT_gate_detent": 1.0
+   },
+   "expect": "blocked",
+   "blocked_by": [
+    "PRT_jar_adapter"
+   ],
+   "at_mm": [
+    52.0,
+    53.0
+   ]
+  }
+ ],
+ "distances": [
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": 5.5,
+   "max": 7.0,
+   "why": "nip squeezes a 7 mm M&M ~1 mm over 0.5 tape (A1-#2, A2-#4)",
+   "ray": {
+    "frame": "PIV_hood",
+    "origin": [
+     21.0,
+     37.0,
+     131.75
+    ],
+    "dir": [
+     0,
+     0,
+     1
+    ]
+   },
+   "payload_mm": 7.0,
+   "tape_mm": 0.5,
+   "compliant": "PRT_nip_leaf: flat-printed leaf spring, 7.1 N preload, backplate lifts up to 2.2 mm at the stud (A3-M1; v2-A3-A2-01 LEAF_T 2.3, LEAF_TRAVEL 2.2)"
+  },
+  {
+   "a": "FST_adapter_0",
+   "b": "BUY_battery",
+   "min": 3.0,
+   "why": "adapter screw tip >= 3 mm above the battery face (A3-M2, A2-#5)"
+  },
+  {
+   "a": "FST_adapter_1",
+   "b": "BUY_battery",
+   "min": 3.0,
+   "why": "adapter screw tip >= 3 mm above the battery face (A3-M2, A2-#5)"
+  },
+  {
+   "a": "BUY_jar_band",
+   "b": "PRT_feeder_housing",
+   "min": 2.0,
+   "why": "glass/band tolerance +/-1: nothing touches the band (brief 1)"
+  },
+  {
+   "a": "BUY_jar_band",
+   "b": "PRT_feeder_crown",
+   "min": 2.0,
+   "why": "glass/band tolerance +/-1: nothing touches the band (brief 1); the crown is the housing part nearest the band",
+   "poses": [
+    {},
+    {
+     "PIV_jar": 30
+    }
+   ]
+  },
+  {
+   "a": "BUY_jar",
+   "b": "PRT_feeder_crown",
+   "min": 2.0,
+   "why": "glass never touches the crown (brief 1)",
+   "poses": [
+    {},
+    {
+     "PIV_jar": 30
+    }
+   ]
+  },
+  {
+   "a": "BUY_jar",
+   "b": "PRT_feeder_cover",
+   "min": 2.0,
+   "why": "glass never touches the servo lobe (brief 1)",
+   "poses": [
+    {},
+    {
+     "PIV_jar": 30
+    }
+   ]
+  },
+  {
+   "a": "PRT_feeder_disc",
+   "b": "PRT_jar_valve",
+   "min": 1.5,
+   "why": "agitator / disc top clears the valve bottom (no shear plane)"
+  },
+  {
+   "a": "PRT_feeder_housing",
+   "b": "PRT_launcher_body",
+   "min": 2.5,
+   "why": "feeder spout to the pod drum at every tilt (A1-#5, A1-#9)",
+   "poses": [
+    {
+     "PIV_tilt": 0
+    },
+    {
+     "PIV_tilt": 22.5
+    },
+    {
+     "PIV_tilt": 45
+    },
+    {
+     "PIV_tilt": 46
+    },
+    {
+     "PIV_tilt": -3
+    }
+   ]
+  },
+  {
+   "a": "PRT_beam",
+   "b": "PRT_launcher_body",
+   "min": 2.5,
+   "why": "beam underside to the pod at every tilt incl. the stops (A1-#5)",
+   "poses": [
+    {
+     "PIV_tilt": 0
+    },
+    {
+     "PIV_tilt": 22.5
+    },
+    {
+     "PIV_tilt": 45
+    },
+    {
+     "PIV_tilt": 46
+    },
+    {
+     "PIV_tilt": -3
+    }
+   ]
+  },
+  {
+   "a": "PRT_post_L",
+   "b": "PRT_encoder_cap",
+   "min": 2.0,
+   "why": "left post to the encoder end at every tilt",
+   "poses": [
+    {
+     "PIV_tilt": 0
+    },
+    {
+     "PIV_tilt": 22.5
+    },
+    {
+     "PIV_tilt": 46
+    },
+    {
+     "PIV_tilt": -3
+    }
+   ]
+  },
+  {
+   "a": "PRT_flywheel",
+   "b": "PRT_launcher_body",
+   "min": 1.5,
+   "why": "wheel to guard cavity (A1-#11 no rubbing)"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": 6.0,
+   "max": 6.4,
+   "why": "v2-A2-01 nip ray at the printed min-gap stop (gap 6.2)",
+   "ray": {
+    "frame": "PIV_hood",
+    "origin": [
+     21.0,
+     37.0,
+     131.75
+    ],
+    "dir": [
+     0,
+     0,
+     1
+    ]
+   },
+   "payload_mm": 7.0,
+   "tape_mm": 0.5,
+   "compliant": "PRT_nip_leaf: flat-printed leaf spring, 7.1 N preload, backplate lifts up to 2.2 mm at the stud (A3-M1; v2-A3-A2-01 LEAF_T 2.3, LEAF_TRAVEL 2.2)",
+   "poses": [
+    {
+     "PIV_hood": 0.327
+    }
+   ]
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": 6.8,
+   "max": 7.2,
+   "why": "v2-A1-01 nip ray at the thumbwheel static max (gap 7.0); drops stall from 7.4 (v2-A2-04: PIV_hood frame)",
+   "ray": {
+    "frame": "PIV_hood",
+    "origin": [
+     21.0,
+     37.0,
+     131.75
+    ],
+    "dir": [
+     0,
+     0,
+     1
+    ]
+   },
+   "payload_mm": 7.0,
+   "tape_mm": 0.5,
+   "compliant": "PRT_nip_leaf: flat-printed leaf spring, 7.1 N preload, backplate lifts up to 2.2 mm at the stud (A3-M1; v2-A3-A2-01 LEAF_T 2.3, LEAF_TRAVEL 2.2)",
+   "poses": [
+    {
+     "PIV_hood": -0.558
+    }
+   ]
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_launcher_body",
+   "min": 0.5,
+   "why": "v2-A1-01/A2-01 hood keeps 0.5 to the body at and 1 deg past the min-gap stop (gap 6.2)",
+   "poses": [
+    {
+     "PIV_hood": 0.327
+    },
+    {
+     "PIV_hood": 1.327
+    }
+   ]
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": 4.0,
+   "why": "v2-A1-01 hood never nears the wheel 1 deg past the min-gap stop (gap 6.2)",
+   "poses": [
+    {
+     "PIV_hood": 1.327
+    }
+   ]
+  },
+  {
+   "a": "FST_feedmount_0",
+   "b": "PRT_feeder_pinion",
+   "min": 2.35,
+   "why": "v2-A1-05 self-tap shank to pinion tips >= 2.35 (= 2.0 crown wall after threading + 0.35 tip clearance; A1 ~1.0, wall 0.94)"
+  },
+  {
+   "a": "FST_feedmount_1",
+   "b": "PRT_feeder_pinion",
+   "min": 2.35,
+   "why": "v2-A1-05 as feedmount_0"
+  },
+  {
+   "a": "PRT_post_R",
+   "b": "PRT_journal_plate",
+   "min": 0.1,
+   "poses": [
+    {
+     "PIV_tilt": 22.5
+    }
+   ],
+   "why": "audit: right journal R15/R15.2 running clearance away from the stop lugs (the contact fit hides a journal rub)"
+  },
+  {
+   "a": "BUY_servo_controller",
+   "b": "PRT_base_shell",
+   "min": 0.3,
+   "max": 6.0,
+   "why": "v2-A1-11 +X wall closed over the controller PCB at y 32 (ray from the board to the wall; it misses where the A1 52x24 notch was). Move this row if a port cutout lands here.",
+   "ray": {
+    "origin": [
+     117.0,
+     32.0,
+     14.0
+    ],
+    "dir": [
+     1,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "a": "BUY_servo_controller",
+   "b": "PRT_base_shell",
+   "min": 0.3,
+   "max": 6.0,
+   "why": "v2-A1-11 +X wall closed over the controller PCB at y 50 (ray from the board to the wall; it misses where the A1 52x24 notch was). Move this row if a port cutout lands here.",
+   "ray": {
+    "origin": [
+     117.0,
+     50.0,
+     14.0
+    ],
+    "dir": [
+     1,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "a": "BUY_servo_controller",
+   "b": "PRT_base_shell",
+   "min": 0.3,
+   "max": 6.0,
+   "why": "v2-A1-11 +X wall closed over the controller PCB at y 68 (ray from the board to the wall; it misses where the A1 52x24 notch was). Move this row if a port cutout lands here.",
+   "ray": {
+    "origin": [
+     117.0,
+     68.0,
+     14.0
+    ],
+    "dir": [
+     1,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_nip_stop",
+   "max": 0.05,
+   "poses": [
+    {
+     "PIV_hood": 0.327
+    }
+   ],
+   "why": "v2-A2-01 the hood lug lands on PRT_nip_stop at the new min-gap setting 6.2 (A2 stop sat at +1.315 = gap 5.3)"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": "=NIP_PASS",
+   "ray": {
+    "frame": "PIV_hood",
+    "origin": [
+     21.0,
+     34.0,
+     131.75
+    ],
+    "dir": [
+     0,
+     0,
+     1
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": 0.327,
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": -0.2,
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": -0.558,
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    }
+   ],
+   "why": "v2-A3-A2-01 bare gap at FULL leaf lift passes the declared MAX candy (MM_T[1] 7.5) on 0.5 tape = 8.0 at four thumbwheel settings (A3: min 7.5 = nominal candy; 7.613 at +0.327 and 7.928 at 0 failed the review row). params asserts HOOD_GAP_LIFT >= MM_T[1] + TAPE_T + 0.1. v2-A4: BDC only; the entry-arc rows below cover psi 50..80"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": "=NIP_PASS",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     7.892,
+     145.574
+    ],
+    "dir": [
+     0.0,
+     0.766,
+     0.6428
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    }
+   ],
+   "why": "v2-A4-A2-01 bare gap at FULL leaf lift on the candy's ENTRY ARC, psi 50 from BDC toward the rear (wheel plane x 21, radial ray through R38 toward the wheel centre), at the min-gap stop / home / static max: the hood pivots about HINGE at PSI_TOP 112, so the lift opens the entry arc less than BDC; the declared MAX candy on tape (NIP_PASS = MM_T[1] + TAPE_T) must pass here too. A4 read 7.94/7.72/7.50 at psi 60/70/80 (min stop) with PSI_C 78; analytic minimum with PSI_C 45 is 8.14 at psi 50 (min stop); the attempt-5 hood ships the lift-matched profile instead (params GAP_PROFILE 'lift', LIFT_FLOOR 8.105 = gap_arc at the min stop, leaf solid), because the PSI_C 45 quadratic stalled 14 drop rows. Adopts review A4 review_rows.json plus psi 50/55"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": "=NIP_PASS",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     5.87,
+     148.203
+    ],
+    "dir": [
+     0.0,
+     0.8192,
+     0.5736
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    }
+   ],
+   "why": "v2-A4-A2-01 bare gap at FULL leaf lift on the candy's ENTRY ARC, psi 55 from BDC toward the rear (wheel plane x 21, radial ray through R38 toward the wheel centre), at the min-gap stop / home / static max: the hood pivots about HINGE at PSI_TOP 112, so the lift opens the entry arc less than BDC; the declared MAX candy on tape (NIP_PASS = MM_T[1] + TAPE_T) must pass here too. A4 read 7.94/7.72/7.50 at psi 60/70/80 (min stop) with PSI_C 78; analytic minimum with PSI_C 45 is 8.14 at psi 50 (min stop); the attempt-5 hood ships the lift-matched profile instead (params GAP_PROFILE 'lift', LIFT_FLOOR 8.105 = gap_arc at the min stop, leaf solid), because the PSI_C 45 quadratic stalled 14 drop rows. Adopts review A4 review_rows.json plus psi 50/55"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": "=NIP_PASS",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     4.092,
+     151.0
+    ],
+    "dir": [
+     0.0,
+     0.866,
+     0.5
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    }
+   ],
+   "why": "v2-A4-A2-01 bare gap at FULL leaf lift on the candy's ENTRY ARC, psi 60 from BDC toward the rear (wheel plane x 21, radial ray through R38 toward the wheel centre), at the min-gap stop / home / static max: the hood pivots about HINGE at PSI_TOP 112, so the lift opens the entry arc less than BDC; the declared MAX candy on tape (NIP_PASS = MM_T[1] + TAPE_T) must pass here too. A4 read 7.94/7.72/7.50 at psi 60/70/80 (min stop) with PSI_C 78; analytic minimum with PSI_C 45 is 8.14 at psi 50 (min stop); the attempt-5 hood ships the lift-matched profile instead (params GAP_PROFILE 'lift', LIFT_FLOOR 8.105 = gap_arc at the min stop, leaf solid), because the PSI_C 45 quadratic stalled 14 drop rows. Adopts review A4 review_rows.json plus psi 50/55"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": "=NIP_PASS",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     1.291,
+     157.004
+    ],
+    "dir": [
+     0.0,
+     0.9397,
+     0.342
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    }
+   ],
+   "why": "v2-A4-A2-01 bare gap at FULL leaf lift on the candy's ENTRY ARC, psi 70 from BDC toward the rear (wheel plane x 21, radial ray through R38 toward the wheel centre), at the min-gap stop / home / static max: the hood pivots about HINGE at PSI_TOP 112, so the lift opens the entry arc less than BDC; the declared MAX candy on tape (NIP_PASS = MM_T[1] + TAPE_T) must pass here too. A4 read 7.94/7.72/7.50 at psi 60/70/80 (min stop) with PSI_C 78; analytic minimum with PSI_C 45 is 8.14 at psi 50 (min stop); the attempt-5 hood ships the lift-matched profile instead (params GAP_PROFILE 'lift', LIFT_FLOOR 8.105 = gap_arc at the min stop, leaf solid), because the PSI_C 45 quadratic stalled 14 drop rows. Adopts review A4 review_rows.json plus psi 50/55"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": "=NIP_PASS",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21.0,
+     -0.422,
+     163.403
+    ],
+    "dir": [
+     0.0,
+     0.9848,
+     0.1736
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": "=HOOD_HI",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": 0.0,
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    },
+    {
+     "PIV_hood": "=HOOD_STATIC_LO",
+     "PIV_nip_lift": "=-HOOD_LEAF_LIFT"
+    }
+   ],
+   "why": "v2-A4-A2-01 bare gap at FULL leaf lift on the candy's ENTRY ARC, psi 80 from BDC toward the rear (wheel plane x 21, radial ray through R38 toward the wheel centre), at the min-gap stop / home / static max: the hood pivots about HINGE at PSI_TOP 112, so the lift opens the entry arc less than BDC; the declared MAX candy on tape (NIP_PASS = MM_T[1] + TAPE_T) must pass here too. A4 read 7.94/7.72/7.50 at psi 60/70/80 (min stop) with PSI_C 78; analytic minimum with PSI_C 45 is 8.14 at psi 50 (min stop); the attempt-5 hood ships the lift-matched profile instead (params GAP_PROFILE 'lift', LIFT_FLOOR 8.105 = gap_arc at the min stop, leaf solid), because the PSI_C 45 quadratic stalled 14 drop rows. Adopts review A4 review_rows.json plus psi 50/55"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "min": 8.8,
+   "max": 9.3,
+   "ray": {
+    "frame": "PIV_hood",
+    "origin": [
+     21.0,
+     34.0,
+     131.75
+    ],
+    "dir": [
+     0,
+     0,
+     1
+    ]
+   },
+   "poses": [
+    {
+     "PIV_hood": -0.558,
+     "PIV_nip_lift": -2.19
+    }
+   ],
+   "why": "v2-A3-A2-01 BOM claim 'a jam lifts the hood to gap ~9.0' at the thumbwheel max (params HOOD_GAP_MAX 8.99; A3 8.35)"
+  },
+  {
+   "a": "PRT_nip_wheel",
+   "b": "PRT_nip_cover",
+   "min": 4.2,
+   "max": 4.4,
+   "poses": [
+    {
+     "PIV_nip_lift": -2.19
+    }
+   ],
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     13.0,
+     -14.125,
+     130.52
+    ],
+    "dir": [
+     0,
+     -0.94792,
+     -0.31851
+    ]
+   },
+   "why": "v2-A3-A2-01 hard stop: at the PIV_nip_lift limit -2.190 the thumbwheel top is LEAF_PAD_H + LEAF_T = 2.0 + 2.3 = 4.3 under the cover roof along the stud axis, so the leaf stack is solid (home 6.5)"
+  },
+  {
+   "a": "PRT_nip_wheel",
+   "b": "PRT_nip_cover",
+   "min": 6.4,
+   "max": 6.6,
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     13.0,
+     -14.125,
+     130.52
+    ],
+    "dir": [
+     0,
+     -0.94792,
+     -0.31851
+    ]
+   },
+   "why": "v2-A3-A2-01 same ray at home: leaf travel 2.2 = 6.5 - 4.3 (A3 1.5 = 6.0 - 4.5)"
+  },
+  {
+   "a": "PRT_feeder_disc",
+   "b": "PRT_feeder_disc",
+   "min": 13.65,
+   "max": 13.85,
+   "ray": {
+    "frame": "PIV_pan",
+    "origin": [
+     10.5,
+     18.187,
+     267.3
+    ],
+    "dir": [
+     0,
+     1,
+     0
+    ]
+   },
+   "why": "v2-A3-A1-03 pocket diameter along y at z 267.3: POCKET_D 13.75 +/- 0.1 (A3 13.9). The payload_fit rows carry the real test (lens pair 12.5 x 6.3 blocked, flat 13.5 x 7.5 fits); these rays pin the printed diameter the coupon picks"
+  },
+  {
+   "a": "PRT_feeder_disc",
+   "b": "PRT_feeder_disc",
+   "min": 13.65,
+   "max": 13.85,
+   "ray": {
+    "frame": "PIV_pan",
+    "origin": [
+     10.5,
+     18.187,
+     267.3
+    ],
+    "dir": [
+     1,
+     0,
+     0
+    ]
+   },
+   "why": "v2-A3-A1-03 pocket diameter along x at z 267.3: POCKET_D 13.75 +/- 0.1 (A3 13.9). The payload_fit rows carry the real test (lens pair 12.5 x 6.3 blocked, flat 13.5 x 7.5 fits); these rays pin the printed diameter the coupon picks"
+  },
+  {
+   "a": "PRT_feeder_disc",
+   "b": "PRT_feeder_disc",
+   "min": 13.65,
+   "max": 13.85,
+   "ray": {
+    "frame": "PIV_pan",
+    "origin": [
+     10.5,
+     18.187,
+     269.3
+    ],
+    "dir": [
+     0,
+     1,
+     0
+    ]
+   },
+   "why": "v2-A3-A1-03 pocket diameter along y at z 269.3: POCKET_D 13.75 +/- 0.1 (A3 13.9). The payload_fit rows carry the real test (lens pair 12.5 x 6.3 blocked, flat 13.5 x 7.5 fits); these rays pin the printed diameter the coupon picks"
+  },
+  {
+   "a": "PRT_feeder_disc",
+   "b": "PRT_feeder_disc",
+   "min": 13.65,
+   "max": 13.85,
+   "ray": {
+    "frame": "PIV_pan",
+    "origin": [
+     10.5,
+     18.187,
+     269.3
+    ],
+    "dir": [
+     1,
+     0,
+     0
+    ]
+   },
+   "why": "v2-A3-A1-03 pocket diameter along x at z 269.3: POCKET_D 13.75 +/- 0.1 (A3 13.9). The payload_fit rows carry the real test (lens pair 12.5 x 6.3 blocked, flat 13.5 x 7.5 fits); these rays pin the printed diameter the coupon picks"
+  },
+  {
+   "a": "PRT_turntable",
+   "b": "PRT_nip_wheel",
+   "min": 24.0,
+   "max": 25.0,
+   "ray": {
+    "origin": [
+     19.5,
+     -1.382,
+     111.593
+    ],
+    "dir": [
+     0,
+     -0.316,
+     0.949
+    ]
+   },
+   "why": "v2-A2-03 thumbwheel rim crest on the finger approach line (tilt 0, x 19.5, rim mid-face u -1): 10.11 to the turntable + 14.4 to the rim (A2 24.51); pins the rim so the guard rows below mean something"
+  },
+  {
+   "a": "PRT_turntable",
+   "b": "PRT_launcher_body",
+   "min": 24.9,
+   "ray": {
+    "origin": [
+     19.5,
+     1.936,
+     112.707
+    ],
+    "dir": [
+     0,
+     -0.316,
+     0.949
+    ]
+   },
+   "why": "v2-A2-03 an R8 fingertip on the rim crest clears the guard shelf: shelf face >= 13.6 along the approach at u -4.5 (11.29 + 13.6; A2 shelf at 10.0 = 4.4 proud of the rim)"
+  },
+  {
+   "a": "PRT_turntable",
+   "b": "PRT_launcher_body",
+   "min": 24.4,
+   "ray": {
+    "origin": [
+     19.5,
+     3.358,
+     113.185
+    ],
+    "dir": [
+     0,
+     -0.316,
+     0.949
+    ]
+   },
+   "why": "v2-A2-03 R8 fingertip clears the guard shelf at u -6 (11.79 + 12.64)"
+  },
+  {
+   "a": "PRT_turntable",
+   "b": "PRT_launcher_body",
+   "min": 22.7,
+   "ray": {
+    "origin": [
+     19.5,
+     5.254,
+     113.822
+    ],
+    "dir": [
+     0,
+     -0.316,
+     0.949
+    ]
+   },
+   "why": "v2-A2-03 R8 fingertip clears the guard shelf at u -8 (12.46 + 10.27)"
+  },
+  {
+   "a": "PRT_gate_detent",
+   "b": "PRT_jar_gate",
+   "max": 0.15,
+   "why": "v2-A2-A1-09 detent clip bump seated in the gate's closed notch (the open notch is GATE_TRAVEL = 52 along -X on the same blade)"
+  },
+  {
+   "a": "CAB_launcher_base",
+   "b": "BUY_motorgo_axis",
+   "max": 3.0,
+   "why": "v2-A2-02 the launcher lead (3 phases + encoder JST) reaches the MotorGo on the base side (A2: the bundle stopped at the hub, 59 mm from the board)"
+  },
+  {
+   "a": "CAB_launcher_base",
+   "b": "CAB_launcher_bundle",
+   "max": 1.0,
+   "poses": [
+    {
+     "PIV_pan": -90
+    },
+    {},
+    {
+     "PIV_pan": 90
+    }
+   ],
+   "why": "v2-A2-02 the moving bundle and the static base lead meet on the pan axis at every pan (the U-loop is in the static segment)"
+  },
+  {
+   "a": "PRT_hood",
+   "b": "PRT_launcher_body",
+   "min": 0.5,
+   "poses": [
+    {
+     "PIV_hood": -0.558,
+     "PIV_nip_lift": -2.19
+    },
+    {
+     "PIV_hood": -0.558,
+     "PIV_nip_lift": 0.0
+    }
+   ],
+   "why": "v2-A3-A2-01 fix step 3: the bay is relieved for the deeper lift; the hood keeps 0.5 to the body at the static max with the leaf solid (HOOD_LO -2.748; A3 0.50 at -2.051)"
+  },
+  {
+   "a": "FST_detent_0",
+   "b": "PRT_jar_gate",
+   "min": 2.4,
+   "why": "v2-A3-A3-01 the stock M3 x 10 pan self-tap, head counterbored into the tab (v2-A4-01: 2.4, flush with the 39.9 back face; A4 1.0), ends where the A3 x 9 tip did (2.65 above the blade); a longer screw or a shallower counterbore drags on the gate"
+  },
+  {
+   "a": "FST_detent_0",
+   "b": "PRT_jar_adapter",
+   "min": 0.5,
+   "why": "v2-A3-A3-01 feeder step: the x 10 tip (y 27.5) stays off the R27.5 spout. The review's sink-only fix (back face 36.5, head 1.0 down) put the tip at y 25.5 inside the spout; the back face moved to 38.5 instead (A3 x 9, no sink: 0.9); v2-A4-01: back face 39.9 with a 2.4 counterbore, bearing face still at y 37.5, tip still at y 27.5"
+  },
+  {
+   "a": "PRT_gate_detent",
+   "b": "PRT_jar_gate",
+   "max": 0.15,
+   "poses": [
+    {
+     "PIV_gate": "=GATE_TRAVEL"
+    }
+   ],
+   "why": "v2-A4 (attempt 5) detent bump seated in the blade's open notch at PIV_gate 52 (closed-notch row above reads the same 0.10)"
+  },
+  {
+   "a": "FST_detent_0",
+   "b": "PRT_jar_gate",
+   "min": 2.4,
+   "poses": [
+    {
+     "PIV_gate": 0
+    },
+    {
+     "PIV_gate": "=GATE_TRAVEL"
+    }
+   ],
+   "why": "v2-A4 (attempt 5) the M3 x 10 tip stays off the gate closed and open (the home row reads 2.652 over the blade)"
+  },
+  {
+   "a": "PRT_jar_gate",
+   "b": "PRT_jar_adapter",
+   "max": 0.1,
+   "poses": [
+    {
+     "PIV_gate": "=GATE_TRAVEL + GATE_STOP_CLR"
+    }
+   ],
+   "why": "v2-A4 (attempt 5) hard stop: the blade's stop lug meets the adapter spout's +X notch shoulder at PIV_gate 52.35 (slide_out open-stop row blocks there too)"
+  },
+  {
+   "a": "PRT_jar_gate",
+   "b": "PRT_jar_valve",
+   "max": 0.1,
+   "poses": [
+    {
+     "PIV_gate": "=GATE_SLOT_X0 - GATE_X0"
+    }
+   ],
+   "why": "v2-A4 (attempt 5) hard stop: the closed blade's -X end meets the valve's -X cheek face (GATE_SLOT_X0) at PIV_gate -0.4"
+  },
+  {
+   "a": "BUY_jar_band",
+   "b": "PRT_gate_detent",
+   "min": 0.3,
+   "why": "v2-A4-01 the detent tab's 45 deg top chamfer clears the jar band's lip corner (R36.75, z 300.5); params GATE_DETENT tab_chamfer 0.32 (A4: R37.25 step, 0.5)"
+  }
+ ],
+ "stacks": [
+  {
+   "name": "magnet centring on the rear shaft (A1-#7, A2-#6)",
+   "limit": 0.3,
+   "terms": [
+    {
+     "what": "v2-A1-07 jig spigot 7.9 in the motor's 8.0 rear access hole",
+     "tol": 0.05
+    },
+    {
+     "what": "magnet in its 6.1 jig pocket",
+     "tol": 0.05
+    },
+    {
+     "what": "encoder cap spigot crush ribs in the nacelle bore",
+     "tol": 0.05
+    },
+    {
+     "what": "motor can crush ribs in the nacelle bore",
+     "tol": 0.05
+    },
+    {
+     "what": "v2-A1-07 Plink PCB pegs 2.4 in 2.5 holes",
+     "tol": 0.05
+    },
+    {
+     "what": "MT6701 IC position on the PCB",
+     "tol": 0.05
+    }
+   ]
+  },
+  {
+   "name": "jar band clears the housing (designed radial clearance 3.0)",
+   "limit": 3.0,
+   "terms": [
+    {
+     "what": "glass thread / band (nominal jar)",
+     "tol": 1.0
+    },
+    {
+     "what": "adapter disc in the band",
+     "tol": 0.75
+    },
+    {
+     "what": "spout in the valve bore",
+     "tol": 0.15
+    },
+    {
+     "what": "valve in the socket",
+     "tol": 0.3
+    },
+    {
+     "what": "bayonet lug in its slot",
+     "tol": 0.2
+    }
+   ]
+  },
+  {
+   "name": "pocket over outlet at fire (outlet 16, pocket 13.75, candy 13): v2-A1-03 / v2-A3-A1-03, limit (16 - 13.75) / 2",
+   "limit": 1.125,
+   "terms": [
+    {
+     "what": "gear backlash at the pocket circle",
+     "tol": 0.15
+    },
+    {
+     "what": "servo deadband +/-0.5 deg at the pinion -> 0.34 deg at r 21",
+     "tol": 0.12
+    },
+    {
+     "what": "disc land R31 in the crown bore R31.3 (radial play)",
+     "tol": 0.3
+    },
+    {
+     "what": "outlet position in the housing",
+     "tol": 0.1
+    }
+   ]
+  }
+ ],
+ "exposure": {
+  "max_cable_mm": 5,
+  "cables_ok": [
+   "CAB_usb*"
+  ],
+  "min_escape": 8
+ },
+ "cable_leads": {
+  "CAB_phase_*": 80,
+  "CAB_usb": 1000,
+  "CAB_12v_in": 200,
+  "CAB_12v_mg": 100,
+  "CAB_12v_ctrl": 250,
+  "CAB_uart": 300,
+  "CAB_bus_pan": 350,
+  "CAB_bus_tilt": 300,
+  "CAB_bus_feeder": 500,
+  "CAB_launcher_bundle": 350,
+  "CAB_launcher_base": 250,
+  "CAB_encoder": 115
+ },
+ "masses_g": {
+  "BUY_battery": 620,
+  "BUY_dewalt_adapter": 90,
+  "BUY_buck_12v": 180,
+  "BUY_motorgo_axis": 25,
+  "BUY_servo_controller": 30,
+  "BUY_servo_*": 66,
+  "BUY_horn_*": 4,
+  "BUY_motor": 200,
+  "BUY_magnet": 1,
+  "BUY_plink_encoder": 3,
+  "BUY_usbc_plug": 10,
+  "BUY_jar": 350,
+  "BUY_mm_fill": 400,
+  "BUY_jar_band": 15,
+  "BUY_tape": 2
+ },
+ "printers": {
+  "P1S": [
+   256,
+   256,
+   256
+  ],
+  "H2D": [
+   325,
+   320,
+   325
+  ]
+ },
+ "prefer_printer": "P1S",
+ "flexures": [
+  {
+   "part": "PRT_nip_leaf",
+   "name": "nip leaf spring",
+   "from": [
+    17.75,
+    -24.5,
+    168.0
+   ],
+   "to": [
+    17.75,
+    -9.5,
+    128.5
+   ],
+   "stress_mpa": 35.5,
+   "why": "v2-A3-A2-01 leaf root stress at the solid stop 35.5 MPa (LEAF_T 2.3, LEAF_PRE 1.2, LEAF_TRAVEL 2.2; launcher_geom.leaf_numbers; A3 30.7); printed flat so it runs in the layer plane. Thickest candy at the min stop 30.4, nominal 26.9"
+  },
+  {
+   "part": "PRT_gate_detent",
+   "name": "gate detent clip",
+   "from": [
+    17.0,
+    25.5,
+    291.05
+   ],
+   "to": [
+    29.5,
+    25.5,
+    291.05
+   ],
+   "stress_mpa": 16.1,
+   "why": "v2-A2-A1-09 1.2 plate beam from its root at the tab (x 17) to the bump (x 29.5); printed on its +Y back face so the beam and its bending lie in the layer plane; 0.4 lift riding the blade, 3 E t d / 2 L^2 = 16.1 MPa (params GATE_DETENT_STRESS)"
+  }
+ ],
+ "accepted_warns": [
+  {
+   "match": "FST_hinge needs a 104 mm+ bit",
+   "why": "the 104 mm hex bit is in the BOM tool list (reviewed A2)"
+  },
+  {
+   "match": "PRT_hub_gear: 72 wall samples",
+   "why": "involute tooth tips (m1 gear), not a wall"
+  },
+  {
+   "match": "PRT_pan_pinion: 72 wall samples",
+   "why": "involute tooth tips, not a wall"
+  },
+  {
+   "match": "PRT_feeder_pinion: 60 wall samples",
+   "why": "involute tooth tips, not a wall"
+  },
+  {
+   "match": "PRT_feeder_disc: 88 wall samples",
+   "why": "involute tooth tips on the gear band, not a wall"
+  },
+  {
+   "match": "PRT_gate_detent: 66 wall samples",
+   "why": "v2-A4-01 (attempt 5): all 66 on the 1.2 plate, the designed detent beam (flexures row, 16.1 MPa in the layer plane); min 1.18 at its 0.4 edge breaks (20.8,39.9,291 / 16,28,291). A4 read 55: the plate is 1.4 wider now that the back face is at y 39.9. The tab reads none (an all-faces probe found no tab sample under 1.55): its 45 deg top chamfer passes 1.25 over the \u00d83.4 clearance hole at the R34.05 inner edge (cad q ray 9.5,32.8 -> z 297.445 vs hole top 296.2)"
+  },
+  {
+   "match": "PRT_jar_gate: 15 wall samples",
+   "why": "v2-A2-A1-09 1.4 of blade under the two R1.1 x 0.6 detent notches (2.0 blade, infill 100, the notches sit outside the bore at r 34-39)"
+  },
+  {
+   "match": "PRT_beam: 205 mm2 of sloped overhang",
+   "why": "v2-A3 finish (A1-08): 31 loft-seam facets at the four R6 plan corners where the 45 deg top chamfer ends, 4.0-4.5 above the bed (top face down), 8 patches of 4-21 mm2; the chamfer round them prints at 45. Not csk cones (the A2 BOM said so; the feeder csk open on the underside, which prints up)"
+  },
+  {
+   "match": "PRT_feeder_cover: 14 wall samples < 1.6 mm (min 1.40)",
+   "why": "v2-A3 finish (A1-08): 1.4 roof over the servo idler-boss recess (R3.6 on the pinion axis x -55.5, z 320.9); the chamfered top prints on the bed, so it is solid bottom layers, and it carries no load"
+  },
+  {
+   "match": "PRT_jar_valve: 21 wall samples < 1.6 mm (min 1.29)",
+   "why": "v2-A3 finish (A1-08): 1.29 roof between the three FST_valve_* cap-head counterbores (radial, z 295.5, r 31..34) and the cheek tops at z 300; teardrop roof, no load (the head bears radially on the counterbore floor)"
+  },
+  {
+   "match": "PRT_journal_plate: 17 wall samples < 1.6 mm (min 1.29)",
+   "why": "v2-A3 finish (A1-08): floor of the FST_hinge_nut trap (trap from x 32.8, plate inner face X_COVER_IN 31.5). Printed inner face down, so the 1.3 floor is solid bottom layers, loaded only in compression by the nut"
+  },
+  {
+   "match": "PRT_nip_cover: 4 wall samples < 1.6 mm (min 1.48)",
+   "why": "v2-A3 finish (A1-08): 1.48-1.52 at the new 45 deg slot-end chamfer (13.5,-12.9,124.8 / 22,-16.2,126.5) and the edge of the FST_nipcover_1 counterbore (26,-30,167); A2 had 15 samples at 1.35 and 171 mm2 of overhang (now 19.5, no warn)"
+  },
+  {
+   "match": "PRT_nip_wheel: 18 wall samples < 1.6 mm (min 1.50)",
+   "why": "v2-A3 finish (A1-08): the thumbwheel's outer face over the captive nut trap (trap to u 3.5, wheel TW_T 5.0), pierced by the 3.4 stud hole; it prints first (outer face on the bed) as solid bottom layers and only sees the leaf preload through the nut"
+  },
+  {
+   "match": "PRT_launcher_body x PRT_hood collide only",
+   "why": "v2-A3-A2-01 launcher step: only at hood -3.06 with the leaf 2.5 past solid (lift -4.69). In range hood to body is 0.54 at both hood stops with lift 0 or -2.19 (distances rows), and the lift-0 sweep holds 0.54 from -0.558 to -2.558 (cad q sweep)"
+  },
+  {
+   "match": "PRT_launcher_body x PRT_nip_wheel collide only",
+   "why": "v2-A3 finish: nip_lift +2.5 pushes the thumbwheel into its seat; nip_lift 0 IS that seat (fits contact, cad q dist at home 0.000)"
+  },
+  {
+   "match": "PRT_hood x PRT_nip_stop collide only",
+   "why": "v2-A3 finish: nip_lift +2.5 (into the seat) with the hood on its gap-6.2 stop; the stop face is PIV_hood hi (cad q dist at +0.327: 0.000)"
+  },
+  {
+   "match": "PRT_nip_stop_sleeve x PRT_nip_wheel collide only",
+   "why": "v2-A3 finish: hood -3.06 is 2.5 past the gap-7.0 stop that this pair forms (cad q dist at -0.558: 0.000)"
+  },
+  {
+   "match": "PRT_nip_stop_sleeve x FST_tw_nut collide only",
+   "why": "v2-A3 finish: hood -3.06, 2.5 past the gap-7.0 sleeve stop; at the stop 0.805 (cad q dist, declared fit 0.5)"
+  },
+  {
+   "match": "PRT_nip_wheel x PRT_nip_cover collide only",
+   "why": "v2-A3-A2-01 launcher step: nip_lift -4.69 is 2.5 past the leaf-solid limit (-2.190: pad + strip 4.3 between wheel and roof, distances row 4.288); at the limit the rim keeps 1.143 to the finger slot (cad q dist)"
+  },
+  {
+   "match": "PRT_nip_stop_sleeve x PRT_nip_leaf collide only",
+   "why": "v2-A3-A2-01 launcher step: both nip joints 2.5 past their stops; 1.782 at hood -0.558 + lift -2.19 (cad q dist)"
+  },
+  {
+   "match": "PRT_post_R x PRT_journal_plate collide only",
+   "why": "v2-A3 finish: the printed tilt stop lugs meet at +46 (cad q dist at tilt 46: 0.000; 0.142 at the 45 firmware limit), inside the 2.5 overtravel by design (fits contact row A1-#5)"
+  },
+  {
+   "match": "PRT_hood x FST_nipstop collide only",
+   "why": "v2-A3-A2-01 launcher step: nip_lift +2.5 (into the seat) or hood past +1.8; at the stops hood to FST_nipstop is 2.0 (+0.327), 3.822 (+0.327 at full lift -2.19), 3.048 / 4.806 (-0.558 at lift 0 / -2.19) (cad q dist)"
+  },
+  {
+   "match": "PRT_hood x PRT_nip_cover collide only",
+   "why": "v2-A3-A2-01 launcher step: hood -3.06 and lift -4.69, both 2.5 past their stops; 3.233 at -0.558 / -2.19 (cad q dist)"
+  },
+  {
+   "match": "PRT_launcher_body x PRT_hood touch just past",
+   "why": "v2-A3 finish: nip_lift +2.5 into the seat (cad q sweep at hood +0.327: 0.54 at lift 0..1.0, touch from +1.5); 0.54 at both hood stops in range"
+  },
+  {
+   "match": "PRT_hood x FST_nipstop touch just past",
+   "why": "v2-A3 finish: nip_lift +2.5 into the seat; 2.0-3.0 at every in-range stop pose (cad q dist)"
+  },
+  {
+   "match": "PRT_nip_stop_sleeve to PRT_nip_leaf 0.70 mm",
+   "why": "v2-A3-A2-01 launcher step: only at nip_lift -4.69 (2.5 past solid); 1.782 at hood -0.558 + lift -2.19 (cad q dist)"
+  },
+  {
+   "match": "tilt servo out +X through the right post",
+   "why": "v2-A3 finish (A2 slide 0.10): the 0.10 is at rest (slide step 0), from the tips of the four FST_tilt_horn_* M2 x 8 (x 45.5, 0.2 past the adapter's -X face) to the journal plate's counterbore floor (x 45.4). Both ride PIV_tilt, keyed together, so there is no relative axial motion, and the slide moves the tips away. After that the closest pair is the 12 AF key in its 12.3 AF socket, 0.15 per flat for 6.5 mm (vertex probe of the slide: 0.15 at 0..5 mm, 0.72 at 7, nothing within 3 mm from 10). It is not the 0.3 servo clamp pocket in post_R, so opening that pocket would change nothing, and opening the socket would add tilt backlash"
+  },
+  {
+   "match": "PRT_nip_leaf: 5 wall samples < 1.6 mm (min 1.49)",
+   "why": "v2-A3-A2-01 launcher step: 1.49-1.54 between FST_leaf_1's pilot (axis x 26, now run through the root block) and the leaf's +X end face (x 28.7), in the root block that the cover clamps; infill 100. The bending strip is LEAF_T 2.3"
+  },
+  {
+   "match": "PRT_launcher_body to PRT_hood 0.21 mm just past the limit (hood=-3.05814, nip_lift=0)",
+   "why": "v2-A3-A2-01 launcher step: hood -3.06 at lift 0 is 0.31 deg past HOOD_LO -2.748 (the bay, BAY_EPS from EPS_OPEN, ends there). cad q sweep at lift 0: 0.54 from -0.558 to -2.558, 0.485 at -2.808, 0.214 at -3.058; the distances rows read 0.54 at -0.558 with lift 0 and -2.19"
+  },
+  {
+   "match": "PRT_launcher_body to PRT_nip_stop_sleeve 0.24 mm just past",
+   "why": "v2-A3-A2-01 launcher step: hood 2.83 with nip_lift +2.5, both past their stops; in range 0.584-0.595 (cad q dist at +0.327 and -0.558, lift 0 / -2.19)"
+  },
+  {
+   "match": "PRT_nip_leaf to FST_tw_nut 0.57 mm at nip_lift=-4.68977",
+   "why": "v2-A3-A2-01 launcher step: only at nip_lift -4.69 (2.5 past the leaf-solid limit). The leaf is drawn free (strip underside u 5.8); its fork now clears the nut corner by 0.7, and at the limit -2.19 the nut is 1.289 from it (cad q dist; was 0.35 with the 2.6 fork)"
+  },
+  {
+   "match": "clearance: PRT_hood to BUY_tape",
+   "why": "v2-A4 launcher step: only at hood +2.83 with nip_lift +2.5, both 2.5 past their stops (PRT_nip_stop at +0.327, thumbwheel seat at lift 0). In range the hood keeps 5.674 to the tape at +0.327 and 4.698 one degree past it (cad q dist)"
+  },
+  {
+   "match": "PRT_jar_adapter x PRT_jar_gate collide only 2.5 deg (1 mm on slides) past the joint limit (gate=53)",
+   "why": "v2-A4 (attempt 5) positive open stop at 52.35: the blade's stop lug meets the adapter spout's +X notch shoulder, so the 1.0 overtravel past PIV_gate 52 runs into it by design (distances hard-stop row 0.0 at 52.35; slide_out open-stop row blocked by PRT_jar_adapter)"
+  },
+  {
+   "match": "PRT_jar_valve x PRT_jar_gate collide only 2.5 deg (1 mm on slides) past the joint limit (gate=-1)",
+   "why": "v2-A4 (attempt 5) positive closed stop at -0.4: the blade's -X end meets the valve's -X cheek face (GATE_SLOT_X0 -27.4 vs GATE_X0 -27.0), so the 1.0 overtravel below closed runs into it by design (distances hard-stop row 0.0 at PIV_gate -0.4)"
+  }
+ ],
+ "payload_fit": [
+  {
+   "name": "v2-A3-A1-03 pocket blocks an edge-on MIN pair 12.5 x 6.3 (pair across x)",
+   "against": [
+    "PRT_feeder_disc"
+   ],
+   "center": [
+    10.5,
+    18.187,
+    263.0
+   ],
+   "frame": "PIV_feeder",
+   "up": [
+    0,
+    0,
+    1
+   ],
+   "across": [
+    1,
+    0,
+    0
+   ],
+   "place": "pair_edge_on",
+   "size": [
+    12.5,
+    6.3
+   ],
+   "shape": "lens",
+   "expect": "blocked",
+   "margin": 0.05,
+   "why": "MM_D[0] x MM_T[0]; lens = sharpest rim, the conservative probe. A3 \u00d813.9: overlap 0.023 mm3, margin 0.00 (precheck). Target at \u00d813.75 >= 0.05"
+  },
+  {
+   "name": "v2-A3-A1-03 pocket blocks an edge-on MIN pair 12.5 x 6.3 (pair across y)",
+   "against": [
+    "PRT_feeder_disc"
+   ],
+   "center": [
+    10.5,
+    18.187,
+    263.0
+   ],
+   "frame": "PIV_feeder",
+   "up": [
+    0,
+    0,
+    1
+   ],
+   "across": [
+    0,
+    1,
+    0
+   ],
+   "place": "pair_edge_on",
+   "size": [
+    12.5,
+    6.3
+   ],
+   "shape": "lens",
+   "expect": "blocked",
+   "margin": 0.05,
+   "why": "same pair turned 90 deg about the pocket axis"
+  },
+  {
+   "name": "v2-A3-A1-03 pocket blocks an edge-on NOMINAL pair 13 x 7",
+   "against": [
+    "PRT_feeder_disc"
+   ],
+   "center": [
+    10.5,
+    18.187,
+    263.0
+   ],
+   "frame": "PIV_feeder",
+   "up": [
+    0,
+    0,
+    1
+   ],
+   "across": [
+    1,
+    0,
+    0
+   ],
+   "place": "pair_edge_on",
+   "size": [
+    13.0,
+    7.0
+   ],
+   "shape": "lens",
+   "expect": "blocked",
+   "margin": 0.3,
+   "why": "MM_D_NOM x MM_T_NOM: the common case must be blocked by a wide margin"
+  },
+  {
+   "name": "v2-A3-A1-03 pocket seats one flat MAX 13.5 x 7.5",
+   "against": [
+    "PRT_feeder_disc"
+   ],
+   "center": [
+    10.5,
+    18.187,
+    263.0
+   ],
+   "frame": "PIV_feeder",
+   "up": [
+    0,
+    0,
+    1
+   ],
+   "place": "flat",
+   "size": [
+    13.5,
+    7.5
+   ],
+   "shape": "lens",
+   "expect": "fits",
+   "margin": 0.05,
+   "why": "MM_D[1] x MM_T[1] drops through. A3 \u00d813.9: margin 0.20 (precheck); target at \u00d813.75 >= 0.05"
+  }
+ ],
+ "sightlines": [
+  {
+   "name": "v2-A3-A2-03 fingertip line reaches the thumbwheel rim first (rim width x 17.5..21.5)",
+   "frame": "PIV_tilt",
+   "poses": [
+    {},
+    {
+     "PIV_tilt": 45
+    },
+    {
+     "PIV_nip_lift": -2.19
+    }
+   ],
+   "origins": [
+    [
+     17.5,
+     -1.619,
+     111.513
+    ],
+    [
+     19.5,
+     -1.619,
+     111.513
+    ],
+    [
+     21.5,
+     -1.619,
+     111.513
+    ]
+   ],
+   "dir": [
+    0,
+    -0.316,
+    0.949
+   ],
+   "first_hit": "PRT_nip_wheel",
+   "max_mm": 30,
+   "why": "BOM 'set the nip gap through the finger slot with the cover on' as a row (A3 used cad q ray: PRT_nip_wheel at 14.4, precheck 13.75/14.4/13.75 at tilt 0 and 45). The full-lift pose guards the raised cover roof. v2-A4: origins moved 0.25 along U with NIP_E (PSI_C 45 moved JACK_SURF one 0.25 step out), so the line keeps its place in the finger slot"
+  }
+ ],
+ "cable_chains": [
+  {
+   "name": "encoder signal (BOM item 15)",
+   "cables": [
+    "CAB_encoder",
+    "CAB_launcher_bundle",
+    "CAB_launcher_base"
+   ],
+   "lead": "=ENC_LEAD - 5",
+   "why": "v2-A4 (A2-02, tool now has cable_chains): one 5-wire JST-SH lead, Plink to MotorGo, unspliced across tilt and pan; 5 for the two connector ends. Replaces the finish.py budget arithmetic as the check (cable_leads CAB_encoder kept)"
+  },
+  {
+   "name": "phase conductors (BOM item 13)",
+   "cables": [
+    "CAB_phase_2",
+    "CAB_launcher_bundle",
+    "CAB_launcher_base"
+   ],
+   "lead": 700,
+   "why": "v2-A4 finish (attempt 5): each 16 AWG phase wire (3 x 700, one per colour) runs from the motor-lead splice in the journal bore (CAB_phase_*, the longest of the three) through the bundle and the base lead to the MotorGo J6/J8 pads, unspliced across tilt and pan; the bundle/base junction on the pan axis is that one wire"
+  }
+ ],
+ "cable_junctions_ok": [
+  "CAB_phase_*",
+  "CAB_bus_*"
+ ]
+}

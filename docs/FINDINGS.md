@@ -25,7 +25,10 @@ Sources are abbreviated:
   `ae5efc1c43c08dd7a`, `V2R3` review `a9d0baaa5e62c78f0`.
   v2 A4 agents: `P4` plan `aaea83537a75dface`, builders `B4-params` `a7061741ac9adb630`, `B4-launcher` `ab19211aef41d8234`,
   `B4-feeder` `a7f1b7ad89443aea1`, `B4-cables` `a98004765603d790f`, `B4-finish` `a4c233ad282956d1b`, `F4` finish
-  `a2dd9ca6dd2a3d344`, `V2R4` review `a9b8ec9c08d63b15a`
+  `a2dd9ca6dd2a3d344`, `V2R4` review `a9b8ec9c08d63b15a`.
+  v2 A5 agents: `P5` plan `a3ebd0625cbbbed8c`, builders `B5-params` `a88feb02c28c95899`, `B5-launcher` `a38b2d19c5e922bf3`,
+  `B5-feeder` `a2ac75214634ea45d`, `B5-finish` `aaceba7df82b03f7a`, `F5` finish `a25a45ccbe64f5e05`, `V2R5` review
+  `a4683ee602e280ba5`
 
 **Baseline:** v1 (the no-tools loop) ran attempts 1-3 and was then stopped by the user (2026-10-24 evening, see
 `HARVEST_BRIEF.md` "Process change"). The v1 tool results below are counterfactual. Every
@@ -1275,3 +1278,145 @@ third time).
 - `tools/verify_all.sh`: 71/71 passed (`/tmp/alex3d-verify.log`); A1-A3 and v2 A1-A3 unchanged. New: verify 4g (v2 A4 designer config 0 F / 0 untriaged / 6 stale accepts / 8 past-limit poses; the
   swept row fails at 7.50 / 7.67 / 7.95 worst at psi 80; -2.19 on the A3 model listed past the limit; stale-model warn
   survives an accept; a raising build script exits non-zero with `BUILD FAILED`).
+
+## v2 Attempt 5 (harvested 2026-10-25)
+
+Inputs: the 7 attempt-5 agents in `V2WF/journal.jsonl` (lines 66-79) and their transcripts, plus `HW2/renders/attempt-5/`:
+progress.md, cadcheck.json, precheck_a4_model*.json, review.md, review.json, review/ (notes.md, review_rows.json,
+cadcheck_review.json, 2 PNGs). The blend V2R5 reviewed (`/tmp/rv5/model.blend`, md5 `015396a3…`, the same as
+`HW2/blender/model.blend` at 08:46) is archived as `examples/mm-launcher-v2a5/` with the designer's checks.json,
+manifest.json, BOM, V2R5's `review_rows_v2a5.json`, `overlay_v2a5.json` (the entry arc as one swept row per setting) and
+`overlay_v2a5_band.json` (the designer's band stack with `between`, plus a planted bounded allow). Plan #6 had started
+(0.6 min) and is not ingested.
+
+**The tools were `dea6536`** (progress.md line 1): the first attempt with `cad rows`, `cad bom`, `=EXPR`, prismatic
+joints, slide `flex`, `cable_chains` and the ray-slip / inscribed-bridge fixes, but not `36189b8` (`ray.sweep`, past-limit
+list, stale-model warn, `BUILD FAILED`). Plan #6 moves the pin to `36189b8`, so **this run's fixes reach v2 attempt 7.**
+
+### Per-agent cost (`cc_transcript.py workflow V2WF`)
+
+| Agent | Wall | Model | Tools | Output tok (thinking) | Cache read | Peak ctx | Longest gen | cad runs (failed) | Images |
+|---|---|---|---|---|---|---|---|---|---|
+| P5 plan | 8.5 | 7.5 | 0.9 | 38k (18k) | 2.6M | 127k | <120 s | 2 (0) | 0 |
+| B5-params | 9.3 | 3.4 | 5.9 | 18k (9k) | 0.6M | 69k | <120 s | 4 (0) | 0 |
+| B5-launcher | **30.2** | 18.1 | 12.1 | **93k (62k)** | 11.5M | **240k** | <120 s | 12 (1) | 0 |
+| B5-feeder | 13.1 | 6.7 | 6.4 | 40k (18k) | 4.4M | 134k | <120 s | 11 (0) | 3 |
+| B5-finish | 17.3 | 10.6 | 6.7 | 62k (15k) | 9.8M | 221k | <120 s | 9 (0) | 3 |
+| F5 finish | 0.7 | 0.6 | 0.0 | 4k (0.3k) | 0.1M | 34k | - | 0 | 0 |
+| V2R5 review | 14.2 | 11.1 | 3.0 | 59k (33k) | 5.5M | 200k | <120 s | 6 (0) | 6 |
+
+| | v1 best (A3) | v2 A3 | v2 A4 | **v2 A5** |
+|---|---|---|---|---|
+| Wall (design + review) | 66.1 min | 145.8 | 91.5 | **93.3** (plan 8.5, builds 69.9, finish 0.7, review 14.2) |
+| Output tokens (thinking) | 352k (228k) | 474k (268k) | 266k (107k) | **314k (157k)** |
+| Cache read | 35.8M | 47.1M | 27.6M | **34.4M** |
+| Peak context (any agent) | 488k | 257k | 200k | **240k** |
+| Longest generation | 290 s | 276 s | < 120 s | **< 120 s** |
+| F/M/A (sum) | 6/6/6 (18) | 8/8/8 (24) | 8/9/9 (26) | **9/8/9 (26)** |
+| Issues B/M/m | 0/4/4 | 0/1/5 | 0/1/2 | **0/1/5** |
+| cadcheck at hand-off | - | 0 F, 34 W, 0 untriaged | 0 F, 43 W, 0 untriaged | **0 F, 34 W, 0 untriaged, 0 stale** |
+| cad runs (failed) | - | 91 (3) | 50 (2) | **44 (1)** |
+
+Same score sum as A4 at about the same cost. **Functionality reached 9 for the first time:** A2-01, the one major in v2
+A2, A3 and A4, is FIXED (entry arc >= 8.0 everywhere, minimum 8.099). The new major is a different part (the detent tab
+against the jar band). All six A4 false-warn accepts went stale on `dea6536` as predicted, and B5-finish removed them.
+**`cad rows` and `cad bom` were used** (8 and 8 calls; `cad bom` at finish: 18 rows, 0 disagree; V2R5 re-ran it).
+
+### Time and token sinks
+
+**V2A5-T1. `cad check ... --only x --out X` ignored `--out`** (progress.md "Tool issues"). The wrapper always put its
+default `--out <dir>/cadcheck.json` first, and cadcheck's `_arg` took the first occurrence, so P5's precheck overwrote
+the designer's `blender/cadcheck.json`; P5 restored it from attempt-4. **Fixed:** the wrapper adds no default when
+`--out` is among the flags, and `_arg` takes the last occurrence. Verify 4h runs the flag form and checks that
+`cadcheck.json` beside the blend is untouched.
+
+**V2A5-T2. A shared-param change predicted on paper, then redesigned by a builder.** P5 planned PSI_C 78 -> 45 from
+analytic numbers (8.138 at the min stop) and ran its precheck rows (`--only distances,slide,cables`) on the A4 model.
+It never built the new value. B5-params applied it and got **14 drop fails** (the 7.0 candy landed at psi 63-66 and
+stalled at tilt >= 40) plus a sightline fail, and wrote "Needs a design decision". B5-launcher then spent **30.2 min, 62k
+thinking tokens and a 240k context** replacing the quadratic profile with a lift-matched one (8.105 floor), with
+experiments along the way. The design was right in the end (31/31 drops, entry arc >= 8.1), but the conflict was there
+to find at plan time with a scratch build. **Template:** the planner tries a shared params change in a `/tmp` copy with
+`cad check --only drop,distances,sightlines` before planning around it. The v2 loop uses its own copy of the template,
+so this reaches v2 only if the user adopts it.
+
+**V2A5-T3. Slide `flex` recorded nothing below `vol_tol`** (progress.md "Tool issues"). The detent rides the blade at
+0.43 mm³ < 0.5, so `flexed` was `{}` and the row proved only that the detent no longer blocks. **Fixed:** a flex part's
+overlap is recorded at any volume > 0 up to its bound. On the A5 blend the gate slide row now reports the ride.
+
+**V2A5-T4. `json.load` again, but mostly config edits.** 76 bash calls with `json.load` (A4 71 by the old count). Split
+by what they do: **47 load and dump checks.json to add rows** (A4: 51 of 82 under the same split), 24 read a report, 3
+read checks.json, 2 other. So the earlier count overstated the reader problem: `cad rows` covers report reads (8
+uses), and editing JSON through `json.load`/`dump` is a fair way to append rows. The reads left: drop `stall_points`
+(`cad rows` printed only `[N]`) and V2R5's reads of the designer's allow, slide and stack rows. **Fixed:** `cad rows`
+prints the first stall points, and `cad rows checks.json [REGEX]` prints config rows (allow, fits, distances, stacks, ...).
+
+**V2A5-T5. Other costs.**
+- `slide_out.step` is mm per station; the A1-A4 gate rows' `"step": 2` read to P5 like an assembly step. Now commented
+  in checks-config.md.
+- 18 bash calls read tool source (A4 about 22).
+- V2R5 wrote **9 hand rows** for the entry arc (psi 10..102) because `dea6536` has no `ray.sweep`. One swept row per
+  setting gives the same minimum (verify 4h). A6 has it.
+- The finish phase again found every step done (0.7 min).
+
+### Issues V2R5 raised, and what the tools did with them
+
+| ID | V2R5 issue | At hand-off | Now | Why it got through |
+|---|---|---|---|---|
+| V2A5-F1 | **Major (A5-01):** the detent tab top wraps the jar band's lower corner at 0.322 normal (0.455 radial); the band chain is RSS 1.26 / worst 1.90, and every other band row uses min 2.0 | passed: row `BUY_jar_band>PRT_gate_detent min 0.3` read 0.322; the band stack passed (typed `limit` 3.0, RSS 1.31) | **fails with the designer's own terms:** the band stack plus `"between": ["BUY_jar_band", "*"]` gives "RSS 1.31 mm > 0.32 (measured: PRT_gate_detent at 0.322, jar=30)"; the adapter is listed as touching | the row's `min` was set to what the geometry gave (A4 0.5, A5 0.32), and the stack's limit was a typed design intent the new tab never touched. New stacks `between`; SKILL, checklist, planner prompt |
+| V2A5-F2 | Minor (A5-02): the 7.5 candy passes the min-stop entry arc by 0.099 (8.099 at psi 90); the designer's rows covered psi 50..80 | passed (8.105..8.182) | one swept row per setting gives 8.099 at psi 90, 8.211 / 8.397 at the other settings (V2R5: 8.219 / 8.423 at psi 90) | rows at stations, not the passage: V2A4-F1 again, now with margin. `ray.sweep` reaches A6 |
+| V2A5-F3 | Minor (A5-03): the 3-way bus junction (BOM 14a) is real hardware but not modelled | warned, then waived with `cable_junctions_ok` | still waived; listed in `cables.junctions_waived` and the coverage line; the warn says to model a connector wider than the cable | the waiver was offered for "a connector sits there" without asking whether it takes room |
+| V2A5-F4 | Minor (A5-04): the PLA leaf cycles to 28-34 MPa on a 12.5 MPa preload (creep, fatigue) | - | - | material judgement, not geometry |
+| V2A5-F5 | Minor (A5-05): BUY_tape modelled 13.8 wide, BOM buys 12.7 tape; side.png crops | - | - | `cad bom` covers fasteners only |
+| V2A5-F6 | Minor (A5-06): an open `allow` PRT_gate_detent x PRT_jar_gate, although its own reason (0.43 mm³ < vol_tol) makes it unnecessary; it would hide a deeper clash in every gate sweep | not flagged | **listed** in `summary.unbounded_allows` (with 5 other designed allows across joints); an `allow` with `"max_mm3"` measures the overlap and fails past it: bounded at 0.1 it fails at 0.43 mm³ | an allow skipped the pair at every pose with no bound. New `max_mm3` |
+
+V2R5 marked 4 of 6 `tool_catchable` (F1, F3, F5, F6), correctly. **At hand-off cadcheck flagged one of them** (F3, waived);
+now F1 fails with a config row, F3 and F6 are listed, and F5 is not covered. Previous issues: 3 of 3 FIXED (A2-01, A4-01,
+A4-02).
+
+**Recurrence:** A2-01 is closed after four attempts. The pattern behind it did recur in a new place. F1 is a row whose
+bound followed the geometry (min 0.3 for a tab built 0.32 away), next to sibling rows at 2.0 on the same purchased part.
+A row the designer writes after measuring passes by construction. The measured stack limit ties the bound to the
+tolerance chain instead.
+
+**Config disputes (3):** the band-detent `min` 0.3 (F1, `between` now); the open detent allow (F6, `max_mm3` now); the
+entry-arc rows at psi 50..80 only (F2, `ray.sweep` in A6).
+
+### What worked
+- **The plan-time precheck again:** P5's 6 precheck fails on the A4 model matched V2R4's A2-01 numbers exactly (7.943 /
+  7.719 / 7.496 at psi 60/70/80). The gate became a prismatic joint and the stud an `M3_hex`, closing two A4 tool-limit
+  deferrals.
+- **`cad bom` at finish** (18 rows, 0 disagree) and **stale accepts cleaned up** at finish (6 removed, `stale []`).
+- **Small steps held:** no generation over 120 s in any agent for the second attempt running, despite the redesign.
+- **The designer modelled the tape** (`BUY_tape`) and aimed drop rows at it, which V2R5 called conservative.
+
+### Reviewer quality (V2R5)
+- 14.2 min. Every issue has numbers, evidence rows (`review_rows.json`, 1 fail) and a dimensioned fix (cap the tab at
+  z 299.5, EB 1.0). V2R5 re-ran the full check and matched all 16 sections of the designer's report.
+- It wrote a `stacks` row by hand with the measured 0.455 typed in as the limit: exactly what `between` now does.
+- The 9 hand entry-arc rows are one swept row in A6.
+- `tool_catchable` was right on all 6.
+
+### Why not the existing code (v2 A5 additions)
+- **Stacks `between` vs tightening the distances row:** the row's `min` is a number the designer types after measuring;
+  the stack already holds the tolerance chain. `between` reuses `min_dist` and `bb_gap` (about 40 lines) and skips
+  candidates farther than the stack's worst case.
+- **`max_mm3` vs deleting the allow:** without the allow, a 0.43 mm³ ride counts as zero-clearance contact across a joint
+  (a rubbing fail), so V2R5's "delete it" would trade one dispute for a fail. A bound keeps the ride legal and makes a
+  deeper clash fail. It reuses `inter_volume`, only for bounded rules and only at overlapping poses.
+- **An unbounded-allow list vs a warn:** the A5 config has 5 legitimate allows across joints (spline, glued magnet,
+  captive stud). A warn would add 5 accepts; a summary list costs nothing to read.
+- **Fixing `--out` in both places:** the wrapper fix alone leaves direct `Blender ... --python cadcheck.py` callers with
+  first-wins; last-wins is the usual CLI rule.
+
+### Still open (gaps)
+- BOM free text vs model (F5: tape width; A4's "22 x 7.5"): `cad bom` reads fasteners only.
+- Material creep and fatigue (F4) are outside geometry.
+- A swept ray is 1-D; gear tooth tips as thin walls; PCB exposure (V2A1-F11); no insertion sweep for merges
+  (V2A1-F6); `parallel_builds` untested live.
+
+### Verification of this run
+- `tools/verify_all.sh`: 75/75 passed (`/tmp/alex3d-verify.log`); A1-A3 and v2 A1-A4 unchanged. New: verify 4h (v2 A5
+  designer config 0 F / 0 untriaged / 0 stale with the detent allow listed as unbounded and the gate slide recording the
+  sub-vol_tol ride; one swept row gives 8.099 at psi 90; the band stack with `between` fails at 0.322 on the detent and a
+  0.1 mm³ bounded allow fails at 0.43; `--out` after `--only` leaves `cadcheck.json` alone).

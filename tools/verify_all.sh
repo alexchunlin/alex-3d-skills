@@ -1,6 +1,6 @@
 #!/bin/sh
 # Re-prove every tool in this repo. Writes only under /tmp/alex3d-verify. About 8 minutes, run at nice 10.
-# The attempt regressions use examples/mm-launcher-{a1,a2,a3,v2a1,v2a2,v2a3,v2a4}/*.blend.gz (the blends the reviewers saw).
+# The attempt regressions use examples/mm-launcher-{a1,a2,a3,v2a1,v2a2,v2a3,v2a4,v2a5}/*.blend.gz (the blends the reviewers saw).
 #   sh tools/verify_all.sh            # HW defaults to the mm-launcher project (read-only; copied first)
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -222,6 +222,38 @@ sys.exit(0 if any(x['joint'] == 'PIV_nip_lift' and x['value'] == -2.19 for x in 
   printf 'raise RuntimeError("planted")\n' > "$V/v2a4s/fail_build.py"
   $CAD build "$V/v2a4s/fail_build.py" > "$V/v2a4s/build.log" 2>&1; rc=$?
   [ $rc != 0 ] && grep -q "cad: BUILD FAILED" "$V/v2a4s/build.log" && ok "cad build: a raising script exits $rc with BUILD FAILED" || bad "cad build exit status"
+fi
+# 4h v2 attempt-5 regression (FINDINGS V2A5): the blend V2R5 reviewed, the designer's config, V2R5's rows as tool rows
+V25="$ROOT/examples/mm-launcher-v2a5"
+if [ -f "$V25/mm_launcher_v2a5.blend.gz" ]; then
+  mkdir -p "$V/v2a5"; gunzip -c "$V25/mm_launcher_v2a5.blend.gz" > "$V/v2a5/model.blend"; cp "$V25/manifest.json" "$V/v2a5/"
+  # designer config: 0 fails, 0 untriaged, 0 stale (as handed off on dea6536); the open detent allow is listed; the gate
+  # slide now records the detent's 0.43 mm3 ride below vol_tol (it recorded nothing, V2A5-T3)
+  $CAD check "$V/v2a5/model.blend" "$V25/checks.json" "$V/v2a5/cadcheck.json" >/dev/null
+  python3 -I -c "
+import json,sys; d=json.load(open(sys.argv[1])); s=d['summary']
+fl=[r.get('flexed',{}).get('PRT_gate_detent',{}).get('max_mm3',0) for r in d['checks']['slide']['rows']]
+ok = s['fails'] == 0 and s['untriaged_warns'] == 0 and not s['stale_accepts'] \
+  and any('gate_detent' in k and 'jar_gate' in k for k in s['unbounded_allows']) and max(fl) > 0.2
+sys.exit(0 if ok else 1)" "$V/v2a5/cadcheck.json" \
+    && ok "V2A5 designer config: 0 F / 0 untriaged / 0 stale; detent allow listed as unbounded; slide flex records the sub-vol_tol ride" || bad "V2A5 designer config: unexpected result"
+  # A5-02: the designer's 5 rows (psi 50..80) and V2R5's 9 hand rows as one swept row per setting: 8.099 at psi 90
+  $CAD check "$V/v2a5/model.blend" "$V25/checks.json" "$V/v2a5/sweep.json" --overlay "$V25/overlay_v2a5.json" --overlay-only --only distances >/dev/null
+  python3 -I -c "
+import json,sys; r=json.load(open(sys.argv[1]))['checks']['distances']['rows']
+sys.exit(0 if r[0]['mm'] == 8.099 and r[0]['sweep_deg'] == 90 and min(x['mm'] for x in r) == 8.099 else 1)" "$V/v2a5/sweep.json" \
+    && ok "V2A5: one swept row gives V2R5's entry-arc minimum, 8.099 at psi 90 (designer rows stopped at psi 80)" || bad "V2A5 swept row"
+  # A5-01: the designer's own band stack terms with "between" fail on the detent tab; A5-06: a bounded allow fails past it
+  $CAD check "$V/v2a5/model.blend" "$V25/checks.json" --only stacks,interference --overlay "$V25/overlay_v2a5_band.json" --out "$V/v2a5/band.json" >/dev/null
+  python3 -I -c "
+import json,sys; s=json.load(open(sys.argv[1]))['summary']; f=' | '.join(s['fail_list'])
+ok = s['fails'] == 2 and 'RSS 1.31 mm > 0.32 (measured: PRT_gate_detent at 0.322' in f and \"over the allow's max_mm3 0.1\" in f
+sys.exit(0 if ok else 1)" "$V/v2a5/band.json" \
+    && ok "V2A5: band stack with between fails at 0.322 on the detent; detent allow bounded at 0.1 mm3 fails" || bad "V2A5 band stack / bounded allow"
+  # --out after the flags is honoured, and the default cadcheck.json beside the blend is left alone (V2A5-T1)
+  mkdir -p "$V/v2a5o"; cp "$V/v2a5/model.blend" "$V/v2a5o/"
+  $CAD check "$V/v2a5o/model.blend" "$V25/checks.json" --only stacks --out "$V/v2a5o/pre.json" >/dev/null
+  [ -f "$V/v2a5o/pre.json" ] && [ ! -f "$V/v2a5o/cadcheck.json" ] && ok "cad check: --out after --only writes there, not over cadcheck.json" || bad "cad check --out flag"
 fi
 # 8 slide-gate example: prismatic joint, slide flex, =EXPR rows, cable chains and junctions, inscribed bridge span,
 #   no-pose service proved at home, stock lengths (FINDINGS V2A3)

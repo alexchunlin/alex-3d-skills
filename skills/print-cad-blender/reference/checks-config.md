@@ -13,7 +13,8 @@ adds `carry`, `fasteners.captive` and `flexures`.
   "max_poses_per_group": 48,      // grids over several joints are thinned to this
 
   "allow": [                      // designed overlap: the pair is skipped entirely
-    {"a": "BUY_servo_*", "b": "BUY_horn_*", "why": "spline inside horn hub"}],
+    {"a": "BUY_servo_*", "b": "BUY_horn_*", "why": "spline inside horn hub"},
+    {"a": "PRT_gate_detent", "b": "PRT_jar_gate", "max_mm3": 1.0, "why": "detent rides the blade"}],  // bounded: deeper fails
   "fits": [                       // designed running fit across a joint
     {"a": "PRT_yoke_arm_L", "b": "PRT_trunnion_L", "min_clearance": 0.1, "why": "journal, 0.2 diametral"},
     {"a": "PRT_base_shell", "b": "PRT_turntable", "contact": true, "contact_normal": [0, 0, 1], "min_clearance": 0.1,
@@ -52,7 +53,7 @@ adds `carry`, `fasteners.captive` and `flexures`.
     "name": "feeder_one_candy_per_cycle", "joint": "PIV_feeder", "sequence": [0, 60, 0], "step": 2,
     "probe": {"frame": "PIV_pan", "center": [21, 0, 267], "dir": [0, 0, -1], "radius": 3, "depth": 23},
     "blockers": ["PRT_feeder_disc", "PRT_feeder_plate"], "expect_windows": 1}],
-  "slide_out": [{"object": "BUY_battery", "dir": [1, 0, 0], "dist": 130, "step": 5, "min_clearance": 1.5},
+  "slide_out": [{"object": "BUY_battery", "dir": [1, 0, 0], "dist": 130, "step": 5, "min_clearance": 1.5},  // step: mm per station
                 {"name": "gate open stop", "object": "PRT_jar_gate", "dir": [1, 0, 0], "dist": 56, "step": 0.5,
                  "expect": "blocked", "blocked_by": ["PRT_jar_adapter"], "at_mm": [52, 53]},      // an end stop: must stop there
                 {"name": "flywheel off", "objects": ["PRT_flywheel", "FST_fw_*"], "ignore": ["PRT_launcher_cover"],
@@ -73,7 +74,9 @@ adds `carry`, `fasteners.captive` and `flexures`.
   "sightlines": [{"name": "finger reaches the thumbwheel through the slot", "frame": "PIV_tilt", "poses": [{}, {"PIV_tilt": 45}],
                   "origins": [[19.5, -2.33, 111.27], [15.5, -2.33, 111.27]], "dir": [0, -0.316, 0.949],
                   "first_hit": "PRT_nip_wheel", "max_mm": 40, "through": []}],     // null = must hit nothing
-  "stacks": [{"name": "magnet centring", "limit": 0.3, "terms": [{"what": "can in bore", "tol": 0.2}, {"what": "jig in bore", "tol": 0.1}]}],
+  "stacks": [{"name": "magnet centring", "limit": 0.3, "terms": [{"what": "can in bore", "tol": 0.2}, {"what": "jig in bore", "tol": 0.1}]},
+             {"name": "jar band clears its neighbours", "between": ["BUY_jar_band", "*"], "poses": [{}, {"PIV_jar": 30}],  // limit measured
+              "terms": [{"what": "glass thread / band", "tol": 1.0}, {"what": "adapter disc in the band", "tol": 0.75}]}],
   "flexures": [{"part": "PRT_nip_cover", "name": "leaf spring", "dir": [0, -0.48, 0.88],   // beam length, world at home
                 "stress_mpa": 20.9}],                                                    // or "from"/"to" points
   "interlayer_mpa": 15,
@@ -83,7 +86,7 @@ adds `carry`, `fasteners.captive` and `flexures`.
   "cable_leads": {"CAB_phase_*": 80},
   "cable_chains": [{"name": "encoder signal", "cables": ["CAB_encoder", "CAB_launcher_bundle", "CAB_launcher_base"],
                     "lead": 550, "why": "one 5-wire lead, Plink to MotorGo, unspliced across both joints"}],
-  "cable_junctions_ok": ["CAB_bus_*"],      // cables whose meeting ends are a real connector
+  "cable_junctions_ok": ["CAB_bus_*"],      // an inline connector no wider than the cable; a bigger one is a BUY_ part
   "fasteners": {"stock_ok": ["FST_custom_*"], "stock_lengths": {"3": [6, 8, 10, 12, 16, 20]}},   // override the stocked lengths
   "accepted_warns": [{"match": "PRT_flywheel: ceiling region needs a 72 mm bridge", "why": "1 mm flange ring, prints as a bridge over infill"}],
   "printers": {"P1S": [256, 256, 256], "H2D": [325, 320, 325]}, "prefer_printer": "P1S",
@@ -188,8 +191,17 @@ skipped", and the run carries on. Keep the row; don't `--only` around it.
   `flexures` row. Cables with no lead length (no `lead_len`, no `cable_leads` match) are listed in one warn.
 - **Slide-out** with `"expect": "blocked"` fails when the motion is not stopped, or is stopped by something other than
   `blocked_by` or outside `at_mm`.
+- **Bounded allow.** `"max_mm3"` on an `allow` rule skips overlaps up to that volume and fails anything deeper (the
+  largest seen is in `interference.allowed_max`). An allow without it skips the pair at every pose, so a deeper clash in a
+  sweep never shows; cadcheck lists allows that skip a pair across a joint with no bound (`summary.unbounded_allows`).
+  v2 A5 allowed the gate detent against the blade "0.43 mm³ < vol_tol", which also hid the whole gate sweep (V2R5 A5-06).
+- **Measured stack limit.** A `stacks` row with `"between": [A, B]` takes its limit from the geometry: the nearest gap
+  from A to B (name, glob, list, or `"*"` for every solid and fastener not touching A), over `poses`. The row reports
+  `measured_mm`, `nearest` and `touching`. Use it for every stack that guards a clearance: a typed limit stays put when
+  the geometry moves. v2 A5's band stack said "designed radial clearance 3.0" while a new detent tab sat 0.322 from the
+  band; with `between` the same terms fail at RSS 1.31 > 0.322 (V2A5-F1).
 - **Slide-out flex.** `"flex": {"PRT_gate_detent": 1.0}` lets a spring ride the moving part: overlaps with it up to
-  that many mm³ are recorded in `flexed` (largest overlap and where) instead of blocking, even when an `allow` rule
+  that many mm³ are recorded in `flexed` (largest overlap and where, below `vol_tol` too) instead of blocking, even when an `allow` rule
   covers the pair. Use it for detents and snap bumps instead of `ignore`, which proves nothing about the spring (v2 A3
   ignored its gate detent, V2A3-T5). A part named in `flex` needs a `flexures` row.
 - **Prismatic joints.** `asm.joint(..., prismatic=True)` slides along +axis, with `lo`, `hi`, `home` and `step` in mm.
@@ -200,7 +212,11 @@ skipped", and the run carries on. Keep the row; don't `--only` around it.
   a 56.5° arc of width 6 (v2 A3, V2A3-T3).
 - **Cables.** A `cable_chains` row adds up its routes and fails above `lead`: use it when conductors run on through
   several routes. Cable ends that meet another cable's end with no purchased part within 3 mm warn (cadlib builds store
-  the ends, `cab_ends`); declare the chain, or list the cables under `cable_junctions_ok` if a connector sits there.
+  the ends, `cab_ends`); declare the chain, or model the connector as a `BUY_` part. `cable_junctions_ok` waives an
+  inline connector no wider than the cable; waived junctions are listed in `cables.junctions_waived` (v2 A5 waived a 3-way
+  bus junction it never modelled, V2R5 A5-03).
+- **`--out`.** `cad check m.blend c.json OUT.json --only x` or `... --only x --out OUT.json`: both write OUT.json. Before
+  v2 A6 the flag form was ignored and the default `cadcheck.json` was overwritten (V2A5-T1).
 - **Stock lengths.** Screws whose length isn't in `fasteners.stock_lengths` for their diameter warn, unless listed in
   `fasteners.stock_ok`. `cad bom BOM.md manifest.json` checks the BOM's fastener table against the model (size, length,
   head, count) with the same table.

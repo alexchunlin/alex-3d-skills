@@ -46,7 +46,9 @@ ARGV = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 
 
 def _arg(name, default=None):
-    return ARGV[ARGV.index(name) + 1] if name in ARGV else default
+    # the last one wins: `cad check m.blend c.json --only x --out y` put the wrapper's default --out first and y was
+    # ignored, so a precheck overwrote the designer's cadcheck.json (v2 A5 progress.md "Tool issues", FINDINGS V2A5-T1)
+    return ARGV[len(ARGV) - 1 - ARGV[::-1].index(name) + 1] if name in ARGV else default
 
 
 DEFAULTS = {
@@ -563,6 +565,7 @@ REPORT = {"tool": "cadcheck", "blend": bpy.data.filepath, "generated": time.strf
           "config": {k: v for k, v in CFG.items() if k not in ("drop_tests",)}, "checks": {}, "coverage": [], "not_checked": []}
 FAILS, WARNS = [], []
 PAST_LIMITS = []   # poses outside a joint's range (check_pose_values)
+UNBOUNDED_ALLOWS = {}   # allow rules with no max_mm3 that skip a pair across a joint: "a x b" -> why (check_interference)
 
 
 def present(check, label, names):
@@ -785,7 +788,7 @@ def check_interference():
             continue
         rule = rule_for(a.name, b.name)
         groups.setdefault(relevant_joints(a, b), []).append((a, b, cls, rule))
-    res = {"groups": [], "collisions": [], "contacts": [], "solid_overlaps": [], "cable_overlaps": [], "min_clearance": []}
+    res = {"groups": [], "collisions": [], "contacts": [], "solid_overlaps": [], "cable_overlaps": [], "min_clearance": [], "allowed_max": []}
     worst = {}
     tested_pairs = 0
     for drv, pairs in sorted(groups.items(), key=lambda kv: len(kv[0])):
@@ -819,9 +822,21 @@ def check_interference():
                 if ov and isc and all(isc(a.matrix_world.to_3x3() @ a.data.polygons[i].normal) for i, _ in ov):
                     ov = None     # touching only on declared contact faces; the rest of the pair is measured below
                 if ov:
-                    if why:
+                    if why and why.get("max_mm3") is None:
+                        if cls == "moving":
+                            UNBOUNDED_ALLOWS.setdefault("%s x %s" % key, why.get("why", ""))
                         continue
                     vol, region, solver = inter_volume(a, b)
+                    if why:
+                        # a bounded allow: a riding detent or a crush rib may overlap up to max_mm3, a deeper clash
+                        # still fails. An unbounded allow across a joint hid any clash in every sweep (V2R5 A5-06)
+                        bound = float(why["max_mm3"])
+                        b_rec = worst.setdefault(("allowed_max", key), {"a": a.name, "b": b.name, "max_mm3": bound, "volume_mm3": 0.0,
+                                                                        "pose": None, "why": why.get("why")})
+                        if vol > b_rec["volume_mm3"]:
+                            b_rec.update(volume_mm3=round(vol, 2), pose=pose_key(pose))
+                        if vol <= bound:
+                            continue
                     rec = {"a": a.name, "b": b.name, "pose": pose_key(pose), "overtravel": over, "tri_overlaps": len(ov),
                            "volume_mm3": round(vol, 2), "region": region, "solver": solver}
                     if cls == "moving":
@@ -830,6 +845,9 @@ def check_interference():
                         tag = "cable_overlaps" if vol >= CFG["vol_tol"] else None
                     else:
                         tag = "solid_overlaps" if vol >= CFG["vol_tol"] else None
+                    if why:   # past a bounded allow's max_mm3: a clash, whatever vol_tol says
+                        tag = {"moving": "collisions", "cable": "cable_overlaps"}.get(cls, "solid_overlaps")
+                        rec["allow_max_mm3"] = float(why["max_mm3"])
                     if tag:
                         prev = worst.get((tag, key))
                         if prev is None or rec["volume_mm3"] > prev["volume_mm3"] or (prev["overtravel"] and not over):
@@ -855,7 +873,8 @@ def check_interference():
             res[tag].sort(key=lambda r: -r.get("volume_mm3", 0) if "volume_mm3" in r else r.get("mm", 0))
     for r in res["collisions"]:
         if r["in_range_poses"]:
-            finding("interference", "fail", "%s x %s collide on different bodies: %.1f mm3 at %s" % (r["a"], r["b"], r["volume_mm3"], r["pose"]), **r)
+            finding("interference", "fail", "%s x %s collide on different bodies: %.1f mm3 at %s%s" % (r["a"], r["b"], r["volume_mm3"], r["pose"],
+                    " (over the allow's max_mm3 %g)" % r["allow_max_mm3"] if "allow_max_mm3" in r else ""), **r)
         else:
             finding("interference", "warn", "%s x %s collide only %s past the joint limit (%s): no margin" % (r["a"], r["b"], OT_TEXT, r["pose"]), **r)
     for r in res["contacts"]:
@@ -864,7 +883,8 @@ def check_interference():
         else:
             finding("interference", "warn", "%s x %s touch just past the joint limit (%s)" % (r["a"], r["b"], r["pose"]), **r)
     for r in res["solid_overlaps"]:
-        finding("interference", "fail", "%s x %s overlap %.1f mm3 on the same body" % (r["a"], r["b"], r["volume_mm3"]), **r)
+        finding("interference", "fail", "%s x %s overlap %.1f mm3 on the same body%s" % (r["a"], r["b"], r["volume_mm3"],
+                " (over the allow's max_mm3 %g)" % r["allow_max_mm3"] if "allow_max_mm3" in r else ""), **r)
     for r in res["cable_overlaps"]:
         finding("interference", "warn", "cable %s x %s overlap %.1f mm3 (route through solid?)" % (r["a"], r["b"], r["volume_mm3"]), **r)
     for r in res["min_clearance"]:
@@ -1756,15 +1776,15 @@ def check_slide():
                     for o in grp:
                         o.matrix_world = M0[o.name]
                     bpy.context.view_layer.update()
-                    if vol >= CFG["vol_tol"]:
-                        lim = next((v for g, v in flex.items() if fnmatch.fnmatch(n, g)), None)
-                        if lim is not None and vol <= lim:
-                            # a declared spring riding the moving part (a detent bump over its track), not a stop
-                            # (v2 A3: the gate detent overlaps the blade 0.43 mm3 mid-travel, V2A3-T5)
-                            if vol > flexed.get(n, (0, 0))[0]:
-                                flexed[n] = (round(vol, 2), s)
-                        else:
-                            hit.append(n)
+                    lim = next((v for g, v in flex.items() if fnmatch.fnmatch(n, g)), None)
+                    if lim is not None and 0 < vol <= lim:
+                        # a declared spring riding the moving part (a detent bump over its track), not a stop
+                        # (v2 A3: the gate detent overlaps the blade 0.43 mm3 mid-travel, V2A3-T5). Recorded below
+                        # vol_tol too: A5's 0.43 mm3 ride left `flexed` empty, so the row proved nothing (V2A5-T3)
+                        if vol > flexed.get(n, (0, 0))[0]:
+                            flexed[n] = (round(vol, 2), s)
+                    elif vol >= CFG["vol_tol"]:
+                        hit.append(n)
             if hit:
                 free_until, blocker = s, hit
                 break
@@ -2147,20 +2167,59 @@ def check_assembly():
 
 def check_stacks():
     """Tolerance stacks (A2-F7: the magnet jig referenced the nacelle bore, 0.55-0.75 mm worst case vs 0.3 allowed).
-    {"name", "limit": mm, "terms": [{"what", "tol": +-mm}]}: worst case = sum, RSS = root of the sum of squares."""
+    {"name", "limit": mm, "terms": [{"what", "tol": +-mm}]}: worst case = sum, RSS = root of the sum of squares.
+    "between": [A, B] measures the limit instead: the nearest gap from A to B (a name, a glob or a list; "*" = every
+    solid and fastener not touching A), over "poses" (default home). A typed limit is a design intent that the geometry
+    can leave behind: v2 A5's band stack said "designed radial clearance 3.0" while a new detent tab sat 0.32 from the
+    band, under the stack's RSS 1.26 (V2R5 A5-01, FINDINGS V2A5-F1). With both, the smaller limit counts."""
     rows = []
     for S in CFG.get("stacks") or []:
         tols = [abs(float(t["tol"])) for t in S["terms"]]
         wc, rss = sum(tols), math.sqrt(sum(t * t for t in tols))
-        row = {"name": S["name"], "limit": S["limit"], "worst_case": round(wc, 3), "rss": round(rss, 3), "terms": S["terms"], "why": S.get("why")}
+        limit = S.get("limit")
+        row = {"name": S["name"], "limit": limit, "worst_case": round(wc, 3), "rss": round(rss, 3), "terms": S["terms"], "why": S.get("why")}
+        if S.get("between"):
+            a_n, bg = S["between"][0], S["between"][1]
+            bg = [bg] if isinstance(bg, str) else list(bg)
+            if not present("stacks", S["name"], [a_n]):
+                continue
+            best, touching = None, set()
+            for pose in S.get("poses") or [{}]:
+                set_pose(pose)
+                a = O[a_n]
+                ta, ba = bvh_world(a), bbox_world(a)
+                for o in SOLIDS + FASTENERS:
+                    if o.name == a_n or not any(fnmatch.fnmatch(o.name, g) for g in bg):
+                        continue
+                    if bb_gap(ba, bbox_world(o)) > max(wc, limit or 0) + 1.0:   # farther than the stack can reach
+                        continue
+                    d, p = min_dist(a, o, ta, bvh_world(o))
+                    if d < 0.05 and bg == ["*"]:
+                        touching.add(o.name)   # in contact with A: part of its datum chain, not a clearance
+                        continue
+                    if best is None or d < best[0]:
+                        best = (d, o.name, pose_key(pose), [round(c, 1) for c in p] if p else None)
+            set_pose({})
+            if best:
+                row.update(measured_mm=round(best[0], 3), nearest=best[1], pose=best[2], at=best[3])
+                limit = best[0] if limit is None else min(limit, best[0])
+            else:
+                row["measured_mm"] = None   # nothing within reach of the stack: it passes on any limit
+            if touching:
+                row["touching"] = sorted(touching)
+            row["limit"] = round(limit, 3) if limit is not None else None
         rows.append(row)
-        if rss > S["limit"] + 1e-9:
-            finding("stacks", "fail", "%s: RSS %.2f mm > %.2f (worst case %.2f); shorten the datum chain" % (S["name"], rss, S["limit"], wc), **row)
-        elif wc > S["limit"] + 1e-9:
-            finding("stacks", "warn", "%s: worst case %.2f mm > %.2f (RSS %.2f)" % (S["name"], wc, S["limit"], rss), **row)
+        if limit is None:
+            continue
+        near = " (measured: %s at %.3f%s)" % (row["nearest"], row["measured_mm"], ", " + row["pose"] if row.get("pose") else "") if row.get("nearest") else ""
+        if rss > limit + 1e-9:
+            finding("stacks", "fail", "%s: RSS %.2f mm > %.2f%s (worst case %.2f); shorten the datum chain or open the gap" % (S["name"], rss, limit, near, wc), **row)
+        elif wc > limit + 1e-9:
+            finding("stacks", "warn", "%s: worst case %.2f mm > %.2f%s (RSS %.2f)" % (S["name"], wc, limit, near, rss), **row)
     if rows:
         REPORT["checks"].setdefault("stacks", {"findings": []})["rows"] = rows
-        REPORT["coverage"].append("stacks: %d tolerance stacks (declared terms only)" % len(rows))
+        REPORT["coverage"].append("stacks: %d tolerance stacks (declared terms only), %d with a measured limit" % (
+            len(rows), sum(1 for r in rows if "measured_mm" in r)))
 
 
 # ------------------------------------------------------------------ stability
@@ -2374,22 +2433,25 @@ def check_cables():
             M = o.matrix_world @ HOME_MW.get(o.name, o.matrix_world).inverted()
             ends[o.name] = [M @ Vector(e[:3]), M @ Vector(e[3:])]
     buy = scene_bvh(PURCHASED) if PURCHASED and ends else None
-    junctions = []
+    junctions, waived = [], []
     names = sorted(ends)
     for i, x in enumerate(names):
         for y in names[i + 1:]:
-            if frozenset((x, y)) in chained or any(fnmatch.fnmatch(x, g) or fnmatch.fnmatch(y, g) for g in CFG["cable_junctions_ok"]):
+            if frozenset((x, y)) in chained:
                 continue
+            ok = any(fnmatch.fnmatch(x, g) or fnmatch.fnmatch(y, g) for g in CFG["cable_junctions_ok"])
             for p in ends[x]:
                 if any((p - q).length < 2.0 for q in ends[y]) and not (buy and buy.find_nearest(p, 3.0)[0] is not None):
-                    junctions.append({"cables": [x, y], "at": [round(c, 1) for c in p]})
+                    (waived if ok else junctions).append({"cables": [x, y], "at": [round(c, 1) for c in p]})
                     break
     if junctions:
         finding("cables", "warn", "%d cable junctions with no purchased part (connector or board) within 3 mm: %s. If the conductors run on, "
-                "add a cable_chains row so the whole run is checked against one lead; if a connector sits there, list the cable under "
-                "cable_junctions_ok" % (len(junctions), "; ".join("%s / %s at %s" % (j["cables"][0], j["cables"][1], j["at"]) for j in junctions[:6])),
+                "add a cable_chains row so the whole run is checked against one lead; if a connector or splice block sits there, model "
+                "it as a BUY_ part (it takes room in the bore and in the twist), or list the cables under cable_junctions_ok if it "
+                "is no wider than the cable" % (len(junctions), "; ".join("%s / %s at %s" % (j["cables"][0], j["cables"][1], j["at"]) for j in junctions[:6])),
                 junctions=junctions)
-    REPORT["checks"].setdefault("cables", {"findings": []}).update(chains=crow, junctions=junctions, ends_known=len(ends))
+    # waived junctions stay visible: v2 A5 waived a 3-way bus junction it never modelled, and V2R5 raised it (A5-03)
+    REPORT["checks"].setdefault("cables", {"findings": []}).update(chains=crow, junctions=junctions, junctions_waived=waived, ends_known=len(ends))
     nolead = [r["object"] for r in rows if r["lead_len"] is None]
     if nolead:
         # v2 A2: only the phase leads had a length; bus, UART and encoder runs across the pan joint went unchecked (V2A2-F4)
@@ -2397,9 +2459,10 @@ def check_cables():
             len(nolead), ", ".join(nolead[:10]) + (" ..." if len(nolead) > 10 else "")), objects=nolead)
     REPORT["checks"].setdefault("cables", {"findings": []})["rows"] = rows
     have = sum(1 for r in rows if r["path_len"] is not None)
-    REPORT["coverage"].append("cables: %d routes, %d with path length, %d chains; junctions on %d routes with known ends (cadlib cab_ends); "
+    REPORT["coverage"].append("cables: %d routes, %d with path length, %d chains; junctions on %d routes with known ends (cadlib cab_ends), %d waived "
+                              "with no modelled part (cable_junctions_ok); "
                               "exposure (>= %d of 26 rays escape, or %d%% of the directions toward a viewer) at home pose" % (
-        len(rows), have, len(crow), len(ends), ex["min_escape"], 100 * ex["view_frac"]))
+        len(rows), have, len(crow), len(ends), len(waived), ex["min_escape"], 100 * ex["view_frac"]))
     REPORT["not_checked"].append("cables: bend radius, slack across joints, connector positions (review by section render)")
 
 
@@ -2499,6 +2562,7 @@ def main():
     REPORT["summary"] = {"pass": not FAILS, "fails": len(FAILS), "warns": len(WARNS), "untriaged_warns": len(untriaged),
                          "fail_list": FAILS, "warn_list": untriaged, "accepted_warns": accepted, "stale_accepts": stale,
                          "coverage": REPORT["coverage"], "not_checked": REPORT["not_checked"], "poses_past_limits": PAST_LIMITS,
+                         "unbounded_allows": UNBOUNDED_ALLOWS,
                          "runtime_s": round(time.time() - T0, 1)}
     os.makedirs(os.path.dirname(os.path.abspath(OUT)), exist_ok=True)
     with open(OUT, "w") as f:
@@ -2522,6 +2586,10 @@ def main():
         print("  poses outside the joint range (posed through the stops; intended?):", "; ".join(
             "%s range %g..%g: %s" % (j, lo, hi, ", ".join("%g in %s" % (v, " ".join(sorted(r))) for v, r in sorted(vals.items())))
             for (j, lo, hi), vals in sorted(by.items())))
+    if UNBOUNDED_ALLOWS:
+        # an allow skips the pair at every pose, so a deeper clash in a sweep never shows; give a riding or crushing
+        # pair "max_mm3" (V2R5 A5-06: the gate detent allow, 0.43 mm3 by its own reason, hid the whole gate sweep)
+        print("  allows that skip a pair across a joint with no max_mm3 (any clash there is hidden):", "; ".join(sorted(UNBOUNDED_ALLOWS)))
     print("  not checked:", "; ".join(REPORT["not_checked"]))
 
 
