@@ -1,6 +1,6 @@
 #!/bin/sh
 # Re-prove every tool in this repo. Writes only under /tmp/alex3d-verify. About 3 minutes, run at nice 10.
-# The attempt regressions use examples/mm-launcher-a{1,2}/mm_launcher_a*.blend.gz (the blends the reviewers saw).
+# The attempt regressions use examples/mm-launcher-a{1,2,3}/mm_launcher_a*.blend.gz (the blends the reviewers saw).
 #   sh tools/verify_all.sh            # HW defaults to the mm-launcher project (read-only; copied first)
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -40,7 +40,7 @@ if [ -f "$A1" ]; then
   for pat in "PRT_feeder_disc x FST_cap_R-1" "PRT_flywheel x FST_motor_0" "PRT_arm_cover_L x PRT_trunnion_L touch" \
              "PRT_hopper to PRT_launcher_body only 0.21" "feed_outlet_to_wheel at tilt=0: lands" "FST_motor_0 head is inside" \
              "PRT_hood to PRT_flywheel = 9.50"; do
-    grep -q "$pat" "$V/a1/cadcheck.json" && ok "A1 reproduces: $pat" || bad "A1 missing: $pat"
+    grep -qF "$pat" "$V/a1/cadcheck.json" && ok "A1 reproduces: $pat" || bad "A1 missing: $pat"
   done
   # cadq reproduces R1's exact numbers
   $CAD q "$V/a1/mm_launcher.blend" dist PRT_feeder_disc FST_cap_R-1 --config "$ROOT/examples/mm-launcher-a1/checks.json" | grep -q '"mm": -27.2' \
@@ -54,17 +54,37 @@ if [ -f "$A2" ]; then
   for pat in "FST_fw_bolt_0 stops 0.35 mm short of its nut" "FST_fw_bolt_0 cannot be driven: straight bit blocked by PRT_flywheel at 18.5 mm; L-key long leg clear over 0 deg" \
              "FST_adapter_0 runs 2.5 mm into purchased part BUY_battery" "FST_adapter_nut_0 sits inside purchased part BUY_battery" \
              "feeder_one_candy_per_cycle: 2 open windows" "FST_clamp_r reachable only at tilt=45" "1.01 mm rigid squeeze" \
-             "FST_jack_0 head stands 11.0 mm" "CAB_bus_feeder: about 11 mm of cable is visible"; do
-    grep -q "$pat" "$V/a2/cadcheck.json" && ok "A2 reproduces: $pat" || bad "A2 missing: $pat"
+             "FST_jack_0 head stands 11.0 mm" "CAB_bus_feeder: about 15 mm of cable is visible from outside around [-104.9"; do
+    grep -qF "$pat" "$V/a2/cadcheck.json" && ok "A2 reproduces: $pat" || bad "A2 missing: $pat"
   done
   python3 -I -c "
 import json,sys; d=json.load(open(sys.argv[1]))
-f=d['summary']['fail_list']; drop=d['checks']['drop']['findings']
+f=d['summary']['fail_list']; drop=[x for x in d['checks']['drop']['findings'] if x['status']=='fail']
 bad=[x for x in f if not any(k in x for k in ('FST_fw_bolt','FST_adapter','feeder_one_candy'))]
 sys.exit(1 if (bad or drop or d['summary']['fails']!=15) else 0)" "$V/a2/cadcheck.json" \
     && ok "A2: exactly the 15 R2-confirmed fails, slide tracer feeds 29/29 at every tilt" || bad "A2: unexpected fails or feed result"
 fi
-# 4b smoke: cadcheck runs on the live project blend (whatever attempt it is at); reports, never asserts
+# 4c attempt-3 regression (FINDINGS A3-F1..F8): battery slide through nuts, leaf printed across layers, stall margin,
+# notch-visible cable, visible nuts; and the nip stud/thumbwheel mechanism (carry, captive) gives no false fails
+A3="$ROOT/examples/mm-launcher-a3/mm_launcher_a3.blend.gz"
+if [ -f "$A3" ]; then
+  mkdir -p "$V/a3"; gunzip -c "$A3" > "$V/a3/mm_launcher.blend"
+  $CAD check "$V/a3/mm_launcher.blend" "$ROOT/examples/mm-launcher-a3/checks.json" "$V/a3/cadcheck.json" >/dev/null
+  for pat in "BUY_battery slide-out blocked by ['FST_adapter_nut_1', 'FST_adapter_nut_3'] at 5 mm" \
+             "PRT_nip_cover (leaf spring): the beam stands 85 deg off the bed" \
+             "feed_spout_to_tape at tilt=45: 29/29 rays reach the target over a slide of only 21.3 deg" \
+             "feed_spout_to_tape at tilt=46: 29/29 rays reach the target over a slide of only 20.3 deg" \
+             "CAB_launcher_bundle_0: about 8 mm of cable is visible" "FST_adapter_nut_1 is visible from outside" \
+             "FST_hinge: only 2.0 mm of thread"; do
+    grep -qF "$pat" "$V/a3/cadcheck.json" && ok "A3 reproduces: $pat" || bad "A3 missing: $pat"
+  done
+  python3 -I -c "
+import json,sys; d=json.load(open(sys.argv[1])); s=d['summary']
+nip=[x for x in s['fail_list'] + [w for w in s['warn_list'] if w.startswith('fasteners')] if 'nip_stud' in x or 'nip_nut' in x]
+sys.exit(1 if (s['fails'] != 2 or nip or d['checks']['index']['findings']) else 0)" "$V/a3/cadcheck.json" \
+    && ok "A3: exactly the 2 R3-confirmed fails, no nip-mechanism findings, feeder index 1 candy per fire" || bad "A3: unexpected fails"
+fi
+# 4b smoke: cadcheck runs on the live v1 project blend (frozen at attempt 3 since v1 stopped); reports, never asserts
 if [ -f "$HW/blender/mm_launcher.blend" ]; then
   mkdir -p "$V/live"; cp "$HW/blender/mm_launcher.blend" "$V/live/"
   $CAD check "$V/live/mm_launcher.blend" "$ROOT/examples/mm-launcher-a2/checks.json" "$V/live/cadcheck.json" >/dev/null

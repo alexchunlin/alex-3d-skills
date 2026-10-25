@@ -25,10 +25,11 @@ Checks (each one writes evidence into the JSON report, with an explicit `coverag
   distances     min/max distance assertions from config ("distances"), optionally as a gap along a ray,
                 with payload squeeze and a declared compliant element
   stacks        tolerance stacks from config ("stacks"): worst case and RSS against a limit
+  flexures      declared springs and snap arms: beam direction vs the part's print orientation (layer bonds)
   stability     centre of mass and static tip angle over a coarse pose grid
   cables        path length vs. lead length, and exposed (visible from outside) cable length
 
-Evidence for the rules here: docs/FINDINGS.md A1-F1, F3, F4, F5, F9, F10, F11, F13, F14 and A2-F1 to F9.
+Evidence for the rules here: docs/FINDINGS.md A1-F1, F3, F4, F5, F9, F10, F11, F13, F14, A2-F1 to F9, A3-F1 to F3, F7, F8 and A3-V1.
 """
 import bpy, bmesh, json, math, os, sys, time, fnmatch, itertools
 from mathutils import Vector, Matrix
@@ -58,11 +59,16 @@ DEFAULTS = {
     "fasteners": {"driver_r": 3.0, "hand_r": 14.0, "max_reach": 60.0, "max_reach_ext": 150.0, "min_engagement": 4.0,
                   # 2.5 mm hex key for M3 socket heads (ISO 2936 short leg ~20, long ~58): A2-F1
                   "lkey_short": 18.0, "lkey_insert": 2.5, "lkey_long": 56.0, "lkey_r": 1.25, "lkey_swing_deg": 60.0,
-                  "max_standoff": 2.0, "max_protrusion": 3.0},
+                  "max_standoff": 2.0, "max_protrusion": 3.0, "captive": {}},
     "service": [],
     "index_tests": [],
     "stacks": [],
-    "exposure": {"max_cable_mm": 5.0, "cables_ok": [], "min_escape": 8},  # 8/26 rays: R2's bare bus run scored 10-12, grooved runs 4-7
+    # exposed = >= min_escape of 26 rays leave the assembly (R2's bare bus run scored 10-12), or >= view_frac of 240
+    # directions toward a viewer above or level (z > view_z) do. A3's bonnet-foot notch scores 6/26 and was missed;
+    # at 10% of the viewer directions it is 8.3 mm long (R3: "about 8 mm"), FINDINGS A3-F7
+    "exposure": {"max_cable_mm": 5.0, "cables_ok": [], "min_escape": 8, "view_frac": 0.10, "view_z": -0.2, "nuts_ok": []},
+    "carry": {},
+    "flexures": [],
     "drop_tests": [],
     "slide_out": [],
     "distances": [],
@@ -112,6 +118,17 @@ for o in FASTENERS: KIND[o.name] = "FST"
 for o in CABLES: KIND[o.name] = "CAB"
 SOLIDS = PRINTED + PURCHASED
 ALL = SOLIDS + FASTENERS + CABLES
+
+# "carry": {"glob": "PIV_x"} re-parents objects onto a joint for every sweep, keeping their home pose. For parts
+# modelled on one body at one setting that ride on another in use (A3: the nip thumbwheel and its nut sit on the pod
+# in the model but ride on the backplate stud; swept as fixed they gave 4 false fails, FINDINGS A3-V1).
+bpy.context.view_layer.update()
+for _g, _piv in CFG["carry"].items():
+    for _o in [x for x in ALL if fnmatch.fnmatch(x.name, _g)]:
+        _mw = _o.matrix_world.copy()
+        _o.parent = O[_piv]
+        _o.matrix_world = _mw
+bpy.context.view_layer.update()
 
 
 def is_nut(o):
@@ -745,6 +762,26 @@ def escapes(tree, p, maxd=3000.0):
     return sum(1 for d in _SPH if tree.ray_cast(p, d, maxd)[0] is None)
 
 
+_N_VIEW = 400
+_SPH400 = [d for d in (Vector((math.cos(2.39996 * i) * math.sqrt(1 - (1 - 2 * (i + 0.5) / _N_VIEW) ** 2),
+                             math.sin(2.39996 * i) * math.sqrt(1 - (1 - 2 * (i + 0.5) / _N_VIEW) ** 2),
+                             1 - 2 * (i + 0.5) / _N_VIEW)) for i in range(_N_VIEW))]
+_VIEW = {}
+
+
+def exposed(tree, p, maxd=3000.0):
+    """Visible from outside: many of 26 rays escape, or a view_frac of the directions toward a viewer above or level
+    do (a notch or slot shows a cable in a narrow cone that 26 rays sample too coarsely)."""
+    ex = CFG["exposure"]
+    n = sum(1 for d in _SPH if tree.ray_cast(p, d, maxd)[0] is None)
+    if n >= ex["min_escape"]:
+        return True
+    view = _VIEW.setdefault(ex["view_z"], [d for d in _SPH400 if d.z > ex["view_z"]])
+    if n == 0 and all(tree.ray_cast(p, d, maxd)[0] is not None for d in view[::8]):
+        return False    # enclosed: skip the dense pass
+    return sum(1 for d in view if tree.ray_cast(p, d, maxd)[0] is None) >= ex["view_frac"] * len(view)
+
+
 def access(head, out, tree, solids_trees, fc):
     """Drive a screw from `head` along `out`: a straight bit (ray bundle at driver radius until open space of
     hand_r is reached), else an L-key (short leg in the socket, long leg swung about the axis), FINDINGS A2-F1."""
@@ -955,6 +992,13 @@ def check_fasteners():
         ok = {pk: a for pk, a in acc.items() if not a["blocked"]}
         best = min(ok.items(), key=lambda kv: kv[1]["reach_mm"]) if ok else None
         r["access_best"] = {"pose": best[0], **best[1]} if best else None
+        # captive: a head held in a pocket and never driven (the nut turns), A3 nip stud. Head seating and access
+        # do not apply; engagement and nut pairing still do.
+        cap = next((why for g, why in fc.get("captive", {}).items() if fnmatch.fnmatch(n, g)), None)
+        if cap:
+            r["captive"] = cap
+            r["head_buried_in"] = []
+            ok, best = {"home": {}}, ("home", {"reach_mm": 0})
         rows.append({"object": n, **r})
         if r["head_buried_in"]:
             finding("fasteners", "fail", "%s head is inside %s (reversed, or a missing counterbore)" % (n, r["head_buried_in"]), object=n)
@@ -973,7 +1017,7 @@ def check_fasteners():
         for b, mm in r["into_purchased"].items():
             finding("fasteners", "fail", "%s runs %.1f mm into purchased part %s, which is not what it threads into%s" % (
                 n, mm, b, " (it has a nut)" if nut else ""), object=n, purchased=b)
-        if r["standoff_mm"] > fc["max_standoff"]:
+        if r["standoff_mm"] > fc["max_standoff"] and not cap:
             finding("fasteners", "warn", "%s head stands %.1f mm off the part: exposed shank under the head" % (n, r["standoff_mm"]), object=n)
         if r["protrusion_mm"] > fc["max_protrusion"] and r["tip_exposed"]:
             finding("fasteners", "warn", "%s thread protrudes %.1f mm past the last part, visible from outside" % (n, r["protrusion_mm"]), object=n)
@@ -1068,7 +1112,7 @@ def survey_screw(o, head, tip, d, hr, sr, trees, nut, full_tree, fc):
                 "thread_host": host, "engagement_mm": round(eng, 2), "head_buried_in": buried, "body": me,
                 "passes_through": {n: round(mm, 1) for n, mm in pen.items()}, "into_purchased": into_buy,
                 "standoff_mm": standoff, "protrusion_mm": round(prot, 1),
-                "tip_exposed": prot > 0 and escapes(full_tree, tip + d * 0.3) >= CFG["exposure"]["min_escape"]})
+                "tip_exposed": prot > 0 and exposed(full_tree, tip + d * 0.3)})
     return rec
 
 
@@ -1088,8 +1132,13 @@ def check_nuts(nuts, nut_of, full_tree):
             k = sum(1 for p in pts if inside(t, p, bb))
             if k >= 0.3 * len(pts):
                 inside_buy[s.name] = round(k / len(pts), 2)
-        row = {"object": nn, "bolt": paired.get(nn), "inside_purchased": inside_buy, "exposed": escapes(full_tree, c) >= CFG["exposure"]["min_escape"]}
+        # visible nut: sample the nut's outer vertices (its centre sits on the bolt, inside the solid tree's holes)
+        vis = sum(1 for p in vs[:: max(1, len(vs) // 12)] if exposed(full_tree, c + (p - c) * 1.02))
+        row = {"object": nn, "bolt": paired.get(nn), "inside_purchased": inside_buy, "exposed": vis >= 2}
         rows.append(row)
+        if row["exposed"] and not inside_buy and not any(fnmatch.fnmatch(nn, g) for g in CFG["exposure"]["nuts_ok"]):
+            finding("fasteners", "warn", "%s is visible from outside (A2 jack nuts, A3 battery-bay window): hide it or list it under "
+                    "exposure.nuts_ok" % nn, object=nn)
         if not row["bolt"]:
             finding("fasteners", "warn", "%s has no bolt on its axis" % nn, object=nn)
         for b, f in inside_buy.items():
@@ -1162,7 +1211,9 @@ def landing_angle(ang, point):
 def slide_trace(p, g, walls, targets, T):
     """Fall along g; on a wall, slide down its slope; stall below stall_deg. Ported from the attempt-2 designer's
     tracer (HW/blender/checks.py:395 trace_drops), generalised to any target objects.
-    Returns (outcome, point, target): outcome is "hit", "stall", "lost" or "max_steps"."""
+    Returns (outcome, point, target, flattest slide in deg or None): outcome is "hit", "stall", "lost" or "max_steps".
+    The flattest slide is the stall margin: A3 fed 29/29 at tilt 45 over a 21 deg last slide, 1 deg above the stall
+    limit, and R3 rated it a major (FINDINGS A3-F1)."""
     cap, pay = T.get("capture_mm", 0.5), T.get("payload_mm", 7.0)
     stall = T.get("stall_deg", 20.0)
 
@@ -1179,7 +1230,7 @@ def slide_trace(p, g, walls, targets, T):
         L = w.length
         return L < 0.2 or walls.ray_cast(q + w.normalized() * 0.1, w.normalized(), L - 0.2)[0] is None
 
-    P, mode, n = p.copy(), "fall", None
+    P, mode, n, flat = p.copy(), "fall", None, None
     for _ in range(900):
         if mode == "fall":
             h = walls.ray_cast(P, g, T.get("max_mm", 400))
@@ -1196,9 +1247,9 @@ def slide_trace(p, g, walls, targets, T):
                     th = (s, q[1], q[2])
                 s += 0.4
             if th:
-                return "hit", th[2], th[1]
+                return "hit", th[2], th[1], flat
             if h[0] is None:
-                return "lost", P + g * hit_d, None
+                return "lost", P + g * hit_d, None, flat
             n = h[1].normalized()
             if n.dot(g) > 0:
                 n = -n
@@ -1207,13 +1258,15 @@ def slide_trace(p, g, walls, targets, T):
             continue
         d = g - g.dot(n) * n
         if d.length < 1e-6:
-            return "stall", P, None
+            return "stall", P, None, 0.0
         d.normalize()
         q = near_target(P, pay)
         if q and visible(P, q[2]):
-            return "hit", q[2], q[1]
-        if math.degrees(math.asin(max(-1.0, min(1.0, d.dot(g))))) < stall:
-            return "stall", P, None
+            return "hit", q[2], q[1], flat
+        slope = math.degrees(math.asin(max(-1.0, min(1.0, d.dot(g)))))
+        flat = slope if flat is None else min(flat, slope)
+        if slope < stall:
+            return "stall", P, None, flat
         hw = walls.ray_cast(P, d, 1.0)
         if hw[0] is not None:
             n2 = hw[1].normalized()
@@ -1230,7 +1283,7 @@ def slide_trace(p, g, walls, targets, T):
             P, n = ha[0] + n2 * 0.05, n2
         else:
             P, mode = Pn, "fall"
-    return "max_steps", P, None
+    return "max_steps", P, None, flat
 
 
 def check_drop():
@@ -1271,13 +1324,15 @@ def check_drop():
                 targets = {n: bvh_world(O[n]) for n in tnames}
             else:
                 trees = {o.name: (bvh_world(o), o) for o in objs}
-            hits, angles, outcomes, stalls = {}, [], {}, []
+            hits, angles, outcomes, stalls, flats = {}, [], {}, [], []
             for (i, j) in offs:
                 p_home = Vector(em["center"]) + u * i + v * j
                 p = frame_point(em.get("frame"), p_home, home_mats)
                 if mode == "slide":
-                    oc, pt, name = slide_trace(p, g, walls, targets, T)
+                    oc, pt, name, flat = slide_trace(p, g, walls, targets, T)
                     outcomes[oc] = outcomes.get(oc, 0) + 1
+                    if oc == "hit" and flat is not None:
+                        flats.append((flat, [round(c, 1) for c in p]))
                     if oc == "stall":
                         stalls.append([round(c, 1) for c in pt])
                     best = (0, name, pt) if oc == "hit" else None
@@ -1296,6 +1351,16 @@ def check_drop():
             row = {"pose": pose_key(pose), "rays": len(offs), "first_hit": hits}
             if mode == "slide":
                 row.update(outcomes=outcomes, stall_points=stalls[:5])
+                if flats:
+                    fmin = min(flats)
+                    row["flattest_slide_deg"] = round(fmin[0], 1)
+                    margin = T.get("stall_margin_deg", 5.0)
+                    stall = T.get("stall_deg", 20.0)
+                    n_low = sum(1 for f, _ in flats if f < stall + margin)
+                    if n_low:
+                        finding("drop", "warn", "%s at %s: %d/%d rays reach the target over a slide of only %.1f deg (stall %g, "
+                                "margin %g): friction varies, so these can stall" % (T["name"], row["pose"], n_low, len(offs), fmin[0],
+                                                                                   stall, margin), test=T["name"], pose=row["pose"])
             if angles:
                 row["angle_deg"] = [round(min(angles), 1), round(max(angles), 1)]
             rows.append(row)
@@ -1382,7 +1447,8 @@ def check_slide():
         ign = {o.name for o in ALL if any(fnmatch.fnmatch(o.name, g) for g in S.get("ignore", []))}
         label = S.get("name") or (grp[0].name if len(grp) == 1 else "+".join(globs))
         d = Vector(S["dir"]).normalized()
-        others = {o.name: bvh_world(o) for o in SOLIDS if o.name not in gnames | ign and not any(allowed(o.name, g) for g in gnames)}
+        # fasteners too: A3's battery slid through two adapter nuts that a solids-only sweep never saw (FINDINGS A3-F3)
+        others = {o.name: bvh_world(o) for o in SOLIDS + FASTENERS if o.name not in gnames | ign and not any(allowed(o.name, g) for g in gnames)}
         bm0 = bmesh.new()
         for o in grp:
             t = world_bm(o)
@@ -1392,6 +1458,10 @@ def check_slide():
             bm0.from_mesh(me)
             bpy.data.meshes.remove(me)
         free_until, blocker = None, None
+        # already overlapping in place (BVH overlap misses a nut wholly inside the part, A2): interference and
+        # fasteners report those; the slide reports what the motion adds
+        at_rest = [n for n in others if any(bb_gap(bbox_world(o), bbox_world(O[n])) == 0 for o in grp)
+                   and sum(inter_volume(o, O[n])[0] for o in grp) >= CFG["vol_tol"]]
         minclr = (1e9, None)
         M0 = {o.name: o.matrix_world.copy() for o in grp}
         for s in frange(0, S["dist"], S.get("step", 5)):
@@ -1402,6 +1472,8 @@ def check_slide():
             bm.free()
             hit = []
             for n, ot in others.items():
+                if n in at_rest:
+                    continue
                 if t.overlap(ot):
                     for o in grp:
                         o.matrix_world = Matrix.Translation(d * s) @ M0[o.name]
@@ -1416,13 +1488,16 @@ def check_slide():
                 free_until, blocker = s, hit
                 break
             for n, ot in others.items():
+                if n in at_rest:
+                    continue
                 for p in pts:
                     r = ot.find_nearest(p, 3.0)
                     if r[0] is not None and r[3] < minclr[0]:
                         minclr = (r[3], n)
         bm0.free()
         rec = {"object": label, "members": sorted(gnames), "dir": list(d), "dist": S["dist"], "blocked_at_mm": free_until, "blocked_by": blocker,
-               "min_clearance_mm": round(minclr[0], 2) if minclr[1] else None, "closest": minclr[1], "pose": pose_key(S.get("pose", {}))}
+               "min_clearance_mm": round(minclr[0], 2) if minclr[1] else None, "closest": minclr[1], "pose": pose_key(S.get("pose", {})),
+               "overlapping_at_rest": at_rest}
         REPORT["checks"].setdefault("slide", {"findings": []}).setdefault("rows", []).append(rec)
         if blocker:
             finding("slide", "fail", "%s slide-out blocked by %s at %g mm" % (label, blocker, free_until), **rec)
@@ -1490,9 +1565,9 @@ def check_stacks():
         wc, rss = sum(tols), math.sqrt(sum(t * t for t in tols))
         row = {"name": S["name"], "limit": S["limit"], "worst_case": round(wc, 3), "rss": round(rss, 3), "terms": S["terms"], "why": S.get("why")}
         rows.append(row)
-        if rss > S["limit"]:
+        if rss > S["limit"] + 1e-9:
             finding("stacks", "fail", "%s: RSS %.2f mm > %.2f (worst case %.2f); shorten the datum chain" % (S["name"], rss, S["limit"], wc), **row)
-        elif wc > S["limit"]:
+        elif wc > S["limit"] + 1e-9:
             finding("stacks", "warn", "%s: worst case %.2f mm > %.2f (RSS %.2f)" % (S["name"], wc, S["limit"], rss), **row)
     if rows:
         REPORT["checks"].setdefault("stacks", {"findings": []})["rows"] = rows
@@ -1500,6 +1575,40 @@ def check_stacks():
 
 
 # ------------------------------------------------------------------ stability
+
+def check_flexures():
+    """Printed springs, flexures and snap arms against the layer direction (A3-F2: the nip leaf spring printed
+    standing up, so its 21-44 MPa bending stress ran across layer bonds). Each entry: {"part", "dir": [x,y,z] or
+    "from"/"to" points (world, home pose) along the beam's length, optional "stress_mpa", "why"}. The beam should
+    lie in the layer plane: its angle to the bed is from the part's print_rot, the same matrix the STL export uses."""
+    fl = CFG["flexures"]
+    if not fl:
+        REPORT["not_checked"].append("flexures: no springs or snap arms declared (print orientation vs bending stress)")
+        return
+    set_pose({})
+    lim = CFG.get("interlayer_mpa", 15.0)
+    rows = []
+    for F in fl:
+        o = O.get(F["part"])
+        if o is None or "print_rot" not in o.keys():
+            finding("flexures", "warn", "%s: not found or has no print_rot" % F["part"], part=F["part"])
+            continue
+        d = Vector(F["dir"]) if "dir" in F else Vector(F["to"]) - Vector(F["from"])
+        pd = (Matrix(o["print_rot"]) @ d.normalized()).normalized()
+        ang = math.degrees(math.asin(min(1.0, abs(pd.z))))
+        st = F.get("stress_mpa")
+        rec = {"part": F["part"], "beam_print_dir": [round(c, 3) for c in pd], "angle_to_bed_deg": round(ang, 1), "stress_mpa": st,
+               "interlayer_mpa": lim, "why": F.get("why")}
+        rows.append(rec)
+        tag = "%s%s" % (F["part"], " (%s)" % F["name"] if F.get("name") else "")
+        if ang > 45 and (st is None or st > lim):
+            finding("flexures", "fail", "%s: the beam stands %.0f deg off the bed, so bending stress%s crosses layer bonds (limit %g MPa): "
+                    "print it with the beam in the layer plane" % (tag, ang, " of %g MPa" % st if st else "", lim), **rec)
+        elif ang > 20:
+            finding("flexures", "warn", "%s: beam %.0f deg off the bed; part of the bending stress crosses layers" % (tag, ang), **rec)
+    REPORT["checks"].setdefault("flexures", {"findings": []})["rows"] = rows
+    REPORT["coverage"].append("flexures: %d declared springs or snap arms against print orientation" % len(rows))
+
 
 def centroid_vol(o):
     bm = world_bm(o)
@@ -1594,7 +1703,7 @@ def check_cables():
         lead = o.get("lead_len") or next((v for k, v in CFG["cable_leads"].items() if fnmatch.fnmatch(o.name, k)), None)
         # exposed run (A2-F8: 10 mm of feeder bus bare above the left bonnet): sample the tube, count escaping rays
         pts = _edge_samples(o, 2.0, 1200)
-        exp = [p for p in pts if escapes(tree, p) >= ex["min_escape"]]
+        exp = [p for p in pts if exposed(tree, p)]
         clusters = []   # single-linkage at 6 mm, so separate bare spots are reported separately
         for p in exp:
             near = [c for c in clusters if any((p - q).length < 6.0 for q in c)]
@@ -1615,7 +1724,8 @@ def check_cables():
                     o.name, sp["extent_mm"], sp["center"]), object=o.name, **sp)
     REPORT["checks"].setdefault("cables", {"findings": []})["rows"] = rows
     have = sum(1 for r in rows if r["path_len"] is not None)
-    REPORT["coverage"].append("cables: %d routes, %d with path length; exposure (>= %d of 26 rays escape) at home pose" % (len(rows), have, ex["min_escape"]))
+    REPORT["coverage"].append("cables: %d routes, %d with path length; exposure (>= %d of 26 rays escape, or %d%% of the directions toward a viewer) at home pose" % (
+        len(rows), have, ex["min_escape"], 100 * ex["view_frac"]))
     REPORT["not_checked"].append("cables: bend radius, slack across joints, connector positions (review by section render)")
 
 
@@ -1627,7 +1737,7 @@ def main():
         {n: (s["axis"], s["lo"], s["hi"]) for n, s in JOINTS.items()}))
     for name, fn in (("parts", check_parts), ("interference", check_interference), ("fasteners", check_fasteners),
                      ("service", check_service), ("drop", check_drop), ("index", check_index), ("slide", check_slide),
-                     ("distances", check_distances), ("stacks", check_stacks), ("stability", check_stability), ("cables", check_cables)):
+                     ("distances", check_distances), ("stacks", check_stacks), ("flexures", check_flexures), ("stability", check_stability), ("cables", check_cables)):
         if want(name) or (name == "interference" and want("clearance")):
             t = time.time()
             fn()
@@ -1636,7 +1746,7 @@ def main():
     if not CABLES:
         REPORT["not_checked"].append("cables: Cables collection empty")
     REPORT["not_checked"].append("not geometric: teardown step count, alignment-jig datums (declare stacks), aesthetics, BOM correctness")
-    REPORT["summary"] = {"pass": not FAILS, "fails": len(FAILS), "warns": len(WARNS), "fail_list": FAILS, "warn_list": WARNS[:60],
+    REPORT["summary"] = {"pass": not FAILS, "fails": len(FAILS), "warns": len(WARNS), "fail_list": FAILS, "warn_list": WARNS,
                          "coverage": REPORT["coverage"], "not_checked": REPORT["not_checked"], "runtime_s": round(time.time() - T0, 1)}
     os.makedirs(os.path.dirname(os.path.abspath(OUT)), exist_ok=True)
     with open(OUT, "w") as f:

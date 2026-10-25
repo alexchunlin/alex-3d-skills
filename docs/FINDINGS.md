@@ -11,8 +11,12 @@ Sources are abbreviated:
 - `D0` = the killed designer, `WF/wf_ebc9f356-a79/agent-a0e1dc96a1cba327c.jsonl`
 - `D2` = designer attempt 2, `WF/wf_26e26b28-15e/agent-a6815d61faa83f67e.jsonl`
 - `R2` = reviewer attempt 2, `WF/wf_26e26b28-15e/agent-a49e56a72136dd0ee.jsonl`
+- `D3` = designer attempt 3, `WF/wf_26e26b28-15e/agent-a16a800e7f34fb0ab.jsonl`
+- `R3a` = the first reviewer for attempt 3, interrupted after 6.6 min, `WF/wf_26e26b28-15e/agent-a84bc90b0abd58f66.jsonl`
+- `R3` = reviewer attempt 3 (the restart that scored it), `WF/wf_26e26b28-15e/agent-aec430aae41935a1a.jsonl`
 
-**Baseline:** by the user's decision (2026-10-24), all 8 attempts of this loop run without this repo's tools. Every
+**Baseline:** v1 (the no-tools loop) ran attempts 1-3 and was then stopped by the user (2026-10-24 evening, see
+`HARVEST_BRIEF.md` "Process change"). The v1 tool results below are counterfactual. Every
 "caught" or "would have flagged" below is counterfactual, measured on archived copies after the fact. The per-attempt
 cost and score rows are the baseline that the first tool-using loop will be compared against.
 
@@ -353,3 +357,192 @@ and F5, plus 2 service fails and 1 index fail. Runtime is 58 s.
   patterns plus "exactly the 15 R2-confirmed fails, and the slide tracer feeds 29/29 at every tilt".
 - The demo turret gained a bolt with a nut: through in the clean build, 0.40 mm short in `--bug` (caught).
 - `cc_transcript.py workflow` on both runs. D0 was corrected from 193k to 215k output tokens.
+
+---
+
+## Attempt 3 (harvested 2026-10-24, revision run; the last v1 baseline attempt)
+
+Inputs: the D3, R3a and R3 journal entries and transcripts, and `HW/renders/attempt-3/`: review.md, checks.json,
+review/checks_rerun*.json, 30 designer PNGs and 14 reviewer PNGs. Also the 21:20 blend that R3 reviewed (md5
+`763db27f…`), now archived as `examples/mm-launcher-a3/mm_launcher_a3.blend.gz`. v1 stopped after this attempt. The
+tool numbers below are counterfactual: nothing from this repo reached D3 or R3.
+
+### Per-agent and per-attempt cost
+
+| Agent | Wall | Model time | Tool time (Blender) | API calls | Output tok (thinking) | Cache read | Cache write | Peak context | Images read | Result |
+|---|---|---|---|---|---|---|---|---|---|---|
+| D3 | 41.0 min | 36.3 | 4.7 (4.3) | 75 | 219k (139k) | 22.9M | 0.49M | 488k | 36 | 32 STLs (36 printed objects), 54 fasteners, 133 KB script, 38 KB checks.py |
+| R3a (interrupted) | 6.6 min | 6.3 | 0.3 (0.2) | 25 | 34k (26k) | 3.1M | 0.21M | 207k | 29 | none: "[Request interrupted by user]" at 21:31 |
+| R3 | 18.5 min | 17.1 | 1.5 (1.4) | 50 | 99k (63k) | 9.8M | 0.33M | 333k | 43 | 6 / 6 / 6 |
+
+**Baseline rows (v1, no tools).** Attempt 3 includes R3a, which was lost work.
+
+| Attempt | Design + review wall | Output tokens (thinking) | Cache read | Cache misses (re-written) | Peak context | Longest generation | F/M/A (sum) | Issues B/M/m | Tool-catchable now | cadcheck on the archived blend | Recur from earlier attempts |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 64.0 + 18.6 = 82.6 min | 481k (327k) | 26.8M | 3 (587k) | 522k | 1001 s | 5/6/5 (16) | 18 (R1) | 7 R1 findings reproduced | `examples/mm-launcher-a1/cadcheck_summary.json` | (first) |
+| 2 | 82.8 + 14.2 = 97.0 min | 520k (354k) | 37.9M | 3 (869k) | 698k | 1028 s | 6/5/6 (17) | 1/3/6 | 8 of 10 | 15 fails, all R2-confirmed | 6 of 10 classes (table A2) |
+| 3 | 41.0 + 6.6 + 18.5 = 66.1 min | 352k (228k) | 35.8M | 0 | 488k | 290 s | 6/6/6 (18) | 0/4/4 | 6 of 8 (one partial) | 2 fails, both R3 majors; 0 false fails | 6 of 8 classes; 3 at the same spot as A2 |
+
+**The score still rises one point per attempt** (16 → 17 → 18), so the v1 baseline ends at 6/6/6 after 3 attempts and
+245.7 min. R3 marks 8 of 10 R2 issues FIXED and 2 PARTIAL (battery path, form language). It raises 8 new issues: no
+blocker, 4 majors, 4 minors. Each fix brought its own new problem: the compliant nip that fixed A2-F4 is the leaf
+spring of A3-F2, and the nuts moved out of the battery envelope (A2-F5) now sit in the battery's slide path (A3-F3).
+
+### Time and token sinks (do they recur?)
+
+**A3-T1. Edit-in-place halved the designer (A1-T7, A2-T3 fixed by the agent).** D3 made 9 `Edit` calls on
+build_assembly.py (52 B to 3.9 KB each, `D3 0:16:46-0:20:15`) and one 27 KB `Write` of the BOM. It did not rewrite
+the 133 KB script. Wall time fell from 82.8 to 41.0 min and output from 443k to 219k tokens. This is the template's
+"edit one module, rebuild, check" rule, done without the template on a script that was already mature.
+
+**A3-T2. Upfront thinking shrank but is still 41% of wall (A1-T1, A2-T1).** The first edit came at 16.8 min. Five
+generations of 120 s or more total 16.9 min. They were mostly hand geometry that a tool answers:
+- `0:04:14`, 216 s: where the L-key elbow lands for the moved pinch bolts. cadcheck `lkey` access answers that in
+  11 s after an edit.
+- `0:13:55`, 289 s: which way the stud head faces ("I'm puzzling over screw orientation"). This is the A1-F10 class
+  again. `asm.fastener(at, into)` fixes the convention.
+- `0:16:45`, 159 s: the swept envelope of the pod for the shroud cut. **No cadlib helper exists for this (gap).**
+
+**A3-T3. No cache misses (A1-T4, A2-T4 did not recur).** The longest generation was 290 s, against 1028 s in D2.
+That agrees with A2-T4: the misses followed 10-17 min generations.
+
+**A3-T4. An interrupted reviewer lost 6.6 min and its restart redid the work (new).** The user stopped the loop
+at 21:31 (R3a's last line is "[Request interrupted by user]"). The workflow resumed and started R3 at 21:38 with
+the same journal key. R3a had written `/tmp/mmrev/{list,measure1,lkey,batt}.py`. R3 wrote
+`/tmp/mmrev/scripts/{list,measure,…,batt}.py` again from zero: nothing on disk told it what R3a had measured. That cost
+34k output tokens and 3.1M cache reads. **Fix (this run):** the reviewer skill and the template's review prompt now
+append every measurement to `review/notes.md`, and a restarted reviewer reads it first.
+
+**A3-T5. Reviewer code reading recurs (A1-T8, A2-T6).** R3's time went like this:
+- 0:00-1:01: read 17 renders.
+- 1:20-6:52: rebuilt in a scratch copy and read checks.py, about 5.5 min.
+- 7:42-12:14: 9 measurement scripts.
+- 13:09-17:00: 14 renders, 2 of them re-rendered.
+
+Most of the 13 scripts now map to cadcheck blocks:
+- `slope.py` → `drop` `flattest_slide_deg`;
+- `batt.py` and `battshape.py` → `slide_out`, now with fasteners;
+- `enc.py` and `enc2.py` → `stacks` and `distances`.
+
+The 4 chute-width scripts (`chute`, `choke`, `choke2`, `choke_render`: "at least 9.5 mm wide along the candy path")
+have **no cadcheck equivalent (gap)**.
+
+**A3-T6. Small failures.** D3 had 3 bash failures: no matplotlib, no skia, and an `AssertionError` from its own
+parameter assert, fixed in one edit. R3 had 1 (`__file__` undefined under `--python-expr`). None cost more than a minute.
+
+### Foot-guns (R3), and whether cadcheck catches them
+
+"Before" is cadcheck at `2197aac` with the A3 config (`/tmp/alex3d-a3/cadcheck_before_a3cfg.json`). "After" is this
+run (`examples/mm-launcher-a3/cadcheck_summary.json`). The config is `examples/mm-launcher-a3/checks.json`: the A2
+config updated from the A3 BOM (sections 0, 4 and 5) and from `build_assembly.py:780-830`.
+
+| ID | R3 issue | Before | After | Needs a declaration? |
+|---|---|---|---|---|
+| A3-F1 | **Major:** feed may stall near full tilt; last slide 21.0° at tilt 45 and 19.9° at the 46° stop (R3 #1) | pass (29/29 hit; no margin reported) | warn: flattest slide 21.3° at 45 and 20.3° at 46, stall 20 + margin 5 | the slide test exists from A2; the 46° pose is a config line (hard stop from BOM 0) |
+| A3-F2 | **Major:** nip-cover leaf spring printed standing up, bending stress across layers (R3 #2) | not checked | fail: beam 85° off the bed, 20.9 MPa > 15 | yes: `flexures` (beam direction, D3's own stress number) |
+| A3-F3 | **Major:** battery slides through two adapter nuts from dx 10 to 70 mm (R3 #3) | warn for the wrong reason: "only 1.25 mm to PRT_base_shell"; fasteners were not in the sweep | fail: blocked by `FST_adapter_nut_1`/`_3` at 5 mm | the `slide_out` entry from A2 (BOM 1 #8) |
+| - | **Major:** no unifying form language (R3 #4) | - | - | not tool-catchable |
+| A3-F5 | Hinge axle threads 2.5 mm into PLA (R3 #5) | warn 2.0 mm | warn 2.0 mm | no. **This was an A2 candidate; R3 confirms it** |
+| A3-F6 | Nip range 5.5-10 can't reach the brief's 9-12 and isn't called out (R3 #6) | - | - | not geometric: brief-numbers table (checklist) |
+| A3-F7 | 8 mm of bundle visible in a turntable notch at the bonnet foot (R3 #7) | not flagged (6/26 rays, threshold 8) | warn: 8 mm at (-107, -2, 100) on all 4 bundle wires and the bus | no |
+| A3-F8 | Battery-bay window shows the adapter, screw tips and nuts (R3 #8) | not checked | partial: warn "FST_adapter_nut_1/_3 visible from outside"; window size not checked | no |
+
+**After this run, 6 of 8 R3 issues produce a fail or warn naming the right objects, with R3's numbers within 0.4°
+and 0 mm.** Before, it was 1 of 8 (the hinge warn). Three of the six fire from geometry alone (F5, F7, F8). F1 fires
+at tilt 45 with the A2 config as it stands; F3 needs the `slide_out` entry, which A2 already had; F2 needs a
+`flexures` entry. The before column has **6 false fails** (A3-V1) and catches no R3 major.
+
+**A3-F7 is also an R2 miss.** The archived A2 blend has the same notch with the same escape counts (probe
+`/tmp/alex3d-a3/probe/cab.py` on both blends: 6/26 at (-110, -3, 98)). R2 did not raise it; R3 did. The new rule
+flags it on both blends, so this is reviewer noise that the tool removes.
+
+**False fails in the earlier cadcheck on A3 (A3-V1), fixed this run.** Before, there were 6 fails, all false, all
+from the new nip mechanism:
+- 4 came from sweeping the thumbwheel and its nut as fixed while the stud swings with the backplate. In use they ride
+  on the stud. The new `carry` config re-parents them onto `PIV_hood`.
+- 2 came from treating the hex-head stud as a screw: "head is inside PRT_hood" and "cannot be driven". It is captive
+  in a hex pocket, and the thumbwheel turns. The new `fasteners.captive` config skips seating and access but keeps
+  engagement.
+
+Allowing these pairs would have hidden real clearances. The stud-to-slot and stud-to-cover clearances are still
+swept. The stud-to-cover clearance is a 0.59 mm warn at overtravel.
+
+**cadcheck bugs found by this attempt (fixed):**
+- `slide_out` swept only printed and purchased solids, so a part slid through fasteners unseen. That is the
+  A1-F14 class ("checks that skip fasteners") inside this repo's own tool. Pairs already overlapping at rest are now
+  listed in `overlapping_at_rest` instead of failing the slide. BVH `overlap` misses a nut wholly inside a part, so
+  the rest test uses volume.
+- The summary's `warn_list` was cut at 60 entries. A3 has 66 warns, and the cut dropped the two stall-margin warns.
+  The list is no longer truncated.
+- Stacks compared floats exactly: 0.1 + 0.1 + 0.1 > 0.3 gave a false warn.
+
+**Exposure rule changed (A3-F7).** The 26-ray rule needs 8 escaping rays. A notch shows a cable through a narrow cone,
+which 26 rays sample too coarsely. The new rule is "8 of 26, or 10% of 240 directions toward a viewer above or level".
+On the A3 notch it gives 8.3 mm, against R3's "about 8 mm". On A2 the same rule:
+- sizes R2's bare bus run at 15 mm, against R2's 10 and the old rule's 11;
+- flags the A2 candidate feeder-servo lead at (21, -84, 227) at 39 mm. A `cad q render` from (140, -200, 200),
+  `/tmp/alex3d-a2p/spot_21.png`, shows that lead on the side of the servo;
+- flags two unconfirmed A2 runs at (-38, -26, 252) and (-27, -57, 252). A top-down render shows no cable, so they are
+  likely seen from below the plate edge.
+
+Cost: cables went from 1.5 to 5.5 s.
+
+### Recurrence across attempts (adds the A3 column to the A2 table)
+
+| Class | A1 | A2 | A3 | Tool now |
+|---|---|---|---|---|
+| Payload path never simulated, or no margin | A1-F1 blocker | FIXED by D2's tracer | A3-F1: feeds, but 1° above stall | slide `flattest_slide_deg` + `stall_margin_deg`, hard-stop poses |
+| Working condition at the nip | A1-F2 | A2-F4 rigid squeeze | FIXED by a leaf spring, which A3-F2 then breaks | `distances` + `compliant`; `flexures` |
+| Fasteners left out of checks, and overclaiming | A1-F3, F10, F14 | A2-F5 | A3-F3: D3's checks test the battery at rest only (R3: "checks.py tests the rest pose only"), and cadcheck's own `slide_out` skipped fasteners | `slide_out` includes fasteners |
+| Purchased part vs fasteners | - | A2-F5 (at rest) | A3-F3 (on its slide path) | shank or nut inside BUY; slide_out |
+| Screws you can't drive | A1-F4, F11 | A2-F1, F6 | FIXED: L-key 10/10, nip-cover screws reachable | L-key, `service` |
+| Thread engagement | - | A2 candidate: hinge 2.0 mm | A3-F5, same screw | engagement warn (since A2) |
+| Cables visible | A1-F12 | A2-F8 | A3-F7 (same notch as A2) | viewer-direction exposure |
+| Visible hardware | (A 5) | A2-F9 jack nuts | A3-F8 battery-window nuts | stand-off, nut visibility |
+| Form language | (A 5) | R2 #10 | R3 #4 | not a tool problem |
+
+### What worked (A3)
+
+- **Small, targeted edits** (A3-T1): 41 min instead of 83, with no regressions in the 8 FIXED items.
+- **D3 turned R2's evidence into checks:** an L-key sweep, same-pivot fastener versus purchased parts, feeder index
+  geometry, nip spring numbers and pinch-bolt engagement (D3 journal `summary`). Those are what cadcheck had added in
+  the A2 run. The designer rebuilt them by hand in checks.py (38 KB, up from 32).
+- **R3's slide-path sweep** (`batt.py`: battery in 5 mm steps against every part, BVH) is what cadcheck `slide_out`
+  already did, minus fasteners. That difference was the bug.
+- **R3 re-ran the designer's tracer and measured the margin, not just the verdict.** That is now a reported number on
+  every slide-mode drop row.
+
+### Reviewer quality (A3)
+
+- The anchors held: there was no blocker, so no score was capped. The four majors are 1 F (feed margin), 2 M (leaf,
+  battery path) and 1 A (form language). All three scores are 6.
+- Every R3 issue cites a measurement or a render path, and R3 reproduced every designer number before repeating it ("all 32
+  STLs match byte for byte"). cadcheck agrees with R3 within 0.4° on the slide angles and exactly on the battery
+  nuts and the 8 mm cable.
+- Noise: A3-F7 existed in A2, and R2 didn't see it. Aesthetics 6 → 6 with the same "kit of boxes" critique, so the
+  form-language anchor still decides A.
+- R3 rated one item as Function major on a friction estimate ("roughly 19 to 24 deg"). The tool now reports the
+  margin, but the right stall angle for a sugar shell on PLA is a physical test, not a number either agent can measure.
+
+### Why not the existing code (A3 additions)
+
+- **D3's checks.py battery check:** rest pose only (R3 #3). cadcheck's `slide_out` existed, but it skipped fasteners.
+  The fix is about 10 lines in the existing check, not a new one.
+- **`allow` instead of `carry`/`captive`:** allowing the 6 nip pairs would also silence the thumbwheel-and-nut sweeps
+  against the cover and the seat land (0.42 and 0.59 mm warns, and the seat stop). `carry` (about 10 lines) keeps them.
+  `captive` (about 8 lines) is narrower than `allow`: it keeps engagement and nut pairing.
+- **Exposure:** the old 26-ray rule was tuned on A2 (bare 10-12, grooved 4-7). The notch scores 6, inside the
+  "grooved" band, so no threshold on 26 rays separates it. The dense viewer pass runs only on samples that are not
+  enclosed.
+- **Flexures:** nothing in cadcheck or cadlib reads print orientation against load. `print_rot` was already on every
+  part for bed fit and STL export, so the check reuses it (about 40 lines).
+
+### Verification of this run
+
+- `tools/verify_all.sh`: 36/36 passed (`/tmp/alex3d-verify/verify_all.log`). That adds an A3 regression: 7 patterns,
+  plus "exactly 2 fails, no nip-mechanism fastener or fail findings, feeder index 2 windows over [0, 30, 0, -30, 0]".
+- A1 is unchanged. A2 still gives exactly the 15 R2-confirmed fails after the slide and exposure changes. The A2
+  drop assertion now counts fails only, because A2 also gets the tilt-45 margin warn (same geometry). The A2 bus
+  pattern changed from 11 to 15 mm with the new exposure rule.
+- The live v1 blend (frozen at A3) with the A2 config gives 10 fails, all config mismatches. The A3 config is the
+  right one for it.

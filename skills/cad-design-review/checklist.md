@@ -4,7 +4,8 @@ Each line names the evidence that settles it. A check row (`cadcheck.json` → `
 which beats a render. Items marked with an ID caught real problems in that attempt. The ID points into `docs/FINDINGS.md`.
 
 ## Function
-- [ ] Payload path: `drop` rows at every joint extreme, landing inside the working window (A1-F1). If none exists, add a `drop_tests` entry and re-run the check rather than eyeballing.
+- [ ] Payload path: `drop` rows at every joint extreme **including the hard stops**, landing inside the working window (A1-F1), and `flattest_slide_deg` at least 5° above the stall angle (A3-F1: 21° at tilt 45 over a 20° limit). If no row exists, add a `drop_tests` entry and re-run the check rather than eyeballing.
+- [ ] Brief numbers: a table of every numeric requirement in the brief against the design value. A deviation that the BOM doesn't call out is an issue (A3 R3 #6: nip range 5.5-10 against the brief's 9-12).
 - [ ] Working condition reachable: `distances` rows for the nip, gap or preload at both ends of the adjustment (A1-F2).
 - [ ] Indexing: one payload per cycle. `index` rows over the **documented** motion (BOM "how it works"), not the one you would choose: A2's 0 → 60 → 0 stroke released twice (A2-F2). Pocket size vs. payload in any orientation; edge-on payloads (A1 R1 #8) with `cad q inside` or a section with `--lentil`.
 - [ ] Grip on the payload: the gap along the working line (`distances` with `ray`), the squeeze, and **which part yields** (A2-F4). A rigid interference on a hard payload is a major.
@@ -21,10 +22,11 @@ which beats a render. Items marked with an ID caught real problems in that attem
 - [ ] Fasteners and cables included in interference (A1-F3). The `coverage` line must list all four collections.
 - [ ] `assembly_order` matches the BOM steps, and every bench sub-assembly can actually be lifted into place.
 - [ ] Service: tape, shim, belt or battery changes without a full teardown. Count the screws (A1 R1 #6). Every BOM service claim has a `service` row, at the pose the BOM states (A2-F6).
-- [ ] Purchased-part tolerances: `slide_out` rows; bays sized for the envelope plus 2 mm (A1-F13).
+- [ ] Purchased-part tolerances: `slide_out` rows; bays sized for the envelope plus 2 mm (A1-F13). "Removable" claims are swept over the **whole path**, including fasteners. A designer check at the rest pose only is an overclaim (A3-F3).
+- [ ] Springs, flexures and snap arms: a `flexures` row each. The beam lies in the layer plane, or the stress stays under 15 MPa across layers (A3-F2).
 
 ## Aesthetics
-- [ ] iso and iso_front_left: no exposed wires, PCB edges or motor cans. `cables` exposure spots and fastener stand-off warns list the candidates with coordinates (A2-F8, F9).
+- [ ] iso and iso_front_left: no exposed wires, PCB edges or motor cans. `cables` exposure spots, nut-visible and fastener stand-off warns list the candidates with coordinates (A2-F8, F9, A3-F7, F8). Windows no bigger than what they must show.
 - [ ] Edge breaks and radii from one declared set (grep the params for BEVEL/RADIUS).
 - [ ] Visible screw heads counterbored; parting lines aligned.
 - [ ] No leftover cut artefacts (notches, stray bosses) in hero views.

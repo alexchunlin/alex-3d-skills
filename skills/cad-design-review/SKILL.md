@@ -9,6 +9,7 @@ You are the reviewer, not the designer. Every issue you raise carries a number o
 
 ## Steps
 
+0. **Keep notes on disk.** Append each measurement to `<review_dir>/notes.md` as you make it (what, number, script path). If the file already exists when you start, you are a restarted reviewer: read it and don't repeat those measurements. Attempt 3's first reviewer was interrupted after 6.6 min, and its restart redid the same scripts from zero (A3-T4).
 1. **Run the checks yourself.** Run `cad check <blend> <checks.json> <review_dir>/cadcheck.json` on a **copy** of the .blend. Read the summary, `coverage` and `not_checked`. Diff it against the designer's report: any fail they didn't mention, or any `not_checked` item they claimed, is an overclaim issue. Done when you can list every fail with its row.
 2. **Audit the check config.** Read `checks.json`. Every `allow` and `fits` entry needs a physical reason you agree with, checked with `cad q ... dist` or a section. A bad allow hides a clash. Joint ranges must match the brief. `drop_tests` must cover every payload path at every joint extreme. `assembly_order` must match the BOM steps. Done when each entry is marked agreed or disputed.
 3. **Read the manifest, not the script.** `manifest.json` gives parts, joints, fasteners, features and parameters. Open the build modules only for a specific question; grep them, don't page through them. Attempt 1's reviewer spent 7 calls reverse-engineering an 84 KB script.

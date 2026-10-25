@@ -1,0 +1,532 @@
+{
+ "_source": "Attempt-3 blend (HW/blender/mm_launcher.blend 21:20, the one R3 reviewed). Started from examples/mm-launcher-a2/checks.json; changes from the A3 BOM sections 0, 4 (steps 17-19) and 5 and build_assembly.py:780-830 (compliant nip).",
+ "joints": {
+  "PIV_pan": {
+   "axis": "Z",
+   "lo": -90,
+   "hi": 90,
+   "step": 15
+  },
+  "PIV_tilt": {
+   "axis": "X",
+   "lo": 0,
+   "hi": 45,
+   "step": 2.5
+  },
+  "PIV_flywheel": {
+   "axis": "X",
+   "continuous": true,
+   "step": 60
+  },
+  "PIV_feeder": {
+   "axis": "Z",
+   "lo": -30,
+   "hi": 30,
+   "step": 15
+  },
+  "PIV_hood": {
+   "axis": "X",
+   "lo": -2.3,
+   "hi": 0.0,
+   "step": 0.5,
+   "_why": "at the 6.5 mm setting the thumbwheel on its seat stops closing (0) and the leaf lets the plate open 2.5 mm at the stud (2.3 deg, measured)"
+  }
+ },
+ "couplings": {
+  "PIV_pan_pinion": {
+   "to": "PIV_pan",
+   "ratio": -1
+  }
+ },
+ "allow": [
+  {
+   "a": "BUY_battery",
+   "b": "BUY_dewalt_adapter",
+   "why": "battery rail stem slides into the adapter"
+  },
+  {
+   "a": "BUY_servo_*",
+   "b": "BUY_horn_*",
+   "why": "spline inside horn hub"
+  },
+  {
+   "a": "BUY_motor",
+   "b": "PRT_flywheel",
+   "why": "motor shaft is modelled with the stator; it sits in the D-bore"
+  },
+  {
+   "a": "BUY_motor",
+   "b": "BUY_magnet",
+   "why": "magnet glued to the rear shaft end (rotor)"
+  },
+  {
+   "a": "FST_adapter_*",
+   "b": "BUY_dewalt_adapter",
+   "why": "corner holes are not modelled in the adapter envelope (BOM step 2 drills them to 3.2)"
+  },
+  {
+   "a": "PRT_nip_wheel",
+   "b": "PRT_nip_cover",
+   "why": "leaf pads drawn in their free (printed) shape: the 2.3 mm overlap is the assembly preload (BOM 0)"
+  },
+  {
+   "a": "PRT_nip_cover",
+   "b": "FST_nip_nut",
+   "why": "the leaf is drawn in its free shape; in use the pads hold it about 4 mm above the nut, and it lifts with the thumbwheel"
+  }
+ ],
+ "masses_g": {
+  "BUY_battery": 620,
+  "BUY_dewalt_adapter": 90,
+  "BUY_buck_12v": 180,
+  "BUY_motorgo_axis": 25,
+  "BUY_servo_controller": 30,
+  "BUY_servo_*": 66,
+  "BUY_horn_*": 4,
+  "BUY_motor": 200,
+  "BUY_magnet": 1,
+  "BUY_plink_encoder": 3,
+  "BUY_usbc_plug": 0
+ },
+ "fits": [
+  {
+   "a": "PRT_base_shell",
+   "b": "PRT_turntable",
+   "contact": true,
+   "why": "turntable bearing ring rides on the deck (plain thrust bearing)"
+  },
+  {
+   "a": "PRT_base_shell",
+   "b": "PRT_pan_hub",
+   "min_clearance": 0.2,
+   "why": "hub journal in deck hole"
+  },
+  {
+   "a": "PRT_yoke_arm_L",
+   "b": "PRT_nacelle",
+   "min_clearance": 0.1,
+   "why": "left tilt journal (nacelle)"
+  },
+  {
+   "a": "PRT_arm_cap_L",
+   "b": "PRT_nacelle",
+   "min_clearance": 0.1,
+   "why": "left tilt journal cap"
+  },
+  {
+   "a": "PRT_yoke_arm_R",
+   "b": "PRT_journal_plate",
+   "contact": true,
+   "why": "right tilt journal plus printed hard-stop lugs (contact at -3/+46)"
+  },
+  {
+   "a": "PRT_arm_cap_R",
+   "b": "PRT_journal_plate",
+   "min_clearance": 0.1,
+   "why": "right tilt journal cap"
+  },
+  {
+   "a": "PRT_servo_pocket_*",
+   "b": "BUY_horn_*",
+   "min_clearance": 0.2,
+   "why": "horn turns inside its pocket"
+  },
+  {
+   "a": "PRT_feeder_plate",
+   "b": "PRT_feeder_disc",
+   "min_clearance": 0.3,
+   "why": "feeder disc runs on the plate"
+  },
+  {
+   "a": "PRT_pan_hub",
+   "b": "PRT_pan_pinion",
+   "min_clearance": 0.1,
+   "why": "1:1 gear mesh"
+  },
+  {
+   "a": "FST_hinge",
+   "b": "PRT_hood",
+   "contact": true,
+   "why": "hinge axle through the backplate boss"
+  },
+  {
+   "a": "PRT_launcher_body",
+   "b": "PRT_hood",
+   "min_clearance": 0.1,
+   "why": "backplate in its bay (0.5 offset nominal)"
+  },
+  {
+   "a": "PRT_nip_wheel",
+   "b": "PRT_launcher_body",
+   "contact": true,
+   "why": "thumbwheel on its seat land: the minimum-gap stop (BOM 0)"
+  }
+ ],
+ "drop_tests": [
+  {
+   "name": "feed_spout_to_tape",
+   "mode": "slide",
+   "stall_deg": 20,
+   "capture_mm": 0.5,
+   "emit": {
+    "frame": "PIV_pan",
+    "center": [
+     21,
+     0,
+     244.8
+    ],
+    "radius": 7.5,
+    "step": 2.5
+   },
+   "dir": [
+    0,
+    0,
+    -1
+   ],
+   "poses": {
+    "PIV_tilt": [
+     0,
+     15,
+     22.5,
+     30,
+     45,
+     46
+    ]
+   },
+   "expect": {
+    "hit": [
+     "PRT_flywheel"
+    ],
+    "angle": {
+     "center": "PIV_flywheel",
+     "frame": "PIV_tilt",
+     "axis": "X",
+     "zero": "-Z",
+     "positive": "-Y",
+     "range": [
+      0,
+      135
+     ]
+    }
+   },
+   "why": "candy must first touch the tape where it moves down into the nip (D2 tracer: psi 0..135 behind BDC); 46 = the printed hard stop (BOM 0), firmware stops at 45"
+  }
+ ],
+ "index_tests": [
+  {
+   "name": "feeder_one_candy_per_cycle",
+   "joint": "PIV_feeder",
+   "sequence": [
+    0,
+    30,
+    0,
+    -30,
+    0
+   ],
+   "step": 2,
+   "probe": {
+    "frame": "PIV_pan",
+    "center": [
+     21,
+     0,
+     267.0
+    ],
+    "dir": [
+     0,
+     0,
+     -1
+    ],
+    "radius": 3.0,
+    "depth": 23
+   },
+   "blockers": [
+    "PRT_feeder_disc",
+    "PRT_feeder_plate"
+   ],
+   "expect_windows": 2,
+   "why": "BOM section 0: park 0, fire +30 and back, next shot -30 and back: one candy per fire, two per cycle"
+  }
+ ],
+ "slide_out": [
+  {
+   "object": "BUY_battery",
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": 130,
+   "step": 5,
+   "min_clearance": 1.5
+  },
+  {
+   "name": "flywheel off along +X (BOM 5)",
+   "objects": [
+    "PRT_flywheel",
+    "FST_fw_*"
+   ],
+   "ignore": [
+    "PRT_launcher_cover",
+    "FST_cover_*"
+   ],
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "dist": 140,
+   "step": 5,
+   "min_clearance": 1.0
+  }
+ ],
+ "distances": [
+  {
+   "a": "PRT_hood",
+   "b": "PRT_flywheel",
+   "ray": {
+    "frame": "PIV_tilt",
+    "origin": [
+     21,
+     37,
+     132
+    ],
+    "dir": [
+     0,
+     0,
+     1
+    ]
+   },
+   "min": 5.5,
+   "max": 7.0,
+   "payload_mm": 7.0,
+   "tape_mm": 0.5,
+   "why": "nip at BDC (bare rim to backplate) squeezes a 7 mm M&M over 0.5 mm tape",
+   "compliant": "PRT_nip_cover leaf spring (about 9 N preload, 3.9 N/mm, BOM 0)"
+  }
+ ],
+ "service": [
+  {
+   "op": "change the nip gap (BOM 5: remove 2 nip-cover screws, any tilt)",
+   "fasteners": [
+    "FST_nip_cover_*"
+   ]
+  },
+  {
+   "op": "re-tighten the flywheel (BOM 5: tilt 45, cover off)",
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "remove": [
+    "PRT_launcher_cover",
+    "FST_cover_*"
+   ],
+   "fasteners": [
+    "FST_fw_bolt_*"
+   ]
+  },
+  {
+   "op": "encoder (BOM 5: tilt 45)",
+   "pose": {
+    "PIV_tilt": 45
+   },
+   "fasteners": [
+    "FST_enc_*"
+   ]
+  }
+ ],
+ "assembly_order": [
+  {
+   "step": "1-8 base",
+   "objects": [
+    "PRT_base_shell",
+    "BUY_dewalt_adapter",
+    "FST_adapter_*",
+    "BUY_motorgo_axis",
+    "BUY_usbc_plug",
+    "BUY_servo_pan",
+    "BUY_horn_pan",
+    "PRT_horn_adapter_pan",
+    "PRT_servo_pocket_pan",
+    "PRT_servo_clamp_pan",
+    "PRT_pan_pinion",
+    "PRT_pan_hub",
+    "BUY_buck_12v",
+    "BUY_servo_controller"
+   ]
+  },
+  {
+   "step": "9 floor",
+   "objects": [
+    "PRT_base_floor",
+    "FST_floor_*"
+   ]
+  },
+  {
+   "step": "10-12 pan stage",
+   "objects": [
+    "PRT_turntable",
+    "PRT_turntable_spine",
+    "PRT_yoke_arm_*",
+    "FST_foot_*"
+   ]
+  },
+  {
+   "step": "13-15 motor, magnet, encoder (bench)",
+   "bench": "launcher",
+   "objects": [
+    "BUY_magnet",
+    "BUY_motor",
+    "PRT_nacelle",
+    "BUY_plink_encoder",
+    "PRT_encoder_cap",
+    "FST_enc_*"
+   ]
+  },
+  {
+   "step": "16 nacelle to body (bench)",
+   "bench": "launcher",
+   "objects": [
+    "PRT_launcher_body",
+    "FST_motor_*",
+    "FST_nacelle_*"
+   ]
+  },
+  {
+   "step": "17 backplate, journal plate, hinge, nip stud and thumbwheel (bench)",
+   "bench": "launcher",
+   "objects": [
+    "PRT_hood",
+    "PRT_journal_plate",
+    "FST_jplate_*",
+    "FST_hinge",
+    "FST_nip_stud",
+    "PRT_nip_wheel",
+    "FST_nip_nut"
+   ]
+  },
+  {
+   "step": "18 flywheel (bench)",
+   "bench": "launcher",
+   "objects": [
+    "PRT_flywheel",
+    "FST_fw_*"
+   ]
+  },
+  {
+   "step": "19 nip cover, cover (bench)",
+   "bench": "launcher",
+   "objects": [
+    "PRT_nip_cover",
+    "FST_nip_cover_*",
+    "PRT_launcher_cover",
+    "FST_cover_*"
+   ]
+  },
+  {
+   "step": "20 pod into yoke, arm caps",
+   "merge": "launcher",
+   "objects": [
+    "PRT_arm_cap_*"
+   ]
+  },
+  {
+   "step": "21 tilt servo and housing",
+   "objects": [
+    "BUY_horn_tilt",
+    "PRT_horn_adapter_tilt",
+    "BUY_servo_tilt",
+    "PRT_servo_pocket_tilt",
+    "PRT_servo_clamp_tilt",
+    "PRT_tilt_servo_cover",
+    "FST_tilt_clamp_*"
+   ]
+  },
+  {
+   "step": "22-23 feeder servo under plate (bench)",
+   "bench": "plate",
+   "objects": [
+    "BUY_horn_feeder",
+    "PRT_horn_adapter_feeder",
+    "BUY_servo_feeder",
+    "PRT_servo_pocket_feeder",
+    "PRT_servo_clamp_feeder",
+    "PRT_feeder_plate",
+    "PRT_feeder_shroud",
+    "FST_feeder_clamp_*"
+   ]
+  },
+  {
+   "step": "24 plate onto caps",
+   "merge": "plate",
+   "objects": [
+    "FST_cap_*"
+   ]
+  },
+  {
+   "step": "25 bonnet, arm cover",
+   "objects": [
+    "PRT_arm_cover_*"
+   ]
+  },
+  {
+   "step": "26 disc, hopper, lid",
+   "objects": [
+    "PRT_feeder_disc",
+    "PRT_hopper",
+    "PRT_hopper_lid"
+   ]
+  },
+  {
+   "step": "battery",
+   "objects": [
+    "BUY_battery"
+   ]
+  }
+ ],
+ "stacks": [
+  {
+   "name": "magnet to sensor centring",
+   "limit": 0.3,
+   "why": "MT6701 off-axis limit; A3 datum chain (jig on the motor, crush ribs), R3 measured about 0.24 RSS",
+   "terms": [
+    {
+     "what": "jig spigot in the motor's \u00d88 access hole",
+     "tol": 0.1
+    },
+    {
+     "what": "encoder cap crush ribs in the nacelle bore",
+     "tol": 0.1
+    },
+    {
+     "what": "PCB on pegs",
+     "tol": 0.1
+    }
+   ]
+  }
+ ],
+ "carry": {
+  "PRT_nip_wheel": "PIV_hood",
+  "FST_nip_nut": "PIV_hood"
+ },
+ "fasteners": {
+  "captive": {
+   "FST_nip_stud": "hex head held in the backplate's hex pocket; the thumbwheel nut turns (BOM step 17)"
+  }
+ },
+ "flexures": [
+  {
+   "part": "PRT_nip_cover",
+   "name": "leaf spring",
+   "dir": [
+    0,
+    -0.482,
+    0.876
+   ],
+   "stress_mpa": 20.9,
+   "why": "34 mm cantilever along the nip frame's V axis (build_assembly.py:822 NIP_V_ROOT); 20.9 MPa at the 9 N preload, 43.6 at the stop (D3 checks.json compliant_nip)"
+  }
+ ]
+}

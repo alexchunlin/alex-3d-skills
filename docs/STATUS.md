@@ -1,38 +1,53 @@
-# Status (updated 2026-10-24, after the revision run for attempt 2)
+# Status (updated 2026-10-24, after the revision run for v1 attempt 3)
 
 ## Ingested
-- Attempt 1: D1 `agent-af2e15ae070705e95`, R1 `agent-a4e34520e7cf12eb4`, killed D0 `agent-a0e1dc96a1cba327c` (wf_ebc9f356-a79), `HW/renders/attempt-1/`.
-- Attempt 2: D2 `agent-a6815d61faa83f67e` (complete, 82.8 min), R2 `agent-a49e56a72136dd0ee` (14.2 min, 6/5/6), `HW/renders/attempt-2/`, and the 20:27 blend (archived).
-- **Not ingested:** D3 `agent-a16a800e7f34fb0ab` (started 20:43). The next run takes D3 and R3 from the start.
+- v1 is **complete and stopped** after attempt 3 (`HARVEST_BRIEF.md` "Process change"). All v1 agents are ingested:
+  - A1: D1, R1, and the killed D0.
+  - A2: D2, R2.
+  - A3: D3 `agent-a16a800e7f34fb0ab` (41.0 min), R3a `agent-a84bc90b0abd58f66` (interrupted at 6.6 min), R3
+    `agent-aec430aae41935a1a` (18.5 min, 6/6/6).
+- Archived blends: `examples/mm-launcher-a{1,2,3}/`, each with checks.json, a cadcheck summary and the blend the
+  reviewer saw.
+- **Next data is v2**: `HW/v2/renders/attempt-N/` and the v2 workflow journal (path given in the prompt). v2 uses
+  these tools for real via the pin worktree `~/code-stuff/alex-3d-skills-pin`. Never touch the pin.
 
-## What exists, and what is proven (`sh tools/verify_all.sh`: 28/28 pass, about 3 min)
+## What exists, and what is proven (`sh tools/verify_all.sh`: 36/36 pass, about 5 min)
 
 | Piece | Proven by |
 |---|---|
-| `tools/transcript/cc_transcript.py` | FINDINGS A1 and A2 tables. It now estimates calls that have no final usage line (A2-T5). |
-| `skills/print-cad-blender`: cadlib (now with `asm.nut`), cadcheck, cadq, `cad` (passes `--only`/`--quick`), template, references | A1 regression: 7 R1 findings. A2 regression: 9 R2 findings, and exactly the 15 R2-confirmed fails (no false fails). Demo clean has 0 fails; demo `--bug` catches 4/4. Template has 0 fails. |
-| cadcheck additions this run | bolt-to-nut pairing, shank or nut inside purchased parts, L-key access, continuous-joint poses, head stand-off, protrusion, `service` ops, `index_tests`, `drop_tests` `mode: slide`, group `slide_out`, `distances.ray` with payload and compliance, `stacks`, cable exposure |
-| `skills/cad-design-review` | updated checklist; **still not exercised by a real reviewer** |
-| `templates/cad-loop.workflow.js` | dry run only; **never run with real agents**. Designer and reviewer now get the claims-to-checks rule. |
-| `examples/mm-launcher-a1/`, `examples/mm-launcher-a2/` | config, summary and archived blend per attempt |
+| `tools/transcript/cc_transcript.py` | FINDINGS A1-A3 cost tables |
+| `skills/print-cad-blender`: cadlib, cadcheck, cadq, `cad`, template, references | A1 regression (7 R1 findings), A2 regression (9 R2 findings, exactly 15 fails), A3 regression (7 R3 patterns, exactly 2 fails, no nip-mechanism false fails); demo clean 0 fails and `--bug` 4/4; template 0 fails |
+| cadcheck additions this run | `slide_out` includes fasteners (with a rest-overlap test); `carry`; `fasteners.captive`; `flexures` (beam vs print orientation); slide-drop `flattest_slide_deg` and `stall_margin_deg`; viewer-direction exposure; nut visibility; full `warn_list`; float-safe stacks |
+| `skills/cad-design-review` | checklist: hard stops, slide margin, brief-numbers table, whole-path removal, flexures, visible nuts; step 0 `notes.md` for restarts. **First real use is v2.** |
+| `templates/cad-loop.workflow.js` | dry run only. The review prompt has notes and restart handling; the finish prompt asks for slide_out and flexures. The v2 orchestration is its own copy under `mmlauncher/orchestration/`, so template edits **don't** reach v2. Skill and cadcheck edits do, through the pin. |
 
-## Baseline (decided 2026-10-24)
-The live loop runs **unchanged for all 8 attempts** as a baseline: no prompt edits, no skills, no `cad check`. The tools here are adopted only after the loop ends, and the first loop that uses them is compared against this one. So:
-- Don't propose switching or patching the live loop. Tool results stay counterfactual: "would have flagged", never "helped".
-- Record the same baseline row for every attempt: wall and model minutes per agent, output, thinking and cache tokens, cache misses, peak context, the longest single generation, F/M/A scores, the number of review issues (blocker/major/minor), how many are tool-catchable, how many cadcheck flags on the archived blend, and how many issues recur from earlier attempts.
+## v1 baseline (final)
 
-## Key numbers
-- Per attempt: A1 82.6 min, 481k output tokens, 5/6/5. A2 97.0 min, 520k output tokens, 6/5/6. At about 1 score point per attempt, the loop will not reach 9/9/9 in 8 attempts.
-- cadcheck on A2: before this run, 34 fails, 28 of them false. After, 15 fails, all R2-confirmed. 8 of 10 R2 issues are flagged, and 5 of those come from geometry alone. Full run 58 s.
+| Attempt | Wall (design + review) | Output tok | F/M/A | Issues B/M/m | Tool-catchable (now) |
+|---|---|---|---|---|---|
+| 1 | 82.6 min | 481k | 5/6/5 | 18 | 7 reproduced |
+| 2 | 97.0 min | 520k | 6/5/6 | 1/3/6 | 8 of 10 |
+| 3 | 66.1 min (6.6 lost to an interrupted reviewer) | 352k | 6/6/6 | 0/4/4 | 6 of 8 |
+
+The full rows (thinking, cache, misses, peak context, longest generation, recurrence) are in FINDINGS A3, "Baseline
+rows". Total: 245.7 min for 3 attempts at about +1 score point per attempt. Compare v2 against this.
 
 ## Known gaps
-- Three of the A2 catches (index, nip squeeze, service) need config entries that restate BOM claims. The tooling helps only if the designer writes them. Nothing checks yet that every BOM claim has an entry; that is a reviewer checklist item.
-- `stacks` is arithmetic on declared terms only. Form language and proportions are not tooling problems.
-- Not checked: nut wrench access, cable bend radius and slack, teardown screw count. The slide tracer has no bounce or rolling.
-- Six new unconfirmed A2 candidates are listed in FINDINGS (backplate bay 0.14 mm, hinge 2.0 mm thread, servo lead 39 mm visible, and others). R3 can confirm or refute them.
+- No check for channel width along a payload path. R3 measured it by hand with 4 scripts (A3-T5).
+- No cadlib helper for the swept envelope of a moving part (D3 spent 159 s deriving one, A3-T2).
+- Stall angle and PLA interlayer limits are defaults from reviewer estimates (20° + 5°, 15 MPa), not tests.
+- Several catches need a config entry restating a BOM claim: index, service, slide_out, flexures and hard-stop
+  poses. The reviewer checklist asks for them. v2 will show whether designers write them.
+- Exposure now flags two unconfirmed A2 spots at (-38, -26, 252) and (-27, -57, 252). The A3 versions of these are
+  gone.
+- Not checked: nut wrench access, cable bend radius and slack, teardown count, window-vs-content size, form language.
 
-## Next (revision run for attempt 3)
-1. Run `cc_transcript.py workflow WF/wf_26e26b28-15e`, then `summary` and `thinking --min-s 300` on D3 and R3. Check whether A2-T1 (36 min of upfront thinking) and A2-T4 (cache misses) recur.
-2. Copy the A3 blend to `/tmp/alex3d-a3`. Start from `examples/mm-launcher-a2/checks.json`, update the joints, fits, order, service and index entries from the A3 BOM, and run `cad check`. Score each R3 issue as caught, partial or missed, in the same table format as A2.
-3. Check whether R3 confirms or refutes the six A2 candidates. Fix the cadcheck false positives or misses this shows. Archive the A3 blend only if it adds new regression patterns (each blend is about 6 MB in git).
-4. Record the baseline row for A3 (see "Baseline" above) in the same format as A1 and A2.
+## Next (revision run for v2 attempt N)
+1. `cc_transcript.py workflow <v2 wf dir>`, then `summary` per agent. Compare time, tokens and peak context against
+   the v1 baseline table above.
+2. Read `HW/v2/renders/attempt-N/{progress.md,cadcheck.json,review.json}`. Count:
+   - cadcheck false fails that cost agent time (grep the transcripts for allow/fits edits and "false");
+   - `check_config_disputes`;
+   - `tool_catchable` issues that cadcheck still missed.
+3. Fix what v2 agents actually tripped over: cadcheck, SKILL wording, checks-config docs. Run
+   `sh tools/verify_all.sh` before every commit, because `main` feeds the next v2 attempt.

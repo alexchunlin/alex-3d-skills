@@ -30,6 +30,17 @@ IDs point into `<repo>/docs/FINDINGS.md`. "Caught" means cadcheck or cadq flags 
 | A2-F8 | 10 mm of bus cable bare between bonnet and plate | cable exposure (≥ 8 of 26 rays escape) | yes (warn): 11 mm at x -107, z 249 |
 | A2-F9 | Jack screws and nuts hang under the pod | head stand-off > 2 mm | yes (warn): 11 mm |
 
+## Attempt 3 (the designer fixed or partly fixed all 10 A2 items; these are new)
+
+| ID | Mistake | Catch | Caught on A3 |
+|---|---|---|---|
+| A3-F1 | Feed reaches the tape at tilt 45 and at the 46° hard stop, but over a 21° / 20° slide with a 20° stall limit | slide `flattest_slide_deg` and `stall_margin_deg`; poses at the hard stop | yes (warn): 21.3° at 45, 20.3° at 46 (R3: 21.0, 19.9) |
+| A3-F2 | Leaf spring printed standing up, so 21-44 MPa of bending stress crosses layer bonds | `flexures` with the beam direction and stress | yes: 85° off the bed, 20.9 > 15 MPa |
+| A3-F3 | "Battery slides out without tools", but the stem runs through two adapter nuts from 10 mm out; the designer's checks tested the rest pose only | `slide_out`, which now includes fasteners | yes: blocked by `FST_adapter_nut_1`/`_3` at 5 mm |
+| A3-F5 | Hinge axle threads 2.5 mm into PLA | engagement < `min_engagement` | yes (warn): 2.0 mm |
+| A3-F7 | 8 mm of bundle seen through a notch at the bonnet foot (unchanged since A2; R2 missed it) | cable exposure, viewer-direction rule | yes (warn): 8 mm (R3: about 8) |
+| A3-F8 | Battery-bay window shows the adapter nuts | nut visibility | partial: both nuts warned; window size not checked |
+
 **Rule from A2:** every sentence in the BOM or design log that states a motion, timing or service claim ("park at 0, fire
 at +60", "change the gap without disassembly", "the flywheel comes off at tilt 45") gets a `checks.json` entry
 (`index_tests`, `service`, `slide_out`) **before** it is written into the BOM. A2-F2 (a major) and A2-F6 were confident prose
@@ -40,4 +51,6 @@ The checker does not cover these. Use sections, the design log or the reviewer c
 - alignment jigs, such as magnet centring (A1-F7)
 - the order of indexing and feed moves, such as tilting mid-drop (A1-F8); single-axis index timing is `index_tests`
 - tolerance stacks you have not written down (A2-F7)
-- form language, proportions, colour (A2 R2 #10)
+- form language, proportions, colour (A2 R2 #10, A3 R3 #4)
+- brief numbers the design quietly misses, such as a nip range of 5.5-10 against the brief's 9-12 (A3 R3 #6): keep a table of the brief's numbers against the design's
+- channel width along the payload path (R3 measured "at least 9.5 mm" by hand)
