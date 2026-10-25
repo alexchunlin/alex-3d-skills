@@ -200,6 +200,10 @@ FASTENER_SPECS = {
     # ISO 4017 hex head, 5.5 AF x 2.0, as a round head across flats (v2 A3 modelled a hex stud as M3_cap, V2A3-F6)
     "M3_hex": (3.0, 5.5, 2.0),
 }
+# every size and head in features.SIZES (M2_cap ... M5_csk), for features.fastener_joint
+for _sz, _s in features.SIZES.items():
+    for _hd in ("cap", "pan", "csk"):
+        FASTENER_SPECS.setdefault("%s_%s" % (_sz, _hd), (_s["d"],) + tuple(_s[_hd]))
 
 
 def fastener(name, at, into, length, spec="M3_cap", joint=None, host=None, step=None):
@@ -227,17 +231,18 @@ def fastener(name, at, into, length, spec="M3_cap", joint=None, host=None, step=
     return ob
 
 
-def nut(name, at, into, joint=None, af=None, h=None, step=None):
-    """M3 hex nut whose bearing face is at `at`, body extending along `into` (same frame as features.nut_trap).
-    Tagged fst_kind="nut", so cadcheck pairs it with the bolt on its axis and fails a bolt that stops short of it
-    (attempt 2: the M3 x 16 pinch bolts ended 0.36 mm before their nuts, FINDINGS A2-F3)."""
-    af = af or features.RULES["m3_nut_af"]
-    h = h or features.RULES["m3_nut_h"]
+def nut(name, at, into, joint=None, af=None, h=None, step=None, size="M3", label=None):
+    """Hex nut (`size`, default M3) whose bearing face is at `at`, body extending along `into` (same frame as
+    features.nut_trap). Tagged fst_kind="nut", so cadcheck pairs it with the bolt on its axis and fails a bolt that
+    stops short of it (attempt 2: the M3 x 16 pinch bolts ended 0.36 mm before their nuts, FINDINGS A2-F3)."""
+    S = features.size_rules(size)
+    af = af or S["nut_af"]
+    h = h or S["nut_h"]
     w = Vector(into).normalized()
     r = af / 2 / math.cos(math.pi / 6)
     ob = geom.cyl(name, (0, 0), r, 0, h, 'Z', n=6)
     geom.xform(ob, features._frame(at, w))
-    ob = part(ob, name, 'FST', "screw", joint, part="M3 hex nut", step=step or "")
+    ob = part(ob, name, 'FST', "screw", joint, part=label or "%s hex nut" % size, step=step or "")
     ob["fst_kind"] = "nut"
     PARTS[name].update(face=list(at), into=list(w), nut_h=h)
     return ob
