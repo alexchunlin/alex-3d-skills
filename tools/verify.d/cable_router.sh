@@ -1,0 +1,44 @@
+# cadlib.route (docs/features/cable-router.md): synthetic tray (block + wall slot + turntable bore), then one A3 re-route.
+# Sourced by tools/verify_all.sh (uses $ROOT $CAD $V; calls ok/bad). About 15 s.
+CR="$V/cr"; mkdir -p "$CR"
+$CAD build "$ROOT/examples/cable-router/build.py" --out "$CR" >/dev/null
+if [ -f "$CR/route.json" ]; then
+  python3 -I -c "
+import json, math, sys
+d = json.load(open(sys.argv[1]))
+def seg_dist(p, a, b):
+    ab = [b[i] - a[i] for i in range(3)]; L2 = sum(x * x for x in ab) or 1e-12
+    t = max(0.0, min(1.0, sum((p[i] - a[i]) * ab[i] for i in range(3)) / L2))
+    return math.dist(p, [a[i] + t * ab[i] for i in range(3)])
+s, b = d['slot'], d['bore']
+via = min(seg_dist((0, 15, 4), p, q) for p, q in zip(s['pts'], s['pts'][1:]))
+ok = s['min_clearance_mm'] >= 0.95 and s['inside_samples'] == 0 and via < 0.05 and s['length_mm'] > s['straight_mm'] + 10
+ok &= len(b['pieces']) == 2 and b['pieces'][1]['joint'] == 'PIV_turn' and b['slack'] and abs(b['slack'][0]['slack_mm']) < 0.5
+ok &= b['min_clearance_mm'] >= 0.95
+sys.exit(0 if ok else 1)" "$CR/route.json" \
+    && ok "router: synthetic slot route keeps 1.0 mm clearance, passes the via, crosses the joint in 2 pieces with 0 slack" \
+    || bad "router: synthetic route assertions (see $CR/route.json)"
+  # independent of the router's own numbers: cadq distance to the block, and cadcheck finds no cable overlap
+  $CAD q "$CR/route.blend" dist CAB_slot BUY_block | python3 -I -c "import json,sys; sys.exit(0 if json.loads(sys.stdin.read()[5:])['mm'] >= 0.95 else 1)" \
+    && ok "router: cadq CAB_slot to BUY_block >= 0.95 mm" || bad "router: CAB_slot too close to BUY_block"
+  $CAD check "$CR/route.blend" "" "$CR/cadcheck.json" --only interference >/dev/null
+  python3 -I -c "
+import json, sys; d = json.load(open(sys.argv[1]))['summary']
+sys.exit(1 if [x for x in d['fail_list'] + d['warn_list'] if 'CAB_' in x] else 0)" "$CR/cadcheck.json" \
+    && ok "router: cadcheck interference has no cable findings on the routed scene" || bad "router: cadcheck cable findings on the routed scene"
+else
+  bad "router: synthetic build wrote no route.json"
+fi
+# A3: CAB_12v_mg re-routed between its own endpoints has zero solid overlap (hand route: 1.7 mm3 in BUY_buck_12v)
+A3B="$V/a3/mm_launcher.blend"
+if [ ! -f "$A3B" ] && [ -f "$ROOT/examples/mm-launcher-a3/mm_launcher_a3.blend.gz" ]; then
+  mkdir -p "$V/a3"; gunzip -c "$ROOT/examples/mm-launcher-a3/mm_launcher_a3.blend.gz" > "$A3B"
+fi
+if [ -f "$A3B" ]; then
+  $CAD q "$A3B" route CAB_12v_mg --config "$ROOT/examples/mm-launcher-a3/checks.json" --json "$CR/a3_12v_mg.json" --save "$CR/a3_rerouted.blend" >/dev/null
+  python3 -I -c "
+import json, sys; r = json.load(open(sys.argv[1]))[0]
+after = sum(v for d in r['after_overlap_mm3'].values() for v in d.values())
+sys.exit(0 if (sum(r['hand']['overlap_mm3'].values()) > 1.0 and after == 0 and r['routed']['min_clearance_mm'] >= 0.95) else 1)" "$CR/a3_12v_mg.json" \
+    && ok "router: A3 CAB_12v_mg re-route has 0 mm3 solid overlap (hand route 1.7)" || bad "router: A3 CAB_12v_mg re-route overlap (see $CR/a3_12v_mg.json)"
+fi
