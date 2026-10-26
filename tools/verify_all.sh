@@ -89,7 +89,7 @@ if [ -f "$A3" ]; then
              "feed_spout_to_tape at tilt=45: 29/29 rays reach the target over a slide of only 21.3 deg" \
              "feed_spout_to_tape at tilt=46: 29/29 rays reach the target over a slide of only 20.3 deg" \
              "CAB_launcher_bundle_0: about 8 mm of cable is visible" "FST_adapter_nut_1 is visible from outside" \
-             "FST_hinge: only 2.0 mm of thread"; do
+             "FST_hinge: only 2.5 mm of thread"; do
     grep -qF "$pat" "$V/a3/cadcheck.json" && ok "A3 reproduces: $pat" || bad "A3 missing: $pat"
   done
   python3 -I -c "
@@ -418,12 +418,13 @@ $CAD check "$V/gate/gate.blend" "$G8/checks.json" "$V/gate/cadcheck.json" >/dev/
 python3 -I -c "
 import json,sys; d=json.load(open(sys.argv[1])); s=d['summary']; c=d['checks']
 sl={r['object']: r for r in c['slide']['rows']}
-ok = (s['fails'] == 0 and s['warns'] == 1 and 'collide only 2.5 deg (1 mm on slides) past the joint limit (gate=21)' in s['warn_list'][0]
+ok = (s['fails'] == 0 and s['warns'] == 2 and 'collide only 2.5 deg (1 mm on slides) past the joint limit (gate=21)' in s['warn_list'][0]
+      and 'FST_stop: only 5.0 mm of thread in PRT_housing (needs 6.0: 2 d' in s['warn_list'][1]
       and sl['gate opens over the detent']['flexed']['PRT_detent']['max_mm3'] == 3.2 and sl['gate stops at full open']['blocked_at_mm'] == 20.5
       and c['parts']['rows'][0]['max_bridge_span_mm'] == 5.0 and c['cables']['chains'][0]['route_mm'] < 80 and not c['service']['findings']
       and d['params']['source'] == 'scene' and any(g['joints'] == ['PIV_gate'] for g in c['interference']['groups']))
 sys.exit(0 if ok else 1)" "$V/gate/cadcheck.json" \
-  && ok "slide gate clean: prismatic sweep, detent flex 3.2 mm3, stop at 20.5, bridge 5.0 (bbox 31.8), chain, service" || bad "slide gate clean"
+  && ok "slide gate clean: prismatic sweep, detent flex 3.2 mm3, stop at 20.5, bridge 5.0 (bbox 31.8), chain, service; M3 x 10 stop screw under 2 d" || bad "slide gate clean"
 $CAD check "$V/gate-bug/gate.blend" "$G8/checks.json" "$V/gate-bug/cadcheck.json" --overlay "$G8/overlay_bug.json" >/dev/null
 for pat in "expression '=NOT_A_PARAM + 1' failed" "PRT_stop x PRT_gate collide on different bodies" "wanted ['PRT_stop'] at [19.5, 20.5] mm" \
            "detent bound too tight slide-out blocked by ['PRT_detent']" "runs 62 mm through CAB_a + CAB_b, but its lead is 50 mm" \
