@@ -24,6 +24,7 @@ Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X
 | `xform(ob, M4)`, `frame(origin, u, v, w)` | bake a transform; build a placement matrix |
 | `join(name, obs)` | merge shells without booleans (purchased placeholders only) |
 | `import_stl(path, name)` | e.g. `reference/mg_axis.stl` as a placeholder |
+| `swept_envelope(...)`, `cadlib.blend` | keep-outs for moving parts; organic connectors grown around tubes and parts: `reference/blend.md` (`Tube` clearance is radial) |
 
 ## features: print features
 
