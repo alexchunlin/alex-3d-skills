@@ -13,11 +13,13 @@ ok = g['non_manifold_edges']==0 and len(h)==6 and all(m['fit_ok'] and m['missed'
 print('clearance %.3f-%.3f, wall %.3f, %d tris, %.1f s' % (min(c), max(c), min(m['wall_min'] for m in h.values()), g['tris'], g['t_total_s']))
 sys.exit(0 if ok else 1)" "$BB/node/report.json" > "$BB/node.txt" 2>&1 \
   && ok "blend node: closed, 6 sockets $(cat "$BB/node.txt")" || bad "blend node: $(cat "$BB/node.txt")"
-$CAD check "$BB/node/node.blend" "" "$BB/node/cadcheck.json" --only parts >/dev/null
+# layer check on (verify_all exports CAD_LAYER_CHECK=0): the node declares supports, and printcheck must agree it needs them
+CAD_LAYER_CHECK=1 $CAD check "$BB/node/node.blend" --only parts --out "$BB/node/cadcheck.json" >/dev/null
 python3 -I -c "
-import json,sys; d=json.load(open(sys.argv[1])); r=d['checks']['parts']['rows'][0]
-sys.exit(0 if d['summary']['fails']==0 and r['non_manifold_edges']==0 and r['fits']['P1S'] and r['min_wall_mm']>=4.0 else 1)" "$BB/node/cadcheck.json" \
-  && ok "blend node: cadcheck parts 0 fails, fits P1S, wall probe >= 4.0" || bad "blend node: cadcheck parts"
+import json,sys; d=json.load(open(sys.argv[1])); r=d['checks']['parts']['rows'][0]; L=r['layer_check']
+sys.exit(0 if d['summary']['fails']==0 and r['non_manifold_edges']==0 and r['fits']['P1S'] and r['min_wall_mm']>=4.0 \
+  and str(r['supports']).startswith('yes') and L['needs_support'] and L['n_islands']==0 else 1)" "$BB/node/cadcheck.json" \
+  && ok "blend node: cadcheck parts 0 fails, fits P1S, wall probe >= 4.0, layer check agrees it needs its declared supports" || bad "blend node: cadcheck parts"
 
 # organic node (fillet 15, short grips): same fit and wall assertions
 $CAD build "$ROOT/examples/blend-node/build.py" -- --out "$BB/node" --organic >/dev/null
@@ -55,3 +57,9 @@ python3 -I -c "
 import json,sys; r=json.load(open(sys.argv[1])); g=r['grow']; s=r['holds']['servo']
 sys.exit(0 if g['non_manifold_edges']==0 and s['fit_ok'] and s['missed']==0 and s['wall_min']>=3.0 and r['orientation']['overhang_mm2']<50 else 1)" "$BB/bracket/report.json" \
   && ok "blend bracket: closed, servo fit within 0.05 mm, wall >= 3, no overhang" || bad "blend bracket: $(head -c 400 "$BB/bracket/report.json")"
+# "supports: no" needs printcheck evidence (SKILL step 5): the layer check on the exported STL, 0 regions needing support
+CAD_LAYER_CHECK=1 $CAD check "$BB/bracket/bracket.blend" --only parts --out "$BB/bracket/cadcheck.json" >/dev/null
+python3 -I -c "
+import json,sys; d=json.load(open(sys.argv[1])); r=d['checks']['parts']['rows'][0]; L=r['layer_check']
+sys.exit(0 if d['summary']['fails']==0 and r['supports']=='no' and L['source'].endswith('bracket.stl') and not L['needs_support'] else 1)" "$BB/bracket/cadcheck.json" \
+  && ok "blend bracket: supports: no holds, layer check on stl/bracket.stl finds nothing needing support" || bad "blend bracket: layer check"
