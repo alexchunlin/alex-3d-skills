@@ -39,9 +39,14 @@ class GridTooLarge(ValueError):
     pass
 
 
-def check_cells(lo, hi, voxel, max_cells=None, what="grid"):
+# geom.swept_envelope's advice: a coarser voxel is safe there (the pad grows with it), a tighter tol is not a fix
+SWEEP_HINT = ("The envelope's pad grows with the voxel (pad = r_max * step / 2 + voxel), so a coarser voxel gives a fatter "
+              "keep-out, never a leaky one; don't tighten tol to win the margin back. Or sweep fewer parts or a shorter range")
+
+
+def check_cells(lo, hi, voxel, max_cells=None, what="grid", hint="Or split the part"):
     """Refuse a grid over max_cells before anything is allocated. The message names the extent, the voxel and the
-    smallest voxel that fits. Returns the cell count."""
+    smallest voxel that fits, then `hint`. Returns the cell count."""
     max_cells = max_cells or MAX_CELLS
     ext = [float(hi[i] - lo[i]) for i in range(3)]
     n = 1
@@ -57,8 +62,8 @@ def check_cells(lo, hi, voxel, max_cells=None, what="grid"):
                 break
             fit *= 1.02
         raise GridTooLarge("%s: %.0f x %.0f x %.0f mm at voxel %g mm is %.0fM cells (max_cells %.0fM); "
-                           "the smallest voxel that fits is %.2f mm, or split the part, or raise max_cells"
-                           % (what, ext[0], ext[1], ext[2], voxel, n / 1e6, max_cells / 1e6, math.ceil(fit * 100) / 100))
+                           "the smallest voxel that fits is %.2f mm. %s, or raise max_cells"
+                           % (what, ext[0], ext[1], ext[2], voxel, n / 1e6, max_cells / 1e6, math.ceil(fit * 100) / 100, hint))
     return n
 
 class Grid:

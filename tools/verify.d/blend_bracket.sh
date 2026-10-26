@@ -42,6 +42,22 @@ sweep() { nice -n 10 "$BL" -b --factory-startup "$@" 2>&1 | grep '^SWEEPCHK' | s
 S1=$(sweep --python "$ROOT/tools/verify.d/blend_bracket_sweep.py" -- "$SCR")
 echo "$S1" | grep -q '"outside": 0,' && echo "$S1" | grep -q '"non_manifold_edges": 0' \
   && ok "swept envelope contains 25 random poses of an L arm: $S1" || bad "swept envelope (L arm): $S1"
+# coarse voxel and tight tol, checked at every mid-angle between poses: the old voxel / 4 pad left 74k of 611k points
+# outside (0.55 mm) at voxel 1 / tol 0.05 and 33k at voxel 0.5 / tol 0.05 (PR #4 review)
+for vt in "1.0 0.05" "0.5 0.05" "2.0 0.25"; do
+  S=$(sweep --python "$ROOT/tools/verify.d/blend_bracket_sweep.py" -- "$SCR" dense $vt)
+  echo "$S" | grep -q '"outside": 0,' && echo "$S" | grep -q '"non_manifold_edges": 0' \
+    && ok "swept envelope, voxel/tol $vt, every mid-pose of an L arm inside: $S" || bad "swept envelope dense $vt: $S"
+done
+# a prismatic joint slides (0..50 mm along X: the envelope spans -10..60), a continuous joint sweeps 0..360
+S=$(sweep --python "$ROOT/tools/verify.d/blend_bracket_sweep.py" -- "$SCR" slide)
+echo "$S" | python3 -I -c "
+import json,sys; d=json.loads(sys.stdin.read()); x=d['env_x']
+sys.exit(0 if d['outside']==0 and d['kind']=='prismatic' and -11.5<x[0]<-10 and 60<x[1]<61.5 and d['non_manifold_edges']==0 else 1)" \
+  && ok "swept envelope of a slide joint is a translation sweep: $S" || bad "swept envelope (slide): $S"
+S=$(sweep --python "$ROOT/tools/verify.d/blend_bracket_sweep.py" -- "$SCR" wheel)
+echo "$S" | grep -q '"outside": 0,' && echo "$S" | grep -q '"non_manifold_edges": 0' \
+  && ok "swept envelope of a continuous joint (no lo/hi) covers 0..360: $S" || bad "swept envelope (continuous): $S"
 S2=$(sweep --python "$ROOT/tools/verify.d/blend_bracket_sweep.py" -- "$SCR" union)
 echo "$S2" | grep -q '"outside": 0,' && bad "containment check has no teeth: union of 5 deg poses passed" \
   || ok "containment check fails the 5 deg pose union (negative control): $S2"
