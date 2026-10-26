@@ -357,21 +357,21 @@ def _joint_range(j, lo, hi, axis=None):
     """(pivot, world axis, kind, lo, hi) of a PIV_ empty, with lo/hi relative to the pose the scene is in now.
     kind is "revolute" (deg) or "prismatic" (mm along +axis, asm.joint(prismatic=True)); a continuous joint with no
     lo/hi given sweeps 0..360."""
-    # TODO: use cadlib.joints after #3 lands (joints.spec reads axis, kind, lo/hi, continuous and base_loc the way
-    # cadcheck's set_pose does); this is the minimum to sweep slides and wheels until then.
-    ax = j.get("joint_axis", axis if isinstance(axis, str) else "X")
+    from . import joints
+    s = joints.spec(j)                                     # the same spec cadcheck and cadlib.route pose from
+    ax = s["axis"] or (axis if isinstance(axis, str) else "X")
     k = "XYZ".index(ax)
     w = Vector(j.matrix_world.col[k][:3]).normalized()
-    kind = str(j.get("joint_kind", "revolute"))
+    kind = s["kind"]
     if kind == "prismatic":
-        base = Vector(j.get("joint_base_loc", tuple(j.location)))
+        base = Vector(s["base_loc"])
         now = (j.location - base).dot(j.rotation_euler.to_matrix() @ Vector([1.0 if i == k else 0.0 for i in range(3)]))
     else:
         now = math.degrees(j.rotation_euler[k])
-    if j.get("joint_continuous") and lo is None and hi is None:
+    if s["continuous"] and lo is None and hi is None:
         lo, hi, now = 0.0, 360.0, 0.0
-    lo = j.get("joint_lo") if lo is None else lo
-    hi = j.get("joint_hi") if hi is None else hi
+    lo = s["lo"] if lo is None else lo
+    hi = s["hi"] if hi is None else hi
     if lo is None or hi is None:
         raise ValueError("swept_envelope: %s has no joint_lo/joint_hi and is not continuous: pass lo and hi" % j.name)
     return j.matrix_world.translation.copy(), w, kind, lo - now, hi - now
