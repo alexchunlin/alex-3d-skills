@@ -272,19 +272,16 @@ def tube_mesh(name, pts, r):
 
 def cable(name, pts, r, color="cable_blk", joint=None, lead_len=None, step=None):
     """Tube along a polyline. Stores path_len (and lead_len if given) so cadcheck can compare them
-    (attempt 1: the bullet joints of 80 mm leads landed at a moving bend, A1-F12), and the path itself
-    (local coordinates) so cadlib.route and reviewers can read the centre line back."""
+    (attempt 1: the bullet joints of 80 mm leads landed at a moving bend, A1-F12)."""
     ob = bpy.data.objects.new(name, tube_mesh(name, pts, r))
     geom.scratch().objects.link(ob)
     L = sum((Vector(pts[i + 1]) - Vector(pts[i])).length for i in range(len(pts) - 1))
     ob = part(ob, name, 'CAB', color, joint, part="cable route", step=step or "")
-    Minv = ob.matrix_world.inverted()
-    ob["path"] = [float(c) for p in pts for c in (Minv @ Vector(p))]
-    ob["r"] = float(r)
     ob["path_len"] = float(L)
     # both ends at home, world mm: cadcheck finds cables that meet with no connector there (V2A3-F3)
     ob["cab_ends"] = [float(c) for c in list(pts[0]) + list(pts[-1])]
-    # the whole polyline and tube radius, for cadcheck's kink and shared-run tests (V2A7-F2)
+    # the whole polyline and tube radius, for cadcheck's kink and shared-run tests (V2A7-F2); cadlib.route and
+    # `cad q route` read the centre line back from them
     ob["cab_path"] = [float(c) for p in pts for c in p]
     ob["cab_r"] = float(r)
     if lead_len:

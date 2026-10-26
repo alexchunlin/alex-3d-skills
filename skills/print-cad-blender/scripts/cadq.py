@@ -183,9 +183,14 @@ def route_cmd():
                 tgt.data = me
                 if k == 0:
                     bpy.data.meshes.remove(old)
-                Minv = tgt.matrix_world.inverted()
-                tgt["path"] = [float(c) for p in pc["pts"] for c in (Minv @ Vector(p))]
-                tgt["r"], tgt["path_len"] = float(r), float(RT._plen(pc["pts"]))
+                # the props asm.cable writes (world at home: route_cmd posed home), so cadcheck's length, junction,
+                # end drift, kink and shared-run tests read the new route, not the hand one
+                tgt["cab_path"] = [float(c) for p in pc["pts"] for c in p]
+                tgt["cab_r"], tgt["path_len"] = float(r), float(RT._plen(pc["pts"]))
+                tgt["cab_ends"] = [float(c) for c in list(pc["pts"][0]) + list(pc["pts"][-1])]
+                for k_old in ("path", "r"):
+                    if k_old in tgt.keys():
+                        del tgt[k_old]
                 C.MANIFOLD_OK.pop(tgt.name, None)
                 made.append(tgt)
             row["after_overlap_mm3"] = {t.name: overlaps(t) for t in made}
@@ -193,7 +198,8 @@ def route_cmd():
         emit(cable=ob.name, hand_mm=before.get("length_mm"), routed_mm=res["length_mm"], hand_overlap_mm3=round(sum(before["overlap_mm3"].values()), 1),
              after_overlap_mm3=round(sum(v for d in row.get("after_overlap_mm3", {}).values() for v in d.values()), 1) if "save" in FLAGS else None,
              min_clearance=res["min_clearance_mm"], bend_r_min=res["bend_r_min"], sharp=res["sharp_corners"],
-             hand_exposed_mm=before.get("exposed_mm"), exposed_mm=res["exposed_mm"], stubs=res["stubs"], slack=res["slack"], s=round(dt, 1))
+             hand_exposed_mm=before.get("exposed_mm"), exposed_mm=res["exposed_mm"], stubs=res["stubs"], slack=res["slack"], s=round(dt, 1),
+             cable_chain=[ob.name] + ["%s_%d" % (ob.name, k) for k in range(1, len(res["pieces"]))] if len(res["pieces"]) > 1 else None)
     if "json" in FLAGS:
         with open(FLAGS["json"], "w") as f:
             json.dump(rows, f, indent=1, default=str)

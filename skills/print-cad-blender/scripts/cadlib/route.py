@@ -875,9 +875,14 @@ def cable(name, start, end, r, color="cable_blk", via=(), joint=None, lead_len=N
 # ------------------------------------------------------------------ existing cables
 
 def path_of(ob):
-    """Centre line of a cable object (world, current pose): the stored "path" prop (cadlib asm.cable), else the
-    ring centroids of a curve-bevel tube (rings of k verts: two cap rings, then one per path point)."""
+    """Centre line of a cable object (world, home pose) and its radius: asm.cable's cab_path / cab_r (world at
+    home, the polyline cadcheck's kink and shared-run tests read), else a "path" prop in local coordinates (blends
+    from this branch before it used cab_path), else the ring centroids of a curve-bevel tube (rings of k verts: two
+    cap rings, then one per path point)."""
     mw = ob.matrix_world
+    if ob.get("cab_path") is not None:
+        f = list(ob["cab_path"])
+        return [f[i:i + 3] for i in range(0, len(f), 3)], ob.get("cab_r")
     if "path" in ob.keys():
         f = list(ob["path"])
         return [list(mw @ Vector(f[i:i + 3])) for i in range(0, len(f), 3)], ob.get("r")

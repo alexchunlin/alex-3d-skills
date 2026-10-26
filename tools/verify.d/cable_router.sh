@@ -21,11 +21,21 @@ sys.exit(0 if ok else 1)" "$CR/route.json" \
   # independent of the router's own numbers: cadq distance to the block, and cadcheck finds no cable overlap
   $CAD q "$CR/route.blend" dist CAB_slot BUY_block | python3 -I -c "import json,sys; sys.exit(0 if json.loads(sys.stdin.read()[5:])['mm'] >= 0.95 else 1)" \
     && ok "router: cadq CAB_slot to BUY_block >= 0.95 mm" || bad "router: CAB_slot too close to BUY_block"
-  $CAD check "$CR/route.blend" "" "$CR/cadcheck.json" --only interference >/dev/null
+  $CAD check "$CR/route.blend" --out "$CR/cadcheck.json" --only interference >/dev/null
   python3 -I -c "
 import json, sys; d = json.load(open(sys.argv[1]))['summary']
 sys.exit(1 if [x for x in d['fail_list'] + d['warn_list'] if 'CAB_' in x] else 0)" "$CR/cadcheck.json" \
     && ok "router: cadcheck interference has no cable findings on the routed scene" || bad "router: cadcheck cable findings on the routed scene"
+  # main's cable checks read the router's cab_path / cab_r: no kinks, no shared runs, the on-axis hand-over does not
+  # drift; the two CAB_bore pieces meet with no connector, which is the one junction (a cable_chains row clears it)
+  $CAD check "$CR/route.blend" --out "$CR/cadcheck_cables.json" --only cables >/dev/null
+  python3 -I -c "
+import json, sys; c = json.load(open(sys.argv[1]))['checks']['cables']
+ok = c['kinks'] == [] and c['shared_runs'] == [] and c['ends_known'] == 3
+ok &= all(r['moves_apart_mm'] <= 0.1 for r in c['end_drift']) and [j['cables'] for j in c['junctions']] == [['CAB_bore', 'CAB_bore_1']]
+sys.exit(0 if ok else 1)" "$CR/cadcheck_cables.json" \
+    && ok "router: cadcheck cables reads the routes (cab_path): 0 kinks, 0 shared runs, 0 end drift, the 2-piece junction only" \
+    || bad "router: cadcheck cables on the routed scene (see $CR/cadcheck_cables.json)"
 else
   bad "router: synthetic build wrote no route.json"
 fi
