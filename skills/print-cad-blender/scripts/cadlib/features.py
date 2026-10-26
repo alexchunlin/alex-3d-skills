@@ -48,29 +48,26 @@ RULES = {
 # PLA holes: clearance d + 0.4 (M4/M5 + 0.5), self-tap pilot ~0.83 d, PLA-tap (machine screw cutting its own thread)
 # ~0.93 d. Heads ISO 4762 (cap), ISO 7045 (pan), ISO 7046 actual dk (csk); nuts ISO 4032; heat-set inserts are the
 # common CNC Kitchen / Ruthex sizes. min_engagement = 2 d of self-tap thread in PLA; tapped_engagement = 1.5 d in a
-# tapped (aluminium) purchased part. lengths = stock ISO 4762 / 7380 lengths. The M3 row is overlaid with the
-# m3_* entries of RULES at lookup (size_rules), so RULES stays the place to tune M3 for a printer.
+# tapped (aluminium) purchased part. Stock lengths are not here: size_rules reads them from cadcheck's
+# fasteners.stock_lengths, so a picked length is never one cadcheck warns is not stocked. The M3 row is overlaid
+# with the m3_* entries of RULES at lookup (size_rules), so RULES stays the place to tune M3 for a printer.
 SIZES = {
     "M2": dict(d=2.0, pitch=0.4, clear_d=2.4, pilot_d=1.6, tap_d=1.8, cap=(3.8, 2.0), pan=(3.8, 1.3), csk=(3.8, 1.2),
-               nut_af=4.0, nut_h=1.6, insert_d=3.2, insert_len=3.0, min_engagement=4.0, tapped_engagement=3.0,
-               lengths=[3, 4, 5, 6, 8, 10, 12, 16, 20]),
+               nut_af=4.0, nut_h=1.6, insert_d=3.2, insert_len=3.0, min_engagement=4.0, tapped_engagement=3.0),
     "M2.5": dict(d=2.5, pitch=0.45, clear_d=2.9, pilot_d=2.0, tap_d=2.3, cap=(4.5, 2.5), pan=(5.0, 1.75), csk=(4.7, 1.5),
-                 nut_af=5.0, nut_h=2.0, insert_d=3.6, insert_len=4.0, min_engagement=5.0, tapped_engagement=3.75,
-                 lengths=[4, 5, 6, 8, 10, 12, 16, 20, 25]),
-    "M3": dict(d=3.0, pitch=0.5, cap=(5.5, 3.0), pan=(6.0, 2.4), csk=(6.0, 1.7), tapped_engagement=4.5,
-               lengths=[4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 25, 30, 35, 40]),   # holes, nut, insert: RULES m3_*
+                 nut_af=5.0, nut_h=2.0, insert_d=3.6, insert_len=4.0, min_engagement=5.0, tapped_engagement=3.75),
+    # M3 holes, nut and insert: RULES m3_*
+    "M3": dict(d=3.0, pitch=0.5, cap=(5.5, 3.0), pan=(6.0, 2.4), csk=(6.0, 1.7), tapped_engagement=4.5),
     "M4": dict(d=4.0, pitch=0.7, clear_d=4.5, pilot_d=3.3, tap_d=3.7, cap=(7.0, 4.0), pan=(8.0, 3.1), csk=(8.4, 2.7),
-               nut_af=7.0, nut_h=3.2, insert_d=5.6, insert_len=8.1, min_engagement=8.0, tapped_engagement=6.0,
-               lengths=[5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 25, 30, 35, 40, 45, 50]),
+               nut_af=7.0, nut_h=3.2, insert_d=5.6, insert_len=8.1, min_engagement=8.0, tapped_engagement=6.0),
     "M5": dict(d=5.0, pitch=0.8, clear_d=5.5, pilot_d=4.2, tap_d=4.6, cap=(8.5, 5.0), pan=(9.5, 3.7), csk=(9.3, 2.7),
-               nut_af=8.0, nut_h=4.7, insert_d=6.4, insert_len=9.5, min_engagement=10.0, tapped_engagement=7.5,
-               lengths=[6, 8, 10, 12, 14, 16, 18, 20, 22, 25, 30, 35, 40, 45, 50, 55, 60]),
+               nut_af=8.0, nut_h=4.7, insert_d=6.4, insert_len=9.5, min_engagement=10.0, tapped_engagement=7.5),
 }
 
 
 def size_rules(size="M3"):
     """One row of SIZES with the derived numbers: counterbore_d (cap head + 1.0, as RULES counterbore_d for M3),
-    trap_af (nut + 0.2, the brief's 5.7 for M3)."""
+    trap_af (nut + 0.2, the brief's 5.7 for M3), lengths (cadcheck DEFAULTS fasteners.stock_lengths for d)."""
     if size not in SIZES:
         raise ValueError("size %r: known sizes %s" % (size, sorted(SIZES)))
     s = dict(SIZES[size])
@@ -83,6 +80,7 @@ def size_rules(size="M3"):
                  csk=(R["m3_csk_head_d"], s["csk"][1]))
     s.setdefault("counterbore_d", s["cap"][0] + 1.0)
     s.setdefault("trap_af", s["nut_af"] + 0.2)
+    s["lengths"] = list(check_default("fasteners", "stock_lengths")["%g" % s["d"]])
     return s
 
 
@@ -341,7 +339,7 @@ def fastener_joint(name, size, at, into, parts, style="selftap", head="cap", sin
               "tapped"   machine screw into a tapped purchased part (no cut in it; thread >= tapped_engagement, and
                          <= depth, the datasheet depth of its tapped hole). A printed last part gets the PLA-tap hole.
     head:     "cap" | "pan" | "csk". sink > 0 counterbores the head (cap/pan): `at` is then sink below the surface.
-    length:   None picks the shortest stock length in SIZES[size]["lengths"] that meets the rule, with the tip
+    length:   None picks the shortest stock length (size_rules(size)["lengths"]) that meets the rule, with the tip
               never more than cadcheck's fasteners.max_protrusion past the last material (the nut counts). A
               given length is checked against the same rule; strict=False keeps one that breaks it (rule_ok False).
     print_up: world print +Z, or {part name: print +Z}, for teardrop holes in parts printed on their side.
