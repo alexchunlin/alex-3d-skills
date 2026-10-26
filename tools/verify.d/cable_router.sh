@@ -1,5 +1,5 @@
 # cadlib.route (docs/features/cable-router.md): synthetic tray (block + wall slot + turntable bore), then one A3 re-route.
-# Sourced by tools/verify_all.sh (uses $ROOT $CAD $V; calls ok/bad). About 15 s.
+# Sourced by tools/verify_all.sh (uses $ROOT $CAD $V; calls ok/bad). About 25 s.
 CR="$V/cr"; mkdir -p "$CR"
 $CAD build "$ROOT/examples/cable-router/build.py" --out "$CR" >/dev/null
 if [ -f "$CR/route.json" ]; then
@@ -57,6 +57,17 @@ if 'a3_raw_ctrl_first_mm3' in d:
 sys.exit(0 if ok else 1)" "$CR/inter_volume.json" \
   && ok "inter_volume: open A3 tube x controller 38.0 mm3 (raw EXACT 1331.9), full containments kept (125.0)" \
   || bad "inter_volume cases (see $CR/inter_volume.json)"
+# router fillets vs the kink test: no arc under 0.75 x OD, none within one OD of a plug end (those corners stay sharp)
+nice -n 10 "$BL" -b --factory-startup --python "$ROOT/tools/verify.d/route_bend_cases.py" -- \
+  "$ROOT/skills/print-cad-blender/scripts" 2>/dev/null | grep '^IBEND' | cut -c7- > "$CR/route_bends.json"
+python3 -I -c "
+import json, sys; d = json.load(open(sys.argv[1]))
+ok = d['bend_7.5']['radii'] == [7.5, 7.5] and d['bend_7.5']['sharp'] == 0
+ok &= d['bend_1']['radii'] == [0.0, 0.0] and d['bend_1']['sharp'] == 2
+ok &= d['end_corner']['radii'] == [0.0] and d['no_clearance']['radii'] == [0.0, 0.0] and d['no_clearance']['sharp'] == 2
+sys.exit(0 if ok else 1)" "$CR/route_bends.json" \
+  && ok "router: no fillet under 0.75 x OD or within one OD of a plug end; those corners stay sharp for the kink test" \
+  || bad "router: fillet floor / end lead (see $CR/route_bends.json)"
 if [ -f "$A3B" ]; then
   $CAD q "$A3B" route CAB_12v_mg --config "$ROOT/examples/mm-launcher-a3/checks.json" --json "$CR/a3_12v_mg.json" --save "$CR/a3_rerouted.blend" >/dev/null
   python3 -I -c "

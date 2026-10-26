@@ -23,7 +23,10 @@ Model:
   "joint" puts the legs after it on another body; the result then has one piece per body and a slack row.
 - Smoothing: shortcuts checked against exact clearance that never enter costlier cells than the A* path used,
   then a fillet of bend_r at each corner, shrunk (or the corner pushed outward) where the arc would lose
-  clearance. The smallest radius used is reported as bend_r_min.
+  clearance. The smallest radius used is reported as bend_r_min. No arc is tighter than cadcheck's kink limit
+  (min_bend_od x OD), and an end within 3 mm of a purchased part (a plug) keeps one OD straight: a corner that
+  can't have both is left sharp, so cadcheck's `cables` kink test (which skips turns under 20 deg, i.e. every
+  vertex of an arc drawn in 10 deg steps) still sees it.
 """
 import bpy, heapq, math, time
 import numpy as np
@@ -32,7 +35,8 @@ from mathutils.bvhtree import BVHTree
 
 DEFAULTS = {"cell": 2.0, "clearance": 1.0, "margin": 20.0, "bend_r": None, "wall_band": None, "lead_in": None,
             "w_open": 0.5, "w_exposed": 8.0, "w_turn": 3.0, "w_stub": 3.0, "sweep_step": 15.0, "max_poses": 13,
-            "view_frac": 0.10, "view_z": -0.2, "min_escape": 8, "prefer": [], "avoid": [], "exposure": True}
+            "view_frac": 0.10, "view_z": -0.2, "min_escape": 8, "prefer": [], "avoid": [], "exposure": True,
+            "min_bend_od": 0.75}   # cadcheck cable_min_bend_od
 OBSTACLES = ("Printed", "Purchased", "Fasteners")
 VIEWERS = ("Printed", "Purchased")      # what hides a cable (cadcheck exposure uses the same two)
 
@@ -554,10 +558,11 @@ def _dense(pts, step=0.5):
     return out
 
 
-def fillet(P, bend_r, check, fixed=()):
-    """Round each corner of polyline P with radius bend_r where it fits (tangent lengths share each segment),
-    keeping check(points, corner) true: push the corner outward (up to 3 times), else shrink the radius by 0.7
-    down to 0.5 mm, then leave it sharp. Returns (points, radius per interior vertex)."""
+def fillet(P, bend_r, check, fixed=(), r_min=0.5, lead=(0.0, 0.0)):
+    """Round each corner of polyline P with radius bend_r where it fits (tangent lengths share each segment; the
+    first and last segments keep lead[0] / lead[1] mm straight), keeping check(points, corner) true: push the corner
+    outward (up to 3 times), else shrink the radius by 0.7 down to r_min, then leave it sharp. A corner whose fitted
+    radius is under r_min is left sharp too. Returns (points, radius per interior vertex)."""
     P = [Vector(p) for p in P]
     n = len(P)
     if n < 3:
@@ -579,15 +584,17 @@ def fillet(P, bend_r, check, fixed=()):
         f = [1.0] * n
         for i in range(n - 1):
             L, s = (P[i + 1] - P[i]).length, t[i] + t[i + 1]
+            L = max(0.0, L - (lead[0] if i == 0 else 0.0) - (lead[1] if i == n - 2 else 0.0))
             if s > L:
                 f[i], f[i + 1] = min(f[i], L / s), min(f[i + 1], L / s)
-        return [t[i] * f[i] / tt[i] if tt[i] > 1e-6 else 0.0 for i in range(n)]
+        R = [t[i] * f[i] / tt[i] if tt[i] > 1e-6 else 0.0 for i in range(n)]
+        return [x if x >= r_min - 1e-9 else 0.0 for x in R]
 
     def arc(i, R):
         return _arc(P[i], (P[i] - P[i - 1]).normalized(), (P[i + 1] - P[i]).normalized(), R[i])
 
     def shrink(i, R):
-        want[i] = R[i] * 0.7 if R[i] * 0.7 >= 0.5 else 0.0
+        want[i] = R[i] * 0.7 if R[i] * 0.7 >= r_min else 0.0
 
     for _ in range(6):
         R = fit()
@@ -667,6 +674,7 @@ def route(start, end, r, via=(), joint=None, obstacles=None, joints=None, coupli
     T0 = time.time()
     opt = dict(DEFAULTS, **kw)
     opt["bend_r"] = float(opt["bend_r"]) if opt["bend_r"] is not None else 5.0 * r
+    bend_floor = max(0.5, float(opt["min_bend_od"]) * 2 * r)
     if joints is None:
         joints, cp = scene_joints(cfg)
         couplings = cp if couplings is None else couplings
@@ -675,6 +683,9 @@ def route(start, end, r, via=(), joint=None, obstacles=None, joints=None, coupli
     set_pose({}, joints, couplings)
     tv = tree(mesh_objs(VIEWERS)) if opt["exposure"] else None
     wps = _waypoints(start, end, via, joint, opt["cell"])
+    # cadcheck's kink test: an end within 3 mm of a purchased part is a termination and keeps one OD straight
+    tb = tree(mesh_objs(("Purchased",)))
+    leads = tuple(2.0 * r if tb is not None and tb.find_nearest(Vector(p), 3.0)[0] is not None else 0.0 for p in (start, end))
     legrows, stubs, legs = [], [], []
     poly, seg_leg, wp_at = [wps[0]["p"].copy()], [], [0]
     for k in range(len(wps) - 1):
@@ -762,7 +773,7 @@ def route(start, end, r, via=(), joint=None, obstacles=None, joints=None, coupli
 
     t0 = time.time()
     fixed = {wp_at[k] for k, w in enumerate(wps) if w["kind"] in ("run", "via")}
-    pts, radii = fillet(poly, opt["bend_r"], check, fixed=fixed)
+    pts, radii = fillet(poly, opt["bend_r"], check, fixed=fixed, r_min=bend_floor, lead=leads)
     corner_rows = [{"at": [round(x, 1) for x in poly[i + 1]], "turn_deg": round(_turn(poly, i + 1), 1), "r": round(x, 2)}
                    for i, x in enumerate(radii) if _turn(poly, i + 1) > 1.0]
     t_smooth = time.time() - t0
@@ -804,7 +815,7 @@ def route(start, end, r, via=(), joint=None, obstacles=None, joints=None, coupli
            "min_clearance_mm": round(min(clr_mid)[0], 2) if clr_mid else None, "min_clearance_at": min(clr_mid)[1] if clr_mid else None,
            "min_clearance_incl_ends_mm": round(min(clr_all), 2) if clr_all else None,
            "inside_samples": inside, "stubs": stubs, "vias": [list(map(float, w["p"])) for w in wps if w["kind"] == "via"],
-           "bend_r_target": round(opt["bend_r"], 2), "bend_r_min": round(min(bent), 2) if bent else None,
+           "bend_r_target": round(opt["bend_r"], 2), "bend_r_min": round(min(bent), 2) if bent else None, "bend_r_floor": round(bend_floor, 2),
            "sharp_corners": sum(1 for x in bent if x <= 0), "corners": corner_rows,
            "exposed_mm": round(exp_mm, 1), "legs": legrows, "slack": slack(pieces, joints, couplings),
            "time_s": {"total": round(time.time() - T0, 2), "smooth": round(t_smooth, 2)},

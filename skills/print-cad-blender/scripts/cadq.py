@@ -117,6 +117,7 @@ def route_cmd():
             num[k] = boxes(FLAGS[k])
     if "no-exposure" in FLAGS:
         num["exposure"] = False
+    num.setdefault("min_bend_od", C.CFG["cable_min_bend_od"])    # the router's bend floor is cadcheck's kink limit
     via = []
     for v in str(FLAGS.get("via", "")).split(";"):
         if not v:
