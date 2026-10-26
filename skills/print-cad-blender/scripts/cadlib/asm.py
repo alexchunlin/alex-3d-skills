@@ -194,9 +194,9 @@ R_PY_DOWN = Matrix.Rotation(-math.pi / 2, 3, 'X')    # world +Y face onto the be
 FASTENER_SPECS = {
     # spec: (shank d, head d, head h)
     "M3_cap": (3.0, 5.5, 3.0), "M3_pan": (3.0, 6.0, 2.4), "M3_csk": (3.0, 6.0, 1.7),
-    "M3_selftap_pan": (3.0, 6.0, 2.4), "M2_pan": (2.0, 3.8, 1.3),
-    # ISO 4762 / ISO 7045 M2.5 (MotorGo board screws; the v2 A1 finisher looked this table up and found none)
-    "M2.5_cap": (2.5, 4.5, 2.5), "M2.5_pan": (2.5, 5.0, 1.75),
+    "M3_selftap_pan": (3.0, 6.0, 2.4),
+    # M2 and M2.5 (MotorGo board screws; the v2 A1 finisher looked this table up and found none) come from
+    # features.SIZES below: ISO 7045 pan heads are M2 4.0 x 1.6 (was 3.8 x 1.3 here) and M2.5 5.0 x 2.1 (was 1.75)
     # ISO 4017 hex head, 5.5 AF x 2.0, as a round head across flats (v2 A3 modelled a hex stud as M3_cap, V2A3-F6)
     "M3_hex": (3.0, 5.5, 2.0),
 }
@@ -301,13 +301,19 @@ def manifest():
         lo = [round(min(v[i] for v in bb), 2) for i in range(3)]
         hi = [round(max(v[i] for v in bb), 2) for i in range(3)]
         parts[name] = {**{k: v for k, v in info.items() if k not in ("path",)}, "bbox_world_home": [lo, hi]}
-    return {"units": "mm", "params": PARAMS, "joints": js, "parts": parts, "features": features.LOG}
+    return {"units": "mm", "params": PARAMS, "joints": js, "parts": parts, "features": features.LOG,
+            "fastener_summary": features.fastener_summary(PARTS)}
 
 
 def write_manifest(path):
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    m = manifest()
     with open(path, "w") as f:
-        json.dump(manifest(), f, indent=1, default=str)
+        json.dump(m, f, indent=1, default=str)
+    fs = m["fastener_summary"]
+    if fs["screws"]:   # screw variety in the build log: fewer spec x length kinds is fewer bags to buy
+        print("FASTENERS %d screws, %d distinct spec x length: %s" % (
+            fs["screws"], fs["distinct"], ", ".join("%s (%d)" % kv for kv in fs["by_spec_length"].items())))
     return path
 
 

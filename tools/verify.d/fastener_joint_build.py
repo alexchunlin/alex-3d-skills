@@ -82,10 +82,15 @@ plate, block, brk, motor = solids()
 cuts = {}
 x, y = J["FST_fj_nut"]
 F.fastener_joint("FST_fj_nut", SIZE, (x, y, Z_TOP), DOWN, [block, plate], style="nut", head="cap", step="1", cuts=cuts)
+# the 11 mm block is too shallow for a blind M4 self-tap or insert (M4 self-tap: 12.7 mm needed, 13.1 allowed, stock
+# 12 / 14), so at M4 those two holes go through the block (through_ok); fastener_joint_review.py covers the blind cap
+THRU = SIZE == "M4"
 x, y = J["FST_fj_tap"]
-F.fastener_joint("FST_fj_tap", SIZE, (x, y, Z_TOP), DOWN, [plate, block], style="selftap", head="csk", step="1", cuts=cuts)
+F.fastener_joint("FST_fj_tap", SIZE, (x, y, Z_TOP), DOWN, [plate, block], style="selftap", head="csk", step="1", cuts=cuts,
+                 through_ok=THRU)
 x, y = J["FST_fj_ins"]
-F.fastener_joint("FST_fj_ins", SIZE, (x, y, Z_TOP), DOWN, [plate, block], style="insert", head="cap", step="1", cuts=cuts)
+F.fastener_joint("FST_fj_ins", SIZE, (x, y, Z_TOP), DOWN, [plate, block], style="insert", head="cap", step="1", cuts=cuts,
+                 through_ok=THRU)
 F.fastener_joint("FST_fj_motor", SIZE, (42.0, 0.0, 15.0), DOWN, [brk, motor], style="tapped", head="pan", depth=8.0,
                  step="1", cuts=cuts)
 for ob in (plate, block, brk):
@@ -109,7 +114,7 @@ rep["holes"] = {
     "tap_plate_clear": hole_d(plate, top("FST_fj_tap"), 3.5),
     "tap_block_pilot": hole_d(block, top("FST_fj_tap"), 8.0),
     "ins_block_pocket": hole_d(block, top("FST_fj_ins"), 4.7 + S["insert_len"] / 2),
-    "ins_block_tip": hole_d(block, top("FST_fj_ins"), L["FST_fj_ins"] - 0.3),
+    "ins_block_tip": hole_d(block, top("FST_fj_ins"), min(L["FST_fj_ins"], Z_TOP) - 0.3),
     "motor_bracket_clear": hole_d(brk, (42.0, 0.0, 15.0), 1.5),
 }
 os.makedirs(OUT, exist_ok=True)

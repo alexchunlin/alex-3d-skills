@@ -35,13 +35,39 @@ for s, w in want.items():
     nut = nb.get("nut") or {}
     through = nut and nb["nut_gap_mm"] == 0 and nb["engagement_mm"] >= nut["len_mm"] and nb["length_mm"] > nut["to_mm"]
     ffails = [x for x in c["summary"]["fail_list"] if x.startswith("fasteners")]
-    print(("PASS" if through and not ffails and c["summary"]["fails"] == 0 else "FAIL") +
-          " fastener_joint %s cadcheck: bolt %.1f passes its nut (%.1f-%.1f) by %.1f, %d fasteners fails, %d fails" % (
+    print(("PASS" if through and not ffails and c["summary"]["fails"] == 0 and c["summary"]["warns"] == 0 else "FAIL") +
+          " fastener_joint %s cadcheck: bolt %.1f passes its nut (%.1f-%.1f) by %.1f, %d fasteners fails, %d fails, %d warns" % (
               s, nb.get("length_mm", 0), nut.get("from_mm", 0), nut.get("to_mm", 0), nb.get("length_mm", 0) - nut.get("to_mm", 0),
-              len(ffails), c["summary"]["fails"]))
+              len(ffails), c["summary"]["fails"], c["summary"]["warns"]))
 EOF
 while read -r st msg; do [ "$st" = PASS ] && ok "$msg" || bad "$msg"; done < "$V/fj/asserts.txt"
 for pat in "FJ_ERR reversed: .*flip \`into\`" "FJ_ERR thin_host: .*only 4.7 mm of thread" "FJ_ERR short_bolt: .*stops 1.00 mm short of its nut" \
            "FJ_ERR buried_head: .*1.00 mm inside" "FJ_DEEP length=30 deepened=1.7"; do
   grep -q "$pat" "$V/fj/M3.log" && ok "fastener_joint refuses/handles: $pat" || bad "fastener_joint missing: $pat"
 done
+# the independent review's cases (fastener_joint_review.py): pre-drilled purchased board, sloped seat, blind boss,
+# self-tap into a purchased part, air gap, csk knife edge, length reuse / lengths= / project checks.json, M2 at 2 d
+$CAD build "$ROOT/tools/verify.d/fastener_joint_review.py" --out "$V/fj/review" > "$V/fj/review.log" 2>&1
+$CAD check "$V/fj/review/fjr.blend" "" "$V/fj/review/cadcheck.json" > /dev/null 2>&1
+grep "^FJR \(PASS\|FAIL\)" "$V/fj/review.log" | while read -r _ st msg; do echo "$st fastener_joint review $msg"; done > "$V/fj/review_asserts.txt"
+[ "$(grep -c . "$V/fj/review_asserts.txt")" -ge 18 ] || echo "FAIL fastener_joint review: $(grep -c . "$V/fj/review_asserts.txt") of 18 case lines (build log $V/fj/review.log)" >> "$V/fj/review_asserts.txt"
+python3 -I - "$V/fj/review/cadcheck.json" <<'PY' >> "$V/fj/review_asserts.txt"
+import json, sys
+try:
+    c = json.load(open(sys.argv[1]))
+except Exception as e:
+    print("FAIL fastener_joint review cadcheck: no report (%s)" % e); sys.exit()
+rows = {r["object"]: r for r in c["checks"]["fasteners"]["rows"]}
+fw = [w for w in c["summary"]["warn_list"] if w.startswith("fasteners")]
+m2 = rows.get("FST_fjr_m2", {})
+print(("PASS" if m2.get("engagement_mm") == 4.0 and m2.get("engagement_need_mm") == 4.0 and not fw else "FAIL") +
+      " fastener_joint review cadcheck: M2 x 6 with exactly 2 d reads %s of %s mm, %d fasteners warns" % (
+          m2.get("engagement_mm"), m2.get("engagement_need_mm"), len(fw)))
+b = [rows.get("FST_fjr_board_%d" % i, {}) for i in range(4)]
+ok = all(r and not r["head_buried_in"] and not r["into_purchased"] and r["standoff_mm"] == 0 and r["thread_host"] == "PRT_fjr_mount" for r in b)
+print(("PASS" if ok and c["summary"]["fails"] == 0 else "FAIL") +
+      " fastener_joint review cadcheck: 4 M2.5 through the pre-drilled board seat on it, thread the boss, %d fails" % c["summary"]["fails"])
+s = rows.get("FST_fjr_slope", {})
+print(("PASS" if s and not s["head_buried_in"] else "FAIL") + " fastener_joint review cadcheck: spot-faced sloped seat, head buried in %s" % s.get("head_buried_in"))
+PY
+while read -r st msg; do [ "$st" = PASS ] && ok "$msg" || bad "$msg"; done < "$V/fj/review_asserts.txt"
