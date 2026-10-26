@@ -10,6 +10,10 @@ HW="${HW:-$HOME/code-stuff/mmlauncher/mm-launcher/mm-launch-hw}"
 V="/tmp/alex3d-verify/run-$$"
 BL="${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}"
 rm -rf "$V"; mkdir -p "$V"; ln -sfn "$V" /tmp/alex3d-verify/latest
+# which commit made these reports (tools/bench/replay.py --from-verify reads it; HEAD at scoring time may be another)
+printf '{"commit": "%s", "skills_tree": "%s", "dirty": %s, "branch": "%s", "when": "%s"}\n' "$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)" \
+  "$(git -C "$ROOT" rev-parse HEAD:skills 2>/dev/null)" "$([ -n "$(git -C "$ROOT" status --porcelain -- skills 2>/dev/null)" ] && echo true || echo false)" \
+  "$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null)" "$(date +%Y-%m-%dT%H:%M:%S)" > "$V/meta.json"
 # The attempt regressions below count other checks' rows exactly; the parts layer check (printcheck) has its own
 # section (4m, 4n) and runs with CAD_LAYER_CHECK=1 there and on the demo and template, which must print as declared.
 export CAD_LAYER_CHECK=0

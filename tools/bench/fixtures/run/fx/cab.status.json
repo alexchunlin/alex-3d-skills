@@ -1,0 +1,1 @@
+{"cmd": ["sh", "cad", "check"], "out": "run/fx/cab.json", "runtime_s": 2.0, "rc": 1, "error": "no output (exit 1): Traceback: blender crashed"}

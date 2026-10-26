@@ -1,0 +1,3 @@
+ok   line 10: M3 x 10 csk ST               qty 4   model 4
+BAD  line 12: M3 x 9 pan ST                qty 1   model 1   M3 x 9 is not a stock length
+CADBOM FAIL: 2 rows, 1 disagree, 0 modelled screws in no row

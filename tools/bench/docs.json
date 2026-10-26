@@ -1,0 +1,24 @@
+{
+ "_doc": [
+  "Which skill docs an agent pays for in every session. 'always': the SKILL.md body, and every doc the SKILL.md tells the",
+  "agent to read unconditionally (the quoted instruction is the reason). 'conditional': read on a trigger. A doc under skills/",
+  "that is in neither list is reported as 'unclassified' (counted as conditional) so a PR that adds one has to place it here.",
+  "role: which agents load the skill (designer covers the v2 planner, builders and finish agents; reviewer the review agent)."
+ ],
+ "skills": {
+  "print-cad-blender": {"role": "designer"},
+  "cad-design-review": {"role": "reviewer"}
+ },
+ "always": {
+  "skills/print-cad-blender/SKILL.md": "the skill body",
+  "skills/print-cad-blender/reference/api.md": "SKILL.md Reference: 'Read it before writing the first part'",
+  "skills/print-cad-blender/reference/footguns.md": "SKILL.md Reference: 'Read it before declaring a subsystem done'",
+  "skills/cad-design-review/SKILL.md": "the skill body",
+  "skills/cad-design-review/checklist.md": "SKILL.md step 5: 'Walk the checklist in checklist.md'",
+  "skills/cad-design-review/rubric.md": "SKILL.md step 6: 'Score with rubric.md'"
+ },
+ "conditional": {
+  "skills/print-cad-blender/reference/checks-config.md": "SKILL.md Reference: 'Read it when cadcheck flags something you designed on purpose'",
+  "skills/print-cad-blender/reference/design-principles.md": "SKILL.md Reference: 'Worth reading when you choose it for a new project'"
+ }
+}

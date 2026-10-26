@@ -1,0 +1,12 @@
+{
+ "_doc": "Fixture corpus for tools/bench/test_replay.py: one attempt, report files in run/fx, no Blender.",
+ "attempts": {
+  "fx": {"dir": "tools/bench/fixtures", "blend": "none", "as": "none", "reviewer": "RX",
+         "runs": [
+          {"id": "designer", "kind": "designer", "type": "check", "config": "none"},
+          {"id": "pc", "kind": "designer", "type": "printcheck", "stl_tar": "none", "manifest": "none"},
+          {"id": "bom", "kind": "designer", "type": "bom", "bom": "none", "manifest": "none"},
+          {"id": "cab", "kind": "designer", "type": "check", "config": "none", "args": ["--only", "cables"]},
+          {"id": "rows", "kind": "review", "type": "check", "config": "none", "args": ["--only", "slide,stacks"]}]}
+ }
+}

@@ -1,0 +1,1935 @@
+{
+ "_doc": [
+  "Ground truth for tools/bench/replay.py. Three lists, scored apart:",
+  "labels: one entry per issue a reviewer raised on an archived attempt (the headline recall). id: the reviewer's id (v1: the FINDINGS id);",
+  "  findings_id: the FINDINGS row; severity (blocker 3, major 2, minor 1 in the weighted recall); tool_catchable: the reviewer's flag",
+  "  (v1: FINDINGS 'Tool that catches it'); process: true = not a design defect, out of every denominator; credit_scope: 'rows' = the",
+  "  designer config's row for it was written from the review, so it counts in rows scope only; source: FINDINGS line or HW/... review",
+  "  file (HW = ~/code-stuff/mmlauncher/mm-launcher/mm-launch-hw); judgment: where this is a call.",
+  "printability: tool findings no reviewer raised (the layer check's support misses, v1 and v2 alike), one entry per finding with the",
+  "  attempts it is on; scored once per finding (worst status over those attempts) in its own score, never in reviewer recall.",
+  "  confirmed_by: 'print YYYY-MM-DD' when a real print confirmed it; print_evidence: [{date: YYYY-MM-DD, by: who printed and looked,",
+  "  printed: what was printed (parts, settings, supports), result: fail | pass | partial, observed: what was seen, action: what it",
+  "  needs (optional), photo: path (optional)}]. Add an entry per print, on any finding or label.",
+  "known_true_positives: planted overlay rows and exploratory review rows: real fails that credit nothing and are not false fails.",
+  "locators (every list): any of {check, objects, kind, region?, partial?}. A report line 'check: message' (cadcheck fail/warn",
+  "  lists, 'printcheck: <stl>: ...', 'bom: BAD ...') matches when it starts with check, names every object (whole token; * ? [..]",
+  "  glob over a family; a named row or test when the line names no object), and matches the kind regex (the defect, never a",
+  "  measured number) and the region regex (where on the part, when the part has other findings). partial: true = the line covers",
+  "  part of the issue (a coverage warn, a sub-point): status 'partial', not caught. locators null: no check names it.",
+  "  `replay.py lint` rejects a top-level | in a regex, check '*', a locator with no object and a number pinned in kind."
+ ],
+ "labels": [
+  {
+   "attempt": "a1",
+   "id": "A1-F1",
+   "findings_id": "A1-F1",
+   "reviewer_item": "R1 #1",
+   "severity": "blocker",
+   "metric": "functionality",
+   "summary": "feed lands 43-76 deg behind TDC, outside the 26 deg hood window; hits the chute wall at tilt 22.5/45",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "drop",
+     "objects": [
+      "feed_outlet_to_wheel"
+     ],
+     "kind": "(?:lands [\\d.]+\\.\\.[\\d.]+ deg, window|first hit)",
+     "region": "at tilt=(?:0|22\\.5): "
+    }
+   ],
+   "source": "docs/FINDINGS.md:122"
+  },
+  {
+   "attempt": "a1",
+   "id": "A1-F2",
+   "findings_id": "A1-F2",
+   "reviewer_item": "R1 #2",
+   "severity": "major",
+   "metric": "functionality",
+   "summary": "nip never squeezes a 7 mm M&M (bare gap 8.9-12.1)",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "distances",
+     "objects": [
+      "PRT_hood",
+      "PRT_flywheel"
+     ],
+     "kind": "PRT_hood to PRT_flywheel = [\\d.]+ mm .*wanted"
+    }
+   ],
+   "source": "docs/FINDINGS.md:123"
+  },
+  {
+   "attempt": "a1",
+   "id": "A1-F3",
+   "findings_id": "A1-F3",
+   "reviewer_item": "R1 #3",
+   "severity": "blocker",
+   "metric": "manufacturability",
+   "summary": "arm-cap screw R-1 head under the feeder disc (27.2 mm3)",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "interference",
+     "objects": [
+      "PRT_feeder_disc",
+      "FST_cap_R-1"
+     ],
+     "kind": " x .* collide"
+    }
+   ],
+   "source": "docs/FINDINGS.md:124"
+  },
+  {
+   "attempt": "a1",
+   "id": "A1-F4",
+   "findings_id": "A1-F4",
+   "reviewer_item": "R1 #4",
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "horn adapter can't be assembled: its screws can't be driven",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "fasteners",
+     "objects": [
+      "FST_*horn*"
+     ],
+     "kind": "cannot be driven"
+    },
+    {
+     "check": "fasteners",
+     "objects": [
+      "*horn_adapter*"
+     ],
+     "kind": "cannot be driven"
+    }
+   ],
+   "source": "docs/FINDINGS.md:125",
+   "judgment": "FINDINGS lists screw_access as the catching tool; the archived config models no horn screws, so nothing names them"
+  },
+  {
+   "attempt": "a1",
+   "id": "A1-F5",
+   "findings_id": "A1-F5",
+   "reviewer_item": "R1 #5",
+   "severity": "major",
+   "metric": "functionality",
+   "summary": "tilt has no margin: 0.21-0.37 mm to hopper and feeder plate at 45, contact at 46",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "clearance",
+     "objects": [
+      "PRT_hopper",
+      "PRT_launcher_*"
+     ],
+     "kind": "only [\\d.]+ mm across a joint",
+     "region": "at tilt=45"
+    },
+    {
+     "check": "clearance",
+     "objects": [
+      "PRT_feeder_plate",
+      "PRT_launcher_*"
+     ],
+     "kind": "only [\\d.]+ mm across a joint",
+     "region": "at tilt=45"
+    },
+    {
+     "check": "interference",
+     "objects": [
+      "PRT_hopper",
+      "PRT_launcher_*"
+     ],
+     "kind": "collide only [\\d.]+ deg past the joint limit"
+    },
+    {
+     "check": "interference",
+     "objects": [
+      "PRT_feeder_plate",
+      "PRT_launcher_*"
+     ],
+     "kind": "collide only [\\d.]+ deg past the joint limit"
+    }
+   ],
+   "source": "docs/FINDINGS.md:126"
+  },
+  {
+   "attempt": "a1",
+   "id": "A1-F6",
+   "findings_id": "A1-F6",
+   "reviewer_item": "R1 #6",
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "routine service needs a 15-screw launcher teardown",
+   "tool_catchable": false,
+   "locators": null,
+   "source": "docs/FINDINGS.md:127"
+  },
+  {
+   "attempt": "a1",
+   "id": "A1-F7",
+   "findings_id": "A1-F7",
+   "reviewer_item": "R1 #7",
+   "severity": "major",
+   "metric": "functionality",
+   "summary": "magnet centring uncontrolled (no jig)",
+   "tool_catchable": false,
+   "locators": null,
+   "source": "docs/FINDINGS.md:128"
+  },
+  {
+   "attempt": "a1",
+   "id": "A1-F8",
+   "findings_id": "A1-F8",
+   "reviewer_item": "R1 #9",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "outlet partly blocked at 40-45 deg tilt (lands on the guard top)",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "drop",
+     "objects": [
+      "feed_outlet_to_wheel",
+      "PRT_launcher_body"
+     ],
+     "kind": "rays first hit \\['PRT_launcher_body'\\]",
+     "region": "at tilt=45: "
+    }
+   ],
+   "source": "docs/FINDINGS.md:129",
+   "judgment": "the tilt-45 drop fail is also part of A1-F1's locator; R1 #9 is the outlet column blocked at 40-45, which that row reports (all 31 rays hit the body)"
+  },
+  {
+   "attempt": "a1",
+   "id": "A1-F9",
+   "findings_id": "A1-F9",
+   "reviewer_item": "R1 #11",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "trunnion face rubs the bonnet flange at 0.00 mm at every tilt",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "interference",
+     "objects": [
+      "PRT_arm_cover_?",
+      "PRT_trunnion_?"
+     ],
+     "kind": "touch with zero clearance"
+    }
+   ],
+   "source": "docs/FINDINGS.md:130"
+  },
+  {
+   "attempt": "a1",
+   "id": "A1-F10",
+   "findings_id": "A1-F10",
+   "reviewer_item": "R1 #15",
+   "severity": "minor",
+   "metric": "manufacturability",
+   "summary": "motor-face screws modelled reversed, shanks inside the flywheel",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "interference",
+     "objects": [
+      "PRT_flywheel",
+      "FST_motor_*"
+     ],
+     "kind": "collide"
+    },
+    {
+     "check": "fasteners",
+     "objects": [
+      "FST_motor_*"
+     ],
+     "kind": "head is inside"
+    },
+    {
+     "check": "fasteners",
+     "objects": [
+      "FST_motor_*"
+     ],
+     "kind": "cannot be driven"
+    }
+   ],
+   "source": "docs/FINDINGS.md:131"
+  },
+  {
+   "attempt": "a1",
+   "id": "A1-F11",
+   "findings_id": "A1-F11",
+   "reviewer_item": "R1 #14",
+   "severity": "minor",
+   "metric": "manufacturability",
+   "summary": "trunnion screws at the bottom of a 102 mm bore (need ~110 mm reach); encoder-cap screw only at 45",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "fasteners",
+     "objects": [
+      "FST_trunnion_*"
+     ],
+     "kind": "needs a \\d+ mm\\+ bit"
+    }
+   ],
+   "source": "docs/FINDINGS.md:132"
+  },
+  {
+   "attempt": "a1",
+   "id": "A1-F12",
+   "findings_id": "A1-F12",
+   "reviewer_item": "R1 #10, #12",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "motor-lead bullet joints land at the moving bend; no UART route",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "cables",
+     "objects": [
+      "CAB_phase*"
+     ],
+     "kind": "(?:runs \\d+ mm|but its lead)"
+    }
+   ],
+   "source": "docs/FINDINGS.md:133",
+   "judgment": "two R1 items under one FINDINGS id; the config declares no lead lengths, so the length check cannot fire"
+  },
+  {
+   "attempt": "a1",
+   "id": "A1-F13",
+   "findings_id": "A1-F13",
+   "reviewer_item": "R1 #13",
+   "severity": "minor",
+   "metric": "manufacturability",
+   "summary": "battery side clearance only 1.0 mm against a nominal envelope",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "slide",
+     "objects": [
+      "BUY_battery"
+     ],
+     "kind": "slides out but with only"
+    }
+   ],
+   "source": "docs/FINDINGS.md:134"
+  },
+  {
+   "attempt": "a1",
+   "id": "A1-F14",
+   "findings_id": "A1-F14",
+   "reviewer_item": "R1 #15",
+   "severity": "minor",
+   "metric": "manufacturability",
+   "summary": "overclaimed checks: 'checks_passed: true' with fasteners and cables excluded",
+   "tool_catchable": false,
+   "locators": null,
+   "source": "docs/FINDINGS.md:135",
+   "judgment": "a process issue (the designer's report overclaimed), not a design defect: kept because FINDINGS lists it, never catchable by a model check, so it is out of every denominator",
+   "process": true
+  },
+  {
+   "attempt": "a1",
+   "id": "A1-R8",
+   "reviewer_item": "R1 #8",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "feeder baffle shears M&Ms standing on edge (15.5 pocket 8.4 deep)",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "payload",
+     "objects": [
+      "PRT_feeder_*"
+     ],
+     "kind": "edge.on"
+    }
+   ],
+   "source": "HW/renders/attempt-1/review.md item 8",
+   "judgment": "not in the FINDINGS table (only 14 of R1's 18 items are); a payload_fit row would catch it, the v1 config has none"
+  },
+  {
+   "attempt": "a1",
+   "id": "A1-R16",
+   "reviewer_item": "R1 #16",
+   "severity": "major",
+   "metric": "aesthetics",
+   "summary": "launcher pod looks unfinished (aesthetics)",
+   "tool_catchable": false,
+   "locators": null,
+   "source": "HW/renders/attempt-1/review.md item 16",
+   "judgment": "not in the FINDINGS table; aesthetics"
+  },
+  {
+   "attempt": "a1",
+   "id": "A1-R17",
+   "reviewer_item": "R1 #17",
+   "severity": "minor",
+   "metric": "aesthetics",
+   "summary": "inconsistent edge breaks and radii (aesthetics)",
+   "tool_catchable": false,
+   "locators": null,
+   "source": "HW/renders/attempt-1/review.md item 17",
+   "judgment": "not in the FINDINGS table; aesthetics"
+  },
+  {
+   "attempt": "a1",
+   "id": "A1-R18",
+   "reviewer_item": "R1 #18",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "flywheel retention: one set screw into a PLA nut trap at 6000 rpm",
+   "tool_catchable": false,
+   "locators": null,
+   "source": "HW/renders/attempt-1/review.md item 18",
+   "judgment": "not in the FINDINGS table; not geometric"
+  },
+  {
+   "attempt": "a2",
+   "id": "A2-F1",
+   "findings_id": "A2-F1",
+   "reviewer_item": "R2 #1",
+   "severity": "blocker",
+   "metric": "manufacturability",
+   "summary": "a 2.5 mm L-key can't reach the flywheel pinch bolts",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "fasteners",
+     "objects": [
+      "FST_fw_bolt_*"
+     ],
+     "kind": "cannot be driven"
+    },
+    {
+     "check": "service",
+     "objects": [
+      "FST_fw_bolt_*"
+     ],
+     "kind": "cannot be reached"
+    }
+   ],
+   "source": "docs/FINDINGS.md:291"
+  },
+  {
+   "attempt": "a2",
+   "id": "A2-F2",
+   "findings_id": "A2-F2",
+   "reviewer_item": "R2 #2",
+   "severity": "major",
+   "metric": "functionality",
+   "summary": "documented 0-60-0 feeder index drops two candies",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "index",
+     "objects": [
+      "feeder_one_candy_per_cycle"
+     ],
+     "kind": "\\d+ open windows"
+    }
+   ],
+   "source": "docs/FINDINGS.md:292",
+   "judgment": "needs the index_tests row the harvest wrote from BOM section 0"
+  },
+  {
+   "attempt": "a2",
+   "id": "A2-F3",
+   "findings_id": "A2-F3",
+   "reviewer_item": "R2 #3",
+   "severity": "major",
+   "metric": "functionality",
+   "summary": "M3 x 16 pinch bolts end 0.36 mm short of their nuts",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "fasteners",
+     "objects": [
+      "FST_fw_bolt_*"
+     ],
+     "kind": "stops [\\d.]+ mm short of its nut"
+    }
+   ],
+   "source": "docs/FINDINGS.md:293"
+  },
+  {
+   "attempt": "a2",
+   "id": "A2-F4",
+   "findings_id": "A2-F4",
+   "reviewer_item": "R2 #4",
+   "severity": "major",
+   "metric": "functionality",
+   "summary": "rigid 1 mm nip squeeze, nothing yields",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "distances",
+     "objects": [
+      "PRT_hood",
+      "PRT_flywheel"
+     ],
+     "kind": "rigid squeeze"
+    }
+   ],
+   "source": "docs/FINDINGS.md:294"
+  },
+  {
+   "attempt": "a2",
+   "id": "A2-F5",
+   "findings_id": "A2-F5",
+   "reviewer_item": "R2 #5",
+   "severity": "minor",
+   "metric": "manufacturability",
+   "summary": "adapter through-bolts and nuts inside the battery envelope",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "fasteners",
+     "objects": [
+      "FST_adapter_*",
+      "BUY_battery"
+     ],
+     "kind": "runs [\\d.]+ mm into purchased part"
+    },
+    {
+     "check": "fasteners",
+     "objects": [
+      "FST_adapter_nut_*",
+      "BUY_battery"
+     ],
+     "kind": "sits inside purchased part"
+    }
+   ],
+   "source": "docs/FINDINGS.md:295"
+  },
+  {
+   "attempt": "a2",
+   "id": "A2-F6",
+   "findings_id": "A2-F6",
+   "reviewer_item": "R2 #7",
+   "severity": "minor",
+   "metric": "manufacturability",
+   "summary": "right clamp screw blocked at tilt 0: 'gap change needs no disassembly' is false",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "service",
+     "objects": [
+      "FST_clamp_r"
+     ],
+     "kind": "reachable only at tilt"
+    }
+   ],
+   "source": "docs/FINDINGS.md:296"
+  },
+  {
+   "attempt": "a2",
+   "id": "A2-F7",
+   "findings_id": "A2-F7",
+   "reviewer_item": "R2 #6",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "magnet jig datum chain 0.55-0.75 mm vs 0.3",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "stacks",
+     "objects": [
+      "magnet to sensor centring"
+     ],
+     "kind": "worst case [\\d.]+ mm > [\\d.]+"
+    }
+   ],
+   "source": "docs/FINDINGS.md:297",
+   "judgment": "FINDINGS:297: the stack terms in the a2 config were written from R2's review ('a calculator, not a detection'), so the stacks warn counts in rows scope only",
+   "credit_scope": "rows"
+  },
+  {
+   "attempt": "a2",
+   "id": "A2-F8",
+   "findings_id": "A2-F8",
+   "reviewer_item": "R2 #8",
+   "severity": "minor",
+   "metric": "aesthetics",
+   "summary": "10 mm of feeder bus bare above the left bonnet",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "cables",
+     "objects": [
+      "CAB_bus_feeder"
+     ],
+     "kind": "mm of cable is visible from outside",
+     "region": "around \\[-1\\d\\d\\.\\d, -?\\d+\\.\\d, 2\\d\\d\\."
+    }
+   ],
+   "source": "docs/FINDINGS.md:298"
+  },
+  {
+   "attempt": "a2",
+   "id": "A2-F9",
+   "findings_id": "A2-F9",
+   "reviewer_item": "R2 #9",
+   "severity": "minor",
+   "metric": "aesthetics",
+   "summary": "jack screws and lock nuts hang under the pod",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "fasteners",
+     "objects": [
+      "FST_jack_*"
+     ],
+     "kind": "head stands [\\d.]+ mm off the part"
+    },
+    {
+     "check": "fasteners",
+     "objects": [
+      "FST_jack_nut_*"
+     ],
+     "kind": "is visible from outside"
+    }
+   ],
+   "source": "docs/FINDINGS.md:299"
+  },
+  {
+   "attempt": "a2",
+   "id": "A2-R10",
+   "reviewer_item": "R2 #10",
+   "severity": "minor",
+   "metric": "aesthetics",
+   "summary": "pieces don't share a form language",
+   "tool_catchable": false,
+   "locators": null,
+   "source": "docs/FINDINGS.md:300"
+  },
+  {
+   "attempt": "a3",
+   "id": "A3-F1",
+   "findings_id": "A3-F1",
+   "reviewer_item": "R3 F1",
+   "severity": "major",
+   "metric": "functionality",
+   "summary": "feed may stall near full tilt: last slide 21.0 at 45 and 19.9 at the 46 stop",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "drop",
+     "objects": [
+      "feed_spout_to_tape"
+     ],
+     "kind": "slide of only [\\d.]+ deg",
+     "region": "at tilt=4[56]: "
+    }
+   ],
+   "source": "docs/FINDINGS.md:462"
+  },
+  {
+   "attempt": "a3",
+   "id": "A3-F2",
+   "findings_id": "A3-F2",
+   "reviewer_item": "R3 M1",
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "nip-cover leaf spring printed standing up, bending across layers",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "flexures",
+     "objects": [
+      "PRT_nip_cover"
+     ],
+     "kind": "beam stands \\d+ deg off the bed"
+    }
+   ],
+   "source": "docs/FINDINGS.md:463",
+   "judgment": "needs the flexures row the harvest wrote from D3's own stress number"
+  },
+  {
+   "attempt": "a3",
+   "id": "A3-F3",
+   "findings_id": "A3-F3",
+   "reviewer_item": "R3 M2",
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "battery slides through two adapter nuts",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "slide",
+     "objects": [
+      "BUY_battery",
+      "FST_adapter_nut_*"
+     ],
+     "kind": "slide-out blocked by"
+    }
+   ],
+   "source": "docs/FINDINGS.md:464"
+  },
+  {
+   "attempt": "a3",
+   "id": "A3-F4",
+   "reviewer_item": "R3 A1",
+   "severity": "major",
+   "metric": "aesthetics",
+   "summary": "no unifying form language",
+   "tool_catchable": false,
+   "locators": null,
+   "source": "docs/FINDINGS.md:465"
+  },
+  {
+   "attempt": "a3",
+   "id": "A3-F5",
+   "findings_id": "A3-F5",
+   "reviewer_item": "R3 F2",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "hinge axle threads 2.5 mm into PLA",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "fasteners",
+     "objects": [
+      "FST_hinge"
+     ],
+     "kind": "only [\\d.]+ mm of thread"
+    }
+   ],
+   "source": "docs/FINDINGS.md:466"
+  },
+  {
+   "attempt": "a3",
+   "id": "A3-F6",
+   "findings_id": "A3-F6",
+   "reviewer_item": "R3 F3",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "nip range 5.5-10 can't reach the brief's 9-12",
+   "tool_catchable": false,
+   "locators": null,
+   "source": "docs/FINDINGS.md:467"
+  },
+  {
+   "attempt": "a3",
+   "id": "A3-F7",
+   "findings_id": "A3-F7",
+   "reviewer_item": "R3 A2",
+   "severity": "minor",
+   "metric": "aesthetics",
+   "summary": "8 mm of bundle visible in a turntable notch at the bonnet foot",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "cables",
+     "objects": [
+      "CAB_launcher_bundle_*"
+     ],
+     "kind": "mm of cable is visible from outside",
+     "region": "around \\[-1\\d\\d\\."
+    }
+   ],
+   "source": "docs/FINDINGS.md:468"
+  },
+  {
+   "attempt": "a3",
+   "id": "A3-F8",
+   "findings_id": "A3-F8",
+   "reviewer_item": "R3 A3",
+   "severity": "minor",
+   "metric": "aesthetics",
+   "summary": "battery-bay window shows the adapter, screw tips and nuts",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "fasteners",
+     "objects": [
+      "FST_adapter_nut_*"
+     ],
+     "kind": "is visible from outside",
+     "partial": true
+    }
+   ],
+   "source": "docs/FINDINGS.md:469",
+   "judgment": "partial in FINDINGS: the nut warn fires, the window size is not checked; counted as caught; locators marked partial credit 'partial', not caught: the line covers part of the issue (a coverage warn or a sub-point)"
+  },
+  {
+   "attempt": "v2a1",
+   "id": "A1-01",
+   "findings_id": "V2A1-F1",
+   "reviewer_item": "A1-01",
+   "severity": "major",
+   "metric": "functionality",
+   "summary": "nip has no hard stops; drop stalls from a 7.4 gap; hood hits the body past the minimum",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "drop",
+     "objects": [
+      "PRT_hood",
+      "PIV_hood"
+     ],
+     "kind": "the payload path touches .*which moves on PIV_hood .*holds PIV_hood at home",
+     "partial": true
+    },
+    {
+     "check": "drop",
+     "objects": [
+      "nip drop at both hood ends"
+     ],
+     "kind": "rays end at \\['stall'\\]"
+    }
+   ],
+   "source": "docs/FINDINGS.md:690",
+   "judgment": "locators marked partial credit 'partial', not caught: the line covers part of the issue (a coverage warn or a sub-point)"
+  },
+  {
+   "attempt": "v2a1",
+   "id": "A1-02",
+   "findings_id": "V2A1-F2",
+   "reviewer_item": "A1-02",
+   "severity": "major",
+   "metric": "functionality",
+   "summary": "setting the gap needs the nip cover off, which comes off only at tilt 45",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "service",
+     "objects": [
+      "FST_nipcover_*"
+     ],
+     "kind": "(?:reachable only at tilt|cannot be reached)"
+    },
+    {
+     "check": "service",
+     "objects": [
+      "PRT_nip_cover"
+     ],
+     "kind": "no slide_out row moves them",
+     "partial": true
+    }
+   ],
+   "source": "docs/FINDINGS.md:691",
+   "judgment": "locators marked partial credit 'partial', not caught: the line covers part of the issue (a coverage warn or a sub-point)"
+  },
+  {
+   "attempt": "v2a1",
+   "id": "A1-03",
+   "findings_id": "V2A1-F3",
+   "reviewer_item": "A1-03",
+   "severity": "major",
+   "metric": "functionality",
+   "summary": "15 mm pocket admits two edge-on candies",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "payload",
+     "objects": [
+      "PRT_feeder_disc"
+     ],
+     "kind": "edge-on pair .*seats without touching"
+    }
+   ],
+   "source": "docs/FINDINGS.md:692"
+  },
+  {
+   "attempt": "v2a1",
+   "id": "A1-04",
+   "findings_id": "V2A1-F4",
+   "reviewer_item": "A1-04",
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "feeder servo swap needs a feeder teardown",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "service",
+     "objects": [
+      "BUY_servo_feeder"
+     ],
+     "kind": "cannot be reached"
+    }
+   ],
+   "source": "docs/FINDINGS.md:693",
+   "judgment": "FINDINGS: fails once V2R1's service row exists; that row is not among the archived overlays, so the rows scope cannot catch it"
+  },
+  {
+   "attempt": "v2a1",
+   "id": "A1-05",
+   "findings_id": "V2A1-F5",
+   "reviewer_item": "A1-05",
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "0.94 mm crown wall at the self-tap pilots",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_feeder_crown"
+     ],
+     "kind": "wall samples <"
+    }
+   ],
+   "source": "docs/FINDINGS.md:694"
+  },
+  {
+   "attempt": "v2a1",
+   "id": "A1-06",
+   "findings_id": "V2A1-F6",
+   "reviewer_item": "A1-06",
+   "severity": "minor",
+   "metric": "manufacturability",
+   "summary": "pod drops into the post U-slots only at tilt 10..35",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "insertion",
+     "objects": [
+      "group 'pod'"
+     ],
+     "kind": "has no straight way in",
+     "region": "step '7 pod drops into the post U-slots'"
+    }
+   ],
+   "source": "docs/FINDINGS.md:695",
+   "judgment": "FINDINGS (v2 A6 insertion section) calls the pod warn a config fact (declare the step's pose); it says exactly what A1-06 says, that the pod has no straight way in at home tilt, so it counts here. On v2 A2-A5 the same warn is unlabelled"
+  },
+  {
+   "attempt": "v2a1",
+   "id": "A1-07",
+   "findings_id": "V2A1-F7",
+   "reviewer_item": "A1-07",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "magnet stack 0.40 > 0.30",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "stacks",
+     "objects": [
+      "magnet centring"
+     ],
+     "kind": "worst case [\\d.]+ mm > [\\d.]+"
+    }
+   ],
+   "source": "docs/FINDINGS.md:696"
+  },
+  {
+   "attempt": "v2a1",
+   "id": "A1-08",
+   "findings_id": "V2A1-F8",
+   "reviewer_item": "A1-08",
+   "severity": "minor",
+   "metric": "manufacturability",
+   "summary": "knife-thin edges (jar_valve 0.02, jar_gate 0.77, hood 0.91) and an undeclared 48 mm bridge",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_jar_valve"
+     ],
+     "kind": "wall samples <",
+     "partial": true
+    },
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_jar_gate"
+     ],
+     "kind": "wall samples <",
+     "partial": true
+    },
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_hood"
+     ],
+     "kind": "wall samples <",
+     "partial": true
+    }
+   ],
+   "source": "docs/FINDINGS.md:697",
+   "judgment": "the bridge half is not matched: the ceiling-span warn was replaced by the layer check, which bridges the crown arcs (35 mm warns) but none at 48; locators marked partial credit 'partial', not caught: the line covers part of the issue (a coverage warn or a sub-point)"
+  },
+  {
+   "attempt": "v2a1",
+   "id": "A1-09",
+   "reviewer_item": "A1-09",
+   "severity": "minor",
+   "metric": "aesthetics",
+   "summary": "bare 2 mm gate sheet (aesthetics)",
+   "tool_catchable": false,
+   "locators": null,
+   "source": "docs/FINDINGS.md:698"
+  },
+  {
+   "attempt": "v2a1",
+   "id": "A1-10",
+   "reviewer_item": "A1-10",
+   "severity": "minor",
+   "metric": "aesthetics",
+   "summary": "feeder breaks the form language (no bevels)",
+   "tool_catchable": false,
+   "locators": null,
+   "source": "docs/FINDINGS.md:698"
+  },
+  {
+   "attempt": "v2a1",
+   "id": "A1-11",
+   "findings_id": "V2A1-F11",
+   "reviewer_item": "A1-11",
+   "severity": "minor",
+   "metric": "aesthetics",
+   "summary": "servo-controller PCB visible through a 52 x 24 base notch",
+   "tool_catchable": true,
+   "locators": null,
+   "source": "docs/FINDINGS.md:699",
+   "judgment": "no check reports a visible PCB (exposure covers cables and nuts); a PR that adds one adds this locator"
+  },
+  {
+   "attempt": "v2a1",
+   "id": "A1-12",
+   "reviewer_item": "A1-12",
+   "severity": "minor",
+   "metric": "aesthetics",
+   "summary": "two PLA colours encode nothing",
+   "tool_catchable": false,
+   "locators": null,
+   "source": "docs/FINDINGS.md:698"
+  },
+  {
+   "attempt": "v2a2",
+   "id": "A2-01",
+   "findings_id": "V2A2-F1",
+   "reviewer_item": "A2-01",
+   "severity": "major",
+   "metric": "functionality",
+   "summary": "below a 6.1 setting the leaf runs out of travel before a 7.0 candy passes; the lift limit is not a real stop",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "drop",
+     "objects": [
+      "PRT_hood",
+      "PIV_nip_lift"
+     ],
+     "kind": "the payload path touches .*which moves on PIV_nip_lift .*holds PIV_nip_lift at home",
+     "partial": true
+    }
+   ],
+   "source": "docs/FINDINGS.md:889",
+   "judgment": "caught only as the drop coverage warn (the test holds the leaf lift at home); no archived row measures the full-lift gap; locators marked partial credit 'partial', not caught: the line covers part of the issue (a coverage warn or a sub-point)"
+  },
+  {
+   "attempt": "v2a2",
+   "id": "A1-03",
+   "findings_id": "V2A2-F2",
+   "reviewer_item": "A1-03",
+   "severity": "major",
+   "metric": "functionality",
+   "summary": "14.4 pocket blocks a 13 x 7 edge-on pair by a hair and seats 12.5 x 6.5",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "payload",
+     "objects": [
+      "PRT_feeder_disc"
+     ],
+     "kind": "edge-on pair .*seats without touching"
+    },
+    {
+     "check": "payload",
+     "objects": [
+      "pocket blocks an edge-on pair"
+     ],
+     "kind": "holds with only [\\d.]+ mm to spare"
+    }
+   ],
+   "source": "docs/FINDINGS.md:890"
+  },
+  {
+   "attempt": "v2a2",
+   "id": "A1-09",
+   "reviewer_item": "A1-09",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "gate has a positive open stop but no detents",
+   "tool_catchable": false,
+   "locators": null,
+   "source": "docs/FINDINGS.md:896"
+  },
+  {
+   "attempt": "v2a2",
+   "id": "A1-08",
+   "reviewer_item": "A1-08",
+   "severity": "minor",
+   "metric": "manufacturability",
+   "summary": "1.12 wall in launcher_body at the widened bay; 171 mm2 overhang on the nip cover",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_launcher_body"
+     ],
+     "kind": "wall samples <"
+    },
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_nip_cover"
+     ],
+     "kind": "mm2 of sloped overhang"
+    }
+   ],
+   "source": "docs/FINDINGS.md:891"
+  },
+  {
+   "attempt": "v2a2",
+   "id": "A2-02",
+   "findings_id": "V2A2-F4",
+   "reviewer_item": "A2-02",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "only the phase leads have a lead length; pan U-loop slack not modelled",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "cables",
+     "objects": [
+      "CAB_bus_pan"
+     ],
+     "kind": "cables have no lead length"
+    }
+   ],
+   "source": "docs/FINDINGS.md:892"
+  },
+  {
+   "attempt": "v2a2",
+   "id": "A2-03",
+   "reviewer_item": "A2-03",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "finger slot: rim 1.1-1.4 proud, guard land face (ergonomics)",
+   "tool_catchable": false,
+   "locators": null,
+   "source": "docs/FINDINGS.md:896"
+  },
+  {
+   "attempt": "v2a2",
+   "id": "A2-04",
+   "findings_id": "V2A2-F5",
+   "reviewer_item": "A2-04",
+   "severity": "minor",
+   "metric": "manufacturability",
+   "summary": "config gaps: step 10a says M2 x 4 over M2 x 8; no flexures row for the leaf; the y37 ray slips past the hood lip",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "assembly",
+     "objects": [
+      "step '10a"
+     ],
+     "kind": "says M2 x 4, but its M2 screws are"
+    },
+    {
+     "check": "flexures",
+     "objects": [
+      "PRT_nip_leaf"
+     ],
+     "kind": "is named compliant in distances .* but has no flexures row"
+    },
+    {
+     "check": "distances",
+     "objects": [
+      "PRT_hood",
+      "PRT_flywheel"
+     ],
+     "kind": "the ray hits PRT_hood on another face than at home"
+    },
+    {
+     "check": "distances",
+     "objects": [
+      "PRT_hood",
+      "PRT_flywheel"
+     ],
+     "kind": "\\(along ray\\) at .*wanted [\\d.]+\\.\\.[\\d.]+",
+     "region": "\\(V2R2 jam-lift row"
+    }
+   ],
+   "source": "docs/FINDINGS.md:893",
+   "judgment": "FINDINGS splits A2-04 into V2A2-F5 (config gaps) and V2A2-F6 (the ray slip); one label here, as the reviewer raised it. Its 'two parts in no step' half was wrong (V2A2-R1)"
+  },
+  {
+   "attempt": "v2a2",
+   "id": "A2-05",
+   "reviewer_item": "A2-05",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "flattest slide 32.8 at gap 5.3 and tilt 46: 4.8 over the stall, rule 5",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "drop",
+     "objects": [
+      "drop at the min-gap stop"
+     ],
+     "kind": "slide of only [\\d.]+ deg",
+     "region": "tilt=4[56]: "
+    }
+   ],
+   "source": "docs/FINDINGS.md:895"
+  },
+  {
+   "attempt": "v2a3",
+   "id": "A2-01",
+   "findings_id": "V2A3-F1",
+   "reviewer_item": "A2-01",
+   "severity": "major",
+   "metric": "functionality",
+   "summary": "min-gap stop sized for the nominal 7.0 candy; a 7.5 candy is squeezed at full lift",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "distances",
+     "objects": [
+      "PRT_hood",
+      "PRT_flywheel"
+     ],
+     "kind": "\\(along ray\\) at .*nip_lift=-[\\d.]+, wanted [\\d.]+\\.\\.None"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1072"
+  },
+  {
+   "attempt": "v2a3",
+   "id": "A2-02",
+   "findings_id": "V2A3-F3",
+   "reviewer_item": "A2-02",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "the 150 mm encoder lead ends at the journal bore; the rest is in no BOM row",
+   "tool_catchable": false,
+   "locators": [
+    {
+     "check": "cables",
+     "objects": [
+      "CAB_encoder"
+     ],
+     "kind": "cable chain .*runs \\d+ mm through .*but its lead is"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1074",
+   "judgment": "V2R3 marked it not tool_catchable; a cable_chains row (new after this attempt) catches it"
+  },
+  {
+   "attempt": "v2a3",
+   "id": "A1-03",
+   "findings_id": "V2A3-F2",
+   "reviewer_item": "A1-03",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "13.9 pocket blocks the min pair by 0.016 mm3: zero margin",
+   "tool_catchable": false,
+   "locators": [
+    {
+     "check": "payload",
+     "objects": [
+      "pocket blocks an edge-on pair"
+     ],
+     "kind": "holds with only [\\d.]+ mm to spare"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1073"
+  },
+  {
+   "attempt": "v2a3",
+   "id": "A3-01",
+   "findings_id": "V2A3-F5",
+   "reviewer_item": "A3-01",
+   "severity": "minor",
+   "metric": "aesthetics",
+   "summary": "detent clip: EB 0.3 on the tab, square plate, proud pan head; M3 x 9 is not stock",
+   "tool_catchable": false,
+   "locators": [
+    {
+     "check": "fasteners",
+     "objects": [
+      "FST_detent_*"
+     ],
+     "kind": "non-stock screw lengths: .*M3 x 9",
+     "partial": true
+    },
+    {
+     "check": "bom",
+     "objects": [
+      "M3 x 9"
+     ],
+     "kind": "is not a stock length",
+     "partial": true
+    }
+   ],
+   "source": "docs/FINDINGS.md:1075",
+   "judgment": "only the M3 x 9 sub-point is tool-catchable; counted as caught when it is; locators marked partial credit 'partial', not caught: the line covers part of the issue (a coverage warn or a sub-point)"
+  },
+  {
+   "attempt": "v2a3",
+   "id": "A3-02",
+   "findings_id": "V2A3-F6",
+   "reviewer_item": "A3-02",
+   "severity": "minor",
+   "metric": "manufacturability",
+   "summary": "BOM lists the nip stud as M3 x 20 hex; the model has M3_cap x 16",
+   "tool_catchable": false,
+   "locators": [
+    {
+     "check": "bom",
+     "objects": [
+      "FST_nip_stud"
+     ],
+     "kind": "is [\\d.]+ long in the model"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1076"
+  },
+  {
+   "attempt": "v2a3",
+   "id": "A3-03",
+   "findings_id": "V2A3-F7",
+   "reviewer_item": "A3-03",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "base floor service has no slide_out row; the detent open notch has no row",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "slide",
+     "objects": [
+      "PRT_base_floor"
+     ],
+     "kind": "(?:slide-out blocked|slides out but with only)"
+    },
+    {
+     "check": "slide",
+     "objects": [
+      "PRT_gate_detent"
+     ],
+     "kind": "(?:slide-out blocked|slides out but with only)"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1077",
+   "judgment": "FINDINGS: V2R3's floor slide row passes; a config gap, not a model defect"
+  },
+  {
+   "attempt": "v2a4",
+   "id": "A2-01",
+   "findings_id": "V2A4-F1",
+   "reviewer_item": "A2-01",
+   "severity": "major",
+   "metric": "functionality",
+   "summary": "full leaf lift opens the nip at BDC but not on the entry arc: 7.50/7.67/7.95 at psi 80",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "distances",
+     "objects": [
+      "PRT_hood",
+      "PRT_flywheel"
+     ],
+     "kind": "\\(along ray swept [\\d.]+\\.\\.[\\d.]+ deg, worst at \\d+\\) at .*wanted [\\d.]+\\.\\.None"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1231"
+  },
+  {
+   "attempt": "v2a4",
+   "id": "A4-01",
+   "findings_id": "V2A4-F2",
+   "reviewer_item": "A4-01",
+   "severity": "minor",
+   "metric": "aesthetics",
+   "summary": "detent tab band relief leaves a square step; pan head 1.4 proud (aesthetics)",
+   "tool_catchable": false,
+   "locators": null,
+   "source": "docs/FINDINGS.md:1232"
+  },
+  {
+   "attempt": "v2a4",
+   "id": "A4-02",
+   "findings_id": "V2A4-F3",
+   "reviewer_item": "A4-02",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "BOM leaf stress numbers rest on the BDC-only gap helper; manifest orient text 22 x 7.5 vs 22 x 8.3",
+   "tool_catchable": false,
+   "locators": null,
+   "source": "docs/FINDINGS.md:1233"
+  },
+  {
+   "attempt": "v2a5",
+   "id": "A5-01",
+   "findings_id": "V2A5-F1",
+   "reviewer_item": "A5-01",
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "detent tab top wraps the jar band's corner at 0.322 normal; band chain RSS 1.26",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "stacks",
+     "objects": [
+      "PRT_gate_detent"
+     ],
+     "kind": "RSS [\\d.]+ mm > [\\d.]+ \\(measured: "
+    }
+   ],
+   "source": "docs/FINDINGS.md:1372",
+   "judgment": "caught only with the designer's own stack terms plus 'between' (overlay_v2a5_band.json): a rows-scope catch"
+  },
+  {
+   "attempt": "v2a5",
+   "id": "A5-02",
+   "findings_id": "V2A5-F2",
+   "reviewer_item": "A5-02",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "the 7.5 candy passes the min-stop entry arc by only 0.099 (8.099 at psi 90)",
+   "tool_catchable": false,
+   "locators": [
+    {
+     "check": "distances",
+     "objects": [
+      "PRT_hood",
+      "PRT_flywheel"
+     ],
+     "kind": "\\(along ray swept [\\d.]+\\.\\.[\\d.]+ deg, worst at \\d+\\) at .*wanted [\\d.]+\\.\\.None"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1373",
+   "judgment": "the swept row reproduces 8.099 at psi 90 but passes (it is above 8.0); a pass is not a catch"
+  },
+  {
+   "attempt": "v2a5",
+   "id": "A5-03",
+   "findings_id": "V2A5-F3",
+   "reviewer_item": "A5-03",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "the 3-way bus junction is real hardware but not modelled",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "cables",
+     "objects": [
+      "CAB_bus_*"
+     ],
+     "kind": "cable junctions with no purchased part"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1374",
+   "judgment": "warned at hand-off then waived with cable_junctions_ok; now listed in cables.junctions_waived, which is not a warn line"
+  },
+  {
+   "attempt": "v2a5",
+   "id": "A5-04",
+   "findings_id": "V2A5-F4",
+   "reviewer_item": "A5-04",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "PLA leaf cycles to 28-34 MPa on a 12.5 MPa preload (creep, fatigue)",
+   "tool_catchable": false,
+   "locators": null,
+   "source": "docs/FINDINGS.md:1375"
+  },
+  {
+   "attempt": "v2a5",
+   "id": "A5-05",
+   "findings_id": "V2A5-F5",
+   "reviewer_item": "A5-05",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "BUY_tape modelled 13.8 wide, the BOM buys 12.7 tape; side.png crops",
+   "tool_catchable": true,
+   "locators": null,
+   "source": "docs/FINDINGS.md:1376",
+   "judgment": "cad bom reads fasteners only; V2R5 marked it tool_catchable"
+  },
+  {
+   "attempt": "v2a5",
+   "id": "A5-06",
+   "findings_id": "V2A5-F6",
+   "reviewer_item": "A5-06",
+   "severity": "minor",
+   "metric": "manufacturability",
+   "summary": "open allow PRT_gate_detent x PRT_jar_gate hides any deeper clash",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "interference",
+     "objects": [
+      "PRT_jar_gate",
+      "PRT_gate_detent"
+     ],
+     "kind": "over the allow's max_mm3"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1377",
+   "judgment": "designer scope only lists it in summary.unbounded_allows (not a warn line); the bounded allow in the band overlay fails"
+  },
+  {
+   "attempt": "v2a6",
+   "id": "A6-01",
+   "findings_id": "V2A6-F1",
+   "reviewer_item": "A6-01",
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "step 10d seats the bus junction in the hub bore after the groove cap closes it",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "insertion",
+     "objects": [
+      "BUY_bus_junction"
+     ],
+     "kind": "is in bench step"
+    },
+    {
+     "check": "insertion",
+     "objects": [
+      "PRT_groove_cap",
+      "BUY_bus_junction"
+     ],
+     "kind": "has no straight way in"
+    },
+    {
+     "check": "slide",
+     "objects": [
+      "PRT_groove_cap",
+      "BUY_bus_junction"
+     ],
+     "kind": "slide-out blocked by"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1529"
+  },
+  {
+   "attempt": "v2a6",
+   "id": "A6-02",
+   "findings_id": "V2A6-F2",
+   "reviewer_item": "A6-02",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "the pan lead and the base/bundle meeting points orbit 9.9 / 5.7 mm over pan +-90",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "cables",
+     "objects": [
+      "CAB_bus_pan"
+     ],
+     "kind": "ends [\\d.]+ mm from .*that point is [\\d.]+ mm further away"
+    },
+    {
+     "check": "cables",
+     "objects": [
+      "CAB_launcher_base"
+     ],
+     "kind": "ends [\\d.]+ mm from .*that point is [\\d.]+ mm further away"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1530"
+  },
+  {
+   "attempt": "v2a6",
+   "id": "A6-03",
+   "findings_id": "V2A6-F3",
+   "reviewer_item": "A6-03",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "swept full-lift and tape rows miss their psi 0 station",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "distances",
+     "objects": [
+      "PRT_hood"
+     ],
+     "kind": "the swept ray missed a part"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1531"
+  },
+  {
+   "attempt": "v2a7",
+   "id": "A7-01",
+   "findings_id": "V2A7-F1",
+   "reviewer_item": "A7-01",
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "step 11a needs tilt 45 (FST_gcap_5) six steps after the tilt servo is in and before power",
+   "tool_catchable": false,
+   "locators": [
+    {
+     "check": "assembly",
+     "objects": [
+      "PIV_tilt",
+      "BUY_servo_tilt"
+     ],
+     "kind": "needs PIV_tilt at \\d+ .*but BUY_servo_tilt .*holds that joint"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1687",
+   "judgment": "V2R7 marked it not tool_catchable; the held-pose check (added after A7) catches it"
+  },
+  {
+   "attempt": "v2a7",
+   "id": "A7-02",
+   "findings_id": "V2A7-F2",
+   "reviewer_item": "A7-02",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "both bus leads share one tube to the splice and turn 90 deg onto its face",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "cables",
+     "objects": [
+      "CAB_bus_feeder"
+     ],
+     "kind": "kinks: "
+    },
+    {
+     "check": "cables",
+     "objects": [
+      "CAB_bus_tilt"
+     ],
+     "kind": "kinks: "
+    },
+    {
+     "check": "cables",
+     "objects": [
+      "CAB_bus_feeder",
+      "CAB_bus_tilt"
+     ],
+     "kind": "lie in one tube"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1688"
+  },
+  {
+   "attempt": "v2a7",
+   "id": "A6-02",
+   "reviewer_item": "A6-02",
+   "severity": "minor",
+   "metric": "functionality",
+   "summary": "PARTIAL: the 6 mm launcher bundle still hands over at r 4 and swings a 5.66 chord",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "cables",
+     "objects": [
+      "CAB_launcher_base",
+      "CAB_launcher_bundle"
+     ],
+     "kind": "ends [\\d.]+ mm from .*that point is [\\d.]+ mm further away"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1689"
+  },
+  {
+   "attempt": "v2a7",
+   "id": "A7-03",
+   "findings_id": "V2A7-F3",
+   "reviewer_item": "A7-03",
+   "severity": "minor",
+   "metric": "manufacturability",
+   "summary": "the cap-removal row lifts +Z 40 and passes, leaving the cap under the pod; two stale 'why' numbers",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "slide",
+     "objects": [
+      "PRT_groove_cap"
+     ],
+     "kind": "(?:not clear|stops short|short of)"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1690",
+   "judgment": "a config dispute (a removal row that stops short passes). V2R7's own rows show back-up blocked by the nip cover but forward-up clear, so the cap can come out and those fails are not this issue: not caught"
+  }
+ ],
+ "printability": [
+  {
+   "id": "PF-jar_valve",
+   "findings_id": "V2PF-1",
+   "attempts": [
+    "v2a1",
+    "v2a2",
+    "v2a3",
+    "v2a4",
+    "v2a5",
+    "v2a6",
+    "v2a7"
+   ],
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "shipped supports: no; needs support: 3 bayonet tabs at z 2, 5.5 mm cantilevers",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_jar_valve"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z [1-3]\\.\\d "
+    },
+    {
+     "check": "printcheck",
+     "objects": [
+      "jar_valve"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z [1-3]\\.\\d "
+    }
+   ],
+   "confirmed_by": "print 2026-10-26",
+   "print_evidence": [
+    {
+     "date": "2026-10-26",
+     "by": "user",
+     "printed": "v2 parts as shipped (supports: no)",
+     "result": "fail",
+     "observed": "the twist-lock jar mechanism (jar_valve) drooped without supports",
+     "action": "needs hand cutting; print with supports or redesign the tabs"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1816",
+   "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker); the same rule for v1 and v2"
+  },
+  {
+   "id": "PF-feeder_cover",
+   "findings_id": "V2PF-1",
+   "attempts": [
+    "v2a1",
+    "v2a2",
+    "v2a3",
+    "v2a4",
+    "v2a5",
+    "v2a6",
+    "v2a7"
+   ],
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "shipped supports: no; needs support: 2 screw ears at z 32, 10.5 mm cantilevers",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_feeder_cover"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z 3[0-4]\\.\\d "
+    },
+    {
+     "check": "printcheck",
+     "objects": [
+      "feeder_cover"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z 3[0-4]\\.\\d "
+    }
+   ],
+   "source": "docs/FINDINGS.md:1817",
+   "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker); the same rule for v1 and v2"
+  },
+  {
+   "id": "PF-base_shell",
+   "findings_id": "V2PF-1",
+   "attempts": [
+    "v2a1",
+    "v2a2",
+    "v2a3",
+    "v2a4",
+    "v2a5",
+    "v2a6",
+    "v2a7"
+   ],
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "shipped supports: no; needs support: zip-tie anchor block at z 45, 6 mm cantilever",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_base_shell"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z 4[3-7]\\.\\d "
+    },
+    {
+     "check": "printcheck",
+     "objects": [
+      "base_shell"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z 4[3-7]\\.\\d "
+    }
+   ],
+   "source": "docs/FINDINGS.md:1818",
+   "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker); the same rule for v1 and v2"
+  },
+  {
+   "id": "PF-post_R",
+   "findings_id": "V2PF-1",
+   "attempts": [
+    "v2a1",
+    "v2a2",
+    "v2a3",
+    "v2a4",
+    "v2a5",
+    "v2a6",
+    "v2a7"
+   ],
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "shipped supports: no; needs support: post top above the cover split at z 142, 11.7 mm cantilever",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_post_R"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z 14[0-4]\\.\\d "
+    },
+    {
+     "check": "printcheck",
+     "objects": [
+      "post_R"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z 14[0-4]\\.\\d "
+    }
+   ],
+   "source": "docs/FINDINGS.md:1819",
+   "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker); the same rule for v1 and v2. Region z 140-144 is the post top; the 1.5 mm ledges at z 130.2 on the same part are short-ledge warns, not this finding"
+  },
+  {
+   "id": "PF1-arm_cover_R",
+   "findings_id": "V2PF-1 (v1)",
+   "attempts": [
+    "a1"
+   ],
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "arm_cover_R: a 2.6 mm wall 9.3 mm off its flange at z 1 (supports: no)",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_arm_cover_R"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z [0-2]\\.\\d "
+    }
+   ],
+   "source": "docs/FINDINGS.md:1841",
+   "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker); the same rule for v1 and v2"
+  },
+  {
+   "id": "PF1-base_shell_ribs",
+   "findings_id": "V2PF-1 (v1)",
+   "attempts": [
+    "a1",
+    "a2",
+    "a3"
+   ],
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "base_shell: 0.6 mm ribs starting 20 mm up (4 regions, supports: no)",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_base_shell"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z (?:20|69)\\.\\d "
+    }
+   ],
+   "source": "docs/FINDINGS.md:1841",
+   "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker); the same rule for v1 and v2"
+  },
+  {
+   "id": "PF1-hopper_lip",
+   "findings_id": "V2PF-1 (v1)",
+   "attempts": [
+    "a1",
+    "a2",
+    "a3"
+   ],
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "hopper: the funnel lip in mid-air (an island on A1, cantilevers on A2/A3; supports: no)",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_hopper"
+     ],
+     "kind": "(?:an island starts in mid-air|a [\\d.]+ mm cantilever)"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1841",
+   "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker); the same rule for v1 and v2"
+  }
+ ],
+ "known_true_positives": [
+  {
+   "attempt": "v2a2",
+   "check": "slide",
+   "objects": [
+    "PRT_jar_adapter"
+   ],
+   "kind": "planted: gate stop",
+   "why": "a planted row in overlay_v2a2.json (verify 4e): it must fail",
+   "source": "tools/verify_all.sh 4e"
+  },
+  {
+   "attempt": "v2a2",
+   "check": "sightlines",
+   "objects": [
+    "PRT_nip_wheel"
+   ],
+   "kind": "planted: the slot ray",
+   "why": "a planted row in overlay_v2a2.json (verify 4e): it must fail",
+   "source": "tools/verify_all.sh 4e"
+  },
+  {
+   "attempt": "v2a7",
+   "check": "slide",
+   "objects": [
+    "R7 A7-01 groove cap leaves"
+   ],
+   "kind": "slide-out blocked by",
+   "why": "V2R7's exploratory exit rows for the groove cap at tilt 45 / 0: the blocked directions are facts its review used (FINDINGS: back-up hits the nip cover at 54), not defects on their own; forward-up is clear",
+   "source": "tools/verify_all.sh 4k; docs/FINDINGS.md:1690"
+  }
+ ]
+}
