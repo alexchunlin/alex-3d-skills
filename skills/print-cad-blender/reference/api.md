@@ -76,11 +76,11 @@ only; for M2.5, cut `G.cyl` holes with `RULES`-style clearances (2.7 clear, 2.1 
 | Call | Notes |
 |---|---|
 | `RT.cable(name, start, end, r, color, via=[], joint=None, lead_len=None, **opt)` | route, then `asm.cable`. Returns `(objects, result)`: one object per body (`name`, `name_1`, ...) |
-| `RT.route(start, end, r, via=[], joint=None, **opt)` | result dict: `pts` (for `asm.cable`), `pieces`, `length_mm`, `min_clearance_mm`, `stubs`, `bend_r_min`, `corners`, `exposed_mm`, `slack`, `legs`, `time_s` |
+| `RT.route(start, end, r, via=[], joint=None, **opt)` | result dict: `pts` (for `asm.cable`), `pieces`, `length_mm`, `min_clearance_mm`, `stubs`, `bend_r_min`, `bend_r_floor`, `sharp_corners`, `corners`, `exposed_mm`, `slack`, `legs`, `time_s` |
 | `via` | `(x, y, z)`, or `{"at": p, "dir": d, "len": L}` for a straight run (a bore), plus `"joint": "PIV_x"` when the cable changes body there. `slack` then gives the path length at each joint limit. |
-| `opt` | `clearance=1.0`, `cell=2.0`, `margin=20`, `bend_r=5*r`, `w_open=0.5`, `w_exposed=8`, `w_turn=3`, `prefer=[(lo, hi)]` (groove boxes), `avoid=[(lo, hi)]` |
+| `opt` | `clearance=1.0`, `cell=2.0`, `margin=20`, `bend_r=5*r`, `min_bend_od=0.75` (no arc under this x OD: cadcheck's `cable_min_bend_od`), `w_open=0.5`, `w_exposed=8`, `w_turn=3`, `prefer=[(lo, hi)]` (groove boxes), `avoid=[(lo, hi)]` |
 
-An endpoint inside a part (a connector) leaves through a short straight `stub`, and the stub's clearance is reported. If a route fails, use `cell=1` and a smaller `clearance` for tight ducts, or add a via. `cad q model.blend route CAB_x[,CAB_y] [--via ...] [--save out.blend]` re-routes existing cables between their own endpoints, for reviewers.
+An endpoint inside a part (a connector) leaves through a short straight `stub`, and the stub's clearance is reported. An end within 3 mm of a purchased part keeps one OD straight; a corner that can't fit an arc of `bend_r_floor` stays sharp, where cadcheck's kink test judges it. A route split by a `"joint"` via needs one `cable_chains` row for its pieces. If a route fails, use `cell=1` and a smaller `clearance` for tight ducts, or add a via. `cad q model.blend route CAB_x[,CAB_y] [--via ...] [--save out.blend]` re-routes existing cables between their own endpoints, for reviewers.
 
 ## cad q (one-shot measurements)
 

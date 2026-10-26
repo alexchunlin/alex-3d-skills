@@ -35,7 +35,10 @@ networkx, trimesh or manifold3d. All runs used nice 10 alongside the live CAD lo
    2. Merge the short staircase segments A* leaves at a turn.
    3. Fillet each corner with `bend_r` (default 5 r). Where an arc would lose clearance, push the corner outward;
       if that fails, shrink the radius. The output is straight runs plus arcs, so `bend_r_min` is the curve's real
-      minimum radius.
+      minimum radius. No arc goes under cadcheck's kink limit (`min_bend_od` x OD, 0.75 by default, `bend_r_floor`
+      in the result), and an end within 3 mm of a purchased part keeps one OD straight. A corner that can't have
+      both is left sharp (`sharp_corners`), because the kink test only sees turns of 20° or more and never the
+      10° steps of an arc.
 5. **Report.** The JSON gives length, exact min clearance (and where), stubs with their clearance, the radius per
    corner, centre-line visible length, slack, per-leg grid size and timings.
 
@@ -121,6 +124,26 @@ Fixes on this branch:
   older cadcheck printed and are left as they are.
 - `asm.tube_mesh` welds the cap rings, so cadlib cables are closed solids.
 
+## Against cadcheck's cable checks (kinks, shared runs, junctions, end drift)
+
+The router writes what `asm.cable` writes: `cab_path`, `cab_r`, `cab_ends` and `path_len`. `cad q route --save`
+writes the same props on every piece. Before it did, the A3 re-route kept the hand blend's missing `cab_path`, and
+cadcheck's ring fallback can't read a welded tube. So the four re-routed cables dropped out of the kink and
+shared-run tests: 13 routes with a known path instead of 17.
+
+A3 after the re-route above, `cad check --only cables`:
+- 17 routes with a known path, and 4 with known ends (0 before).
+- No kinks.
+- The same 5 shared runs as the hand blend, all between `CAB_bus_feeder` and the `CAB_launcher_bundle_*` routes,
+  which were not re-routed.
+- No junctions and no end drift.
+
+`tools/verify.d/route_bend_cases.py` checks the bend floor:
+- the default 5 r stays a 7.5 mm arc;
+- `bend_r=1.0`, under the 2.25 mm floor for r 1.5, gives two sharp corners;
+- an end corner with a 2 mm first leg stays sharp;
+- an arc that can't keep clearance at any radius over the floor becomes sharp, not 0.5 mm.
+
 ## Synthetic test (`examples/cable-router/build.py`, `tools/verify.d/cable_router.sh`)
 
 The scene is a tray with a block, a wall with one floor slot, and a turntable (`PIV_turn`, ±90°) with a centre bore
@@ -135,8 +158,11 @@ and an off-centre post.
   - Slack 0.0 mm over ±90°, because the via is on the axis.
   - It clears the post at every pose, because the post is swept.
 - cadcheck `--only interference` gives no cable findings.
+- cadcheck `--only cables` reads all three routes from `cab_path`: no kinks, no shared runs, 0.0 mm end drift at
+  the on-axis hand-over. Its one junction warn is `CAB_bore` / `CAB_bore_1`, as expected: a split route needs a
+  `cable_chains` row (`cad q route` prints it as `cable_chain`).
 
-The test also re-routes A3 `CAB_12v_mg` and asserts 0 mm³ overlap (hand route: 1.7). It takes about 15 s.
+The test also re-routes A3 `CAB_12v_mg` and asserts 0 mm³ overlap (hand route: 1.7). It takes about 25 s.
 
 ## Why not the existing code
 
@@ -147,7 +173,7 @@ The test also re-routes A3 `CAB_12v_mg` and asserts 0 mm³ overlap (hand route: 
 | Blender Geometry Nodes "Shortest Edge Paths" (C++ Dijkstra, in the dependency) | same `CAB_12v_ctrl` grid: 169k cells, 98.6k free, 1.13M lattice edges. Mesh build 0.16 s + evaluation 0.07 s, against 0.98 s for A*. Path cost 243.8 against 240.4 | 4x faster search, but no turn cost (Dijkstra keeps no direction state) and no per-entry stub cost, plus a 1.1M-edge mesh round trip. Search is 3-21% of a route (0.06-0.79 s); the grid and exposure sampling are the rest. It could become the search engine later without changing the API |
 | `bpy.ops.mesh.shortest_path_select` | read, not run: an edit-mode operator over edge length or topology | no cost field, so no wall or exposure preference |
 | scipy `csgraph` / networkx | not in Blender's Python (checked); no installs allowed | n/a |
-| `asm.cable` | kept: the router only produces its `pts` | changed only to store `path` and weld the caps |
+| `asm.cable` | kept: the router only produces its `pts` | changed only to weld the caps; the router reads the centre line back from its `cab_path` / `cab_r` |
 
 The smallest change that closes the gap: there is no config of the existing code that produces a route, so the new
 module only adds the search and smoothing. It reuses cadcheck's exposure rule, joint and pose conventions, and
@@ -155,7 +181,8 @@ module only adds the search and smoothing. It reuses cadcheck's exposure rule, j
 
 ## Limits and follow-ups
 
-- Cables are routed one at a time and don't see each other; bundles can overlap (cadcheck ignores cable pairs).
+- Cables are routed one at a time and don't see each other. Two routes laid in one tube show up in cadcheck's
+  `cables` shared-run warn, not in the router.
 - Tight ducts need `cell=1`, about 8x the cells. Exposure sampling is the slowest stage (0.4-4.3 s per leg).
 - Turn cost uses the parent cell's direction, which is approximate. Slack treats the pieces as rigid with a straight
   bridge at the via: no twist and no bend.
