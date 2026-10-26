@@ -52,7 +52,8 @@ Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X
 | `R_ID, R_FLIP, R_PX_DOWN, R_NX_DOWN, R_PY_DOWN, R_NY_DOWN` | common `print_rot` values |
 | `fastener(name, at, into, length, spec="M3_cap", joint=None, host=None, step=None)` | `spec`: `M3_cap`, `M3_pan`, `M3_csk`, `M3_selftap_pan`, `M3_hex`, `M2_pan`, `M2.5_cap`, `M2.5_pan`; use stocked lengths (cadcheck warns otherwise) |
 | `nut(name, at, into, joint=None, af=None, h=None, step=None)` | hex nut, bearing face at `at`; cadcheck checks the bolt on its axis reaches through it |
-| `cable(name, pts, r, color, joint=None, lead_len=None)` | stores `path_len` and both ends; cadcheck compares it with `lead_len`, and flags ends that meet another cable with no connector (declare `cable_chains`). Get `pts` from `route` below rather than typing them |
+| `cable(name, pts, r, color, joint=None, lead_len=None)` | stores `path_len` and both ends; cadcheck compares it with `lead_len`, and flags ends that meet another cable with no connector (declare `cable_chains`) |
+| `route.cable(name, start, end, r, color, via=[...])` | routes a cable around every solid and moving part, then `cable()`: [route.md](route.md) |
 | `write_manifest(path)` | parts, joints, fasteners, cables, features, params |
 
 ### A screw, its hole and its nut (one `at`, one `into`)
@@ -68,19 +69,6 @@ A.nut("FST_cover_nut_0", (40, 0, 30 - 10), into, joint="PIV_tilt")    # optional
 clamped part. `sink` puts `at` that far below the outer face, and the counterbore is cut back out from it. `fastener`
 specs: `M3_cap`, `M3_pan`, `M3_csk`, `M3_selftap_pan`, `M3_hex`, `M2_pan`, `M2.5_cap`, `M2.5_pan`. `screw_hole` cuts M3 sizes
 only; for M2.5, cut `G.cyl` holes with `RULES`-style clearances (2.7 clear, 2.1 pilot).
-
-## route: cable routing
-
-`from cadlib import route as RT`. It routes around every solid in Printed, Purchased and Fasteners at the home pose. Solids on another body are swept over the joints in between.
-
-| Call | Notes |
-|---|---|
-| `RT.cable(name, start, end, r, color, via=[], joint=None, lead_len=None, **opt)` | route, then `asm.cable`. Returns `(objects, result)`: one object per body (`name`, `name_1`, ...) |
-| `RT.route(start, end, r, via=[], joint=None, **opt)` | result dict: `pts` (for `asm.cable`), `pieces`, `length_mm`, `min_clearance_mm`, `stubs`, `bend_r_min`, `bend_r_floor`, `sharp_corners`, `corners`, `exposed_mm`, `slack`, `legs`, `time_s` |
-| `via` | `(x, y, z)`, or `{"at": p, "dir": d, "len": L}` for a straight run (a bore), plus `"joint": "PIV_x"` when the cable changes body there. `slack` then gives the path length at each joint limit. |
-| `opt` | `clearance=1.0`, `cell=2.0`, `margin=20`, `bend_r=5*r`, `min_bend_od=0.75` (no arc under this x OD: cadcheck's `cable_min_bend_od`), `w_open=0.5`, `w_exposed=8`, `w_turn=3`, `prefer=[(lo, hi)]` (groove boxes), `avoid=[(lo, hi)]` |
-
-An endpoint inside a part (a connector) leaves through a short straight `stub`, and the stub's clearance is reported. An end within 3 mm of a purchased part keeps one OD straight; a corner that can't fit an arc of `bend_r_floor` stays sharp, where cadcheck's kink test judges it. A route split by a `"joint"` via needs one `cable_chains` row for its pieces. If a route fails, use `cell=1` and a smaller `clearance` for tight ducts, or add a via. `cad q model.blend route CAB_x[,CAB_y] [--via ...] [--save out.blend]` re-routes existing cables between their own endpoints, for reviewers.
 
 ## cad q (one-shot measurements)
 

@@ -17,7 +17,8 @@ networkx, trimesh or manifold3d. All runs used nice 10 alongside the live CAD lo
 1. **Grid.** Cells of 2 mm cover the leg's endpoints plus a 20 mm margin. A cell is blocked when a surface of a
    Printed, Purchased or Fastener object is closer than r + clearance (BVH `find_nearest`), or when the cell is inside
    a solid. Inside means column ray parity per object, or the nearest face pointing away. Solids on another body are
-   swept over the joints in between, so the route clears them at every pose.
+   swept over the joints in between (slides in mm), sampled finely enough per joint and inflated by what the sampling
+   can miss, so the route clears them at every pose (see "After the review" below).
 2. **Search.** A* over 26 neighbours. Cost per mm:
    - 1 near a wall or in a declared `prefer` box;
    - 1.5 in open space;
@@ -164,6 +165,42 @@ and an off-centre post.
 
 The test also re-routes A3 `CAB_12v_mg` and asserts 0 mm³ overlap (hand route: 1.7). It takes about 25 s.
 
+## After the review (PR #3)
+
+The review's adversarial scenes (`scenes.py`) are now regressions in `tools/verify.d/route_review.sh` (16 checks
+with `cable_router.sh`, about 19 s). Each moving-part case is judged against a fine sweep (0.5° or 0.5 mm), not
+against the poses the router sampled.
+
+| Finding | Fix | Evidence |
+|---|---|---|
+| Slides ignored: 0..40 mm read as degrees | `cadlib/joints.py` holds cadcheck's joint specs and `set_pose` (prismatic branch included); cadcheck, cadq and the router all pose through it | scene `slide`: cadcheck fail 132.2 mm³ → 0 fails, cable 2.52 mm from the drawer at drw=20; regression ≥ 0.95 mm at every 0.5 mm |
+| Misses between samples (15° steps, 13 poses in total) | per joint, step = sweep_tol / (reach x π/360), so reach x step <= r + clearance, with reach bounded per query point through the pivots in between; at most 96 per joint; swept solids inflated by the largest move the sampling can miss; continuous joints swept as a spin envelope | `wedge`, `pantilt`: the end lies in the sweep and now raises "in the swept path of PIV_arm"; arm ±30°, pan x tilt and paddle regressions keep ≥ 0.95 mm at every fine pose |
+| Folds at joint crossings | `crossings` gives the turn at each limit; above 30° the router warns unless the via's `dir` runs along the axis | hinge across the axis: 0 / 110° at 0 / 110, warned; along the axis: 0 / 0, no warning |
+| No guard | `violations` (every 0.5 mm sample away from the ends under the asked clearance, straight runs included; a via skips only its stub), printed; `cad q route` exits 1 | `slot_2.0_viadir`: 22 samples, worst -0.5 mm; `slot_5.4_via`: 8 samples, worst 0.76 of 1.0, reported |
+
+A3 re-route timings, Blender at nice 10 on a loaded machine (load 8-11):
+
+| Command | Before | After | Routes |
+|---|---|---|---|
+| `route CAB_12v_ctrl,CAB_uart,CAB_12v_mg,CAB_bus_ctrl` | 23.6 s wall (21.2 s routing) | 25.0 s wall (22.7 s routing) | identical lengths and clearances |
+| `route CAB_encoder_tilt --cell 1 --clearance 0.3` (tilt leg, pan x tilt sweep) | 4.0 s | 11.8 s | 94.2 → 95.2 mm, 0.30 clearance, 0 violations |
+
+Per-pose matrices come from the parent chain (`joints.world_at`, checked against Blender to 4e-6 on A3), so a pose
+costs no depsgraph update. The first version, with a depsgraph update per pose, took 126 s for the four cables.
+cadcheck on A3 before and after the shared posing: the same 2 fails and 70 warns, line for line.
+
+**cadcheck's own sweep misses `wedge` (open, not changed here).**
+- Scene: an arm on PIV_arm (Z, -90..90, no `step`), 8..70 mm from the axis, 2 mm wide, z 0.5..40. A static cable
+  (r 1.5) runs radially at 7.5°, from r 45 to r 64, at z 13.
+- cadcheck samples max(2.5, 180/12) = 15°, plus 2.5° overtravel: 15 poses and 34 pair-pose tests. It reports
+  "PRT_arm to CAB_w 3.386 mm at arm=15" as a clearance row and no fail.
+- `cad q sweep PRT_arm CAB_w PIV_arm -5 20 0.5` shows the collision: 0.25 mm at 4.0°, overlap from 4.5° to 10.5°,
+  peaking at 100.5 mm³ at 7.5°.
+- Any part whose reach x step / 2 exceeds the clearance can pass between two samples. Here that is 70 x 15° / 2 =
+  9.2 mm against a 2 mm wide arm.
+- Fix candidates: derive the step from the reach, as the router does; or bisect between two samples whenever the
+  sampled clearance is under reach x step / 2.
+
 ## Why not the existing code
 
 | Option | Measured | Result |
@@ -185,7 +222,11 @@ module only adds the search and smoothing. It reuses cadcheck's exposure rule, j
   `cables` shared-run warn, not in the router.
 - Tight ducts need `cell=1`, about 8x the cells. Exposure sampling is the slowest stage (0.4-4.3 s per leg).
 - Turn cost uses the parent cell's direction, which is approximate. Slack treats the pieces as rigid with a straight
-  bridge at the via: no twist and no bend.
+  bridge at the via: no twist and no bend. The fold at the via is in `crossings`, not in slack.
+- A forced straight run (`"dir"`) is checked, but the fillets at its ends may still eat into it: the synthetic bore
+  run leaves the via 4.8° off the axis, which shows as a 7° turn at ±90 in `crossings`.
+- Swept moving parts are inflated by up to `sweep_tol` (more where `max_joint_poses` or `max_group_poses` caps the
+  sampling), so a route next to a moving part keeps more room than it strictly needs.
 - Endpoints inside parts stay as stub overlaps. A `connectors` declaration (an allow scoped to the endpoint) would
   silence these warns honestly.
 - Not yet re-routed:

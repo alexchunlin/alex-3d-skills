@@ -9,10 +9,10 @@ description: Parametric, 3D-printable assemblies in headless Blender with cadlib
 
 | Tool | Does |
 |---|---|
-| `cadlib/` | geometry + Manifold booleans (`geom`), print features (`features`), assembly conventions (`asm`), cable routing (`route`), STL export (`export`), renders (`render`) |
+| `cadlib/` | geometry + Manifold booleans (`geom`), print features (`features`), assembly conventions (`asm`), STL export (`export`), renders (`render`) |
 | `cad build build.py -- args` | run a build script headless. A script that raises exits non-zero and prints `cad: BUILD FAILED`; `cad check` warns when sources are newer than the blend |
 | `cad check model.blend checks.json` | every check below, JSON evidence plus a 40-line summary, about 2-40 s |
-| `cad q model.blend <cmd>` | one measurement: `dist`, `sweep`, `ray`, `inside`, `list`, `section`, `render`, `printcheck`; `route` re-routes existing cables. `cad q` alone prints the commands |
+| `cad q model.blend <cmd>` | one measurement: `dist`, `sweep`, `ray`, `inside`, `list`, `section`, `render`. `cad q` alone prints the commands |
 | `cad py -c "import params as P; print(P.X)"` | Python with bpy and cadlib, run from `blender/`: evaluate params or geometry helpers without stubbing bpy |
 | `cad rows cadcheck.json [REGEX]` | one line per check row (or `manifest.json` part), no Blender: grep the report instead of writing a `json.load` snippet. v2 A3's agents wrote them in 67 bash calls, and 6 died on a guessed key |
 | `cad bom BOM.md manifest.json` | the BOM's fastener table against the model: size, length, head, count, stock lengths |
@@ -47,7 +47,8 @@ Blender starts in 0.7 s, so run these as often as you like; Blender time was 2.3
    - **A step that needs a joint moved after its servo is in says how.** Mark the step that brings power `"powered": true`; the `assembly` check warns on a step `pose`, or a screw reachable only at a joint limit, on a servo-held joint before that. v2 A7's groove-cap step said "tilt the pod to 45" six steps after the tilt servo and before the battery: back-driving an unpowered servo, the attempt's one major (V2A7-F1). Prefer a screw reachable at home; otherwise take the drive out first and write that in the step's `pose_how`.
    - **A removal row goes until the part is clear of the machine,** not 40 mm: v2 A7's cap row lifted +Z 40 and passed, but +Z hits the nip cover at 54 and the cap really leaves forward-up (V2R7 A7-03). The `insertion` check tests each part to infinity; a `slide_out` row should too.
    - **Model each lead as its own route, side by side in a shared channel, with one OD straight out of every plug or splice and corners rounded (at least 0.75 x OD on the centreline).** cadcheck warns on kinks and on two routes in one tube; v2 A7 had both at the bus splice (V2A7-F2).
-   - Route cables with `route.cable(name, start, end, r, via=[...])` instead of typing waypoints. Give a via for each bore or slot a cable must use, and add `"joint"` where it crosses onto a moving body (you get the slack). Hand-typed routes went through solids in every v1 attempt (A1-F12, A2-F8, A3-F7). Read `stubs` and `bend_r_min` in the result. A via with `"joint"` splits the route into `name`, `name_1`, ...: give them one `cable_chains` row with the lead, and put that via on the joint axis.
+   - Route cables with `cadlib.route` (`reference/route.md`), not typed waypoints; give each bore or slot a via with `"dir"`.
+   - Cross a joint along its axis (via `"dir"` = the axis) or model a service loop: across a hinge axis the cable folds by the hinge angle.
    - Turn "reachable through the slot" or "visible through the window" into a `sightlines` row, and "stops at 52" into a `slide_out` row with `"expect": "blocked"`. A `cad q ray` line proves it once; a row re-proves it on every run (V2A2-T4).
    - Each **hard stop** gets a `distances` row at the joint limit with `max` about 0.1, naming the two parts that touch. In v2 A2 the leaf-lift limit said "the stud bottoms on the cover", but the stud was 2.36 mm clear there (V2A2-F1).
    - A `fits` rule with `contact: true` covering a thrust or stop face **and** a journal needs `contact_normal`. Otherwise the journal is never measured (V2A1-V4).
