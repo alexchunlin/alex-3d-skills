@@ -1,0 +1,197 @@
+{
+ "_doc": "Fixture labels for tools/bench/test_replay.py (see tools/bench/labels.json for the schema).",
+ "labels": [
+  {
+   "attempt": "fx",
+   "id": "TP",
+   "severity": "blocker",
+   "tool_catchable": true,
+   "summary": "a known true positive: fails",
+   "locators": [
+    {
+     "check": "interference",
+     "objects": [
+      "PRT_a",
+      "FST_b"
+     ],
+     "kind": "collide"
+    }
+   ]
+  },
+  {
+   "attempt": "fx",
+   "id": "PREFIX",
+   "severity": "major",
+   "tool_catchable": true,
+   "summary": "the same words under another check must not credit it: the line is 'interference: PRT_c to PRT_d only ...'",
+   "locators": [
+    {
+     "check": "clearance",
+     "objects": [
+      "PRT_c",
+      "PRT_d"
+     ],
+     "kind": "only [\\d.]+ mm across a joint"
+    }
+   ]
+  },
+  {
+   "attempt": "fx",
+   "id": "ACC",
+   "severity": "minor",
+   "tool_catchable": true,
+   "summary": "said by the tool, dismissed by the config",
+   "locators": [
+    {
+     "check": "fasteners",
+     "objects": [
+      "FST_e"
+     ],
+     "kind": "head stands [\\d.]+ mm off the part"
+    }
+   ]
+  },
+  {
+   "attempt": "fx",
+   "id": "PART",
+   "severity": "major",
+   "tool_catchable": true,
+   "summary": "a coverage warn is a partial catch",
+   "locators": [
+    {
+     "check": "drop",
+     "objects": [
+      "PRT_hood",
+      "PIV_lift"
+     ],
+     "kind": "holds PIV_lift at home",
+     "partial": true
+    }
+   ]
+  },
+  {
+   "attempt": "fx",
+   "id": "ROWS",
+   "severity": "minor",
+   "tool_catchable": true,
+   "credit_scope": "rows",
+   "summary": "the designer's row was written from the review: rows scope only",
+   "locators": [
+    {
+     "check": "stacks",
+     "objects": [
+      "stack one"
+     ],
+     "kind": "worst case [\\d.]+ mm > [\\d.]+"
+    }
+   ]
+  },
+  {
+   "attempt": "fx",
+   "id": "ERR",
+   "severity": "minor",
+   "tool_catchable": true,
+   "summary": "its check ran in a run that crashed",
+   "locators": [
+    {
+     "check": "cables",
+     "objects": [
+      "CAB_x"
+     ],
+     "kind": "kinks: "
+    }
+   ]
+  },
+  {
+   "attempt": "fx",
+   "id": "MISS",
+   "severity": "major",
+   "tool_catchable": false,
+   "summary": "nothing names it",
+   "locators": null
+  },
+  {
+   "attempt": "fx",
+   "id": "PROC",
+   "severity": "minor",
+   "tool_catchable": false,
+   "process": true,
+   "summary": "a process item",
+   "locators": null
+  },
+  {
+   "attempt": "fx",
+   "id": "LID",
+   "severity": "minor",
+   "tool_catchable": true,
+   "summary": "the reviewer's row fails",
+   "locators": [
+    {
+     "check": "slide",
+     "objects": [
+      "PRT_lid"
+     ],
+     "kind": "slide-out blocked by"
+    }
+   ]
+  },
+  {
+   "attempt": "fx",
+   "id": "BOMX",
+   "severity": "minor",
+   "tool_catchable": true,
+   "summary": "a non-stock length in the BOM",
+   "locators": [
+    {
+     "check": "bom",
+     "objects": [
+      "M3 x 9"
+     ],
+     "kind": "is not a stock length"
+    }
+   ]
+  }
+ ],
+ "printability": [
+  {
+   "id": "PF-p",
+   "attempts": [
+    "fx"
+   ],
+   "severity": "major",
+   "tool_catchable": true,
+   "summary": "tab needs support",
+   "locators": [
+    {
+     "check": "printcheck",
+     "objects": [
+      "part_p"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z 1[0-4]\\.\\d "
+    }
+   ],
+   "confirmed_by": "print 2026-10-26",
+   "print_evidence": [
+    {
+     "date": "2026-10-26",
+     "by": "fixture",
+     "printed": "part_p, supports: no",
+     "result": "fail",
+     "observed": "tab drooped"
+    }
+   ]
+  }
+ ],
+ "known_true_positives": [
+  {
+   "attempt": "fx",
+   "check": "slide",
+   "objects": [
+    "PRT_y"
+   ],
+   "kind": "planted: gate stop",
+   "why": "a planted row"
+  }
+ ]
+}

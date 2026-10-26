@@ -604,20 +604,23 @@ def compare(results: Path, base: str, new: str, out=sys.stdout) -> int:
     sa, sb = {r.get("labels_file_sha") for r in A.values()}, {r.get("labels_file_sha") for r in B.values()}
     if sa != sb or len(sa) != 1:
         why.append("labels differ (%s vs %s): rescore one run with --from-run" % (sorted(map(str, sa)), sorted(map(str, sb))))
+    common = [a for a in A if a in B and (not a.startswith("ALL") or A[a].get("attempts") == B[a].get("attempts"))]
+    if not [a for a in common if not a.startswith("ALL")]:
+        why.append("no attempt in common")
     for nm, R in ((base, A), (new, B)):
-        e = {a: r["errors"] for a, r in R.items() if not a.startswith("ALL") and r["errors"]}
+        e = {a: R[a]["errors"] for a in common if not a.startswith("ALL") and R[a]["errors"]}
         if e:
             why.append("%s has run errors: %s" % (nm, e))
-    if {a: r.get("runs_subset") for a, r in A.items()} != {a: r.get("runs_subset") for a, r in B.items() if a in A}:
+    if any(A[a].get("runs_subset") != B[a].get("runs_subset") for a in common):
         why.append("run subsets differ")
-    if set(A) != set(B):
-        why.append("attempt sets differ: %s vs %s" % (sorted(A), sorted(B)))
     if why:
         print("REFUSED: " + "; ".join(why), file=out)
         return 2
     worse = []
     print("| attempt | " + " | ".join(k for k, _ in GATE) + " |\n|---|" + "---|" * len(GATE), file=out)
-    for a in A:
+    if set(A) != set(B):
+        print("(attempts in common only: %s)\n" % ", ".join(common), file=out)
+    for a in common:
         cells = []
         for k, sign in GATE:
             x, y = A[a].get(k), B[a].get(k)
@@ -625,7 +628,7 @@ def compare(results: Path, base: str, new: str, out=sys.stdout) -> int:
                 cells.append("-")
                 continue
             cells.append("%s -> %s" % (x, y) if x != y else str(y))
-            if (y - x) * sign < 0 and a.startswith("ALL"):
+            if (y - x) * sign < 0:
                 worse.append("%s %s %s -> %s" % (a, k, x, y))
         print("| %s | %s |" % (a, " | ".join(cells)), file=out)
     print("\nworse: " + ("; ".join(worse) if worse else "nothing (recall not down, false fails and noise not up)"), file=out)

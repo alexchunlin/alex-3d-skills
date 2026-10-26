@@ -1,0 +1,11 @@
+{
+ "_doc": "Locators the lint must reject, one problem each.",
+ "labels": [
+  {"attempt": "fx", "id": "BAR", "severity": "minor", "locators": [{"check": "payload", "objects": ["PRT_disc"], "kind": "pair|edge"}]},
+  {"attempt": "fx", "id": "STAR", "severity": "minor", "locators": [{"check": "*", "objects": ["PRT_disc"], "kind": "visible"}]},
+  {"attempt": "fx", "id": "NOOBJ", "severity": "minor", "locators": [{"check": "distances", "objects": [], "kind": "along ray swept"}]},
+  {"attempt": "fx", "id": "PIN", "severity": "minor", "locators": [{"check": "drop", "objects": ["min-gap stop"], "kind": "slide of only 32\\.\\d"}]}
+ ],
+ "printability": [],
+ "known_true_positives": []
+}
