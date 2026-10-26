@@ -73,7 +73,10 @@ DEFAULTS = {
     "vol_tol": 0.5,
     "moving_min_clearance": 0.5,
     "moving_warn_clearance": 1.0,
-    "fasteners": {"driver_r": 3.0, "hand_r": 14.0, "max_reach": 60.0, "max_reach_ext": 150.0, "min_engagement": 4.0,
+    # thread engagement, in shank diameters: 2 d self-tapped or PLA-tapped into a printed part, 1.5 d into a tapped
+    # purchased (metal) part. A project "min_engagement" (mm) overrides both, as before.
+    "fasteners": {"driver_r": 3.0, "hand_r": 14.0, "max_reach": 60.0, "max_reach_ext": 150.0,
+                  "min_engagement_d": 2.0, "tapped_engagement_d": 1.5,
                   # 2.5 mm hex key for M3 socket heads (ISO 2936 short leg ~20, long ~58): A2-F1
                   "lkey_short": 18.0, "lkey_insert": 2.5, "lkey_long": 56.0, "lkey_r": 1.25, "lkey_swing_deg": 60.0,
                   "max_standoff": 2.0, "max_protrusion": 3.0, "captive": {},
@@ -1328,8 +1331,9 @@ def check_fasteners():
                             n, r["engagement_mm"], nut["name"], nut["len_mm"]), object=n)
         elif not r["thread_host"]:
             finding("fasteners", "warn", "%s: no material grips the thread (floating screw, or every hole is clearance)" % n, object=n)
-        elif r["engagement_mm"] < fc.get("min_engagement", 4.0):
-            finding("fasteners", "warn", "%s: only %.1f mm of thread in %s" % (n, r["engagement_mm"], r["thread_host"]), object=n)
+        elif r["engagement_mm"] < r["engagement_need_mm"] - 1e-6:
+            finding("fasteners", "warn", "%s: only %.1f mm of thread in %s (needs %.1f: %s)" % (
+                n, r["engagement_mm"], r["thread_host"], r["engagement_need_mm"], r["engagement_rule"]), object=n)
         for b, mm in r["into_purchased"].items():
             finding("fasteners", "fail", "%s runs %.1f mm into purchased part %s, which is not what it threads into%s" % (
                 n, mm, b, " (it has a nut)" if nut else ""), object=n, purchased=b)
@@ -1386,9 +1390,10 @@ def survey_screw(o, head, tip, d, hr, sr, trees, nut, full_tree, fc):
             if sum(1 for r in ring if inside(t, c + r, bb)) >= 4:
                 pen[n] = pen.get(n, 0.0) + 0.5
         s_ += 0.5
-    # thread host: walk back from the tip
-    eng, host, s_ = 0.0, None, 0.5
-    while s_ < L - 0.5:
+    # thread host: walk back from the tip, one sample at the middle of each 0.5 mm step (the walk used to start
+    # 0.5 mm in, so it read 0.5 mm short and a joint at exactly 2 d warned)
+    eng, host, s_ = 0.0, None, 0.25
+    while s_ < L:
         c = tip - d * s_
         hits = {}
         for n, (t, bb) in trees.items():
@@ -1404,6 +1409,12 @@ def survey_screw(o, head, tip, d, hr, sr, trees, nut, full_tree, fc):
                 break
         s_ += 0.5
     rec = {}
+    if "min_engagement" in fc:      # project override in mm (old configs)
+        rec["engagement_need_mm"], rec["engagement_rule"] = float(fc["min_engagement"]), "fasteners.min_engagement"
+    else:
+        dia = float(o.get("fst_d", 0) or 0) or 2 * sr
+        k = "tapped_engagement_d" if host and KIND.get(host) == "BUY" else "min_engagement_d"
+        rec["engagement_need_mm"], rec["engagement_rule"] = round(fc[k] * dia, 2), "%g d, fasteners.%s" % (fc[k], k)
     if nut:
         nn, t0, t1 = nut
         rec["nut"] = {"name": nn, "from_mm": round(t0, 2), "to_mm": round(t1, 2), "len_mm": round(t1 - t0, 2)}

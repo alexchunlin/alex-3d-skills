@@ -9,6 +9,7 @@ CR_S = 4.0                # inner (cavity) corner radius
 BASE = 80.0
 BASE_H = 30.0
 WALL = 2.4
+SCREW = "M3"             # fastener size for features.fastener_joint (M2, M2.5, M3, M4, M5)
 # --- moving stage
 STAGE_R = 30.0
 STAGE_T = 5.0

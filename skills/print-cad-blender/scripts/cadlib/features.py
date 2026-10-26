@@ -9,10 +9,15 @@ shows up as a mismatch instead of a silent clash. Features return objects to pas
 `cut` lists go in sub=, `add` lists in add=.
 
 Numbers are from the design brief (pilot 2.5, clearance 3.4, nut 5.7 AF, wall >= 1.6) plus common
-PLA practice; change RULES per printer if a test print disagrees.
+PLA practice; change RULES per printer if a test print disagrees. SIZES holds M2 to M5.
+
+fastener_joint() is the one call per screw: it measures the parts along the axis, picks the stock length,
+cuts every part and places the screw and its nut or insert. It replaces the screw() wrapper the v2 designer
+wrote three times (mm-launch-hw/v2/blender/parts/base.py:64, launcher.py:43, pan_stage.py:19).
 """
-import math
+import ast, json, math, os, sys
 from mathutils import Vector, Matrix
+from mathutils.bvhtree import BVHTree
 from . import geom
 
 RULES = {
@@ -28,7 +33,6 @@ RULES = {
     "nut_trap_h_extra": 0.3,
     "m3_insert_hole_d": 4.0, "m3_insert_len": 5.7,   # typical M3 x 5.7 brass heat-set insert, 4.0-4.2 hole
     "counterbore_d": 6.5,           # R1 fix for the feeder-plate screw heads
-    "min_engagement": 6.0,          # self-tap thread length worth having in PLA
     # fits (diametral clearance unless noted)
     "fit_press": 0.10, "fit_snug": 0.15, "fit_slide": 0.25, "fit_running": 0.30, "fit_loose": 0.40,
     "fit_journal_radial": 0.20,
@@ -38,6 +42,54 @@ RULES = {
     "pcb_pocket_clear": 0.4,        # brief: perimeter lip +0.4
     "horn_recess_clear": 0.2,       # brief: recess = disc + 0.2
 }
+
+# Per-size fastener table for fastener_joint() and the size= argument of screw_hole / nut_trap (mm).
+# Clearance: ISO 273 medium (M2 2.4, M2.5 2.9, M3 3.4, M4 4.5, M5 5.5). Self-tap pilot ~0.83-0.85 d, above the thread's
+# minor diameter (M2.5: 2.1 vs 1.95). PLA-tap (a machine screw cutting its own thread) ~0.93 d. Heads: ISO 4762 (cap),
+# ISO 7045 (pan), ISO 7046 actual dk (csk); nuts ISO 4032; heat-set inserts are the common CNC Kitchen / Ruthex sizes.
+# The M2, M2.5, M4 and M5 holes are table values: confirm them with a test-print coupon before trusting a fit.
+# Not here, read from cadcheck (project checks.json first, then cadcheck DEFAULTS; see check_value): stock lengths,
+# max_protrusion, and thread engagement (2 d into a printed part, 1.5 d into a tapped purchased one).
+# The M3 row is overlaid with the m3_* entries of RULES at lookup (size_rules), so RULES stays the place to tune M3.
+SIZES = {
+    "M2": dict(d=2.0, pitch=0.4, clear_d=2.4, pilot_d=1.7, tap_d=1.8, cap=(3.8, 2.0), pan=(4.0, 1.6), csk=(3.8, 1.2),
+               nut_af=4.0, nut_h=1.6, insert_d=3.2, insert_len=3.0),
+    "M2.5": dict(d=2.5, pitch=0.45, clear_d=2.9, pilot_d=2.1, tap_d=2.3, cap=(4.5, 2.5), pan=(5.0, 2.1), csk=(4.7, 1.5),
+                 nut_af=5.0, nut_h=2.0, insert_d=3.6, insert_len=4.0),
+    # M3 holes, nut and insert: RULES m3_*
+    "M3": dict(d=3.0, pitch=0.5, cap=(5.5, 3.0), pan=(6.0, 2.4), csk=(6.0, 1.7)),
+    "M4": dict(d=4.0, pitch=0.7, clear_d=4.5, pilot_d=3.3, tap_d=3.7, cap=(7.0, 4.0), pan=(8.0, 3.1), csk=(8.4, 2.7),
+               nut_af=7.0, nut_h=3.2, insert_d=5.6, insert_len=8.1),
+    "M5": dict(d=5.0, pitch=0.8, clear_d=5.5, pilot_d=4.2, tap_d=4.6, cap=(8.5, 5.0), pan=(9.5, 3.7), csk=(9.3, 2.7),
+               nut_af=8.0, nut_h=4.7, insert_d=6.4, insert_len=9.5),
+}
+
+
+def size_rules(size="M3"):
+    """One row of SIZES with the derived numbers: counterbore_d (cap head + 1.0, as RULES counterbore_d for M3),
+    trap_af (nut + 0.2, the brief's 5.7 for M3), and from cadcheck's rules (check_value): lengths (stock_lengths for d),
+    min_engagement (min_engagement_d x d) and tapped_engagement (tapped_engagement_d x d), both replaced by a project's
+    fasteners.min_engagement in mm when its checks.json sets one (cadcheck does the same)."""
+    if size not in SIZES:
+        raise ValueError("size %r: known sizes %s" % (size, sorted(SIZES)))
+    s = dict(SIZES[size])
+    if size == "M3":
+        R = RULES
+        s.update(clear_d=R["m3_clear_d"], pilot_d=R["m3_selftap_pilot_d"], tap_d=R["m3_tap_machine_d"],
+                 nut_af=R["m3_nut_af"], nut_h=R["m3_nut_h"], trap_af=R["nut_trap_af"], insert_d=R["m3_insert_hole_d"],
+                 insert_len=R["m3_insert_len"], counterbore_d=R["counterbore_d"],
+                 cap=(R["m3_head_d"], R["m3_head_h"]), pan=(R["m3_pan_head_d"], R["m3_pan_head_h"]),
+                 csk=(R["m3_csk_head_d"], s["csk"][1]))
+    s.setdefault("counterbore_d", s["cap"][0] + 1.0)
+    s.setdefault("trap_af", s["nut_af"] + 0.2)
+    key = "%g" % s["d"]
+    stock = check_value("fasteners", "stock_lengths") or {}
+    s["lengths"] = list(stock.get(key) or check_default("fasteners", "stock_lengths")[key])
+    mm = check_value("fasteners", "min_engagement")
+    s["min_engagement"] = mm if mm is not None else round(check_value("fasteners", "min_engagement_d") * s["d"], 2)
+    s["tapped_engagement"] = mm if mm is not None else round(check_value("fasteners", "tapped_engagement_d") * s["d"], 2)
+    return s
+
 
 LOG = []   # every placed feature, written to the manifest by asm.write_manifest()
 
@@ -70,52 +122,60 @@ def _hole(name, d, z0, z1, print_up=None, into=None):
     return geom.cyl(name, (0, 0), d / 2, z0, z1, 'Z')
 
 
-def screw_hole(at, into, length, kind="selftap", head="cap", sink=0.0, clamp=0.0, print_up=None, name="hole"):
-    """Cutters for an M3 screw whose head bears at `at` and whose shank runs `length` along `into`.
+def screw_hole(at, into, length, kind="selftap", head="cap", sink=0.0, clamp=0.0, print_up=None, name="hole", size="M3",
+               tip=1.0):
+    """Cutters for a `size` screw (default M3) whose head bears at `at` and whose shank runs `length` along `into`.
 
-    kind:  "selftap"  pilot Ø2.5 all the way (the screw cuts its thread in this part)
-           "clearance" Ø3.4 all the way (the part being clamped)
-           "clamp"    Ø3.4 for the first `clamp` mm (the clamped part), Ø2.5 pilot beyond (the host)
-           "insert"   Ø3.4 for `clamp` mm, then a heat-set insert pocket
+    kind:  "selftap"  pilot (M3 Ø2.5) all the way (the screw cuts its thread in this part)
+           "clearance" clearance (M3 Ø3.4) all the way (the part being clamped)
+           "clamp"    clearance for the first `clamp` mm (the clamped part), pilot beyond (the host)
+           "tap"      clearance for `clamp` mm, then the PLA-tap hole (a machine screw cutting its own thread)
+           "insert"   clearance for `clamp` mm, then a heat-set insert pocket, then clearance to the tip
     head:  "cap" | "pan" | "csk" | "none".
     sink:  the bearing face `at` lies this far below the part's outer surface: a counterbore
            (cap/pan) is cut from `at` back out by sink + 0.6 mm. For "csk", `at` is the outer
            surface and the countersink cone is cut there.
     print_up: world direction of print +Z for this part; holes with a horizontal axis become
            teardrops (no support inside the hole).
+    tip:   how far the pilot / tap / insert-relief hole runs past the screw's tip.
     """
-    R = RULES
+    S = size_rules(size)
     cuts = []
     over = 0.6  # extend cutters past the faces so booleans never leave skins
     if kind == "selftap":
-        cuts.append(_hole(name + "_pilot", R["m3_selftap_pilot_d"], -over, length + 1.0, print_up, into))
+        cuts.append(_hole(name + "_pilot", S["pilot_d"], -over, length + tip, print_up, into))
     elif kind == "clearance":
-        cuts.append(_hole(name + "_clr", R["m3_clear_d"], -over, length + over, print_up, into))
-    elif kind == "clamp":
-        cuts.append(_hole(name + "_clr", R["m3_clear_d"], -over, clamp + 0.01, print_up, into))
-        cuts.append(_hole(name + "_pilot", R["m3_selftap_pilot_d"], clamp - 0.01, length + 1.0, print_up, into))
+        cuts.append(_hole(name + "_clr", S["clear_d"], -over, length + over, print_up, into))
+    elif kind in ("clamp", "tap"):
+        cuts.append(_hole(name + "_clr", S["clear_d"], -over, clamp + 0.01, print_up, into))
+        d = S["pilot_d"] if kind == "clamp" else S["tap_d"]
+        cuts.append(_hole(name + "_pilot", d, clamp - 0.01, length + tip, print_up, into))
     elif kind == "insert":
-        cuts.append(_hole(name + "_clr", R["m3_clear_d"], -over, clamp + 0.01, print_up, into))
-        cuts.append(_hole(name + "_ins", R["m3_insert_hole_d"], clamp - 0.01, clamp + R["m3_insert_len"] + 0.5, print_up, into))
+        cuts.append(_hole(name + "_clr", S["clear_d"], -over, clamp + 0.01, print_up, into))
+        z1 = clamp + S["insert_len"] + 0.5
+        cuts.append(_hole(name + "_ins", S["insert_d"], clamp - 0.01, z1, print_up, into))
+        if length + tip > z1:   # a screw longer than the insert needs room past it
+            cuts.append(_hole(name + "_tip", S["clear_d"], z1 - 0.01, length + tip, print_up, into))
     else:
         raise ValueError(kind)
     if sink > 0 and head in ("cap", "pan"):
-        d = R["counterbore_d"] if head == "cap" else R["m3_pan_head_d"] + 0.6
+        d = S["counterbore_d"] if head == "cap" else S["pan"][0] + 0.6
         cuts.append(geom.cyl(name + "_cb", (0, 0), d / 2, -sink - over, 0.01, 'Z'))
     elif head == "csk":
-        r = R["m3_csk_head_d"] / 2 + 0.2
-        cuts.append(geom.cone(name + "_csk", (0, 0), r + over, R["m3_clear_d"] / 2, -over, r + over - R["m3_clear_d"] / 2 - over, 'Z'))
+        r = S["csk"][0] / 2 + 0.2
+        cuts.append(geom.cone(name + "_csk", (0, 0), r + over, S["clear_d"] / 2, -over, r + over - S["clear_d"] / 2 - over, 'Z'))
     for c in cuts:
         _place(c, at, into)
-    _log("screw_hole", at, into, length=length, kind=kind, head=head, sink=sink, clamp=clamp)
+    _log("screw_hole", at, into, length=length, kind=kind, head=head, sink=sink, clamp=clamp, size=size)
     return cuts
 
 
-def nut_trap(at, into, depth=None, af=None, rot_deg=0.0, slot_dir=None, slot_len=0.0, name="nut"):
-    """Hex pocket for an M3 nut whose bearing face is at `at`, pocket going `into`.
+def nut_trap(at, into, depth=None, af=None, rot_deg=0.0, slot_dir=None, slot_len=0.0, name="nut", size="M3"):
+    """Hex pocket for a `size` nut (default M3) whose bearing face is at `at`, pocket going `into`.
     slot_dir (world vector, perpendicular to into) adds a side-entry slot for captive nuts."""
-    af = af or RULES["nut_trap_af"]
-    depth = depth or RULES["m3_nut_h"] + RULES["nut_trap_h_extra"]
+    S = size_rules(size)
+    af = af or S["trap_af"]
+    depth = depth or S["nut_h"] + RULES["nut_trap_h_extra"]
     pk = geom.prism(name + "_hex", geom.hexagon((0, 0), af, math.radians(rot_deg)), -0.01, depth, 'Z')
     cuts = [pk]
     if slot_dir is not None and slot_len > 0:
@@ -195,3 +255,412 @@ def bore(name, c, r_shaft, w0, w1, axis='X', fit="running"):
     axis's (u, v) plane). Declare the pair under "fits" in the check config with min_clearance."""
     rad = RULES["fit_journal_radial"] if fit == "running" else RULES["fit_" + fit] / 2
     return geom.cyl(name, c, r_shaft + rad, w0, w1, axis)
+
+
+# ------------------------------------------------------------------ fastened joints
+
+class FastenerError(ValueError):
+    """fastener_joint could not make a joint that meets the rules; the message says what to change."""
+
+
+TOL = 0.01   # mm: ray-measured stacks carry float noise; a 16.004 mm minimum still takes the 16 mm screw
+SEAT_TOL = 0.2   # mm of material above the bearing face that still seats a head (cadcheck probes 0.25 behind it)
+GAP_TOL = 0.3    # mm of air between clamped parts on the axis before it is called a gap
+
+_CHECK_DEFAULTS = {}
+_PROJECT = {"path": None, "set": False, "cache": {}}
+
+
+def check_default(section, key):
+    """A value from cadcheck.py DEFAULTS, read from its source (cadcheck runs on import), so the joint rules and the
+    check that judges them cannot drift apart."""
+    if not _CHECK_DEFAULTS:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cadcheck.py")) as f:
+            tree = ast.parse(f.read())
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "DEFAULTS":
+                _CHECK_DEFAULTS.update(ast.literal_eval(node.value))
+    return _CHECK_DEFAULTS[section].get(key)
+
+
+def use_checks(path):
+    """Read fastener rules from this checks.json (None: no project file). Without a call, the project file is
+    $CAD_CHECKS, else the checks.json beside the build script (`cad build blender/build_assembly.py` reads
+    blender/checks.json, the file `cad check` is given)."""
+    _PROJECT.update(path=path, set=True)
+
+
+def project_checks_path():
+    if _PROJECT["set"]:
+        return _PROJECT["path"]
+    if os.environ.get("CAD_CHECKS"):
+        return os.environ["CAD_CHECKS"]
+    if "--python" in sys.argv[:-1]:
+        p = os.path.join(os.path.dirname(os.path.abspath(sys.argv[sys.argv.index("--python") + 1])), "checks.json")
+        return p if os.path.isfile(p) else None
+    return None
+
+
+def check_value(section, key):
+    """cadcheck's value for section.key: the project checks.json's when it sets one (cadcheck merges a project section
+    over DEFAULTS key by key), else DEFAULTS. None when neither has it."""
+    p = project_checks_path()
+    if p:
+        if p not in _PROJECT["cache"]:
+            with open(p) as f:
+                _PROJECT["cache"][p] = json.load(f)
+        sec = _PROJECT["cache"][p].get(section)
+        if isinstance(sec, dict) and key in sec:
+            return sec[key]
+    return check_default(section, key)
+
+
+def _bvh(ob):
+    M = ob.matrix_world
+    vs = [M @ x.co for x in ob.data.vertices]
+    return BVHTree.FromPolygons(vs, [tuple(f.vertices) for f in ob.data.polygons]), vs
+
+
+def _spans(tree, p, w, reach):
+    """Material stretches [(t0, t1)] along the line through p along w, t in mm from p."""
+    o, hits, t = p - w * reach, [], 0.0
+    while t < 2 * reach:
+        loc, nrm, _, dist = tree.ray_cast(o + w * t, w, 2 * reach - t)
+        if loc is None:
+            break
+        th, sgn = t + dist - reach, (1 if nrm.dot(w) < 0 else -1)     # +1 entering material, -1 leaving
+        if not hits or abs(hits[-1][0] - th) > 1e-3 or hits[-1][1] != sgn:
+            hits.append((th, sgn))
+        t += dist + 1e-4
+    out, depth, t0 = [], 0, None
+    for th, sgn in hits:
+        depth = max(0, depth + sgn)
+        if sgn > 0 and depth == 1:
+            t0 = th
+        elif sgn < 0 and depth == 0 and t0 is not None:
+            out.append((t0, th))
+            t0 = None
+    return out
+
+
+def _ahead(spans, eps):
+    """The first stretch that ends ahead of `at` (it may start behind it: a buried head)."""
+    return next(((a, b) for a, b in spans if b > eps), None)
+
+
+def _median(xs):
+    xs = sorted(xs)
+    return xs[len(xs) // 2] if len(xs) % 2 else 0.5 * (xs[len(xs) // 2 - 1] + xs[len(xs) // 2])
+
+
+def _survey(at, into, parts, shank_r, head_r, n=8, eps=0.05):
+    """Per part: the first stretch ahead of `at` on the axis, and on n rays each on a ring at shank_r and at head_r.
+    The axis line is offset 0.01 mm and the rings start off the 0 deg direction, so no ray runs down a mesh edge."""
+    w = Vector(into).normalized()
+    F3 = _frame((0, 0, 0), w).to_3x3()
+    u, v = F3.col[0], F3.col[1]
+    p = Vector(at) + u * 0.0137 + v * 0.0091
+    ring = lambda r: [p + (u * math.cos(a) + v * math.sin(a)) * r
+                      for a in (2 * math.pi * (k + 0.37) / n for k in range(n))]
+    out = {}
+    for ob in parts:
+        tree, vs = _bvh(ob)
+        reach = max((x - p).length for x in vs) + head_r + 1.0
+        out[ob.name] = {"ob": ob, "axis": _ahead(_spans(tree, p, w, reach), eps),
+                        "shank": [_ahead(_spans(tree, q, w, reach), eps) for q in ring(shank_r)] if shank_r else [],
+                        "head": [_ahead(_spans(tree, q, w, reach), eps) for q in ring(head_r)] if head_r else []}
+    return out
+
+
+def _classify(sv):
+    """(t_in, t_out, kind) of one part from its survey: "solid" (material on the axis), "pilot" (a hole smaller than
+    the shank: material at 0.92 x shank radius), "clear" (a hole the shank passes: material only at the head ring),
+    or (None, None, None)."""
+    if sv["axis"]:
+        return sv["axis"][0], sv["axis"][1], "solid"
+    for ring, kind in (("shank", "pilot"), ("head", "clear")):
+        got = [x for x in sv[ring] if x]
+        if got and len(got) * 2 >= len(sv[ring]):
+            return _median([a for a, b in got]), _median([b for a, b in got]), kind
+    return None, None, None
+
+
+def axis_stack(at, into, parts, eps=0.05, shank_r=None, head_r=None, n=8):
+    """[(object, t_in, t_out, kind)]: each part's first stretch of material along the screw axis through `at` along
+    `into` that ends ahead of `at` (t in mm from `at`, negative behind it), sorted by t_in. kind is "solid" when the
+    axis itself is in material; with shank_r / head_r, a part already holed on the axis is found by rays on those
+    rings ("pilot": hole smaller than the shank, "clear": the shank passes). A part with no material ahead comes back
+    as (object, None, None, None) at the end."""
+    sv = _survey(at, into, parts, shank_r, head_r, n, eps)
+    rows = [(x["ob"],) + _classify(x) for x in sv.values()]
+    return sorted([r for r in rows if r[1] is not None], key=lambda r: r[1]) + [r for r in rows if r[1] is None]
+
+
+def _purchased(ob):
+    return ob.name.startswith("BUY_") or any(c.name == "Purchased" for c in ob.users_collection)
+
+
+def _r(v):
+    return [round(c, 2) for c in v]
+
+
+def _used_lengths(spec):
+    """{length: count} of screws of this spec already placed in this build (asm.PARTS), for length reuse."""
+    from . import asm
+    out = {}
+    for info in asm.PARTS.values():
+        if info.get("spec") == spec and info.get("length") is not None:
+            out[float(info["length"])] = out.get(float(info["length"]), 0) + 1
+    return out
+
+
+def fastener_joint(name, size, at, into, parts, style="selftap", head="cap", sink=0.0, length=None,
+                   min_engagement=None, depth=None, trap=True, nut_rot_deg=0.0, print_up=None,
+                   joint=None, host=None, step=None, strict=True, cuts=None, lengths=None,
+                   through_ok=False, gap_ok=False):
+    """One fastened joint: measure the stack, pick the length, cut every part, place the screw (and nut or insert).
+    Use it when a screw is the right join (a load path, service access, a metal part); snaps, pins and tabs are not.
+
+    at, into: as screw_hole / asm.fastener. `at` is the head's bearing face (for head="csk", the outer surface the
+              head sits flush with); `into` is the direction the shank travels.
+    size:     "M2", "M2.5", "M3", "M4" or "M5" (SIZES). Changing the size is this one argument.
+    parts:    the solids the screw passes, in any order. The stack is measured along the axis (and on rings at the
+              shank and head radius): every part but the last one met is clamped (clearance hole); the last one holds
+              the thread. A part already holed on the axis (a purchased board, a servo ear, a part cut earlier) is a
+              pre-drilled layer: counted in the grip and seating the head, not cut. Name the solids with their final
+              PRT_/BUY_ names: the cutters come back under those names.
+    style:    "selftap"  pilot in the last part (printed); thread >= min_engagement (2 d) into it
+              "nut"      through-bolt; nut in a hex trap at the far face of the last part (trap=False: the nut
+                         bears on that face). The bolt passes the nut by at least one pitch.
+              "insert"   heat-set insert pocket in the last part (printed); the screw runs through the whole insert
+              "tapped"   machine screw into a tapped purchased part (no cut in it; thread >= tapped_engagement, 1.5 d,
+                         and <= depth, the datasheet depth of its tapped hole). A printed last part gets the PLA-tap
+                         hole and the 2 d rule.
+    head:     "cap" | "pan" | "csk". sink > 0 counterbores the head (cap/pan): `at` is then up to sink below the
+              surface; on a sloped face that is a spot-face.
+    length:   None picks a stock length in the rule's window: one this build already uses for the same spec if one
+              fits (fewer screw types), else the shortest. Stock is `lengths=`, else the project checks.json's
+              fasteners.stock_lengths, else cadcheck's DEFAULTS. The tip stays within fasteners.max_protrusion of the
+              last material (the nut counts). A given length is checked against the same rule; strict=False keeps one
+              that breaks it (rule_ok False).
+    min_engagement: mm of thread, replacing the 2 d / 1.5 d rule (cadcheck's fasteners.min_engagement_d and
+              tapped_engagement_d, or the project's fasteners.min_engagement in mm).
+    through_ok: selftap / insert / PLA-tap holes are blind by default: the screw stops min_wall + 1 mm short of the
+              host's far face. True lets the hole break through it instead.
+    gap_ok:   True accepts air (> 0.3 mm) between clamped parts on the axis (a deliberate stand-off).
+    print_up: world print +Z, or {part name: print +Z}, for teardrop holes in parts printed on their side.
+    joint, host, step: as asm.fastener (host defaults to the last part's name).
+    cuts:     a dict to extend, so several joints accumulate and each part gets one csg.
+
+    Returns cuts: {part name: [cutters]}, for geom.csg(part, sub=cuts[part.name]); a part may get an empty list.
+    The record (stack, grip, length, engagement, rule) goes to the manifest under the screw's "fastener_joint".
+    Raises FastenerError when the joint cannot meet the rules: no part ahead of `at` (a reversed screw, FINDINGS
+    A1-F10), a head inside or off the first part or on a sloped seat, an air gap in the stack, a self-tap or insert
+    into a purchased part, too little thread (A3-F5), a blind hole too shallow for any stock length, a countersink
+    deeper than the plate allows, or a given length that stops short of its nut (A2-F3).
+    """
+    from . import asm      # asm imports features
+    S = size_rules(size)
+    if style not in ("selftap", "nut", "insert", "tapped"):
+        raise ValueError("style %r: selftap, nut, insert or tapped" % style)
+    if head not in ("cap", "pan", "csk"):
+        raise ValueError("head %r: cap, pan or csk" % head)
+    w, at = Vector(into).normalized(), Vector(at)
+    maxp = check_value("fasteners", "max_protrusion")
+    wall = RULES["min_wall"]
+    head_r = S[head][0] / 2
+    sv = _survey(at, w, parts, 0.92 * S["d"] / 2, 0.8 * head_r)
+    rows = [(x["ob"],) + _classify(x) for x in sv.values()]
+    st = sorted([r for r in rows if r[1] is not None], key=lambda r: r[1])
+    lost = [r[0].name for r in rows if r[1] is None]
+    if not st:
+        raise FastenerError("%s: none of %s has material ahead of at=%s along into=%s, so the parts are behind the "
+                            "head: flip `into` (it points from the head into the material)" % (
+                                name, [o.name for o in parts], _r(at), _r(w)))
+    if lost:
+        raise FastenerError("%s: %s not on the axis ahead of at=%s along into=%s, nor within the head (stack found: "
+                            "%s)" % (name, lost, _r(at), _r(w), [(o.name, round(a, 2), round(b, 2)) for o, a, b, k in st]))
+    stack = lambda: [(o.name, round(a, 2) + 0.0, round(b, 2) + 0.0) + (() if k == "solid" else (k,)) for o, a, b, k in st]
+    # head seat: on the axis and at 0.8 x head radius, as cadcheck's head-buried probe (0.25 mm behind the face)
+    first, (last, t_in, t_out, lkind) = st[0], st[-1]
+    spot = sink > 0 and head != "csk"
+    lo_seat = -sink - 0.5 if spot else -SEAT_TOL         # a counterbore clears back to sink + 0.6
+    if first[1] < lo_seat:
+        raise FastenerError("%s: the head would sit %.2f mm inside %s; `at` is the bearing face: move it, flip "
+                            "`into`, or pass sink=%.2f for a counterbore" % (
+                                name, (-sink if spot else 0.0) - first[1], first[0].name, -first[1]))
+    if first[1] > 0.3:
+        raise FastenerError("%s: the head stands %.2f mm off %s; `at` is the bearing face%s" % (
+            name, first[1], first[0].name, " (sink=%g puts it %g below the surface)" % (sink, sink) if sink else ""))
+    seat = []
+    for k in range(len(sv[first[0].name]["head"])):
+        es = [x["head"][k][0] for x in sv.values() if x["head"][k]]
+        seat.append(min(es) if es else None)
+    es = [e for e in seat if e is not None]
+    if es and min(es) < lo_seat:
+        rise, low = -min(es), max(es)
+        raise FastenerError(
+            "%s: the head seat is not flat: at 0.8 x head radius (%.2f mm) the material runs from %.2f mm above to "
+            "%.2f mm %s the bearing face (a sloped face, or `into` not normal to it), so cadcheck would fail 'head "
+            "buried'. Spot-face it: move `at` %.2f mm along `into` and pass sink=%.1f, or make the face normal to the "
+            "axis" % (name, 0.8 * head_r, rise, abs(low), "below" if low >= 0 else "above", max(0.0, low),
+                      math.ceil((max(0.0, low) - min(es)) * 10 + 2) / 10.0))
+    # gaps: the clamp pulls the stack together, so air on the axis bends a part or leaves the joint loose
+    for (a, _, a1, _k), (b, b0, _, _k2) in zip(st, st[1:]):
+        if b0 - a1 > GAP_TOL and not gap_ok:
+            raise FastenerError("%s: %.2f mm of air between %s and %s on this axis (%s): close the gap, or pass "
+                                "gap_ok=True for a deliberate stand-off" % (name, b0 - a1, a.name, b.name, stack()))
+    buy = _purchased(last)
+    # what the last part can hold
+    if buy and style in ("selftap", "insert"):
+        raise FastenerError("%s: style=%r into purchased part %s: a self-tap or heat-set insert needs a printed host. "
+                            "Use style='tapped' (machine screw into its tapped hole, depth=) or style='nut'" % (
+                                name, style, last.name))
+    if buy and style == "nut" and trap:
+        raise FastenerError("%s: a nut trap cannot be cut in purchased part %s; pass trap=False (nut on its far face)"
+                            % (name, last.name))
+    if lkind == "clear" and not (style == "nut" or (style == "tapped" and buy)):
+        raise FastenerError("%s: %s has a hole the %s shank passes on this axis (material only at the head ring): "
+                            "nothing for a %s thread to grip. Use style='nut', or a part without the hole" % (
+                                name, last.name, size, style))
+    for o, a, b, k in st[:-1]:
+        if k == "pilot" and _purchased(o):
+            raise FastenerError("%s: clamped part %s has a hole smaller than the %s shank on this axis: the screw would "
+                                "thread into it instead of clamping it" % (name, o.name, size))
+    if head == "csk" and first[3] == "solid":
+        cone, thick = S["csk"][0] / 2 + 0.2 - S["clear_d"] / 2, first[2] - first[1]
+        if cone > thick - wall + TOL:
+            raise FastenerError("%s: the %s countersink is %.2f mm deep but %s is %.2f mm thick here, leaving %.2f mm "
+                                "under it (min_wall %.1f): a knife edge. Use head='cap' or 'pan', or a plate >= %.2f" % (
+                                    name, size, cone, first[0].name, thick, thick - cone, wall, cone + wall))
+    rec = {"size": size, "style": style, "head": head, "stack": [list(x) for x in stack()]}
+    nf = nf_lo = nf_hi = None                       # nut bearing face, mm from `at`
+    blind = style in ("selftap", "insert") or (style == "tapped" and not buy)
+    cap_why = "the protrusion limit (tip <= %.1f mm past the last material)" % maxp
+    if style in ("selftap", "tapped"):
+        need = S["tapped_engagement"] if (style == "tapped" and buy) else S["min_engagement"]
+        need = need if min_engagement is None else min_engagement
+        if t_in + need > t_out + TOL:
+            raise FastenerError("%s: %s gives only %.1f mm of thread on this axis; %s %s needs %.1f. Add a boss, use "
+                                "style='nut' or 'insert', or pass min_engagement=" % (
+                                    name, last.name, t_out - t_in, size, style, need))
+        lo, hi = t_in + need, t_out + maxp
+        if style == "tapped" and depth:
+            hi, cap_why = min(hi, t_in + depth), "the tapped hole's depth (%g mm)" % depth
+        rule = "thread >= %.1f mm in %s" % (need, last.name)
+        lo_why = "%.1f mm of thread" % need
+    elif style == "insert":
+        if t_in + S["insert_len"] + 0.5 > t_out + TOL:
+            raise FastenerError("%s: %s is %.1f mm thick on this axis; a %s insert pocket needs %.1f" % (
+                name, last.name, t_out - t_in, size, S["insert_len"] + 0.5))
+        # cadcheck pairs the screw with the insert proxy (a nut), so a tip out of the part counts from the insert's end
+        lo, hi = t_in + S["insert_len"], max(t_out, min(t_out, t_in + S["insert_len"]) + maxp)
+        rule = "screw through the %.1f mm insert" % S["insert_len"]
+        lo_why = "through the insert"
+    else:
+        pocket = S["nut_h"] + RULES["nut_trap_h_extra"]
+        nf_hi, nf_lo = (t_out - pocket, t_in + wall) if trap else (t_out, t_out)
+        if nf_hi < nf_lo - TOL:
+            raise FastenerError("%s: %s is %.1f mm thick on this axis, too thin for a %s nut trap (needs %.1f); use "
+                                "trap=False (nut on its far face)" % (
+                                    name, last.name, t_out - t_in, size, pocket + wall))
+        nf = nf_hi
+        lo, hi = nf + S["nut_h"] + S["pitch"], nf + S["nut_h"] + maxp
+        rule = "bolt passes the nut by %.2f to %.1f mm" % (S["pitch"], maxp)
+        lo_why = "past the nut"
+    if blind and not through_ok and t_out - wall - 1.0 < hi:
+        hi, cap_why = t_out - wall - 1.0, "a blind hole (1 mm of pilot past the tip, then min_wall %.1f to the far face)" % wall
+    ok = True
+    stock = [float(x) for x in (lengths if lengths is not None else S["lengths"])]
+    spec = "%s_%s" % (size, head)
+    if length is None:
+        fit = [l for l in stock if lo - TOL <= l <= hi + TOL]
+        if not fit and style == "nut" and trap:
+            # no stock length with the nut at the far face: sink the trap deeper, as little as needed
+            deeper = [l for l in stock if nf_lo + S["nut_h"] + S["pitch"] - TOL <= l < lo - TOL]
+            if deeper:
+                fit = [max(deeper)]
+                nf = max(nf_lo, fit[0] - S["nut_h"] - min(2 * S["pitch"], maxp))
+                lo, hi = nf + S["nut_h"] + S["pitch"], nf + S["nut_h"] + maxp
+                rec["trap_deepened_mm"] = round(nf_hi - nf, 2)
+        if not fit:
+            if lo > hi + TOL:
+                fix = ("deepen it by %.1f mm, use style='nut', or pass through_ok=True to let the hole break through"
+                       % (lo - hi) if cap_why.startswith("a blind") else "change the stack")
+                raise FastenerError("%s: %s is too shallow on this axis: %s needs a screw >= %.2f mm, but %s allows "
+                                    "<= %.2f. %s" % (name, last.name, lo_why, lo, cap_why, hi, fix[0].upper() + fix[1:]))
+            raise FastenerError("%s: no stock %s length between %.2f and %.2f mm (%s; %s). Stock: %s. Change the "
+                                "stack, pass lengths=, or pass length= with strict=False" % (
+                                    name, size, lo, hi, rule, cap_why, [("%g" % x) for x in stock]))
+        used = _used_lengths(spec)
+        reuse = [l for l in fit if used.get(l)]
+        L = max(reuse, key=lambda l: (used[l], -l)) if reuse else min(fit)
+        rec["length_reused"] = bool(reuse)
+    else:
+        L = float(length)
+        if not lo - TOL <= L <= hi + TOL:
+            msg = "%s: length %g breaks the rule (%s; %s): needs %.2f to %.2f mm" % (name, L, rule, cap_why, lo, hi)
+            if nf is not None and L < nf:
+                msg += "; it stops %.2f mm short of its nut" % (nf - L)
+            if strict:
+                raise FastenerError(msg + "; leave length=None to pick one")
+            ok, rec["rule_note"] = False, msg
+    if nf is not None:
+        eng, prot = L - nf, L - nf - S["nut_h"]
+    elif style == "insert":
+        eng, prot = min(L - t_in, S["insert_len"]), max(0.0, L - t_out)
+    else:
+        eng, prot = min(L, t_out) - t_in, max(0.0, L - t_out)
+    rec.update(length=L, grip_mm=round(nf if nf is not None else t_in, 2), engagement_mm=round(eng, 2),
+               protrusion_mm=round(prot, 2), window_mm=[round(lo, 2), round(hi, 2)], rule=rule, rule_ok=ok,
+               blind=blind and not through_ok, holes={k: S[k] for k in ("clear_d", "pilot_d", "tap_d", "trap_af", "insert_d")})
+    # cutters per part; head cuts go to every part (a countersink deeper than the first part cuts the next). A clamped
+    # part whose hole the shank already passes (kind "clear") is not cut, nor is a tapped purchased part. A solid
+    # purchased placeholder that is clamped gets its clearance hole, as before (apply it to model the real hole).
+    cuts = {} if cuts is None else cuts
+    clamp = max(0.0, t_in)
+    tip = 1.0
+    if 0 < t_out - (L + tip) < wall:
+        # through_ok, or a given length: a blind hole would leave a skin too thin to print under the tip
+        tip = t_out - wall - L if t_out - wall >= L + 0.5 else t_out - L + 0.6
+    for i, (ob, a, b, kind) in enumerate(st):
+        up = print_up.get(ob.name) if isinstance(print_up, dict) else print_up
+        kw = dict(head=head, sink=sink, print_up=up, name="%s_%d" % (name, i), size=size, tip=tip)
+        lst = cuts.setdefault(ob.name, [])
+        if kind == "clear" and ob is not last:
+            continue
+        if ob is not last:
+            lst += screw_hole(at, w, L, "clearance", **kw)
+        elif style == "selftap":
+            lst += screw_hole(at, w, L, "clamp", clamp=clamp, **kw)
+        elif style == "tapped":
+            lst += [] if buy else screw_hole(at, w, L, "tap", clamp=clamp, **kw)
+        elif style == "insert":
+            lst += screw_hole(at, w, L, "insert", clamp=clamp, **kw)
+        else:
+            if kind != "clear":
+                lst += screw_hole(at, w, L, "clearance", **kw)
+            if trap:
+                lst += nut_trap(at + w * nf, w, depth=t_out - nf + 0.6, rot_deg=nut_rot_deg, name=kw["name"] + "_nut", size=size)
+    # hardware on the same at/into
+    asm.fastener(name, at, w, L, spec=spec, joint=joint, host=host or last.name, step=step)
+    if nf is not None:
+        asm.nut(name + "_nut", at + w * nf, w, joint=joint, step=step, size=size)
+    elif style == "insert":
+        # proxy just inside the pocket, tagged as a nut so cadcheck checks the screw runs through it
+        af = (S["insert_d"] / 2 - 0.15) * 2 * math.cos(math.pi / 6)
+        asm.nut(name + "_insert", at + w * t_in, w, joint=joint, af=af, h=S["insert_len"], step=step, size=size,
+                label="%s heat-set insert" % size)
+    asm.PARTS[name]["fastener_joint"] = rec
+    _log("fastener_joint", at, w, name=name, **rec)
+    return cuts
+
+
+def fastener_summary(parts):
+    """{"screws": n, "distinct": k, "by_spec_length": {"M3_cap x 12": count}} over every screw in asm.PARTS."""
+    by = {}
+    for info in parts.values():
+        if info.get("spec") and info.get("length") is not None:
+            k = "%s x %g" % (info["spec"], float(info["length"]))
+            by[k] = by.get(k, 0) + 1
+    return {"screws": sum(by.values()), "distinct": len(by), "by_spec_length": dict(sorted(by.items()))}
