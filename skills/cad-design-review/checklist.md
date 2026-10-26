@@ -30,6 +30,6 @@ which beats a render. Items marked with an ID caught real problems in that attem
 
 ## Aesthetics
 - [ ] iso and iso_front_left: no exposed wires, PCB edges or motor cans. `cables` exposure spots, nut-visible and fastener stand-off warns list the candidates with coordinates (A2-F8, F9, A3-F7, F8). Windows no bigger than what they must show.
-- [ ] Edge breaks and radii from one declared set (grep the params for BEVEL/RADIUS). A `parts` warn "overlap clamp cut the edge break" means the part's breaks are a fraction of the declared size (V2A6-T2).
+- [ ] Edge breaks and radii from one declared set (grep `params.py` for `EB`/`CR`, as in the project template). A `parts` warn "overlap clamp cut the edge break" means the part's breaks are a fraction of the declared size (V2A6-T2).
 - [ ] Visible screw heads counterbored; parting lines aligned.
 - [ ] No leftover cut artefacts (notches, stray bosses) in hero views.
