@@ -2,7 +2,7 @@
 
 ```python
 import sys; sys.path.insert(0, "<skill>/scripts")
-from cadlib import geom as G, features as F, asm as A, export as E, render as R, blend as B
+from cadlib import geom as G, features as F, asm as A, export as E, render as R
 ```
 
 Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X' maps (u, v, w) to (y, z, x),
@@ -24,21 +24,7 @@ Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X
 | `xform(ob, M4)`, `frame(origin, u, v, w)` | bake a transform; build a placement matrix |
 | `join(name, obs)` | merge shells without booleans (purchased placeholders only) |
 | `import_stl(path, name)` | e.g. `reference/mg_axis.stl` as a placeholder |
-| `swept_envelope(obs, pivot, axis=None, lo=None, hi=None, tol=0.25, voxel=0.5)` | keep-out: one closed mesh holding every pose over a joint range. `pivot` is a `PIV_` empty (its axis and range) or a point plus `axis`. Conservative by about 0.4 mm; 2.3 s for the A3 nacelle. At 230k-925k triangles, keep it in the scratch collection, never `Printed`/`Purchased`, or every cadcheck pass pays for it. `method="union"` (Manifold union of poses) is exact at the poses but pokes out between them. |
-
-## blend: grown connectors ("place the parts, grow the bracket")
-
-One smooth printed solid around the parts it holds: members are joined with round fillets, keep-outs are cut, and
-then the fits, holes and clip are cut exactly with Manifold. `docs/features/blend-bracket.md` has the measurements.
-
-| Call | Notes |
-|---|---|
-| `Tube(a, b, d, wall=4, clearance=0.2, stop=None, edge=1, lead_in=0.5)` | sleeve from a to b around a tube of diameter d. `stop` is the socket floor's distance from a (None: through bore). |
-| `Block(M, size, wall=2.4, clearance=0.2, grip=None, open=("+z",))` | box-shaped part (servo body, board, battery) centred on frame M. `grip` limits the cradle in local coordinates; the cutter runs out through the `open` faces. |
-| `rod(a, b, r, edge)`, `capsule(a, b, r)`, `sphere(c, r)`, `rbox(M, size, r)`, `mesh_field(ob)` | extra members: plates, posts, fins, struts |
-| `grow(name, holds, fillet=5, extra=[], keepout=[], keepout_clear=0.5, clip=None, holes=[], voxel=0.5)` | returns `(ob, report)`. `clip` is a world box intersected exactly (flat bed face). `holes` takes `features.screw_hole(...)` lists. About 2 s, under 45k triangles. Over `max_cells` (default 40M grid cells, about 1.7 GB) it raises `GridTooLarge` before allocating, naming the smallest voxel that fits; it never coarsens silently. `swept_envelope` has the same guard. |
-| `measure(ob, holds)` | fit clearance and wall per hold, by rays on the finished mesh |
-| `overhang(ob, R)` | `(overhang mm2, bed mm2)` for a print rotation. Run it on every grown part before you accept it: fillets and sleeves make overhangs that a box design doesn't have (the node needs supports in every orientation). It compares orientations; the evidence for `supports: no` is still `cad printcheck` on the exported STL. |
+| `swept_envelope(...)`, `cadlib.blend` | keep-outs for moving parts; organic connectors grown around tubes and parts: `reference/blend.md` (`Tube` clearance is radial) |
 
 ## features: print features
 
