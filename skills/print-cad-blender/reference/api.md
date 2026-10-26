@@ -31,7 +31,7 @@ Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X
 
 | Call | Notes |
 |---|---|
-| `fastener_joint(name, size, at, into, parts, style="selftap", head="cap", sink=0, cuts=None, ...)` | **Use this for every screw.** Measures the stack of `parts` (uncut solids named with their final `PRT_`/`BUY_` names) along the axis, picks the shortest stock length that meets the rule, cuts each part and places the FST plus nut or insert. `style`: `selftap`, `nut` (trap in the last part; `trap=False` for a nut on its face), `insert`, `tapped` (purchased part, `depth=` of its tapped hole). Returns `{part name: [cutters]}`; pass `cuts=` to accumulate. Raises `FastenerError` for a reversed screw, a buried head, too little thread, or no stock length. M3 to M4 is the `size` argument. |
+| `fastener_joint(name, size, at, into, parts, style="selftap", head="cap", sink=0, cuts=None, ...)` | **Use this when a screw is the right join.** Measures the stack of `parts` (uncut solids with their final `PRT_`/`BUY_` names; a part already holed on the axis, like a purchased board, is clamped, not cut), picks a stock length that meets the rule (reusing one already in the build when it fits), cuts each part and places the FST plus nut or insert. `style`: `selftap`, `nut` (trap in the last part; `trap=False` for a nut on its face), `insert`, `tapped` (purchased part, `depth=` of its tapped hole). Self-tap and insert holes are blind unless `through_ok=True`. Returns `{part name: [cutters]}`; pass `cuts=` to accumulate. Raises `FastenerError` with the fix: reversed screw, buried head or sloped seat, air gap, self-tap into a purchased part, too little thread, host too shallow, countersink knife edge. M2 to M5 is the `size` argument. |
 | `screw_hole(at, into, length, kind, head="cap", sink=0, clamp=0, print_up=None, size="M3")` | `kind`: `selftap` (Ø2.5), `clearance` (Ø3.4), `clamp` (Ø3.4 for `clamp` mm then Ø2.5), `tap` (Ø3.4 then the PLA-tap hole), `insert` (Ø3.4, a heat-set pocket, then Ø3.4 past it). Diameters are M3; `size` picks another row of `SIZES`. `sink` gives a counterbore depth. `head="csk"` cuts a countersink. `print_up` turns horizontal holes into teardrops. |
 | `nut_trap(at, into, depth=None, af=5.7, rot_deg=0, slot_dir=None, slot_len=0, size="M3")` | hex pocket, optional side-entry slot |
 | `boss(at, into, od, height)` | cylinder grown back from `at` (against `into`); union it, then cut the hole |
@@ -41,7 +41,7 @@ Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X
 | `pcb_pocket(at, into, w, h, depth, clear=0.4)` | board locating pocket |
 | `bore(name, c, r_shaft, w0, w1, axis, fit="running")` | journal bore with the fit's clearance |
 | `RULES` | all PLA and fastener numbers; change them here, not inline |
-| `SIZES`, `size_rules(size)` | M2-M5: pitch, clearance, pilot, tap, cap/pan/csk head d and h, nut AF and h, trap AF, insert hole, min engagement. The M3 row reads the `m3_*` entries of `RULES`. `size_rules` adds the stock lengths from cadcheck's default `fasteners.stock_lengths` |
+| `SIZES`, `size_rules(size)` | M2-M5: pitch, clearance, pilot, tap, cap/pan/csk head d and h, nut AF and h, trap AF, insert hole, insert length. The M3 row reads the `m3_*` entries of `RULES`. `size_rules` adds cadcheck's stock lengths and thread engagement (2 d, 1.5 d tapped), project `checks.json` first |
 
 ## asm: assembly
 
