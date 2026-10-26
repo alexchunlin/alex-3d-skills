@@ -33,4 +33,3 @@ which beats a render. Items marked with an ID caught real problems in that attem
 - [ ] Edge breaks and radii from one declared set (grep the params for BEVEL/RADIUS). A `parts` warn "overlap clamp cut the edge break" means the part's breaks are a fraction of the declared size (V2A6-T2).
 - [ ] Visible screw heads counterbored; parting lines aligned.
 - [ ] No leftover cut artefacts (notches, stray bosses) in hero views.
-- [ ] Form language: check DP1-DP7 of `<pcb>/reference/design-principles.md` (shared section, continuing lines, colour roles, masses within about 60 mm of the main axis), then match the rubric's form-language anchor (R2 #10, R3 #4).
