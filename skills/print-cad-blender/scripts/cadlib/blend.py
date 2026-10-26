@@ -216,16 +216,25 @@ def _nseg_exact(r, sag=0.01):
 class Tube:
     """Grip a round tube or rod of diameter d whose axis runs from a to b (b is the open mouth).
 
-    The grip is a sleeve of wall `wall` from a to b. `stop`: the tube end sits this far from a (a blind socket, the
-    rest of the sleeve toward a stays solid). None means the bore runs through both ends. `edge` rounds the
-    sleeve rims, `lead_in` chamfers the mouth for insertion."""
+    The grip is a sleeve of wall `wall` from a to b. `clearance` is radial: the bore is d + 2 * clearance, so the
+    default 0.2 is a 0.4 mm diametral fit (features.RULES["fit_loose"]). `stop`: the tube end sits this far from a (a
+    blind socket, the rest of the sleeve toward a stays solid). None means the bore runs through both ends. `edge`
+    rounds the sleeve rims, `lead_in` chamfers the mouth for insertion. `print_up`: world direction of print +Z; a bore
+    within 60 deg of horizontal in print becomes a teardrop pointing up (as features.screw_hole does), its point cut flat
+    to keep RULES["min_wall"] above it, and measure() skips the rays into the point. The socket holds the tube by fit only: retain it with a screw through the sleeve
+    (`holes=features.screw_hole(...)`) or glue. name: default tube0, tube1, ... in grow() order."""
 
-    def __init__(self, a, b, d, wall=4.0, clearance=0.2, stop=None, edge=1.0, lead_in=0.5, name="tube"):
+    def __init__(self, a, b, d, wall=4.0, clearance=0.2, stop=None, edge=1.0, lead_in=0.5, print_up=None, name=None):
         self.a, self.b, self.d = Vector(a), Vector(b), float(d)
-        self.wall, self.clearance, self.stop, self.edge, self.lead_in, self.name = wall, clearance, stop, edge, lead_in, name
+        self.wall, self.clearance, self.stop, self.edge, self.lead_in = wall, clearance, stop, edge, lead_in
+        self.name, self._auto = name or "tube", name is None
         self.M, self.L = _seg_frame(a, b)
         self.r_bore = d / 2 + clearance
         self.r_out = self.r_bore + wall
+        self.up = None   # print +Z in the tube's local (u, v) plane, when the bore is a teardrop
+        if print_up is not None and abs((self.b - self.a).normalized().dot(Vector(print_up).normalized())) < 0.5:
+            up = self.M.to_3x3().inverted() @ Vector(print_up)
+            self.up = Vector((up.x, up.y)).normalized()
 
     def field(self):
         return rod(self.a, self.b, self.r_out, self.edge, self.name)
@@ -233,13 +242,34 @@ class Tube:
     def cutters(self):
         n = _nseg_exact(self.r_bore)
         z0 = -1.0 if self.stop is None else self.stop
-        cut = [geom.cyl(self.name + "_bore", (0, 0), self.r_bore, z0, self.L + 1.0, 'Z', n=n)]
+        if self.up is not None:
+            cut = [geom.prism(self.name + "_bore", self.teardrop(n), z0, self.L + 1.0, 'Z')]
+        else:
+            cut = [geom.cyl(self.name + "_bore", (0, 0), self.r_bore, z0, self.L + 1.0, 'Z', n=n)]
         if self.lead_in > 0:
             li = self.lead_in
             cut.append(geom.cone(self.name + "_lead", (0, 0), self.r_bore, self.r_bore + li + 1.0, self.L - li, self.L + 1.0, 'Z', n=n))
             if self.stop is None:
                 cut.append(geom.cone(self.name + "_lead0", (0, 0), self.r_bore + li + 1.0, self.r_bore, -1.0, li, 'Z', n=n))
         return [geom.xform(c, self.M) for c in cut]
+
+    def teardrop(self, n):
+        """geom.teardrop's bore profile, with the point cut flat where it would leave less than RULES["min_wall"] of
+        sleeve above it (r * sqrt(2) = 14.4 > 14.2 for a 20 mm tube in a 4 mm wall: a slot along the top)."""
+        from .features import RULES
+        prof = geom.teardrop((0, 0), self.r_bore, tuple(self.up), n)
+        top = min(self.r_bore * math.sqrt(2), self.r_out - RULES["min_wall"])
+        ux, uy = self.up
+        out = []
+        for i, a in enumerate(prof):                  # clip the convex profile to (p . up) <= top
+            b = prof[(i + 1) % len(prof)]
+            da, db = a[0] * ux + a[1] * uy - top, b[0] * ux + b[1] * uy - top
+            if da <= 1e-9:
+                out.append(a)
+            if (da < -1e-9 < db) or (db < -1e-9 < da):
+                t = da / (da - db)
+                out.append((a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])))
+        return out
 
     def stations(self):
         """Axial positions (from a) where the grip is a plain sleeve: away from the stop, the rims and the lead-in."""
@@ -256,6 +286,8 @@ class Tube:
             p = self.a + w * z
             for k in range(n_ang):
                 t = 2 * math.pi * (k + 0.5) / n_ang
+                if self.up is not None and math.cos(t) * self.up.x + math.sin(t) * self.up.y > 0.70:
+                    continue   # into the teardrop's point: not a fit surface
                 dr = u * math.cos(t) + v * math.sin(t)
                 hit = tree.ray_cast(p, dr, 200.0)
                 if hit[0] is None:
@@ -272,11 +304,13 @@ class Block:
 
     The grip is the box grown by clearance + wall (rounded with radius wall), limited to the local region
     `grip` = ((x0, y0, z0), (x1, y1, z1)) when given. The cutter is the box plus clearance, run out through every face
-    named in `open` ('+z', '-x', ...) so the part can drop in and its connectors stay free."""
+    named in `open` ('+z', '-x', ...) so the part can drop in and its connectors stay free. clearance is per side.
+    name: default block0, block1, ... in grow() order."""
 
-    def __init__(self, M, size, wall=2.4, clearance=0.2, grip=None, open=("+z",), edge=1.0, name="block"):
+    def __init__(self, M, size, wall=2.4, clearance=0.2, grip=None, open=("+z",), edge=1.0, name=None):
         self.M = _frame_of(M)
-        self.size, self.wall, self.clearance, self.grip, self.open, self.edge, self.name = size, wall, clearance, grip, open, edge, name
+        self.size, self.wall, self.clearance, self.grip, self.open, self.edge = size, wall, clearance, grip, open, edge
+        self.name, self._auto = name or "block", name is None
         self.half = [s / 2 for s in size]
 
     def field(self):
@@ -417,6 +451,22 @@ def skin(name, fields, fillet=5.0, keepout=(), keepout_clear=0.5, keepout_edge=1
                 "t_field_s": round(t_field, 2), "t_mesh_s": round(time.time() - t0 - t_field, 2)}
 
 
+def _name_holds(holds):
+    """Number unnamed holds (tube0, tube1, block0, ...) and refuse duplicate names: measure() reports by name, and two
+    holds called "tube" used to come back as one row."""
+    count, seen = {}, set()
+    for h in holds:
+        if getattr(h, "_auto", False):
+            base = type(h).__name__.lower()
+            h.name, h._auto = "%s%d" % (base, count.get(base, 0)), False   # named once: measure() sees grow()'s names
+            count[base] = count.get(base, 0) + 1
+    for h in holds:
+        if h.name in seen:
+            raise ValueError("blend: two holds are named %r; give each hold its own name (measure() reports by name)" % h.name)
+        seen.add(h.name)
+    return holds
+
+
 def grow(name, holds=(), fillet=5.0, extra=(), keepout=(), keepout_clear=0.5, keepout_edge=1.0, clip=None, holes=(),
          voxel=0.5, adaptivity=0.0, bias=0.02, max_tris=40000, max_cells=None):
     """Grow one smooth printed solid around `holds` (Tube, Block) and `extra` fields (rod, capsule, rbox, sphere).
@@ -435,8 +485,10 @@ def grow(name, holds=(), fillet=5.0, extra=(), keepout=(), keepout_clear=0.5, ke
                  the node with 0.02). adaptivity (OpenVDB, 0..1) is cheaper but flattens round arms: 0.05 cost 0.21 mm.
     max_cells:   dense grid limit (default MAX_CELLS = 40M; 36.9M peaked at 1.63 GB). Over it, GridTooLarge is raised before
                  anything is allocated, naming the smallest voxel that fits. It does not coarsen silently.
-    Returns (object, report dict). The report is also stored on the object as ob["blend"]."""
+    Returns (object, report dict). The report is also stored on the object as ob["blend"], and the tube rims and clip
+    faces as ob["blend_orient"], the default candidates of best_orientation()."""
     t0 = time.time()
+    _name_holds(holds)
     ob, rep = skin(name, [h.field() for h in holds] + list(extra), fillet, keepout, keepout_clear, keepout_edge, clip,
                    voxel, adaptivity, bias, max_tris, max_cells)
     sub = []
@@ -511,7 +563,7 @@ def measure(ob, holds):
     Mw = ob.matrix_world
     tree = BVHTree.FromPolygons([Mw @ v.co for v in me.vertices], [tuple(p.vertices) for p in me.polygons])
     out = {}
-    for h in holds:
+    for h in _name_holds(holds):
         clr, wall = h.probe(tree)
         cl = [c for c in clr if c is not None]
         wl = [w for w in wall if w is not None]

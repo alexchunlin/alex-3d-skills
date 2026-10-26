@@ -109,11 +109,11 @@ def hull_circles(circs, n=72):
     return hull2d(pts)
 
 
-def teardrop(c, r, up=(0, 1)):
+def teardrop(c, r, up=(0, 1), n=32):
     """Hole profile printable without support when its axis is horizontal: 45 deg point toward `up`
-    (the print +Z direction expressed in the profile's (u, v) plane)."""
+    (the print +Z direction expressed in the profile's (u, v) plane). n: facets of the round part."""
     ang = math.atan2(up[1], up[0])
-    pts = [p for p in circle(c, r, 32, 0)
+    pts = [p for p in circle(c, r, n, 0)
            if (p[0] - c[0]) * math.cos(ang) + (p[1] - c[1]) * math.sin(ang) <= r * math.sin(math.radians(45)) + 1e-6]
     pts.append((c[0] + r * math.sqrt(2) * math.cos(ang), c[1] + r * math.sqrt(2) * math.sin(ang)))
     return hull2d(pts)

@@ -37,6 +37,11 @@ G1=$(nice -n 10 "$BL" -b --factory-startup --python "$ROOT/tools/verify.d/blend_
 echo "$G1" | grep -q '"ok": true' && ok "blend size guard refuses 190M-cell grow and 76M-cell sweep before allocating: $(echo "$G1" | cut -c1-160)" \
   || bad "blend size guard: $G1"
 
+# hold names: unnamed holds are numbered, duplicates raise; a print_up tube gets a teardrop bore that keeps its sleeve closed
+H=$(nice -n 10 "$BL" -b --factory-startup -t 4 --python "$ROOT/tools/verify.d/blend_bracket_holds.py" -- "$SCR" 2>&1 | grep '^HOLDS' | sed 's/^HOLDS //')
+echo "$H" | grep -q '"ok": true' && ok "blend holds: tube0/tube1 auto names, duplicate names raise, teardrop bore with fit kept: $(echo "$H" | cut -c1-220)" \
+  || bad "blend holds: $H"
+
 # swept envelope: every vertex and edge midpoint of 25 random poses inside (synthetic L arm, and the A3 nacelle if present)
 sweep() { nice -n 10 "$BL" -b --factory-startup "$@" 2>&1 | grep '^SWEEPCHK' | sed 's/^SWEEPCHK //'; }
 S1=$(sweep --python "$ROOT/tools/verify.d/blend_bracket_sweep.py" -- "$SCR")
