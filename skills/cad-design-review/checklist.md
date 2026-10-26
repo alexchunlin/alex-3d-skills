@@ -29,7 +29,7 @@ which beats a render. Items marked with an ID caught real problems in that attem
 - [ ] Sliding parts (gates, drawers, plungers) are `prismatic` joints, so the open state is in every sweep, and a detent riding one is a slide row `flex` bound, not an `ignore` (V2A3-T6: the reviewer moved the gate by hand in copies of the blend).
 
 ## Aesthetics
-- [ ] iso and iso_front_left: no exposed wires, PCB edges or motor cans. `cables` exposure spots, nut-visible and fastener stand-off warns list the candidates with coordinates (A2-F8, F9, A3-F7, F8). Windows no bigger than what they must show.
+- [ ] iso and iso_front_left: no exposed wires, PCB edges or motor cans. `cables` exposure spots, nut-visible and fastener stand-off warns list the candidates with coordinates (A2-F8, F9, A3-F7, F8). Windows no bigger than what they must show, plus 2 mm (A3-F8).
 - [ ] Edge breaks and radii from one declared set (grep `params.py` for `EB`/`CR`, as in the project template). A `parts` warn "overlap clamp cut the edge break" means the part's breaks are a fraction of the declared size (V2A6-T2).
 - [ ] Visible screw heads counterbored; parting lines aligned.
 - [ ] No leftover cut artefacts (notches, stray bosses) in hero views.
