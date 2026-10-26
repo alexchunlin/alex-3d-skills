@@ -39,7 +39,10 @@ case "$cmd" in
          # anything after OUT passes through, e.g. --only fasteners,service --quick
          if [ -n "$c" ]; then run "$b" --python "$HERE/cadcheck.py" -- --config "$c" "$@"; else run "$b" --python "$HERE/cadcheck.py" -- "$@"; fi ;;
   q) case "${1:-}" in ""|-h|--help|help) sed -n '/^"""/,/^"""/p' "$HERE/cadq.py" | sed '1s/^"""//;$d'; exit 0 ;; esac
-     b="$1"; shift; run "$b" --python "$HERE/cadq.py" -- "$@" | grep -E '^CADQ|Error|cadq:' ;;
+     # keep cadq's exit status through the filter: `cad q m.blend route ...` exits 1 on a clearance violation
+     b="$1"; shift; qs="${TMPDIR:-/tmp}/cadq.$$.status"
+     { run "$b" --python "$HERE/cadq.py" -- "$@" && echo 0 > "$qs" || echo $? > "$qs"; } | grep -E '^CADQ|Error|cadq:' || true
+     rc=$(cat "$qs" 2>/dev/null || echo 1); rm -f "$qs"; exit "$rc" ;;
   py) # Python with bpy, cadlib and the project on sys.path: evaluate params or pure-geometry helpers without a build
       # (v2 A2: the launcher and feeder builders hand-stubbed bpy/cadlib to import params.py from plain python3)
       run --python-expr "import sys, os, runpy; sys.path[:0] = [os.getcwd(), os.path.join(os.getcwd(), 'parts'), '$HERE']; a = sys.argv[sys.argv.index('--') + 1:]; sys.argv = a; exec(a[1]) if a[0] == '-c' else runpy.run_path(a[0], run_name='__main__')" -- "$@" ;;

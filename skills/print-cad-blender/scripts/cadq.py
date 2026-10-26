@@ -16,7 +16,8 @@ Commands
   route CAB_a[,CAB_b] [--via 'X,Y,Z[@DX,DY,DZ[:LEN]][>PIV_x];...'] [--clearance C] [--cell H] [--bend R]
         [--from X,Y,Z --to X,Y,Z] [--save OUT.blend] [--json OUT.json]
                                       re-route existing cables (cadlib.route) between their own endpoints and
-                                      compare with the hand route: length, overlap mm3, visible mm, bend radius
+                                      compare with the hand route: length, overlap mm3, visible mm, bend radius.
+                                      Exits 1 when a route is under the clearance away from its ends (violation rows)
   --lentil X,Y,Z[:NX,NY,NZ][;...]     (with section/render) M&M-size markers (normal = thickness axis, default 0,0,1)
 
 Prints one JSON object per result line prefixed with CADQ, so agents can grep it. `cad q` with no arguments prints
@@ -135,7 +136,7 @@ def route_cmd():
         via.append(spec)
     C.set_pose({})
     tv = C.scene_bvh(C.SOLIDS)
-    rows = []
+    rows, bad = [], []
     for nm in POS[1].split(","):
         ob = obj(nm)
         path, rad = RT.path_of(ob)
@@ -159,7 +160,7 @@ def route_cmd():
         before = dict(stats(path) if path else {}, overlap_mm3=overlaps(ob))
         t0 = _t.time()
         res = RT.route(a, b, r, via=via, joint=None if jb == "static" else jb, obstacles=C.SOLIDS + C.FASTENERS,
-                       joints=C.JOINTS, couplings=C.COUPLE, **num)
+                       joints=C.JOINTS, couplings=C.COUPLE, quiet=True, **num)
         dt = _t.time() - t0
         row = {"cable": ob.name, "r": round(r, 2), "from": list(a), "to": list(b), "hand": before, "routed": res, "route_s": round(dt, 1)}
         if "save" in FLAGS:
@@ -200,7 +201,23 @@ def route_cmd():
              after_overlap_mm3=round(sum(v for d in row.get("after_overlap_mm3", {}).values() for v in d.values()), 1) if "save" in FLAGS else None,
              min_clearance=res["min_clearance_mm"], bend_r_min=res["bend_r_min"], sharp=res["sharp_corners"],
              hand_exposed_mm=before.get("exposed_mm"), exposed_mm=res["exposed_mm"], stubs=res["stubs"], slack=res["slack"], s=round(dt, 1),
-             cable_chain=[ob.name] + ["%s_%d" % (ob.name, k) for k in range(1, len(res["pieces"]))] if len(res["pieces"]) > 1 else None)
+             cable_chain=[ob.name] + ["%s_%d" % (ob.name, k) for k in range(1, len(res["pieces"]))] if len(res["pieces"]) > 1 else None,
+             crossings=res["crossings"] or None, violations=len(res["violations"]))
+        for w in res["warnings"]:
+            emit(cable=ob.name, warn=w)
+        if res["violations"]:
+            bad.append(ob.name)
+            # one line per run of consecutive samples, so a 4 mm slot is one line, not eight
+            runs = []
+            for v in res["violations"]:
+                if runs and v["i"] == runs[-1][-1]["i"] + 1:
+                    runs[-1].append(v)
+                else:
+                    runs.append([v])
+            for rn in runs:
+                w = min(rn, key=lambda v: v["clearance_mm"])
+                emit(cable=ob.name, violation={"samples": [rn[0]["i"], rn[-1]["i"]], "from": rn[0]["at"], "to": rn[-1]["at"],
+                                               "worst_mm": w["clearance_mm"], "worst_at": w["at"], "asked_mm": res["clearance_asked_mm"]})
     if "json" in FLAGS:
         with open(FLAGS["json"], "w") as f:
             json.dump(rows, f, indent=1, default=str)
@@ -221,6 +238,9 @@ def route_cmd():
                 bpy.data.collections.remove(c)
         bpy.ops.wm.save_as_mainfile(filepath=out, copy=True)
         emit(saved=out)
+    if bad:
+        # a route that breaks the clearance it was asked for, or enters a solid, away from its ends: exit non-zero
+        sys.exit("cadq: route: %s under the requested clearance away from the ends (CADQ violation rows above)" % ", ".join(bad))
 
 
 def usage_of(c):

@@ -3,10 +3,13 @@ shortcuts and bend-radius fillets. The points go straight into asm.cable(name, p
 cadcheck's cable checks (overlap, exposure, lead length) apply to the result.
 
     from cadlib import route as RT
-    res = RT.route(a, b, 1.6, via=[{"at": (0, 0, 60), "dir": (0, 0, 1), "len": 20}], clearance=1.0)
-    A.cable("CAB_12v_ctrl", res["pts"], 1.6, "cable_red", lead_len=200)
     obs, res = RT.cable("CAB_bus", a, b, 1.4, "cable_wht", via=[...])     # route + asm.cable, one object per body
+    res = RT.route(a, b, 1.6, via=[(0, 20, 30)], clearance=1.0)            # one body (no "joint" via): one piece
+    A.cable("CAB_12v_ctrl", res["pts"], 1.6, "cable_red", lead_len=200)  # res["pts"] only when len(res["pieces"]) == 1
     cad q model.blend route CAB_12v_ctrl --config checks.json --save out.blend   # re-route an existing cable
+
+A route split by a "joint" via has one piece per body: build each piece on its joint (RT.cable does), not res["pts"].
+Full reference: ../../reference/route.md.
 
 Why: every v1 attempt had cable review issues (FINDINGS A1-F12 routes, A2-F8 bare run, A3-F7 visible in a notch),
 and hand-typed waypoints put 165.6 mm3 of five A3 cables inside solids (CAB_uart 113.4, CAB_12v_ctrl 38.0 in
@@ -15,12 +18,19 @@ BUY_servo_controller; cadcheck's 1331.9 for the latter was an open-tube boolean 
 Model:
 - Grid: cells of `cell` mm over the leg's endpoints plus `margin`. A cell is blocked when a solid surface is closer
   than r + clearance (BVH find_nearest) or the cell is inside a solid (per-object column ray parity). Solids on
-  another body are swept over the joints between the two bodies, so the route clears them at every pose.
+  another body are swept over the joints between the two bodies (revolute in degrees, prismatic in mm, posed by
+  cadlib.joints exactly as cadcheck poses them). Each joint is sampled finely enough that a point at the moving
+  side's reach r_max moves at most r + clearance per step (sweep_tol = half that between samples), capped per joint,
+  and the swept solids are inflated by the largest move between samples, so the route clears them at every pose,
+  not only at the sampled ones (PR #3 review: scenes `wedge`, `pantilt`, `slide`).
 - Search: A* over 26 neighbours. Cost per mm: 1 within `wall_band` of the blocked band or in a `prefer` box,
   1 + w_open in open space, plus w_exposed where the cell is visible from outside (cadcheck's viewer-direction
   rule on a 2-cell lattice), plus w_turn mm per radian of turn.
-- Vias: points the cable must pass. {"at": p, "dir": d, "len": L} forces a straight run (a hub bore), and
-  "joint" puts the legs after it on another body; the result then has one piece per body and a slack row.
+- Vias: points the cable must pass. {"at": p, "dir": d, "len": L} forces a straight run (a hub bore, a slot), and
+  "joint" (a PIV name, or "static") puts the legs after it on another body; the result then has one piece per body,
+  a slack row and a crossing row (the cable's turn at the via at each joint limit; warned above 30 deg).
+- Guard: the result is sampled every 0.5 mm against exact clearance; every sample away from the two ends that is
+  under the requested clearance is listed in `violations` (straight runs and via stubs included) and printed.
 - Smoothing: shortcuts checked against exact clearance that never enter costlier cells than the A* path used,
   then a fillet of bend_r at each corner, shrunk (or the corner pushed outward) where the arc would lose
   clearance. The smallest radius used is reported as bend_r_min. No arc is tighter than cadcheck's kink limit
@@ -28,13 +38,18 @@ Model:
   can't have both is left sharp, so cadcheck's `cables` kink test (which skips turns under 20 deg, i.e. every
   vertex of an arc drawn in 10 deg steps) still sees it.
 """
-import bpy, heapq, math, time
+import bpy, heapq, json, math, time
 import numpy as np
-from mathutils import Vector, Matrix
+from mathutils import Vector, Matrix, Euler
 from mathutils.bvhtree import BVHTree
+from . import joints as JT
 
 DEFAULTS = {"cell": 2.0, "clearance": 1.0, "margin": 20.0, "bend_r": None, "wall_band": None, "lead_in": None,
-            "w_open": 0.5, "w_exposed": 8.0, "w_turn": 3.0, "w_stub": 3.0, "sweep_step": 15.0, "max_poses": 13,
+            "w_open": 0.5, "w_exposed": 8.0, "w_turn": 3.0, "w_stub": 3.0,
+            "sweep_tol": None,          # largest move of a swept solid between two sampled poses; None: (r + clearance) / 2
+            "max_joint_poses": 96,      # samples per joint, at most (the inflation grows when this caps the step)
+            "max_group_poses": 1024,    # runtime guard for 2+ joints in a chain: thins the joint whose inflation is least
+            "fold_warn_deg": 30.0,      # warn when the cable turns more than this at a joint crossing at a limit
             "view_frac": 0.10, "view_z": -0.2, "min_escape": 8, "prefer": [], "avoid": [], "exposure": True,
             "min_bend_od": 0.75}   # cadcheck cable_min_bend_od
 OBSTACLES = ("Printed", "Purchased", "Fasteners")
@@ -52,8 +67,7 @@ def mesh_objs(colls):
     return out
 
 
-def is_joint(o):
-    return o is not None and o.type == 'EMPTY' and o.name.startswith("PIV_")
+is_joint = JT.is_joint
 
 
 def chain(o):
@@ -74,40 +88,13 @@ def body(o):
 
 
 def scene_joints(cfg=None):
-    """(joints, couplings) the way cadcheck reads them: PIV props, then the config's "joints"/"couplings"."""
-    cfg = cfg or {}
-    J, CP = {}, dict(cfg.get("couplings", {}))
-    for e in bpy.data.objects:
-        if not is_joint(e):
-            continue
-        s = {"axis": None, "lo": None, "hi": None, "home": 0.0, "step": None, "continuous": False}
-        for ks, k in (("joint_axis", "axis"), ("joint_lo", "lo"), ("joint_hi", "hi"), ("joint_home", "home"),
-                      ("joint_step", "step"), ("joint_continuous", "continuous")):
-            if ks in e.keys():
-                s[k] = e[ks]
-        if s["axis"] is None and "axis" in e.keys():
-            s["axis"] = str(e["axis"]).strip()[:1].upper()
-        s.update(cfg.get("joints", {}).get(e.name, {}))
-        if s["axis"] not in ("X", "Y", "Z"):
-            s["axis"] = None
-        s["base_rot"] = tuple(e.rotation_euler)
-        J[e.name] = s
-        if "couple_to" in e.keys() and e.name not in CP:
-            CP[e.name] = {"to": e["couple_to"], "ratio": float(e.get("couple_ratio", 1.0))}
-    return J, CP
+    """(joints, couplings) the way cadcheck reads them (cadlib.joints): PIV props, then the config's joints/couplings."""
+    return JT.read(None, cfg)
 
 
 def set_pose(pose, J, CP):
-    vals = {n: pose.get(n, s.get("home", 0.0) or 0.0) for n, s in J.items()}
-    for n, c in CP.items():
-        vals[n] = vals.get(c["to"], 0.0) * c["ratio"] + c.get("offset", 0.0)
-    for n, s in J.items():
-        if s["axis"] is None:
-            continue
-        r = list(s["base_rot"])
-        r["XYZ".index(s["axis"])] = math.radians(vals[n])
-        bpy.data.objects[n].rotation_euler = r
-    bpy.context.view_layer.update()
+    """cadcheck's set_pose (cadlib.joints.apply): revolute joints in degrees, prismatic ones in mm."""
+    JT.apply(J, CP, pose)
 
 
 def drivers(names, CP):
@@ -119,35 +106,168 @@ def drivers(names, CP):
     return frozenset(out)
 
 
-def _samples(s, step):
-    if not s or s["axis"] is None:
-        return [0.0]
-    if s.get("continuous"):
-        return list(np.arange(0.0, 360.0 - 1e-6, max(step, 30.0)))
-    if s["lo"] is None or s["hi"] is None:
-        return [s.get("home", 0.0) or 0.0]
-    lo, hi = float(s["lo"]), float(s["hi"])
-    st = max(s.get("step") or step, (hi - lo) / 12.0, 1e-3)
-    v = list(np.arange(lo, hi + 1e-9, st))
-    return v + ([hi] if abs(v[-1] - hi) > 1e-6 else [])
+def _driver_of(n, CP):
+    """(driver, ratio): the free joint behind n and how far n moves per unit of it."""
+    k = 1.0
+    while n in CP:
+        k *= float(CP[n]["ratio"])
+        n = CP[n]["to"]
+    return n, k
 
 
-def pose_grid(drv, J, opt):
-    per = [_samples(J.get(j), opt["sweep_step"]) for j in sorted(drv)]
-    while math.prod(len(p) for p in per) > opt["max_poses"]:
-        i = max(range(len(per)), key=lambda k: len(per[k]))
-        if len(per[i]) <= 3:
+def _motion(j, J):
+    """(kind, pivot, unit direction) of joint j's motion at the current pose, measured by nudging the empty (so a
+    base rotation or a parent's frame is accounted for exactly as set_pose moves it)."""
+    s, e = J[j], bpy.data.objects[j]
+    m0 = e.matrix_world.copy()
+    vl = bpy.context.view_layer
+    if s.get("kind") == "prismatic":
+        old = e.location.copy()
+        ax = Vector([1.0 if i == "XYZ".index(s["axis"]) else 0.0 for i in range(3)])
+        e.location = old + Euler(s["base_rot"]).to_matrix() @ ax
+        vl.update()
+        d = e.matrix_world.translation - m0.translation
+        e.location = old
+        vl.update()
+        return "prismatic", m0.translation.copy(), d.normalized() if d.length > 1e-9 else Vector((0, 0, 1))
+    old = e.rotation_euler.copy()
+    r = list(old)
+    r["XYZ".index(s["axis"])] += math.radians(1.0)
+    e.rotation_euler = r
+    vl.update()
+    R = e.matrix_world.to_3x3().normalized() @ m0.to_3x3().normalized().inverted()
+    e.rotation_euler = old
+    vl.update()
+    return "revolute", m0.translation.copy(), R.to_quaternion().axis.normalized()
+
+
+def _ranged(j, J, CP):
+    """Joint j moves: it has an axis and its driver has a range (a coupled gear follows its driver's)."""
+    d = J.get(_driver_of(j, CP)[0]) or {}
+    return bool((J.get(j) or {}).get("axis") and d.get("axis") and (d.get("continuous") or d.get("lo") is not None))
+
+
+def _travel(s):
+    if s.get("lo") is None:
+        return 0.0
+    h = float(s.get("home", 0.0) or 0.0)
+    return max(abs(float(s["lo"]) - h), abs(float(s["hi"]) - h))
+
+
+def _axis_dist(P, piv, u):
+    P = np.asarray(P, float).reshape(-1, 3) - np.asarray(piv, float)
+    return np.linalg.norm(np.cross(P, np.asarray(u, float)), axis=1)
+
+
+def _path_rho(j, path, info, J):
+    """(P0, K) such that any point p hanging off path[0] stays within |p - P0| + K of joint j's axis, whatever the
+    joints in `path` do: path runs from the point's side to j through moving joints (their pivots), and each pivot is
+    fixed relative to the next, so only the last pivot's distance from j's axis and the links between pivots add.
+    (None, 0): no joint in between, the point's own distance from the axis is exact."""
+    if not path:
+        return None, 0.0
+    kind, piv, u = info[j]
+    K = float(_axis_dist([info[path[-1]][1]], piv, u)[0])
+    for a, b in zip(path, path[1:]):
+        K += (info[a][1] - info[b][1]).length
+    K += sum(_travel(J[x]) for x in path if info[x][0] == "prismatic")
+    return np.array(info[path[0]][1], float), K
+
+
+def _rho(P, P0, K, piv, u):
+    P = np.asarray(P, float).reshape(-1, 3)
+    return _axis_dist(P, piv, u) if P0 is None else np.linalg.norm(P - P0, axis=1) + K
+
+
+def sweep_plan(obj_pts, obj_chain, leg_pts, leg_chain, J, CP, tol, cap, budget):
+    """How to sweep one obstacle body against one leg: (poses, terms, stats).
+
+    The relative motion comes from the moving joints in exactly one of the two chains. For each free (driver) joint
+    the step is the largest that keeps the move of any point between two samples under `tol`: a point at distance rho
+    from a revolute axis moves at most rho * step / 2 to the nearer sample, a slide point step / 2. rho is bounded on
+    both sides (the leg's query point and the obstacle's box corners, through the pivots of the joints in between,
+    see _path_rho), and the move is at most the smaller. Each joint gets at most `cap` samples. `terms` give that move
+    per query point, so the swept solids are inflated by exactly what the sampling can miss. `budget` thins the
+    product of long chains; the inflation grows to match, so thinning costs room, never a miss."""
+    mo, ml = [j for j in obj_chain if j not in leg_chain], [j for j in leg_chain if j not in obj_chain]
+    mo, ml = [j for j in mo if _ranged(j, J, CP)], [j for j in ml if _ranged(j, J, CP)]
+    moving = mo + ml
+    if not moving:
+        return [{}], [], {"poses": 1, "drivers": {}}
+    info = {j: _motion(j, J) for j in moving}
+    terms_by = {}
+    for j in moving:
+        d, k = _driver_of(j, CP)
+        kind, piv, u = info[j]
+        if kind == "prismatic":
+            terms_by.setdefault(d, []).append(("const", abs(k) * 0.5))
+            continue
+        if j in ml:     # the leg hangs below j: query side = leg joints below j; obstacle side = obstacle joints, then
+            i = ml.index(j)     # the leg joints above j from the top down
+            qpath, opath = ml[:i], mo + ml[i + 1:][::-1]
+        else:
+            i = mo.index(j)
+            qpath, opath = ml + mo[i + 1:][::-1], mo[:i]
+        P0, K = _path_rho(j, qpath, info, J)
+        O0, OK = _path_rho(j, opath, info, J)
+        ocap = float(_rho(obj_pts, O0, OK, piv, u).max())
+        terms_by.setdefault(d, []).append(("rho", abs(k) * math.pi / 360.0, P0, K, piv, u, ocap))
+
+    def coef(tl):       # move per unit of driver step at the worst grid point
+        return sum(t[1] if t[0] == "const" else t[1] * min(t[6], float(_rho(leg_pts, t[2], t[3], t[4], t[5]).max())) for t in tl)
+    drv = sorted(terms_by)
+    rng, n = {}, {}
+    for d in drv:
+        s = J.get(d) or {}
+        rng[d] = (0.0, 360.0, True) if s.get("continuous") else (float(s["lo"]), float(s["hi"]), False)
+        c = coef(terms_by[d])
+        span = rng[d][1] - rng[d][0]
+        if span <= 1e-9:
+            n[d] = 0
+            continue
+        st = tol / c if c > 1e-12 else span          # move per sample gap = c * step <= tol
+        n[d] = min(cap - (0 if rng[d][2] else 1), max(1, int(math.ceil(span / st - 1e-9))))   # intervals
+
+    def count(d):
+        return 1 if n[d] == 0 else (n[d] if rng[d][2] else n[d] + 1)
+    while math.prod(count(d) for d in drv) > budget:
+        cand = [d for d in drv if n[d] > 1]
+        if not cand:
             break
-        per[i] = [per[i][int(round(t))] for t in np.linspace(0, len(per[i]) - 1, max(3, len(per[i]) - 2))]
-    out = [{}]
-    for j, vals in zip(sorted(drv), per):
-        out = [dict(p, **{j: float(a)}) for p in out for a in vals]
+        d = min(cand, key=lambda x: coef(terms_by[x]) * (rng[x][1] - rng[x][0]) / n[x])
+        n[d] = max(1, int(n[d] * 0.8))
+    per, terms, stats = [], [], {}
+    for d in drv:
+        lo, hi, cyc = rng[d]
+        st = (hi - lo) / n[d] if n[d] else 0.0
+        vals = [lo + st * i for i in range(count(d))] if n[d] else [lo]
+        per.append(vals)
+        terms += [(t[0], t[1] * st) + tuple(t[2:]) for t in terms_by[d]]
+        stats[d] = {"samples": len(vals), "step": round(st, 3), "max_move_mm": round(coef(terms_by[d]) * st, 2)}
+    poses = [{}]
+    for d, vals in zip(drv, per):
+        poses = [dict(p, **{d: float(a)}) for p in poses for a in vals]
+    return poses, terms, {"poses": len(poses), "drivers": stats}
+
+
+def inflation(terms, P):
+    """Largest move between sampled poses for query points P (n x 3, leg frame), per point."""
+    P = np.asarray(P, float).reshape(-1, 3)
+    out = np.zeros(len(P))
+    for t in terms:
+        out += t[1] if t[0] == "const" else t[1] * np.minimum(_rho(P, t[2], t[3], t[4], t[5]), t[6])
     return out
 
 
 def _mw(name):
     o = bpy.data.objects.get(name) if name and name != "static" else None
     return o.matrix_world.copy() if o is not None else Matrix.Identity(4)
+
+
+def _mw_at(name, J, vals, cache):
+    if not name or name == "static" or bpy.data.objects.get(name) is None:
+        return Matrix.Identity(4)
+    return JT.world_at(name, J, vals, cache)
 
 
 # ------------------------------------------------------------------ BVH
@@ -165,11 +285,11 @@ def _tris(o):
     return co, t.reshape(-1, 3)
 
 
-def tree(objs):
-    """One BVH over all `objs` in world coordinates at the current pose (None when empty)."""
+def tree(objs, extra=()):
+    """One BVH over all `objs` in world coordinates at the current pose, plus `extra` (vertices, triangles) arrays
+    (None when empty)."""
     vs, ts, off = [], [], 0
-    for o in objs:
-        co, t = _tris(o)
+    for co, t in [_tris(o) for o in objs] + list(extra):
         if not len(t):
             continue
         vs.append(co)
@@ -235,21 +355,24 @@ class Grid:
         return int(self.flat(self.ijk_of(p)))
 
 
-def _nearest(G, tr, R, cells, d, ins, M=None):
-    """d[cells] = min(d, distance to tr) for cells within R; ins[c] |= the nearest face faces away (inside).
-    The sign test catches solids that column parity can't (touching shells: A3's controller header block).
-    M maps grid points into tr's frame."""
+def _nearest(G, tr, R, cells, d, ins, M=None, infl=None):
+    """d[cells] = min(d, distance to tr - infl) for cells within R (+ infl); ins[c] |= the nearest face faces away
+    (inside). The sign test catches solids that column parity can't (touching shells: A3's controller header block).
+    M maps grid points into tr's frame; infl (per cell) inflates a swept solid by its move between sampled poses."""
     P = G.xyz[cells]
     if M is not None:
         A = np.array(M)
         P = P @ A[:3, :3].T + A[:3, 3]
     fn = tr.find_nearest
-    for c, p in zip(cells.tolist(), P.tolist()):
-        h = fn(p, R)
+    inf = [0.0] * len(cells) if infl is None else infl.tolist()
+    for c, p, e in zip(cells.tolist(), P.tolist(), inf):
+        h = fn(p, R + e)
         if h[0] is not None:
-            if h[3] < d[c]:
-                d[c] = h[3]
-            if (p[0] - h[0][0]) * h[1][0] + (p[1] - h[0][1]) * h[1][1] + (p[2] - h[0][2]) * h[1][2] < -1e-6:
+            if h[3] - e < d[c]:
+                d[c] = h[3] - e
+            # relative tolerance: a point above a box edge whose nearest face comes back as the side face has a dot of
+            # about -1e-4 * distance from float noise, which read as "inside" (-10.3 mm in the review's pan/tilt case)
+            if (p[0] - h[0][0]) * h[1][0] + (p[1] - h[0][1]) * h[1][1] + (p[2] - h[0][2]) * h[1][2] < -1e-3 * h[3] - 1e-6:
                 ins[c] = True
 
 
@@ -389,47 +512,98 @@ class Leg:
         self.r, self.h, self.opt = r, h, opt
         self.R = r + opt["clearance"]
         band = opt["wall_band"] if opt["wall_band"] is not None else 1.5 * h
+        self.dcap = self.R + band            # d is exact below this; above it only "farther than dcap" is known
         lo = np.minimum(a, b) - opt["margin"]
         hi = np.maximum(a, b) + opt["margin"]
         G = self.G = Grid(lo, hi, h)
-        # obstacles on this leg's body (or with no joint between) are fixed; the rest sweep
-        mine = drivers(set(chain(legbody)), CP)
-        fixed, moving = [], {}
-        for o in obstacles:
-            rel = drivers(set(chain(o)), CP) ^ mine
-            (moving.setdefault(rel, []) if rel and any(J.get(j, {}).get("axis") for j in rel) else fixed).append(o)
         set_pose({}, J, CP)
-        self.fixed_tree = tree(fixed)
+        # obstacles on this leg's body (or with no moving joint between) are fixed; the rest sweep, one rigid group per
+        # body: one BVH at home, posed by a matrix per sampled pose. A part behind a continuous joint (a wheel) is
+        # replaced by its spin envelope, an annulus about that axis on the wheel's parent body: sampled instead, A3's
+        # flywheel took 900 pan x tilt x wheel poses at 47 mm of inflation
+        mine = chain(legbody)
+        groups = {}
+        for o in obstacles:
+            ch = chain(o)
+            spin = [j for j in ch if j not in mine and (J.get(j) or {}).get("axis") and (J.get(j) or {}).get("continuous")]
+            if spin:
+                c = spin[-1]
+                up = chain(c)[1:]
+                g = groups.setdefault(up[0] if up else "static", {"objs": [], "extra": []})
+                g["extra"].append(_envelope(o, c, ch, J, CP))
+            else:
+                groups.setdefault(body(o), {"objs": [], "extra": []})["objs"].append(o)
+        set_pose({}, J, CP)
+        corners = np.array([[x, y, z] for x in (G.lo[0], G.lo[0] + G.n[0] * h) for y in (G.lo[1], G.lo[1] + G.n[1] * h)
+                            for z in (G.lo[2], G.lo[2] + G.n[2] * h)])
+        tol = opt["sweep_tol"] if opt["sweep_tol"] is not None else 0.5 * self.R
+        fixed, fixed_extra, plans = [], [], []
+        for bn, g in sorted(groups.items()):
+            opts = np.array([c for o in g["objs"] for c in _corners(o)] + [c for co, _ in g["extra"] for c in co.tolist()])
+            poses, terms, st = sweep_plan(opts, chain(bn), corners, mine, J, CP, tol, int(opt["max_joint_poses"]),
+                                          int(opt["max_group_poses"]))
+            if not terms and len(poses) == 1:
+                fixed += g["objs"]
+                fixed_extra += g["extra"]
+            else:
+                plans.append((bn, g, opts, poses, terms, st))
+        set_pose({}, J, CP)
+        self.fixed_tree = tree(fixed, fixed_extra)
         d = np.full(G.N, np.inf)
         sign_in = np.zeros(G.N, bool)
         live = np.nonzero(~G.border)[0]
+        XL = G.xyz[live]
         if self.fixed_tree:
-            _nearest(G, self.fixed_tree, self.R + band, live, d, sign_in)
-        glo, ghi = G.lo - self.R - band, G.lo + G.n * h + self.R + band
-        self.sweep = []
-        Mb_home = _mw(legbody)
-        for rel, objs in moving.items():
-            for pose in pose_grid(rel, J, self.opt):
-                set_pose(pose, J, CP)
-                M = _mw(legbody) @ Mb_home.inverted()     # leg frame (world at home) -> world at this pose
-                Minv = np.array(M.inverted())
-                near = []
-                for o in objs:                           # only solids that reach the grid at this pose
-                    blo, bhi = _bbox(o)
-                    cs = np.array([[x, y, z, 1] for x in (blo[0], bhi[0]) for y in (blo[1], bhi[1]) for z in (blo[2], bhi[2])])
-                    cl = (cs @ Minv.T)[:, :3]
-                    if (cl.max(0) >= glo).all() and (cl.min(0) <= ghi).all():
-                        near.append(o)
-                tr = tree(near)
-                if tr is None:
+            _nearest(G, self.fixed_tree, self.dcap, live, d, sign_in)
+        Mleg_home = _mw(legbody)
+        glo, ghi = G.lo, G.lo + (G.n - 1) * h
+        BLK = 8
+        nb = tuple(int(x) for x in (G.n + BLK - 1) // BLK)
+        nbm = np.array(nb) - 1
+        bi = G.ijk[live] // BLK
+        blk = (bi[:, 0] * nb[1] + bi[:, 1]) * nb[2] + bi[:, 2]
+        self.groups, self.sweep_stats = [], []
+        for bn, g, opts, poses, terms, st in plans:
+            set_pose({}, J, CP)
+            tr = tree(g["objs"], g["extra"])           # world at home = this body's home frame
+            if tr is None:
+                continue
+            Mb_home = _mw(bn)
+            infl_all = inflation(terms, XL)
+            emax = float(infl_all.max()) if len(infl_all) else 0.0
+            pad = self.dcap + emax
+            # each part's home box (a static group's union box covers the whole grid): per pose, only the 8-cell
+            # blocks that some part's box reaches get distance queries
+            bx = [(np.array(_corners(o)).min(0), np.array(_corners(o)).max(0)) for o in g["objs"]] + \
+                 [(co.min(0), co.max(0)) for co, _ in g["extra"]]
+            boxes = np.array([[[x, y, z, 1] for x in (lo_[0], hi_[0]) for y in (lo_[1], hi_[1]) for z in (lo_[2], hi_[2])]
+                              for lo_, hi_ in bx])
+            Ts = []
+            for pose in poses:
+                # leg frame (world at home) -> world at this pose -> the obstacle body's home frame; matrices from the
+                # parent chain (cadlib.joints.world_at), so a pose costs no depsgraph update
+                vals, cache = JT.values(J, CP, pose), {}
+                T = Mb_home @ _mw_at(bn, J, vals, cache).inverted() @ _mw_at(legbody, J, vals, cache) @ Mleg_home.inverted()
+                cl = (boxes @ np.array(T.inverted()).T)[:, :, :3]      # every part's home box, in the leg frame
+                clo, chi = cl.min(1) - pad, cl.max(1) + pad
+                hit = ~((chi < glo).any(1) | (clo > ghi).any(1))
+                if not hit.any():
                     continue
-                bb = np.array([c for o in near for c in _bbox(o)])
-                corners = np.array([[x, y, z, 1] for x in (bb[:, 0].min(), bb[:, 0].max())
-                                    for y in (bb[:, 1].min(), bb[:, 1].max()) for z in (bb[:, 2].min(), bb[:, 2].max())])
-                cl = (corners @ Minv.T)[:, :3]
-                sel = live[((G.xyz[live] >= cl.min(0) - self.R - band) & (G.xyz[live] <= cl.max(0) + self.R + band)).all(1)]
-                _nearest(G, tr, self.R + band, sel, d, sign_in, M)
-                self.sweep.append((pose, tr, M))
+                bm = np.zeros(nb, bool)
+                b0 = np.clip(np.floor((clo[hit] - G.lo) / (BLK * h)).astype(int), 0, nbm)
+                b1 = np.clip(np.floor((chi[hit] - G.lo) / (BLK * h)).astype(int), 0, nbm)
+                for (i0, j0, k0), (i1, j1, k1) in zip(b0.tolist(), b1.tolist()):
+                    bm[i0:i1 + 1, j0:j1 + 1, k0:k1 + 1] = True
+                sel = bm.ravel()[blk]
+                if not sel.any():
+                    continue
+                Ts.append(T)
+                cells = live[sel]
+                keep = d[cells] >= self.R              # already blocked: another pose can't unblock it
+                _nearest(G, tr, self.dcap, cells[keep], d, sign_in, T, infl_all[sel][keep])
+            self.groups.append({"body": bn, "tree": tr, "Ts": Ts, "terms": terms})
+            self.sweep_stats.append(dict(st, body=bn, near_poses=len(Ts), max_inflation_mm=round(emax, 2),
+                                         spin_envelopes=len(g["extra"])))
         set_pose({}, J, CP)
         self.d = d
         cand = d >= self.R
@@ -445,17 +619,61 @@ class Leg:
         self.W = W
         self.t_exposure = time.time() - t0
 
+    @property
+    def swept_poses(self):
+        return sum(len(g["Ts"]) for g in self.groups)
+
+    def holds(self, p):
+        ijk = (np.asarray(p, float) - self.G.lo) / self.h
+        return bool((ijk >= 0.5).all() and (ijk <= self.G.n - 1.5).all())
+
     def clear(self, p):
         """Exact clearance of a cable centred at p: surface distance minus r, negative (-(d + r)) when p is inside
-        a solid (nearest face points away), worst over the swept poses."""
-        best = 1e9
-        for tr, M in ([(self.fixed_tree, None)] if self.fixed_tree else []) + [(t, M) for _, t, M in self.sweep]:
-            q = Vector(p) if M is None else M @ Vector(p)
-            hh = tr.find_nearest(q, self.R + 5.0)
+        a solid (nearest face points away), worst over the swept poses, a swept solid inflated by its move between
+        samples. None when no solid is within r + clearance + 5 mm."""
+        best = None
+        pv = Vector(p)
+        if self.fixed_tree:
+            hh = self.fixed_tree.find_nearest(pv, self.R + 5.0)
             if hh[0] is not None:
-                dd = hh[3] - self.r if (q - hh[0]).dot(hh[1]) >= -1e-6 else -hh[3] - self.r
-                best = min(best, dd)
+                best = hh[3] - self.r if _outside(pv, hh) else -hh[3] - self.r
+        for g in self.groups:
+            e = float(inflation(g["terms"], [p])[0]) if g["terms"] else 0.0
+            fn = g["tree"].find_nearest
+            for T in g["Ts"]:
+                q = T @ pv
+                hh = fn(q, self.R + 5.0 + e)
+                if hh[0] is not None:
+                    dd = (hh[3] if _outside(q, hh) else -hh[3]) - self.r - e
+                    best = dd if best is None else min(best, dd)
         return best
+
+    def swept_by(self, p):
+        """{body: clearance} for the swept bodies that take p under the requested clearance at some pose."""
+        out, pv = {}, Vector(p)
+        for g in self.groups:
+            e = float(inflation(g["terms"], [p])[0]) if g["terms"] else 0.0
+            for T in g["Ts"]:
+                q = T @ pv
+                hh = g["tree"].find_nearest(q, self.R + 5.0 + e)
+                if hh[0] is not None:
+                    dd = (hh[3] if _outside(q, hh) else -hh[3]) - self.r - e
+                    if dd < self.opt["clearance"]:
+                        out[g["body"]] = round(min(out.get(g["body"], 1e9), dd), 2)
+        return out
+
+    def clear_lb(self, p, need):
+        """clear(p), or a lower bound on it that is already >= need (from the grid's distance field: d is 1-Lipschitz,
+        so a free cell whose centre is far from every solid proves p is too). Keeps the shortcut and fillet checks
+        cheap when hundreds of poses are swept."""
+        if self.holds(p):
+            c = self.G.at(p)
+            if not self.inside[c]:
+                lb = min(float(self.d[c]), self.dcap) - (Vector(p) - Vector(self.G.xyz[c])).length - self.r
+                if lb >= need:
+                    return lb
+        v = self.clear(p)
+        return 1e9 if v is None else v
 
     def seg_ok(self, a, b, wmax, skip_a=0.0, skip_b=0.0, need=None):
         """Segment a-b keeps the clearance (exact) through free cells no costlier than wmax."""
@@ -471,20 +689,25 @@ class Leg:
             c = self.G.at(p)
             if self.blocked[c] or (wmax is not None and self.W[c] > wmax + 1e-6):
                 return False
-            if self.clear(p) < need:
+            if self.clear_lb(p, need) < need:
                 return False
         return True
 
     def entry(self, p, mode=0):
-        """{cell: cost} where the search may start or end for waypoint p. mode 0: its own cell when p is clear.
-        Otherwise free cells within lead_in, at w_stub * W per mm of the straight stub: mode 1 only stubs that go no
-        deeper into a solid than p already is, mode 2 any stub (reported). Stubs serve connectors inside a part's
-        envelope (A3's CAB_12v_ctrl ends inside the controller's header block) and points sealed in a pocket
-        (A3's CAB_uart ends under the controller board, where the hand route also cut the board). Only the 200
-        nearest cells are tried. Empty when nothing is free nearby."""
+        """{cell: cost} where the search may start or end for waypoint p.
+        mode 0: p's own cell when p keeps the clearance and its cell is free; otherwise the same as mode 1.
+        mode 1: free cells within lead_in, at w_stub * W per mm of a straight stub that goes no deeper into a solid
+                than p already is (from a clear p: never into a solid, though it may cross the clearance band). This
+                is what lets a clear p in a pocket whose own cell is boxed in by the band reach the open grid.
+        mode 2: any stub (reported in `stubs`).
+        Stubs serve connectors inside a part's envelope (A3's CAB_12v_ctrl ends inside the controller's header block)
+        and points sealed in a pocket (A3's CAB_uart ends under the controller board, where the hand route also cut
+        the board). Only the 200 nearest cells are tried. Empty when nothing is free nearby."""
         G = self.G
         c = G.at(p)
-        if mode == 0 and not self.blocked[c] and self.clear(p) >= self.opt["clearance"]:
+        cp = self.clear(p)
+        cp = 1e9 if cp is None else cp
+        if mode == 0 and not self.blocked[c] and cp >= self.opt["clearance"]:
             return {c: 0.0}
         lead = self.opt["lead_in"] or (self.R + 4 * self.h)
         k = int(math.ceil(lead / self.h))
@@ -494,7 +717,7 @@ class Leg:
         cells = cells[~self.blocked[cells]]
         dd = np.linalg.norm(G.xyz[cells] - np.asarray(p, float), axis=1)
         order = np.argsort(dd)[:200]
-        floor = min(self.clear(p), 0.0) - 1e-3
+        floor = min(cp, 0.0) - 1e-3
         pv = Vector(p)
         out = {}
         for c, x in zip(cells[order].tolist(), dd[order].tolist()):
@@ -502,32 +725,98 @@ class Leg:
                 break
             q = Vector(G.xyz[c])
             m = max(1, int(math.ceil(x / 0.5)))
-            if mode == 2 or all(self.clear(pv.lerp(q, s / m)) >= floor for s in range(1, m + 1)):
+            if mode == 2 or all(self.clear_lb(pv.lerp(q, s / m), floor) >= floor for s in range(1, m + 1)):
                 out[c] = x * self.opt["w_stub"] * float(self.W[c])
         return out
 
 
-def _shortcut(leg, P, Wp, stub_a, stub_b):
+def _envelope(o, c, ch, J, CP, n=48):
+    """Closed annulus (vertices, triangles; world at home) that object o fills while continuous joint c spins: radii
+    rho_min..rho_max about c's axis over o's axial extent. With moving joints between o and c, rho_min is 0 and rho_max
+    the reach bound. Polygon edges sit inside rho_min and outside rho_max, so the envelope covers the part."""
+    kind, piv, u = _motion(c, J)
+    u = Vector(u).normalized()
+    co, _ = _tris(o)
+    below = [j for j in ch[:ch.index(c)] if _ranged(j, J, CP)]
+    t = (co - np.array(piv)) @ np.array(u)
+    if below:
+        info = {j: _motion(j, J) for j in below + [c]}
+        P0, K = _path_rho(c, below, info, J)
+        rmax = float(_rho(co, P0, K, piv, u).max())
+        rmin, t0, t1 = 0.0, float(t.min()) - rmax, float(t.max()) + rmax
+    else:
+        rmax = float(_axis_dist(co, piv, u).max())
+        t0, t1 = float(t.min()), float(t.max())
+        # closest approach of the surface to the axis: nearest hits from axis points every 0.5 mm (0.25 mm slack)
+        tr = tree([o])
+        m = max(2, int(math.ceil((t1 - t0) / 0.5)) + 1)
+        rmin = 1e9
+        for i in range(m):
+            q = Vector(piv) + u * (t0 + (t1 - t0) * i / (m - 1))
+            hh = tr.find_nearest(q, rmax + 1.0)
+            if hh[0] is None:
+                continue
+            if not _outside(q, hh):          # the axis runs through the solid: a disc, no bore
+                rmin = 0.0
+                break
+            rmin = min(rmin, hh[3])
+        rmin = max(0.0, min(rmin, rmax) - 0.25)
+    w = u.orthogonal().normalized()
+    v = u.cross(w)
+    ro, ri = rmax / math.cos(math.pi / n), max(rmin, 1e-3)      # a 1 um core keeps the inner wall's normals defined
+    V = []
+    for tt in (t0, t1):
+        for rr in (ri, ro):
+            for k in range(n):
+                a = 2 * math.pi * k / n
+                V.append(list(Vector(piv) + u * tt + (w * math.cos(a) + v * math.sin(a)) * rr))
+    # rings: 0 = bottom inner, 1 = bottom outer, 2 = top inner, 3 = top outer
+    F = []
+
+    def quad(r0, r1, k, flip):
+        a, b, c2, d2 = r0 * n + k, r0 * n + (k + 1) % n, r1 * n + (k + 1) % n, r1 * n + k
+        F.extend([(a, c2, b), (a, d2, c2)] if flip else [(a, b, c2), (a, c2, d2)])
+    for k in range(n):
+        quad(1, 3, k, False)        # outer wall
+        quad(0, 2, k, True)         # inner wall
+        quad(0, 1, k, False)        # bottom cap
+        quad(2, 3, k, True)         # top cap
+    return np.array(V, float), np.array(F, dtype=np.int64)
+
+
+def _outside(q, hh):
+    """find_nearest hit hh is on the outside of q's solid (same relative tolerance as _nearest)."""
+    return (q - hh[0]).dot(hh[1]) >= -1e-3 * hh[3] - 1e-6
+
+
+def _corners(o):
+    bb = [o.matrix_world @ Vector(c) for c in o.bound_box]
+    return [list(v) for v in bb]
+
+
+def _shortcut(leg, P, Wp, skip_a, skip_b):
+    """Line-of-sight shortcuts. skip_a / skip_b: mm at the first / last point left unchecked (an end's stub plus a
+    cell; at a via only its stub, so a shortcut can't cut the corner of the slot the via sits in)."""
     out, i, n = [P[0]], 0, len(P)
     while i < n - 1:
         j, k = i + 1, i + 2
-        while k < n and leg.seg_ok(P[i], P[k], max(Wp[i:k + 1]), skip_a=(stub_a + leg.h) if i == 0 else 0.0,
-                                   skip_b=(stub_b + leg.h) if k == n - 1 else 0.0):
+        while k < n and leg.seg_ok(P[i], P[k], max(Wp[i:k + 1]), skip_a=skip_a if i == 0 else 0.0,
+                                   skip_b=skip_b if k == n - 1 else 0.0):
             j, k = k, k + 1
         out.append(P[j])
         i = j
     return out
 
 
-def _merge_short(leg, P, stub_a, stub_b):
+def _merge_short(leg, P, skip_a, skip_b):
     """Drop a vertex between short segments (< 2.5 cells, the staircase A* leaves at a turn) when the joined
     segment keeps the clearance; longer segments leave room for the bend radius (A3 CAB_12v_mg: 2.5 -> 8 mm)."""
     P = list(P)
     i = 1
     while i < len(P) - 1:
         if min((P[i] - P[i - 1]).length, (P[i + 1] - P[i]).length) < 2.5 * leg.h and \
-                leg.seg_ok(P[i - 1], P[i + 1], None, skip_a=(stub_a + leg.h) if i == 1 else 0.0,
-                           skip_b=(stub_b + leg.h) if i == len(P) - 2 else 0.0):
+                leg.seg_ok(P[i - 1], P[i + 1], None, skip_a=skip_a if i == 1 else 0.0,
+                           skip_b=skip_b if i == len(P) - 2 else 0.0):
             del P[i]
             i = max(1, i - 1)
         else:
@@ -655,7 +944,7 @@ def _waypoints(start, end, via, joint, cell):
             if (a0 - wps[-1]["p"]).length > (a1 - wps[-1]["p"]).length:
                 a0, a1 = a1, a0
             wps += [{"p": a0, "body": prev, "kind": "run", "straight": True},
-                    {"p": v["at"], "body": nb, "kind": "via", "straight": True, "from": prev},
+                    {"p": v["at"], "body": nb, "kind": "via", "straight": True, "from": prev, "dir": tuple(d)},
                     {"p": a1, "body": nb, "kind": "run"}]
         else:
             wps.append({"p": v["at"], "body": nb, "kind": "via", "from": prev})
@@ -663,10 +952,12 @@ def _waypoints(start, end, via, joint, cell):
     return wps
 
 
-def route(start, end, r, via=(), joint=None, obstacles=None, joints=None, couplings=None, cfg=None, **kw):
-    """Route a cable of radius r from start to end through each via. Returns a JSON-safe dict: pts (the list for
-    asm.cable), pieces [{joint, pts}] (one per body when a via changes body), length_mm, min_clearance_mm,
-    stubs (endpoints that sit in the clearance band), bend_r_min, exposed_mm, slack rows, time_s and grid stats.
+def route(start, end, r, via=(), joint=None, obstacles=None, joints=None, couplings=None, cfg=None, quiet=False, **kw):
+    """Route a cable of radius r from start to end through each via. Returns a JSON-safe dict: pts (all points, for
+    asm.cable when there is one piece), pieces [{joint, pts}] (one per body when a via changes body), length_mm,
+    min_clearance_mm (None when no solid is within r + clearance + 5 mm), violations (samples away from the ends under
+    the requested clearance), crossings (the turn at each joint crossing at each limit), warnings, stubs, bend_r_min,
+    exposed_mm, slack rows, time_s and grid stats. Violations and warnings are also printed unless quiet.
 
     joint: the body of the first leg (the joint you would give asm.cable). obstacles: default Printed +
     Purchased + Fasteners. joints/couplings: scene_joints(cfg) when None. kw overrides DEFAULTS
@@ -688,21 +979,33 @@ def route(start, end, r, via=(), joint=None, obstacles=None, joints=None, coupli
     leads = tuple(2.0 * r if tb is not None and tb.find_nearest(Vector(p), 3.0)[0] is not None else 0.0 for p in (start, end))
     legrows, stubs, legs = [], [], []
     poly, seg_leg, wp_at = [wps[0]["p"].copy()], [], [0]
+    end_skip = [0.0, 0.0]          # mm at the start / end that the guard leaves to the end stub
     for k in range(len(wps) - 1):
         a, b, lb = wps[k]["p"], wps[k + 1]["p"], wps[k]["body"]
-        leg = None
+        a_end, b_end = k == 0, k == len(wps) - 2
         if wps[k].get("straight"):
+            # a forced straight run (via "dir"): not searched, but checked like the rest (a small grid of its own)
+            leg = Leg(np.array(a), np.array(b), r, lb, obstacles, joints, couplings,
+                      dict(opt, margin=opt["clearance"] + r + 4 * opt["cell"]), None)
             seg = [a, b]
+            legrows.append({"body": lb, "straight": True, "dims": leg.G.n.tolist(), "swept_poses": leg.swept_poses,
+                            "sweep": leg.sweep_stats, "grid_s": round(leg.t_grid, 2)})
         else:
-            leg = None
+            leg, prev = None, None
             for grow, mode in ((1, 0), (1, 1), (1, 2), (2, 2)):   # clear ends, safe stubs, any stub, a bigger box
                 o2 = dict(opt, margin=opt["margin"] * grow)
                 if leg is None or leg.opt["margin"] != o2["margin"]:
-                    leg = Leg(np.array(a), np.array(b), r, lb, obstacles, joints, couplings, o2, tv)
+                    leg, prev = Leg(np.array(a), np.array(b), r, lb, obstacles, joints, couplings, o2, tv), None
                 src, dst = leg.entry(a, mode), leg.entry(b, mode)
                 if not src or not dst:
-                    raise RuntimeError("route: %s is buried: no free cell within lead_in (r + clearance = %.2f)" % (
-                        [round(x, 1) for x in (a if not src else b)], leg.R))
+                    pb = a if not src else b
+                    sw = leg.swept_by(pb)
+                    raise RuntimeError("route: %s is buried: no free cell within lead_in (r + clearance = %.2f)%s" % (
+                        [round(x, 1) for x in pb], leg.R, "; it is in the swept path of %s (clearance %s over the joint "
+                        "range): move it out of the path, or put the cable on that body" % (", ".join(sw), sw) if sw else ""))
+                if prev == (src, dst):         # mode 1 gave mode 0's entries (neither end was clear): same search
+                    continue
+                prev = (src, dst)
                 t0 = time.time()
                 cells, nexp = astar(leg.G, leg.blocked, leg.W, src, dst, b, opt["w_turn"])
                 ts = time.time() - t0
@@ -710,23 +1013,35 @@ def route(start, end, r, via=(), joint=None, obstacles=None, joints=None, coupli
                     break
             if cells is None:
                 raise RuntimeError("route: no path from %s to %s with r + clearance = %.2f mm on a %.1f mm grid; try a "
-                                   "smaller cell or clearance, or a via" % ([round(x, 1) for x in a], [round(x, 1) for x in b], leg.R, leg.h))
+                                   "smaller cell or clearance, or a via (a slot or bore narrower than 2 (r + clearance) "
+                                   "+ cell needs a via with \"dir\")" % ([round(x, 1) for x in a], [round(x, 1) for x in b], leg.R, leg.h))
             sa = (Vector(leg.G.xyz[cells[0]]) - a).length if src[cells[0]] else 0.0
             sb = (Vector(leg.G.xyz[cells[-1]]) - b).length if dst[cells[-1]] else 0.0
+            # an end skips its stub plus a cell (the plug's own clearance is the end's business); a via only its stub
+            ka, kb = sa + (leg.h if a_end else 0.0), sb + (leg.h if b_end else 0.0)
+            if a_end:
+                end_skip[0] = ka
+            if b_end:
+                end_skip[1] = kb
             P = [a] + [Vector(leg.G.xyz[c]) for c in cells] + [b]
             Wp = [leg.W[cells[0]]] + [float(leg.W[c]) for c in cells] + [leg.W[cells[-1]]]
             t0 = time.time()
-            seg = _merge_short(leg, _shortcut(leg, P, Wp, sa, sb), sa, sb)
+            seg = _merge_short(leg, _shortcut(leg, P, Wp, ka, kb), ka, kb)
             legrows.append({"body": lb, "dims": leg.G.n.tolist(), "cells": int(leg.G.N), "margin": o2["margin"],
-                            "blocked_frac": round(float(leg.blocked.mean()), 3), "swept_poses": len(leg.sweep),
-                            "expanded": nexp, "grid_s": round(leg.t_grid, 2), "exposure_s": round(leg.t_exposure, 2),
-                            "search_s": round(ts, 2), "shortcut_s": round(time.time() - t0, 2)})
-            for p, s, c in ((a, sa, cells[0]), (b, sb, cells[-1])):
-                if s:
+                            "blocked_frac": round(float(leg.blocked.mean()), 3), "swept_poses": leg.swept_poses,
+                            "sweep": leg.sweep_stats, "expanded": nexp, "grid_s": round(leg.t_grid, 2),
+                            "exposure_s": round(leg.t_exposure, 2), "search_s": round(ts, 2),
+                            "shortcut_s": round(time.time() - t0, 2)})
+            for p, s_, c, is_end in ((a, sa, cells[0], a_end), (b, sb, cells[-1], b_end)):
+                if s_:
                     q = Vector(leg.G.xyz[c])
-                    m = max(1, int(math.ceil(s / 0.5)))
-                    stubs.append({"at": [round(x, 2) for x in p], "stub_mm": round(s, 1), "clearance_mm": round(leg.clear(p), 2),
-                                  "stub_min_clearance_mm": round(min(leg.clear(p.lerp(q, k / m)) for k in range(m + 1)), 2)})
+                    m = max(1, int(math.ceil(s_ / 0.5)))
+                    cl = [leg.clear(p.lerp(q, k2 / m)) for k2 in range(m + 1)]
+                    cl = [x for x in cl if x is not None]
+                    c0 = leg.clear(p)
+                    stubs.append({"at": [round(x, 2) for x in p], "end": is_end, "stub_mm": round(s_, 1),
+                                  "clearance_mm": round(c0, 2) if c0 is not None else None,
+                                  "stub_min_clearance_mm": round(min(cl), 2) if cl else None})
         legs.append(leg)
         for p in seg[1:]:
             poly.append(Vector(p))
@@ -740,33 +1055,38 @@ def route(start, end, r, via=(), joint=None, obstacles=None, joints=None, coupli
         din, dout = poly[i] - poly[i - 1], poly[i + 1] - poly[i]
         u = (din.normalized() + dout.normalized())
         u = u.normalized() if u.length > 1e-6 else din.normalized()
-        s = min(1.5, 0.25 * din.length, 0.25 * dout.length)
-        poly[i:i + 1] = [poly[i] - u * s, poly[i].copy(), poly[i] + u * s]
+        s_ = min(1.5, 0.25 * din.length, 0.25 * dout.length)
+        poly[i:i + 1] = [poly[i] - u * s_, poly[i].copy(), poly[i] + u * s_]
         seg_leg[i - 1:i] = [seg_leg[i - 1]] * 2
         seg_leg[i + 1:i + 1] = [seg_leg[i + 1]]
         for kk in range(k, len(wp_at)):
             wp_at[kk] += 1 if kk == k else 2
     ends = [Vector(start), Vector(end)]
-    skip = max([s["stub_mm"] for s in stubs] + [0.0]) + opt["cell"]
 
-    def clear_by(p, cand):
-        """Exact clearance of p for the legs in cand whose grid holds it (None if none does); -r inside a solid."""
+    def near_end(p):
+        return (p - ends[0]).length < end_skip[0] or (p - ends[1]).length < end_skip[1]
+
+    def clear_by(p, cand, need=None):
+        """Exact clearance of p for the legs in cand whose grid holds it (None if none does); -r inside a solid.
+        With `need`, a lower bound that is already >= need may stand in for the exact value."""
         out = None
         for leg in cand:
-            if leg is None:
+            if leg is None or not leg.holds(p):
                 continue
-            ijk = (np.asarray(p, float) - leg.G.lo) / leg.h
-            if (ijk >= 0.5).all() and (ijk <= leg.G.n - 1.5).all():
-                c = -leg.r if leg.inside[leg.G.at(p)] else leg.clear(p)
+            if leg.inside[leg.G.at(p)]:
+                c = -leg.r
+            else:
+                c = leg.clear(p) if need is None else leg.clear_lb(p, need)
+            if c is not None:
                 out = c if out is None else min(out, c)
         return out
 
     def check(pts, i):
         cand = {seg_leg[j] for j in (i - 1, i) if 0 <= j < len(seg_leg)}
         for p in pts:
-            if min((p - e).length for e in ends) < skip:
+            if near_end(p):
                 continue
-            c = clear_by(p, cand)
+            c = clear_by(p, cand, opt["clearance"])
             if c is not None and c < opt["clearance"]:
                 return False
         return True
@@ -778,8 +1098,9 @@ def route(start, end, r, via=(), joint=None, obstacles=None, joints=None, coupli
                    for i, x in enumerate(radii) if _turn(poly, i + 1) > 1.0]
     t_smooth = time.time() - t0
     # one piece per body: split at the vias that change body (they stay exact vertices of pts)
-    cuts = [w["p"] for w in wps if w["kind"] == "via" and w["body"] != w["from"]]
-    bodies = [wps[0]["body"]] + [w["body"] for w in wps if w["kind"] == "via" and w["body"] != w["from"]]
+    cut_wps = [w for w in wps if w["kind"] == "via" and w["body"] != w["from"]]
+    cuts = [w["p"] for w in cut_wps]
+    bodies = [wps[0]["body"]] + [w["body"] for w in cut_wps]
     pieces, cur = [{"joint": bodies[0], "pts": []}], 0
     for p in pts:
         pieces[-1]["pts"].append(p)
@@ -789,31 +1110,50 @@ def route(start, end, r, via=(), joint=None, obstacles=None, joints=None, coupli
     body_legs = {}
     for leg, w in zip(legs, wps):
         body_legs.setdefault(w["body"], []).append(leg)
-    # stats: exact clearance every 0.5 mm, inside cells, exposure every 2 mm on the centre line (cadcheck's rule)
-    clr_all, clr_mid, inside, exp_mm = [], [], 0, 0.0
+    # guard and stats: exact clearance every 0.5 mm (one sample index along the whole route), inside cells, and
+    # exposure every 2 mm on the centre line (cadcheck's rule)
+    clr_all, clr_mid, inside, exp_mm, viol, si = [], [], 0, 0.0, [], 0
     for pc in pieces:
         q = pc["pts"]
         for i in range(len(q) - 1):
             L = (q[i + 1] - q[i]).length
             m = max(1, int(math.ceil(L / 0.5)))
-            for s in range(m + 1):
-                p = q[i].lerp(q[i + 1], s / m)
+            for s_ in range(m + 1):
+                p = q[i].lerp(q[i + 1], s_ / m)
+                si += 1
                 c = clear_by(p, body_legs.get(pc["joint"], []))
                 if c is None:
                     continue
                 clr_all.append(c)
-                if min((p - e).length for e in ends) >= skip:
-                    clr_mid.append((c, [round(x, 1) for x in p]))
-                    inside += int(any(lg is not None and lg.inside[lg.G.at(p)] for lg in body_legs.get(pc["joint"], [])))
+                if not near_end(p):
+                    clr_mid.append((c, [round(x, 2) for x in p]))
+                    inside += int(any(lg is not None and lg.holds(p) and lg.inside[lg.G.at(p)] for lg in body_legs.get(pc["joint"], [])))
+                    if c < opt["clearance"] - 1e-3 and not (viol and viol[-1]["i"] == si - 1 and viol[-1]["at"] == [round(x, 2) for x in p]):
+                        viol.append({"i": si - 1, "at": [round(x, 2) for x in p], "clearance_mm": round(c, 2)})
             if tv is not None:
                 m2 = max(1, int(math.ceil(L / 2.0)))
-                exp_mm += sum(L / m2 for s in range(m2) if exposed(tv, q[i].lerp(q[i + 1], (s + 0.5) / m2), opt))
+                exp_mm += sum(L / m2 for s_ in range(m2) if exposed(tv, q[i].lerp(q[i + 1], (s_ + 0.5) / m2), opt))
     bent = [x for i, x in enumerate(radii) if _turn(poly, i + 1) > 1.0]
+    cross = crossings(pieces, cut_wps, joints, couplings)
+    warnings = []
+    if viol:
+        w = min(viol, key=lambda v: v["clearance_mm"])
+        warnings.append("%d samples away from the ends are under the requested %.2f mm clearance (worst %.2f at %s%s)" % (
+            len(viol), opt["clearance"], w["clearance_mm"], w["at"], ", into a solid or its swept path" if w["clearance_mm"] < 0 else ""))
+    for cr in cross:
+        worst = max(cr["turn_deg"].items(), key=lambda kv: kv[1])
+        if worst[1] > opt["fold_warn_deg"] and not cr["on_axis"]:
+            cr["warn"] = True
+            warnings.append("the cable folds %.0f deg crossing %s at %s (%s=%s): cross along the joint axis (via \"dir\" = "
+                            "the axis) or model a service loop" % (worst[1], cr["joint"], cr["at"], cr["joint"], worst[0]))
+    mn = min(clr_mid) if clr_mid else None
+    mna = min(clr_all) if clr_all else None
     res = {"pts": [[round(x, 3) for x in p] for p in pts],
            "pieces": [{"joint": pc["joint"], "pts": [[round(x, 3) for x in p] for p in pc["pts"]]} for pc in pieces],
            "r": r, "length_mm": round(_plen(pts), 1), "straight_mm": round((ends[1] - ends[0]).length, 1),
-           "min_clearance_mm": round(min(clr_mid)[0], 2) if clr_mid else None, "min_clearance_at": min(clr_mid)[1] if clr_mid else None,
-           "min_clearance_incl_ends_mm": round(min(clr_all), 2) if clr_all else None,
+           "min_clearance_mm": round(mn[0], 2) if mn else None, "min_clearance_at": mn[1] if mn else None,
+           "min_clearance_incl_ends_mm": round(mna, 2) if mna is not None else None,
+           "clearance_asked_mm": opt["clearance"], "violations": viol, "warnings": warnings, "crossings": cross,
            "inside_samples": inside, "stubs": stubs, "vias": [list(map(float, w["p"])) for w in wps if w["kind"] == "via"],
            "bend_r_target": round(opt["bend_r"], 2), "bend_r_min": round(min(bent), 2) if bent else None, "bend_r_floor": round(bend_floor, 2),
            "sharp_corners": sum(1 for x in bent if x <= 0), "corners": corner_rows,
@@ -821,6 +1161,9 @@ def route(start, end, r, via=(), joint=None, obstacles=None, joints=None, coupli
            "time_s": {"total": round(time.time() - T0, 2), "smooth": round(t_smooth, 2)},
            "settings": {k: v for k, v in opt.items() if k not in ("prefer", "avoid")}}
     set_pose({}, joints, couplings)
+    if not quiet:
+        for w in warnings:
+            print("route: WARN " + w)
     return res
 
 
@@ -831,10 +1174,63 @@ def _turn(P, i):
     return math.degrees(a.angle(b)) if a.length and b.length else 0.0
 
 
+def _limits(s):
+    if s.get("continuous"):
+        return [0.0, 90.0, 180.0, 270.0]
+    if s.get("lo") is not None:
+        h = float(s.get("home", 0.0) or 0.0)
+        return sorted({float(s["lo"]), h, float(s["hi"])})
+    return []
+
+
+def _rel(b0, b1, J, CP):
+    """Driver joints between two bodies, each with (pose -> matrix taking b1's home frame into b0's home frame)."""
+    set_pose({}, J, CP)
+    H0, H1 = _mw(b0), _mw(b1)
+
+    def M(pose):
+        set_pose(pose, J, CP)
+        return H0 @ _mw(b0).inverted() @ _mw(b1) @ H1.inverted()
+    return sorted(drivers(set(chain(b1)) ^ set(chain(b0)), CP)), M
+
+
+def crossings(pieces, cut_wps, J, CP):
+    """At each via where the route changes body: the cable's turn there (incoming direction against the outgoing one
+    carried by the joint) at each limit of every joint between the two bodies. A via whose "dir" runs along the joint
+    axis turns 0 at every pose; a cable crossing a hinge across its axis folds by the hinge angle (PR #3 review, scene
+    `hinge`: 0 / 55 / 109 deg at 0 / 55 / 110), which a straight bridge hides from `slack`."""
+    rows = []
+    for k in range(1, len(pieces)):
+        a, b = pieces[k - 1], pieces[k]
+        if len(a["pts"]) < 2 or len(b["pts"]) < 2:
+            continue
+        din = (a["pts"][-1] - a["pts"][-2]).normalized()
+        dout = (b["pts"][1] - b["pts"][0]).normalized()
+        w = cut_wps[k - 1] if k - 1 < len(cut_wps) else {}
+        vdir = Vector(w["dir"]).normalized() if w.get("dir") else None
+        rel, M = _rel(a["joint"], b["joint"], J, CP)
+        for j in rel:
+            s = J.get(j) or {}
+            if not s.get("axis"):
+                continue
+            turns = {}
+            for v in _limits(s):
+                d2 = (M({j: v}).to_3x3() @ dout).normalized()
+                turns["%g" % v] = round(math.degrees(din.angle(d2)) if d2.length > 0 else 0.0, 1)
+            set_pose({}, J, CP)
+            kind, piv, u = _motion(j, J)
+            on_axis = bool(vdir is not None and (kind == "prismatic" or abs(vdir.dot(u)) > math.cos(math.radians(10))))
+            rows.append({"joint": j, "at": [round(x, 2) for x in a["pts"][-1]], "from": a["joint"], "to": b["joint"],
+                         "turn_deg": turns, "on_axis": on_axis})
+    set_pose({}, J, CP)
+    return rows
+
+
 def slack(pieces, J, CP):
     """Path length at each limit of every joint between consecutive pieces' bodies, with the later pieces
-    moving with their body (seen from the first piece's body). slack_mm = longest minus home: the extra lead
-    a cable needs to reach both joint extremes."""
+    moving with their body (seen from the first piece's body). slack_mm = longest minus home: how much the path
+    stretches between the joint limits. It treats the via as a straight bridge, so it is 0 at an on-axis via by
+    design and says nothing about the fold there (see crossings)."""
     rows = []
     if len(pieces) < 2:
         return rows
@@ -857,14 +1253,12 @@ def slack(pieces, J, CP):
     L0 = length({})
     for j in sorted(rel):
         s = J.get(j) or {}
-        if s.get("continuous"):
-            vals = [0.0, 90.0, 180.0, 270.0]
-        elif s.get("lo") is not None:
-            vals = [float(s["lo"]), float(s["hi"])]
-        else:
+        vals = [0.0, 90.0, 180.0, 270.0] if s.get("continuous") else ([float(s["lo"]), float(s["hi"])] if s.get("lo") is not None else [])
+        if not vals:
             continue
         Ls = {a: length({j: a}) for a in vals}
-        rows.append({"joint": j, "home_mm": round(L0, 1), "at_deg": {("%g" % a): round(L, 1) for a, L in Ls.items()},
+        rows.append({"joint": j, "home_mm": round(L0, 1), "at": {("%g" % a): round(L, 1) for a, L in Ls.items()},
+                     "unit": "mm" if s.get("kind") == "prismatic" else "deg",
                      "slack_mm": round(max(Ls.values()) - L0, 1), "range_mm": round(max(Ls.values()) - min(min(Ls.values()), L0), 1)})
     set_pose({}, J, CP)
     return rows
@@ -872,14 +1266,23 @@ def slack(pieces, J, CP):
 
 def cable(name, start, end, r, color="cable_blk", via=(), joint=None, lead_len=None, step=None, **kw):
     """route() then asm.cable(): one object per body (name, name_1, ...), each on its piece's joint.
-    Returns (objects, result)."""
+    Returns (objects, result).
+
+    lead_len goes on the cable when the route is one piece. A split route is one conductor in several objects, and
+    cadcheck compares each object's own path_len with its lead_len, so the lead belongs on a cable_chains row (the
+    whole run against one lead), not on each piece: res["cable_chain"] is that row, ready for checks.json."""
     from . import asm
     res = route(start, end, r, via=via, joint=joint, **kw)
     obs = []
+    split = len(res["pieces"]) > 1
     for k, pc in enumerate(res["pieces"]):
         j = None if pc["joint"] == "static" else pc["joint"]
         obs.append(asm.cable(name if k == 0 else "%s_%d" % (name, k), pc["pts"], r, color, joint=j,
-                             lead_len=lead_len if k == 0 and len(res["pieces"]) == 1 else None, step=step))
+                             lead_len=None if split else lead_len, step=step))
+    if split:
+        res["cable_chain"] = {"name": name, "cables": [o.name for o in obs], "lead": lead_len}
+        if not kw.get("quiet"):
+            print("route: %s is split at a joint: add a cable_chains row to checks.json: %s" % (name, json.dumps(res["cable_chain"])))
     return obs, res
 
 
