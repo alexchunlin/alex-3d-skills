@@ -1,11 +1,23 @@
 {
  "_doc": [
-  "Ground truth for tools/bench/replay.py: one entry per issue a reviewer raised on an archived attempt, plus the 4 v2 post-freeze",
-  "support misses on every v2 attempt. id: the reviewer's id (v1: the FINDINGS id); findings_id: the FINDINGS row; severity: the reviewer's",
-  "(v1 from review.md); tool_catchable: the reviewer's flag (v1: FINDINGS 'Tool that catches it'); locators: any of {check, match: regex}",
-  "on a report line 'check: message' (cadcheck fail/warn lists, 'printcheck: <stl>: ...', 'bom: BAD ...'); null when no check names it.",
-  "source: FINDINGS line, or HW/... (HW = ~/code-stuff/mmlauncher/mm-launcher/mm-launch-hw) review files. judgment: where this is a call.",
-  "known_true_positives: real fails no reviewer raised, and planted overlay rows; they are not false fails."
+  "Ground truth for tools/bench/replay.py. Three lists, scored apart:",
+  "labels: one entry per issue a reviewer raised on an archived attempt (the headline recall). id: the reviewer's id (v1: the FINDINGS id);",
+  "  findings_id: the FINDINGS row; severity (blocker 3, major 2, minor 1 in the weighted recall); tool_catchable: the reviewer's flag",
+  "  (v1: FINDINGS 'Tool that catches it'); process: true = not a design defect, out of every denominator; credit_scope: 'rows' = the",
+  "  designer config's row for it was written from the review, so it counts in rows scope only; source: FINDINGS line or HW/... review",
+  "  file (HW = ~/code-stuff/mmlauncher/mm-launcher/mm-launch-hw); judgment: where this is a call.",
+  "printability: tool findings no reviewer raised (the layer check's support misses, v1 and v2 alike), one entry per finding with the",
+  "  attempts it is on; scored once per finding (worst status over those attempts) in its own score, never in reviewer recall.",
+  "  confirmed_by: 'print YYYY-MM-DD' when a real print confirmed it; print_evidence: [{date: YYYY-MM-DD, by: who printed and looked,",
+  "  printed: what was printed (parts, settings, supports), result: fail | pass | partial, observed: what was seen, action: what it",
+  "  needs (optional), photo: path (optional)}]. Add an entry per print, on any finding or label.",
+  "known_true_positives: planted overlay rows and exploratory review rows: real fails that credit nothing and are not false fails.",
+  "locators (every list): any of {check, objects, kind, region?, partial?}. A report line 'check: message' (cadcheck fail/warn",
+  "  lists, 'printcheck: <stl>: ...', 'bom: BAD ...') matches when it starts with check, names every object (whole token; * ? [..]",
+  "  glob over a family; a named row or test when the line names no object), and matches the kind regex (the defect, never a",
+  "  measured number) and the region regex (where on the part, when the part has other findings). partial: true = the line covers",
+  "  part of the issue (a coverage warn, a sub-point): status 'partial', not caught. locators null: no check names it.",
+  "  `replay.py lint` rejects a top-level | in a regex, check '*', a locator with no object and a number pinned in kind."
  ],
  "labels": [
   {
@@ -20,7 +32,11 @@
    "locators": [
     {
      "check": "drop",
-     "match": "feed_outlet_to_wheel at tilt=(0: lands|22\\.5: .*first hit)"
+     "objects": [
+      "feed_outlet_to_wheel"
+     ],
+     "kind": "(?:lands [\\d.]+\\.\\.[\\d.]+ deg, window|first hit)",
+     "region": "at tilt=(?:0|22\\.5): "
     }
    ],
    "source": "docs/FINDINGS.md:122"
@@ -37,7 +53,11 @@
    "locators": [
     {
      "check": "distances",
-     "match": "PRT_hood to PRT_flywheel = \\d"
+     "objects": [
+      "PRT_hood",
+      "PRT_flywheel"
+     ],
+     "kind": "PRT_hood to PRT_flywheel = [\\d.]+ mm .*wanted"
     }
    ],
    "source": "docs/FINDINGS.md:123"
@@ -54,7 +74,11 @@
    "locators": [
     {
      "check": "interference",
-     "match": "PRT_feeder_disc x FST_cap_R-1"
+     "objects": [
+      "PRT_feeder_disc",
+      "FST_cap_R-1"
+     ],
+     "kind": " x .* collide"
     }
    ],
    "source": "docs/FINDINGS.md:124"
@@ -71,11 +95,17 @@
    "locators": [
     {
      "check": "fasteners",
-     "match": "FST_\\w*horn\\w* cannot be driven"
+     "objects": [
+      "FST_*horn*"
+     ],
+     "kind": "cannot be driven"
     },
     {
      "check": "fasteners",
-     "match": "horn_adapter.*cannot be driven"
+     "objects": [
+      "*horn_adapter*"
+     ],
+     "kind": "cannot be driven"
     }
    ],
    "source": "docs/FINDINGS.md:125",
@@ -93,11 +123,37 @@
    "locators": [
     {
      "check": "clearance",
-     "match": "PRT_(hopper|feeder_plate) to PRT_launcher_(body|cover) only 0\\.\\d+ mm across a joint at tilt=45"
+     "objects": [
+      "PRT_hopper",
+      "PRT_launcher_*"
+     ],
+     "kind": "only [\\d.]+ mm across a joint",
+     "region": "at tilt=45"
+    },
+    {
+     "check": "clearance",
+     "objects": [
+      "PRT_feeder_plate",
+      "PRT_launcher_*"
+     ],
+     "kind": "only [\\d.]+ mm across a joint",
+     "region": "at tilt=45"
     },
     {
      "check": "interference",
-     "match": "PRT_(hopper|feeder_plate) x PRT_launcher_(body|cover) collide only 2\\.5 deg past"
+     "objects": [
+      "PRT_hopper",
+      "PRT_launcher_*"
+     ],
+     "kind": "collide only [\\d.]+ deg past the joint limit"
+    },
+    {
+     "check": "interference",
+     "objects": [
+      "PRT_feeder_plate",
+      "PRT_launcher_*"
+     ],
+     "kind": "collide only [\\d.]+ deg past the joint limit"
     }
    ],
    "source": "docs/FINDINGS.md:126"
@@ -138,7 +194,12 @@
    "locators": [
     {
      "check": "drop",
-     "match": "feed_outlet_to_wheel at tilt=45: .*first hit \\['PRT_launcher_body'\\]"
+     "objects": [
+      "feed_outlet_to_wheel",
+      "PRT_launcher_body"
+     ],
+     "kind": "rays first hit \\['PRT_launcher_body'\\]",
+     "region": "at tilt=45: "
     }
    ],
    "source": "docs/FINDINGS.md:129",
@@ -156,7 +217,11 @@
    "locators": [
     {
      "check": "interference",
-     "match": "PRT_arm_cover_[LR] x PRT_trunnion_[LR] touch"
+     "objects": [
+      "PRT_arm_cover_?",
+      "PRT_trunnion_?"
+     ],
+     "kind": "touch with zero clearance"
     }
    ],
    "source": "docs/FINDINGS.md:130"
@@ -173,11 +238,25 @@
    "locators": [
     {
      "check": "interference",
-     "match": "PRT_flywheel x FST_motor_\\d"
+     "objects": [
+      "PRT_flywheel",
+      "FST_motor_*"
+     ],
+     "kind": "collide"
     },
     {
      "check": "fasteners",
-     "match": "FST_motor_\\d (head is inside|cannot be driven)"
+     "objects": [
+      "FST_motor_*"
+     ],
+     "kind": "head is inside"
+    },
+    {
+     "check": "fasteners",
+     "objects": [
+      "FST_motor_*"
+     ],
+     "kind": "cannot be driven"
     }
    ],
    "source": "docs/FINDINGS.md:131"
@@ -194,7 +273,10 @@
    "locators": [
     {
      "check": "fasteners",
-     "match": "FST_trunnion_\\d needs a \\d+ mm\\+ bit"
+     "objects": [
+      "FST_trunnion_*"
+     ],
+     "kind": "needs a \\d+ mm\\+ bit"
     }
    ],
    "source": "docs/FINDINGS.md:132"
@@ -211,7 +293,10 @@
    "locators": [
     {
      "check": "cables",
-     "match": "CAB_phase\\w*: .*(runs \\d+ mm|but its lead)"
+     "objects": [
+      "CAB_phase*"
+     ],
+     "kind": "(?:runs \\d+ mm|but its lead)"
     }
    ],
    "source": "docs/FINDINGS.md:133",
@@ -229,7 +314,10 @@
    "locators": [
     {
      "check": "slide",
-     "match": "BUY_battery slides out but with only"
+     "objects": [
+      "BUY_battery"
+     ],
+     "kind": "slides out but with only"
     }
    ],
    "source": "docs/FINDINGS.md:134"
@@ -245,7 +333,8 @@
    "tool_catchable": false,
    "locators": null,
    "source": "docs/FINDINGS.md:135",
-   "judgment": "a process issue (the designer's report), not a design defect; kept because FINDINGS lists it; never tool-catchable by a model check"
+   "judgment": "a process issue (the designer's report overclaimed), not a design defect: kept because FINDINGS lists it, never catchable by a model check, so it is out of every denominator",
+   "process": true
   },
   {
    "attempt": "a1",
@@ -258,7 +347,10 @@
    "locators": [
     {
      "check": "payload",
-     "match": "pair|edge"
+     "objects": [
+      "PRT_feeder_*"
+     ],
+     "kind": "edge.on"
     }
    ],
    "source": "HW/renders/attempt-1/review.md item 8",
@@ -312,11 +404,17 @@
    "locators": [
     {
      "check": "fasteners",
-     "match": "FST_fw_bolt_\\d cannot be driven"
+     "objects": [
+      "FST_fw_bolt_*"
+     ],
+     "kind": "cannot be driven"
     },
     {
      "check": "service",
-     "match": "FST_fw_bolt_\\d cannot be reached"
+     "objects": [
+      "FST_fw_bolt_*"
+     ],
+     "kind": "cannot be reached"
     }
    ],
    "source": "docs/FINDINGS.md:291"
@@ -333,7 +431,10 @@
    "locators": [
     {
      "check": "index",
-     "match": "feeder_one_candy_per_cycle: \\d+ open windows"
+     "objects": [
+      "feeder_one_candy_per_cycle"
+     ],
+     "kind": "\\d+ open windows"
     }
    ],
    "source": "docs/FINDINGS.md:292",
@@ -351,7 +452,10 @@
    "locators": [
     {
      "check": "fasteners",
-     "match": "FST_fw_bolt_\\d stops [\\d.]+ mm short of its nut"
+     "objects": [
+      "FST_fw_bolt_*"
+     ],
+     "kind": "stops [\\d.]+ mm short of its nut"
     }
    ],
    "source": "docs/FINDINGS.md:293"
@@ -368,7 +472,11 @@
    "locators": [
     {
      "check": "distances",
-     "match": "PRT_hood to PRT_flywheel: [\\d.]+ mm rigid squeeze"
+     "objects": [
+      "PRT_hood",
+      "PRT_flywheel"
+     ],
+     "kind": "rigid squeeze"
     }
    ],
    "source": "docs/FINDINGS.md:294"
@@ -385,11 +493,19 @@
    "locators": [
     {
      "check": "fasteners",
-     "match": "FST_adapter_\\d runs [\\d.]+ mm into purchased part BUY_battery"
+     "objects": [
+      "FST_adapter_*",
+      "BUY_battery"
+     ],
+     "kind": "runs [\\d.]+ mm into purchased part"
     },
     {
      "check": "fasteners",
-     "match": "FST_adapter_nut_\\d sits inside purchased part BUY_battery"
+     "objects": [
+      "FST_adapter_nut_*",
+      "BUY_battery"
+     ],
+     "kind": "sits inside purchased part"
     }
    ],
    "source": "docs/FINDINGS.md:295"
@@ -406,7 +522,10 @@
    "locators": [
     {
      "check": "service",
-     "match": "FST_clamp_r reachable only at tilt"
+     "objects": [
+      "FST_clamp_r"
+     ],
+     "kind": "reachable only at tilt"
     }
    ],
    "source": "docs/FINDINGS.md:296"
@@ -423,11 +542,15 @@
    "locators": [
     {
      "check": "stacks",
-     "match": "magnet to sensor centring: worst case"
+     "objects": [
+      "magnet to sensor centring"
+     ],
+     "kind": "worst case [\\d.]+ mm > [\\d.]+"
     }
    ],
    "source": "docs/FINDINGS.md:297",
-   "judgment": "FINDINGS: the stack terms were written from R2's review, so this is a calculator, not a detection"
+   "judgment": "FINDINGS:297: the stack terms in the a2 config were written from R2's review ('a calculator, not a detection'), so the stacks warn counts in rows scope only",
+   "credit_scope": "rows"
   },
   {
    "attempt": "a2",
@@ -441,7 +564,11 @@
    "locators": [
     {
      "check": "cables",
-     "match": "CAB_bus_feeder: about \\d+ mm of cable is visible from outside around \\[-10\\d\\.\\d, -?\\d+\\.\\d, 2[45]\\d"
+     "objects": [
+      "CAB_bus_feeder"
+     ],
+     "kind": "mm of cable is visible from outside",
+     "region": "around \\[-1\\d\\d\\.\\d, -?\\d+\\.\\d, 2\\d\\d\\."
     }
    ],
    "source": "docs/FINDINGS.md:298"
@@ -458,11 +585,17 @@
    "locators": [
     {
      "check": "fasteners",
-     "match": "FST_jack_\\d head stands"
+     "objects": [
+      "FST_jack_*"
+     ],
+     "kind": "head stands [\\d.]+ mm off the part"
     },
     {
      "check": "fasteners",
-     "match": "FST_jack_nut_\\d is visible"
+     "objects": [
+      "FST_jack_nut_*"
+     ],
+     "kind": "is visible from outside"
     }
    ],
    "source": "docs/FINDINGS.md:299"
@@ -490,7 +623,11 @@
    "locators": [
     {
      "check": "drop",
-     "match": "feed_spout_to_tape at tilt=4[56]: .*slide of only"
+     "objects": [
+      "feed_spout_to_tape"
+     ],
+     "kind": "slide of only [\\d.]+ deg",
+     "region": "at tilt=4[56]: "
     }
    ],
    "source": "docs/FINDINGS.md:462"
@@ -507,7 +644,10 @@
    "locators": [
     {
      "check": "flexures",
-     "match": "PRT_nip_cover .*beam stands \\d+ deg off the bed"
+     "objects": [
+      "PRT_nip_cover"
+     ],
+     "kind": "beam stands \\d+ deg off the bed"
     }
    ],
    "source": "docs/FINDINGS.md:463",
@@ -525,7 +665,11 @@
    "locators": [
     {
      "check": "slide",
-     "match": "BUY_battery slide-out blocked by \\['FST_adapter_nut"
+     "objects": [
+      "BUY_battery",
+      "FST_adapter_nut_*"
+     ],
+     "kind": "slide-out blocked by"
     }
    ],
    "source": "docs/FINDINGS.md:464"
@@ -553,7 +697,10 @@
    "locators": [
     {
      "check": "fasteners",
-     "match": "FST_hinge: only [\\d.]+ mm of thread"
+     "objects": [
+      "FST_hinge"
+     ],
+     "kind": "only [\\d.]+ mm of thread"
     }
    ],
    "source": "docs/FINDINGS.md:466"
@@ -582,7 +729,11 @@
    "locators": [
     {
      "check": "cables",
-     "match": "CAB_launcher_bundle_\\d: about \\d+ mm of cable is visible from outside around \\[-10\\d"
+     "objects": [
+      "CAB_launcher_bundle_*"
+     ],
+     "kind": "mm of cable is visible from outside",
+     "region": "around \\[-1\\d\\d\\."
     }
    ],
    "source": "docs/FINDINGS.md:468"
@@ -599,11 +750,15 @@
    "locators": [
     {
      "check": "fasteners",
-     "match": "FST_adapter_nut_\\d is visible from outside"
+     "objects": [
+      "FST_adapter_nut_*"
+     ],
+     "kind": "is visible from outside",
+     "partial": true
     }
    ],
    "source": "docs/FINDINGS.md:469",
-   "judgment": "partial in FINDINGS: the nut warn fires, the window size is not checked; counted as caught"
+   "judgment": "partial in FINDINGS: the nut warn fires, the window size is not checked; counted as caught; locators marked partial credit 'partial', not caught: the line covers part of the issue (a coverage warn or a sub-point)"
   },
   {
    "attempt": "v2a1",
@@ -617,14 +772,23 @@
    "locators": [
     {
      "check": "drop",
-     "match": "the payload path touches \\['PRT_hood'\\], which moves on PIV_hood"
+     "objects": [
+      "PRT_hood",
+      "PIV_hood"
+     ],
+     "kind": "the payload path touches .*which moves on PIV_hood .*holds PIV_hood at home",
+     "partial": true
     },
     {
      "check": "drop",
-     "match": "nip drop at both hood ends .*rays end at \\['stall'\\]"
+     "objects": [
+      "nip drop at both hood ends"
+     ],
+     "kind": "rays end at \\['stall'\\]"
     }
    ],
-   "source": "docs/FINDINGS.md:690"
+   "source": "docs/FINDINGS.md:690",
+   "judgment": "locators marked partial credit 'partial', not caught: the line covers part of the issue (a coverage warn or a sub-point)"
   },
   {
    "attempt": "v2a1",
@@ -638,10 +802,22 @@
    "locators": [
     {
      "check": "service",
-     "match": "(nip|gap).*(only at tilt|cannot be reached|no slide_out row)"
+     "objects": [
+      "FST_nipcover_*"
+     ],
+     "kind": "(?:reachable only at tilt|cannot be reached)"
+    },
+    {
+     "check": "service",
+     "objects": [
+      "PRT_nip_cover"
+     ],
+     "kind": "no slide_out row moves them",
+     "partial": true
     }
    ],
-   "source": "docs/FINDINGS.md:691"
+   "source": "docs/FINDINGS.md:691",
+   "judgment": "locators marked partial credit 'partial', not caught: the line covers part of the issue (a coverage warn or a sub-point)"
   },
   {
    "attempt": "v2a1",
@@ -655,7 +831,10 @@
    "locators": [
     {
      "check": "payload",
-     "match": "edge-on pair"
+     "objects": [
+      "PRT_feeder_disc"
+     ],
+     "kind": "edge-on pair .*seats without touching"
     }
    ],
    "source": "docs/FINDINGS.md:692"
@@ -672,7 +851,10 @@
    "locators": [
     {
      "check": "service",
-     "match": "feeder servo swap.*cannot be reached"
+     "objects": [
+      "BUY_servo_feeder"
+     ],
+     "kind": "cannot be reached"
     }
    ],
    "source": "docs/FINDINGS.md:693",
@@ -690,7 +872,10 @@
    "locators": [
     {
      "check": "parts",
-     "match": "PRT_feeder_crown: \\d+ wall samples < [\\d.]+ mm \\(min 0\\.9"
+     "objects": [
+      "PRT_feeder_crown"
+     ],
+     "kind": "wall samples <"
     }
    ],
    "source": "docs/FINDINGS.md:694"
@@ -707,7 +892,11 @@
    "locators": [
     {
      "check": "insertion",
-     "match": "group 'pod' .*step '7 pod drops into the post U-slots"
+     "objects": [
+      "group 'pod'"
+     ],
+     "kind": "has no straight way in",
+     "region": "step '7 pod drops into the post U-slots'"
     }
    ],
    "source": "docs/FINDINGS.md:695",
@@ -725,7 +914,10 @@
    "locators": [
     {
      "check": "stacks",
-     "match": "magnet centring .*worst case 0\\.4"
+     "objects": [
+      "magnet centring"
+     ],
+     "kind": "worst case [\\d.]+ mm > [\\d.]+"
     }
    ],
    "source": "docs/FINDINGS.md:696"
@@ -742,11 +934,31 @@
    "locators": [
     {
      "check": "parts",
-     "match": "PRT_(jar_valve|jar_gate|hood): \\d+ wall samples"
+     "objects": [
+      "PRT_jar_valve"
+     ],
+     "kind": "wall samples <",
+     "partial": true
+    },
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_jar_gate"
+     ],
+     "kind": "wall samples <",
+     "partial": true
+    },
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_hood"
+     ],
+     "kind": "wall samples <",
+     "partial": true
     }
    ],
    "source": "docs/FINDINGS.md:697",
-   "judgment": "the bridge half is not matched: the ceiling-span warn was replaced by the layer check, which bridges the crown arcs (35 mm warns) but none at 48"
+   "judgment": "the bridge half is not matched: the ceiling-span warn was replaced by the layer check, which bridges the crown arcs (35 mm warns) but none at 48; locators marked partial credit 'partial', not caught: the line covers part of the issue (a coverage warn or a sub-point)"
   },
   {
    "attempt": "v2a1",
@@ -779,14 +991,9 @@
    "metric": "aesthetics",
    "summary": "servo-controller PCB visible through a 52 x 24 base notch",
    "tool_catchable": true,
-   "locators": [
-    {
-     "check": "*",
-     "match": "(BUY_servo_controller|PCB).*visible"
-    }
-   ],
+   "locators": null,
    "source": "docs/FINDINGS.md:699",
-   "judgment": "exposure covers cables and nuts, not PCBs; locator kept for when it does"
+   "judgment": "no check reports a visible PCB (exposure covers cables and nuts); a PR that adds one adds this locator"
   },
   {
    "attempt": "v2a1",
@@ -800,94 +1007,6 @@
    "source": "docs/FINDINGS.md:698"
   },
   {
-   "attempt": "v2a1",
-   "id": "V2PF-jar_valve",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: 3 bayonet tabs at z 2: 5.5 mm cantilevers",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_jar_valve\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "jar_valve: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1817",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
-   "attempt": "v2a1",
-   "id": "V2PF-feeder_cover",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: 2 screw ears at z 32: 10.5 mm cantilevers",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_feeder_cover\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "feeder_cover: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1818",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
-   "attempt": "v2a1",
-   "id": "V2PF-base_shell",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: zip-tie anchor block at z 45: 6 mm cantilever",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_base_shell\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "base_shell: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1819",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
-   "attempt": "v2a1",
-   "id": "V2PF-post_R",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: post top above the cover split at z 142: 11.7 mm cantilever",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_post_R\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "post_R: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1820",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
    "attempt": "v2a2",
    "id": "A2-01",
    "findings_id": "V2A2-F1",
@@ -899,11 +1018,16 @@
    "locators": [
     {
      "check": "drop",
-     "match": "which moves on PIV_nip_lift \\("
+     "objects": [
+      "PRT_hood",
+      "PIV_nip_lift"
+     ],
+     "kind": "the payload path touches .*which moves on PIV_nip_lift .*holds PIV_nip_lift at home",
+     "partial": true
     }
    ],
    "source": "docs/FINDINGS.md:889",
-   "judgment": "caught only as the drop coverage warn (the test holds the leaf lift at home); no archived row measures the full-lift gap"
+   "judgment": "caught only as the drop coverage warn (the test holds the leaf lift at home); no archived row measures the full-lift gap; locators marked partial credit 'partial', not caught: the line covers part of the issue (a coverage warn or a sub-point)"
   },
   {
    "attempt": "v2a2",
@@ -917,7 +1041,17 @@
    "locators": [
     {
      "check": "payload",
-     "match": "pocket blocks an edge-on pair"
+     "objects": [
+      "PRT_feeder_disc"
+     ],
+     "kind": "edge-on pair .*seats without touching"
+    },
+    {
+     "check": "payload",
+     "objects": [
+      "pocket blocks an edge-on pair"
+     ],
+     "kind": "holds with only [\\d.]+ mm to spare"
     }
    ],
    "source": "docs/FINDINGS.md:890"
@@ -944,11 +1078,17 @@
    "locators": [
     {
      "check": "parts",
-     "match": "PRT_launcher_body: \\d+ wall samples < [\\d.]+ mm \\(min 1\\.1"
+     "objects": [
+      "PRT_launcher_body"
+     ],
+     "kind": "wall samples <"
     },
     {
      "check": "parts",
-     "match": "PRT_nip_cover: 1\\d\\d mm2 of sloped overhang"
+     "objects": [
+      "PRT_nip_cover"
+     ],
+     "kind": "mm2 of sloped overhang"
     }
    ],
    "source": "docs/FINDINGS.md:891"
@@ -965,7 +1105,10 @@
    "locators": [
     {
      "check": "cables",
-     "match": "\\d+ cables have no lead length"
+     "objects": [
+      "CAB_bus_pan"
+     ],
+     "kind": "cables have no lead length"
     }
    ],
    "source": "docs/FINDINGS.md:892"
@@ -993,15 +1136,34 @@
    "locators": [
     {
      "check": "assembly",
-     "match": "says M2 x 4, but its M2 screws are"
+     "objects": [
+      "step '10a"
+     ],
+     "kind": "says M2 x 4, but its M2 screws are"
     },
     {
      "check": "flexures",
-     "match": "PRT_nip_leaf is named compliant"
+     "objects": [
+      "PRT_nip_leaf"
+     ],
+     "kind": "is named compliant in distances .* but has no flexures row"
     },
     {
      "check": "distances",
-     "match": "ray hits PRT_hood on another face than at home|14\\.18 mm \\(along ray\\)"
+     "objects": [
+      "PRT_hood",
+      "PRT_flywheel"
+     ],
+     "kind": "the ray hits PRT_hood on another face than at home"
+    },
+    {
+     "check": "distances",
+     "objects": [
+      "PRT_hood",
+      "PRT_flywheel"
+     ],
+     "kind": "\\(along ray\\) at .*wanted [\\d.]+\\.\\.[\\d.]+",
+     "region": "\\(V2R2 jam-lift row"
     }
    ],
    "source": "docs/FINDINGS.md:893",
@@ -1018,98 +1180,14 @@
    "locators": [
     {
      "check": "drop",
-     "match": "min-gap stop .*slide of only 32\\.\\d"
+     "objects": [
+      "drop at the min-gap stop"
+     ],
+     "kind": "slide of only [\\d.]+ deg",
+     "region": "tilt=4[56]: "
     }
    ],
    "source": "docs/FINDINGS.md:895"
-  },
-  {
-   "attempt": "v2a2",
-   "id": "V2PF-jar_valve",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: 3 bayonet tabs at z 2: 5.5 mm cantilevers",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_jar_valve\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "jar_valve: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1817",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
-   "attempt": "v2a2",
-   "id": "V2PF-feeder_cover",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: 2 screw ears at z 32: 10.5 mm cantilevers",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_feeder_cover\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "feeder_cover: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1818",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
-   "attempt": "v2a2",
-   "id": "V2PF-base_shell",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: zip-tie anchor block at z 45: 6 mm cantilever",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_base_shell\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "base_shell: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1819",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
-   "attempt": "v2a2",
-   "id": "V2PF-post_R",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: post top above the cover split at z 142: 11.7 mm cantilever",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_post_R\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "post_R: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1820",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
   },
   {
    "attempt": "v2a3",
@@ -1123,7 +1201,11 @@
    "locators": [
     {
      "check": "distances",
-     "match": "\\d\\.\\d+ mm \\(along ray\\).*wanted 8\\.0"
+     "objects": [
+      "PRT_hood",
+      "PRT_flywheel"
+     ],
+     "kind": "\\(along ray\\) at .*nip_lift=-[\\d.]+, wanted [\\d.]+\\.\\.None"
     }
    ],
    "source": "docs/FINDINGS.md:1072"
@@ -1140,7 +1222,10 @@
    "locators": [
     {
      "check": "cables",
-     "match": "runs \\d+ mm through CAB_encoder"
+     "objects": [
+      "CAB_encoder"
+     ],
+     "kind": "cable chain .*runs \\d+ mm through .*but its lead is"
     }
    ],
    "source": "docs/FINDINGS.md:1074",
@@ -1158,7 +1243,10 @@
    "locators": [
     {
      "check": "payload",
-     "match": "only 0\\.0\\d mm to spare"
+     "objects": [
+      "pocket blocks an edge-on pair"
+     ],
+     "kind": "holds with only [\\d.]+ mm to spare"
     }
    ],
    "source": "docs/FINDINGS.md:1073"
@@ -1175,15 +1263,23 @@
    "locators": [
     {
      "check": "fasteners",
-     "match": "non-stock screw lengths: M3 x 9"
+     "objects": [
+      "FST_detent_*"
+     ],
+     "kind": "non-stock screw lengths: .*M3 x 9",
+     "partial": true
     },
     {
      "check": "bom",
-     "match": "M3 x 9 is not a stock length"
+     "objects": [
+      "M3 x 9"
+     ],
+     "kind": "is not a stock length",
+     "partial": true
     }
    ],
    "source": "docs/FINDINGS.md:1075",
-   "judgment": "only the M3 x 9 sub-point is tool-catchable; counted as caught when it is"
+   "judgment": "only the M3 x 9 sub-point is tool-catchable; counted as caught when it is; locators marked partial credit 'partial', not caught: the line covers part of the issue (a coverage warn or a sub-point)"
   },
   {
    "attempt": "v2a3",
@@ -1197,7 +1293,10 @@
    "locators": [
     {
      "check": "bom",
-     "match": "FST_nip_stud is 16 long"
+     "objects": [
+      "FST_nip_stud"
+     ],
+     "kind": "is [\\d.]+ long in the model"
     }
    ],
    "source": "docs/FINDINGS.md:1076"
@@ -1214,99 +1313,21 @@
    "locators": [
     {
      "check": "slide",
-     "match": "(floor|detent).*(blocked|only)"
+     "objects": [
+      "PRT_base_floor"
+     ],
+     "kind": "(?:slide-out blocked|slides out but with only)"
+    },
+    {
+     "check": "slide",
+     "objects": [
+      "PRT_gate_detent"
+     ],
+     "kind": "(?:slide-out blocked|slides out but with only)"
     }
    ],
    "source": "docs/FINDINGS.md:1077",
    "judgment": "FINDINGS: V2R3's floor slide row passes; a config gap, not a model defect"
-  },
-  {
-   "attempt": "v2a3",
-   "id": "V2PF-jar_valve",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: 3 bayonet tabs at z 2: 5.5 mm cantilevers",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_jar_valve\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "jar_valve: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1817",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
-   "attempt": "v2a3",
-   "id": "V2PF-feeder_cover",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: 2 screw ears at z 32: 10.5 mm cantilevers",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_feeder_cover\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "feeder_cover: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1818",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
-   "attempt": "v2a3",
-   "id": "V2PF-base_shell",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: zip-tie anchor block at z 45: 6 mm cantilever",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_base_shell\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "base_shell: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1819",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
-   "attempt": "v2a3",
-   "id": "V2PF-post_R",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: post top above the cover split at z 142: 11.7 mm cantilever",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_post_R\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "post_R: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1820",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
   },
   {
    "attempt": "v2a4",
@@ -1320,7 +1341,11 @@
    "locators": [
     {
      "check": "distances",
-     "match": "mm \\(along ray swept [\\d.]+\\.\\.[\\d.]+ deg, worst at \\d+\\)"
+     "objects": [
+      "PRT_hood",
+      "PRT_flywheel"
+     ],
+     "kind": "\\(along ray swept [\\d.]+\\.\\.[\\d.]+ deg, worst at \\d+\\) at .*wanted [\\d.]+\\.\\.None"
     }
    ],
    "source": "docs/FINDINGS.md:1231"
@@ -1350,94 +1375,6 @@
    "source": "docs/FINDINGS.md:1233"
   },
   {
-   "attempt": "v2a4",
-   "id": "V2PF-jar_valve",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: 3 bayonet tabs at z 2: 5.5 mm cantilevers",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_jar_valve\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "jar_valve: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1817",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
-   "attempt": "v2a4",
-   "id": "V2PF-feeder_cover",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: 2 screw ears at z 32: 10.5 mm cantilevers",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_feeder_cover\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "feeder_cover: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1818",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
-   "attempt": "v2a4",
-   "id": "V2PF-base_shell",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: zip-tie anchor block at z 45: 6 mm cantilever",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_base_shell\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "base_shell: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1819",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
-   "attempt": "v2a4",
-   "id": "V2PF-post_R",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: post top above the cover split at z 142: 11.7 mm cantilever",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_post_R\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "post_R: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1820",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
    "attempt": "v2a5",
    "id": "A5-01",
    "findings_id": "V2A5-F1",
@@ -1449,7 +1386,10 @@
    "locators": [
     {
      "check": "stacks",
-     "match": "RSS [\\d.]+ mm > 0\\.3\\d \\(measured: PRT_gate_detent"
+     "objects": [
+      "PRT_gate_detent"
+     ],
+     "kind": "RSS [\\d.]+ mm > [\\d.]+ \\(measured: "
     }
    ],
    "source": "docs/FINDINGS.md:1372",
@@ -1467,7 +1407,11 @@
    "locators": [
     {
      "check": "distances",
-     "match": "8\\.099 mm .*(wanted|margin)"
+     "objects": [
+      "PRT_hood",
+      "PRT_flywheel"
+     ],
+     "kind": "\\(along ray swept [\\d.]+\\.\\.[\\d.]+ deg, worst at \\d+\\) at .*wanted [\\d.]+\\.\\.None"
     }
    ],
    "source": "docs/FINDINGS.md:1373",
@@ -1485,7 +1429,10 @@
    "locators": [
     {
      "check": "cables",
-     "match": "junction|meet .*no connector"
+     "objects": [
+      "CAB_bus_*"
+     ],
+     "kind": "cable junctions with no purchased part"
     }
    ],
    "source": "docs/FINDINGS.md:1374",
@@ -1528,99 +1475,15 @@
    "locators": [
     {
      "check": "interference",
-     "match": "PRT_gate_detent x PRT_jar_gate.*max_mm3|over the allow's max_mm3"
+     "objects": [
+      "PRT_jar_gate",
+      "PRT_gate_detent"
+     ],
+     "kind": "over the allow's max_mm3"
     }
    ],
    "source": "docs/FINDINGS.md:1377",
    "judgment": "designer scope only lists it in summary.unbounded_allows (not a warn line); the bounded allow in the band overlay fails"
-  },
-  {
-   "attempt": "v2a5",
-   "id": "V2PF-jar_valve",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: 3 bayonet tabs at z 2: 5.5 mm cantilevers",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_jar_valve\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "jar_valve: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1817",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
-   "attempt": "v2a5",
-   "id": "V2PF-feeder_cover",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: 2 screw ears at z 32: 10.5 mm cantilevers",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_feeder_cover\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "feeder_cover: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1818",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
-   "attempt": "v2a5",
-   "id": "V2PF-base_shell",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: zip-tie anchor block at z 45: 6 mm cantilever",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_base_shell\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "base_shell: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1819",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
-   "attempt": "v2a5",
-   "id": "V2PF-post_R",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: post top above the cover split at z 142: 11.7 mm cantilever",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_post_R\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "post_R: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1820",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
   },
   {
    "attempt": "v2a6",
@@ -1634,15 +1497,26 @@
    "locators": [
     {
      "check": "insertion",
-     "match": "BUY_bus_junction is in bench step"
+     "objects": [
+      "BUY_bus_junction"
+     ],
+     "kind": "is in bench step"
     },
     {
      "check": "insertion",
-     "match": "\\+Z PRT_groove_cap \\(BUY_bus_junction\\)"
+     "objects": [
+      "PRT_groove_cap",
+      "BUY_bus_junction"
+     ],
+     "kind": "has no straight way in"
     },
     {
      "check": "slide",
-     "match": "PRT_groove_cap"
+     "objects": [
+      "PRT_groove_cap",
+      "BUY_bus_junction"
+     ],
+     "kind": "slide-out blocked by"
     }
    ],
    "source": "docs/FINDINGS.md:1529"
@@ -1659,7 +1533,17 @@
    "locators": [
     {
      "check": "cables",
-     "match": "(CAB_bus_pan|CAB_launcher_base) ends [\\d.]+ mm from .*at pan=-?90 that point is"
+     "objects": [
+      "CAB_bus_pan"
+     ],
+     "kind": "ends [\\d.]+ mm from .*that point is [\\d.]+ mm further away"
+    },
+    {
+     "check": "cables",
+     "objects": [
+      "CAB_launcher_base"
+     ],
+     "kind": "ends [\\d.]+ mm from .*that point is [\\d.]+ mm further away"
     }
    ],
    "source": "docs/FINDINGS.md:1530"
@@ -1676,98 +1560,13 @@
    "locators": [
     {
      "check": "distances",
-     "match": "the swept ray missed a part"
+     "objects": [
+      "PRT_hood"
+     ],
+     "kind": "the swept ray missed a part"
     }
    ],
    "source": "docs/FINDINGS.md:1531"
-  },
-  {
-   "attempt": "v2a6",
-   "id": "V2PF-jar_valve",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: 3 bayonet tabs at z 2: 5.5 mm cantilevers",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_jar_valve\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "jar_valve: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1817",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
-   "attempt": "v2a6",
-   "id": "V2PF-feeder_cover",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: 2 screw ears at z 32: 10.5 mm cantilevers",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_feeder_cover\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "feeder_cover: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1818",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
-   "attempt": "v2a6",
-   "id": "V2PF-base_shell",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: zip-tie anchor block at z 45: 6 mm cantilever",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_base_shell\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "base_shell: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1819",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
-  },
-  {
-   "attempt": "v2a6",
-   "id": "V2PF-post_R",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
-   "severity": "major",
-   "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: post top above the cover split at z 142: 11.7 mm cantilever",
-   "tool_catchable": true,
-   "locators": [
-    {
-     "check": "parts",
-     "match": "PRT_post_R\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "post_R: .*cantilever"
-    }
-   ],
-   "source": "docs/FINDINGS.md:1820",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
   },
   {
    "attempt": "v2a7",
@@ -1781,7 +1580,11 @@
    "locators": [
     {
      "check": "assembly",
-     "match": "needs PIV_tilt at 45 .*BUY_servo_tilt"
+     "objects": [
+      "PIV_tilt",
+      "BUY_servo_tilt"
+     ],
+     "kind": "needs PIV_tilt at \\d+ .*but BUY_servo_tilt .*holds that joint"
     }
    ],
    "source": "docs/FINDINGS.md:1687",
@@ -1799,11 +1602,25 @@
    "locators": [
     {
      "check": "cables",
-     "match": "CAB_bus_(feeder|tilt) \\(OD [\\d.]+\\) kinks"
+     "objects": [
+      "CAB_bus_feeder"
+     ],
+     "kind": "kinks: "
     },
     {
      "check": "cables",
-     "match": "CAB_bus_feeder and CAB_bus_tilt lie in one tube"
+     "objects": [
+      "CAB_bus_tilt"
+     ],
+     "kind": "kinks: "
+    },
+    {
+     "check": "cables",
+     "objects": [
+      "CAB_bus_feeder",
+      "CAB_bus_tilt"
+     ],
+     "kind": "lie in one tube"
     }
    ],
    "source": "docs/FINDINGS.md:1688"
@@ -1819,7 +1636,11 @@
    "locators": [
     {
      "check": "cables",
-     "match": "CAB_launcher_base ends [\\d.]+ mm from CAB_launcher_bundle.*that point is"
+     "objects": [
+      "CAB_launcher_base",
+      "CAB_launcher_bundle"
+     ],
+     "kind": "ends [\\d.]+ mm from .*that point is [\\d.]+ mm further away"
     }
    ],
    "source": "docs/FINDINGS.md:1689"
@@ -1836,162 +1657,277 @@
    "locators": [
     {
      "check": "slide",
-     "match": "(groove cap|gcap|PRT_groove_cap).*(not clear|stops short|short of)"
+     "objects": [
+      "PRT_groove_cap"
+     ],
+     "kind": "(?:not clear|stops short|short of)"
     }
    ],
    "source": "docs/FINDINGS.md:1690",
    "judgment": "a config dispute (a removal row that stops short passes). V2R7's own rows show back-up blocked by the nip cover but forward-up clear, so the cap can come out and those fails are not this issue: not caught"
-  },
+  }
+ ],
+ "printability": [
   {
-   "attempt": "v2a7",
-   "id": "V2PF-jar_valve",
+   "id": "PF-jar_valve",
    "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
+   "attempts": [
+    "v2a1",
+    "v2a2",
+    "v2a3",
+    "v2a4",
+    "v2a5",
+    "v2a6",
+    "v2a7"
+   ],
    "severity": "major",
    "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: 3 bayonet tabs at z 2: 5.5 mm cantilevers",
+   "summary": "shipped supports: no; needs support: 3 bayonet tabs at z 2, 5.5 mm cantilevers",
    "tool_catchable": true,
    "locators": [
     {
      "check": "parts",
-     "match": "PRT_jar_valve\\b.*cantilever"
+     "objects": [
+      "PRT_jar_valve"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z [1-3]\\.\\d "
     },
     {
      "check": "printcheck",
-     "match": "jar_valve: .*cantilever"
+     "objects": [
+      "jar_valve"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z [1-3]\\.\\d "
+    }
+   ],
+   "confirmed_by": "print 2026-10-26",
+   "print_evidence": [
+    {
+     "date": "2026-10-26",
+     "by": "user",
+     "printed": "v2 parts as shipped (supports: no)",
+     "result": "fail",
+     "observed": "the twist-lock jar mechanism (jar_valve) drooped without supports",
+     "action": "needs hand cutting; print with supports or redesign the tabs"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1816",
+   "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker); the same rule for v1 and v2"
+  },
+  {
+   "id": "PF-feeder_cover",
+   "findings_id": "V2PF-1",
+   "attempts": [
+    "v2a1",
+    "v2a2",
+    "v2a3",
+    "v2a4",
+    "v2a5",
+    "v2a6",
+    "v2a7"
+   ],
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "shipped supports: no; needs support: 2 screw ears at z 32, 10.5 mm cantilevers",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_feeder_cover"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z 3[0-4]\\.\\d "
+    },
+    {
+     "check": "printcheck",
+     "objects": [
+      "feeder_cover"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z 3[0-4]\\.\\d "
     }
    ],
    "source": "docs/FINDINGS.md:1817",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
+   "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker); the same rule for v1 and v2"
   },
   {
-   "attempt": "v2a7",
-   "id": "V2PF-feeder_cover",
+   "id": "PF-base_shell",
    "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
+   "attempts": [
+    "v2a1",
+    "v2a2",
+    "v2a3",
+    "v2a4",
+    "v2a5",
+    "v2a6",
+    "v2a7"
+   ],
    "severity": "major",
    "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: 2 screw ears at z 32: 10.5 mm cantilevers",
+   "summary": "shipped supports: no; needs support: zip-tie anchor block at z 45, 6 mm cantilever",
    "tool_catchable": true,
    "locators": [
     {
      "check": "parts",
-     "match": "PRT_feeder_cover\\b.*cantilever"
+     "objects": [
+      "PRT_base_shell"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z 4[3-7]\\.\\d "
     },
     {
      "check": "printcheck",
-     "match": "feeder_cover: .*cantilever"
+     "objects": [
+      "base_shell"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z 4[3-7]\\.\\d "
     }
    ],
    "source": "docs/FINDINGS.md:1818",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
+   "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker); the same rule for v1 and v2"
   },
   {
-   "attempt": "v2a7",
-   "id": "V2PF-base_shell",
+   "id": "PF-post_R",
    "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
+   "attempts": [
+    "v2a1",
+    "v2a2",
+    "v2a3",
+    "v2a4",
+    "v2a5",
+    "v2a6",
+    "v2a7"
+   ],
    "severity": "major",
    "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: zip-tie anchor block at z 45: 6 mm cantilever",
+   "summary": "shipped supports: no; needs support: post top above the cover split at z 142, 11.7 mm cantilever",
    "tool_catchable": true,
    "locators": [
     {
      "check": "parts",
-     "match": "PRT_base_shell\\b.*cantilever"
+     "objects": [
+      "PRT_post_R"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z 14[0-4]\\.\\d "
     },
     {
      "check": "printcheck",
-     "match": "base_shell: .*cantilever"
+     "objects": [
+      "post_R"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z 14[0-4]\\.\\d "
     }
    ],
    "source": "docs/FINDINGS.md:1819",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
+   "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker); the same rule for v1 and v2. Region z 140-144 is the post top; the 1.5 mm ledges at z 130.2 on the same part are short-ledge warns, not this finding"
   },
   {
-   "attempt": "v2a7",
-   "id": "V2PF-post_R",
-   "findings_id": "V2PF-1",
-   "reviewer_item": "none (post-freeze, orchestrator)",
+   "id": "PF1-arm_cover_R",
+   "findings_id": "V2PF-1 (v1)",
+   "attempts": [
+    "a1"
+   ],
    "severity": "major",
    "metric": "manufacturability",
-   "summary": "shipped supports: no, needs support: post top above the cover split at z 142: 11.7 mm cantilever",
+   "summary": "arm_cover_R: a 2.6 mm wall 9.3 mm off its flange at z 1 (supports: no)",
    "tool_catchable": true,
    "locators": [
     {
      "check": "parts",
-     "match": "PRT_post_R\\b.*cantilever"
-    },
-    {
-     "check": "printcheck",
-     "match": "post_R: .*cantilever"
+     "objects": [
+      "PRT_arm_cover_R"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z [0-2]\\.\\d "
     }
    ],
-   "source": "docs/FINDINGS.md:1820",
-   "judgment": "no reviewer raised it; severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker). Same 4 parts on every v2 attempt (verify 4n)"
+   "source": "docs/FINDINGS.md:1841",
+   "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker); the same rule for v1 and v2"
+  },
+  {
+   "id": "PF1-base_shell_ribs",
+   "findings_id": "V2PF-1 (v1)",
+   "attempts": [
+    "a1",
+    "a2",
+    "a3"
+   ],
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "base_shell: 0.6 mm ribs starting 20 mm up (4 regions, supports: no)",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_base_shell"
+     ],
+     "kind": "a [\\d.]+ mm cantilever",
+     "region": "at z (?:20|69)\\.\\d "
+    }
+   ],
+   "source": "docs/FINDINGS.md:1841",
+   "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker); the same rule for v1 and v2"
+  },
+  {
+   "id": "PF1-hopper_lip",
+   "findings_id": "V2PF-1 (v1)",
+   "attempts": [
+    "a1",
+    "a2",
+    "a3"
+   ],
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "hopper: the funnel lip in mid-air (an island on A1, cantilevers on A2/A3; supports: no)",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_hopper"
+     ],
+     "kind": "(?:an island starts in mid-air|a [\\d.]+ mm cantilever)"
+    }
+   ],
+   "source": "docs/FINDINGS.md:1841",
+   "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker); the same rule for v1 and v2"
   }
  ],
  "known_true_positives": [
   {
-   "attempt": "a1",
-   "check": "parts",
-   "match": "PRT_arm_cover_R \\(model\\): a [\\d.]+ mm cantilever",
-   "why": "arm_cover_R's 2.6 mm wall 9.3 mm off its flange (layer check); tool-catchable, no reviewer raised it",
-   "source": "docs/FINDINGS.md:1841"
-  },
-  {
-   "attempt": "a1",
-   "check": "parts",
-   "match": "PRT_base_shell \\(model\\): a [\\d.]+ mm cantilever",
-   "why": "base_shell's 0.6 mm ribs starting 20 mm up (layer check); tool-catchable, no reviewer raised it",
-   "source": "docs/FINDINGS.md:1841"
-  },
-  {
-   "attempt": "a2",
-   "check": "parts",
-   "match": "PRT_base_shell \\(model\\): a [\\d.]+ mm cantilever",
-   "why": "base_shell's 0.6 mm ribs starting 20 mm up (layer check); tool-catchable, no reviewer raised it",
-   "source": "docs/FINDINGS.md:1841"
-  },
-  {
-   "attempt": "a3",
-   "check": "parts",
-   "match": "PRT_base_shell \\(model\\): a [\\d.]+ mm cantilever",
-   "why": "base_shell's 0.6 mm ribs starting 20 mm up (layer check); tool-catchable, no reviewer raised it",
-   "source": "docs/FINDINGS.md:1841"
-  },
-  {
-   "attempt": "a1",
-   "check": "parts",
-   "match": "PRT_hopper \\(model\\): (an island|a [\\d.]+ mm cantilever)",
-   "why": "the hopper's funnel lip in mid-air (layer check); tool-catchable, no reviewer raised it",
-   "source": "docs/FINDINGS.md:1841"
-  },
-  {
-   "attempt": "a2",
-   "check": "parts",
-   "match": "PRT_hopper \\(model\\): (an island|a [\\d.]+ mm cantilever)",
-   "why": "the hopper's funnel lip in mid-air (layer check); tool-catchable, no reviewer raised it",
-   "source": "docs/FINDINGS.md:1841"
-  },
-  {
-   "attempt": "a3",
-   "check": "parts",
-   "match": "PRT_hopper \\(model\\): (an island|a [\\d.]+ mm cantilever)",
-   "why": "the hopper's funnel lip in mid-air (layer check); tool-catchable, no reviewer raised it",
-   "source": "docs/FINDINGS.md:1841"
+   "attempt": "v2a2",
+   "check": "slide",
+   "objects": [
+    "PRT_jar_adapter"
+   ],
+   "kind": "planted: gate stop",
+   "why": "a planted row in overlay_v2a2.json (verify 4e): it must fail",
+   "source": "tools/verify_all.sh 4e"
   },
   {
    "attempt": "v2a2",
-   "check": "*",
-   "match": "planted: ",
+   "check": "sightlines",
+   "objects": [
+    "PRT_nip_wheel"
+   ],
+   "kind": "planted: the slot ray",
    "why": "a planted row in overlay_v2a2.json (verify 4e): it must fail",
    "source": "tools/verify_all.sh 4e"
   },
   {
    "attempt": "v2a7",
    "check": "slide",
-   "match": "R7 A7-01 groove cap leaves",
+   "objects": [
+    "R7 A7-01 groove cap leaves"
+   ],
+   "kind": "slide-out blocked by",
    "why": "V2R7's exploratory exit rows for the groove cap at tilt 45 / 0: the blocked directions are facts its review used (FINDINGS: back-up hits the nip cover at 54), not defects on their own; forward-up is clear",
    "source": "tools/verify_all.sh 4k; docs/FINDINGS.md:1690"
   }
