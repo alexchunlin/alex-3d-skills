@@ -15,11 +15,28 @@ python3 -I tools/transcript/cc_transcript.py images|renders|files $WF/agent-ID.j
 python3 -I tools/transcript/cc_transcript.py grep     $WF/agent-ID.jsonl 'tilt sweep'
 python3 -I tools/transcript/cc_transcript.py show     $WF/agent-ID.jsonl 43           # full input/output of tool call #43
 python3 -I tools/transcript/cc_transcript.py bench    [--attempt v2a7] [--json]       # tools/bench tier 2: doc/source reads, feature use
+python3 -I tools/transcript/cc_transcript.py calibrate [--write] [--json]             # chars/token of doc reads, from the usage numbers
 ```
 
 `bench` reads the agents in `tools/bench/agents.json` (or the transcripts given): skill-doc tokens read before the first
-`.py`/`.json` edit, cadcheck/cadlib source reads, failed cad runs, and the cad subcommands, `cad q` commands, `--only`
-sections, checks.json keys and cadlib calls each agent used. See `tools/bench/README.md`.
+`.py`/`.json` write to the design project (a /tmp probe is not the first edit), cadcheck/cadlib source reads, failed cad
+runs, and the cad subcommands, `cad q` commands, `--only` sections, checks.json keys and cadlib calls each agent used.
+See `tools/bench/README.md`.
+- **Which files a call read** resolves against the skills tree at the agent's tools pin (`agents.json` pins; v1 had none:
+  HEAD), so `.`, `/2` (of `2>/dev/null`), `../..` and other non-files drop out, globs and a recursive grep's bare
+  directory (`grep -rn x reference SKILL.md`) expand to the pin's files.
+- **How much of the result each file gets** is matched by content: every result line goes to the pin file containing it
+  (after a grep `path:` or line-number prefix), so a multi-file `cat` that stopped part way (V2R7 call #0: `echo =====`
+  failed in zsh after the first file) credits only the file printed, and unrelated output in the same call credits none.
+  When nothing matches (another checkout than the pin) the result is split evenly; `read_methods` counts each method.
+- **cad uses** count only commands in command position (after `;`, `&&`, `|`, `(`, `$(`, newlines, `VAR=`, `nice`,
+  `time`, `do`; including variables set to a cad path), never prose: heredoc bodies written to files and comments are
+  dropped first.
+- **tokens** are characters / the ratio `calibrate` measured (`tools/bench/tokens.json`): for an API call that made one
+  tool call, the next call's context (input + cache write + cache read) minus this call's, minus this call's
+  `output_tokens`, is the result's tokens. Thinking stays in that output: on 71 calls with a tiny result and > 1000
+  thinking tokens, the context grew by output_tokens + 94 (median), not by output minus thinking. On 29 skill-doc reads
+  (>= 2000 chars, >= 90% doc text) the median is 2.25 chars/token (IQR 2.08-2.54, range 1.39-2.66), not 4.
 
 How the numbers are computed:
 - **model time** of an API call = previous event (tool result or prompt) to the last streamed block of

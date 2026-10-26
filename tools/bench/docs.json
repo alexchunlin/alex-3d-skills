@@ -18,6 +18,7 @@
   "skills/cad-design-review/rubric.md": "SKILL.md step 6: 'Score with rubric.md'"
  },
  "conditional": {
-  "skills/print-cad-blender/reference/checks-config.md": "SKILL.md Reference: 'Read it when cadcheck flags something you designed on purpose'"
+  "skills/print-cad-blender/reference/checks-config.md": "SKILL.md Reference: 'Read it when cadcheck flags something you designed on purpose'",
+  "skills/print-cad-blender/reference/design-principles.md": "SKILL.md Reference: 'Worth reading when you choose it for a new project'"
  }
 }

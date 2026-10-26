@@ -15,6 +15,8 @@ Never read a 10 MB transcript whole. Run this instead:
     python3 -I cc_transcript.py thinking agent-XXXX.jsonl [--min-s 120] [--chars 1500]  # what long thinking was about
     python3 -I cc_transcript.py grep     agent-XXXX.jsonl PATTERN    # regex over thinking/text/tool io
     python3 -I cc_transcript.py workflow <wf_dir>                    # one row per agent + journal results
+    python3 -I cc_transcript.py bench [--attempt v2a7] [--json]      # tools/bench tier 2 telemetry (tools/bench/agents.json)
+    python3 -I cc_transcript.py calibrate [--write]                  # chars/token of doc reads from the usage numbers
 
 Standard library only. Works on transcripts that are still being written (a
 partial last line is ignored).
@@ -33,6 +35,7 @@ import base64
 import os
 import json
 import re
+import subprocess
 import sys
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
@@ -567,11 +570,12 @@ def cmd_workflow(_tr, a) -> None:
 # ---------------------------------------------------------------- bench: doc reads, source reads, feature use
 
 # a file of either skill, wherever the checkout lives (the v2 loop read a pinned copy, alex-3d-skills-pin)
-SKILL_FILE_RE = re.compile(r"skills/(print-cad-blender|cad-design-review)(?:/([\w./*-]*))?")
+SKILL_FILE_RE = re.compile(r"skills/(print-cad-blender|cad-design-review)(?:/([\w./*?-]*))?")
 # `cad <sub>` through the wrapper (cad, .../scripts/cad, $CAD, "$PCB/scripts/cad"), and the scripts run by hand
-CAD_SUBS = "build|check|q|py|rows|bom|sheet|printcheck|slice"
+CAD_SUBS = ("build", "check", "q", "py", "rows", "bom", "sheet", "printcheck", "slice")
 CAD_VAR_RE = re.compile(r"\b(\w+)=[\"']?[^\s;\"']*/scripts/cad[\"']?(?=[\s;&|]|$)")
 CAD_SCRIPT_RE = re.compile(r"\b(cadcheck|cadq|cadrows|cadbom|printcheck|cadslice)\.py\b")
+CAD_SCRIPT_SUB = {"cadcheck": "check", "cadq": "q", "cadrows": "rows", "cadbom": "bom", "printcheck": "printcheck", "cadslice": "slice"}
 
 ONLY_RE = re.compile(r"--only[ =]([\w,]+)")
 CADLIB_CALL_RE = re.compile(r"\b(G|F|A|E|R|geom|features|asm|export|render)\.(\w+)\s*\(")
@@ -581,61 +585,297 @@ JSON_KEY_RE = re.compile(r"[\"'](\w+)[\"']\s*:|\[\s*[\"'](\w+)[\"']\s*\]\s*(?:\.
 CONFIG_FILE_RE = re.compile(r"(checks|review_rows|overlay)\w*\.json")
 READERS = {"cat", "sed", "head", "tail", "grep", "rg", "awk", "less", "nl", "bat", "egrep"}
 PATTERN_FIRST = {"grep", "rg", "egrep", "sed", "awk"}
+# words that may stand before the command itself: `nice -n 10 cad check`, `time $CAD q`, `do $CQ q ...`
+CMD_PREFIX = {"nice", "time", "env", "command", "exec", "then", "do", "else", "!", "{", "nohup"}
+SEG_SPLIT_RE = re.compile(r"\n|;|&&|\|\||\||\$\(|`|\(|\)")
+REDIR_RE = re.compile(r"^(?:\d*|&)(?:>>?|<<?)&?")
+TMP_PREFIXES = ("/tmp/", "/private/tmp/", "/var/folders/", "$TMPDIR", "${TMPDIR")
+HEREDOC_START_RE = re.compile(r"<<-?\s*(['\"]?)(\w+)\1")
+BENCH_DIR = Path(__file__).resolve().parents[1] / "bench"
+REPO = Path(__file__).resolve().parents[2]
 
 
-def cad_calls(cmd: str) -> tuple[list[str], list[str]]:
-    """(cad subcommands, cad q commands) in a Bash command: `cad`, `.../scripts/cad`, `$CAD`, and any variable the command
-    sets to a cad path first (v2 builders wrote `Q=.../scripts/cad; $Q q model.blend list ...`)."""
-    names = ["CAD"] + CAD_VAR_RE.findall(cmd)
-    pre = r"(?:\bcad|\$\{?(?:%s)\}?)[\"']?\s+" % "|".join(map(re.escape, names))
-    return re.findall(pre + r"(%s)\b" % CAD_SUBS, cmd), re.findall(pre + r"q\s+\S+\s+(\w+)", cmd)
+def chars_per_token() -> tuple[float, str]:
+    """The chars/token ratio measured on these transcripts (`calibrate --write` -> tools/bench/tokens.json), else 4."""
+    p = BENCH_DIR / "tokens.json"
+    try:
+        d = json.loads(p.read_text())
+        return float(d["chars_per_token"]), "tools/bench/tokens.json (%s, n %s)" % (d.get("measured_on", "?"), d.get("n", "?"))
+    except Exception:
+        return 4.0, "default 4.0: tools/bench/tokens.json missing (run cc_transcript.py calibrate --write)"
+
+
+def strip_heredocs(cmd: str) -> str:
+    """The command with heredoc bodies removed (header lines kept): a script or note written to a file is not a command.
+    Bodies fed to a shell (`sh <<EOF`) are kept, they run."""
+    out, lines, i = [], cmd.split("\n"), 0
+    while i < len(lines):
+        ln = lines[i]
+        out.append(ln)
+        m = HEREDOC_START_RE.search(ln)
+        i += 1
+        if m and not re.search(r"\b(?:sh|bash|zsh)\s*(?:-s\s*)?<<", ln):
+            tag = m.group(2)
+            while i < len(lines) and lines[i].strip() != tag:
+                i += 1
+            i += 1
+    return "\n".join(out)
+
+
+def _segments(cmd: str) -> list[list[str]]:
+    """Token lists of the simple commands in a Bash command (heredoc bodies and comments dropped)."""
+    import shlex
+    segs = []
+    for seg in SEG_SPLIT_RE.split(strip_heredocs(cmd)):
+        try:
+            toks = shlex.split(seg, comments=True)
+        except ValueError:
+            toks = seg.split("#", 1)[0].split()
+        if toks:
+            segs.append(toks)
+    return segs
+
+
+def _command_words(toks: list[str], env: dict) -> list[str]:
+    """Tokens from the command word on: VAR= assignments (recorded in env), nice/time/env/... prefixes skipped."""
+    i = 0
+    while i < len(toks):
+        t = toks[i]
+        if re.match(r"^\w+=", t):
+            k, v = t.split("=", 1)
+            env[k] = v
+            i += 1
+        elif t in CMD_PREFIX:
+            i += 1
+            if t == "nice" and i < len(toks) and toks[i] == "-n":
+                i += 2
+            elif t == "nice" and i < len(toks) and re.match(r"^-\d+$", toks[i]):
+                i += 1
+        elif t == "timeout" and i + 1 < len(toks):
+            i += 2
+        else:
+            break
+    return toks[i:]
+
+
+def cad_calls(cmd: str) -> tuple[list[str], list[str], list[str]]:
+    """(cad subcommands, cad q commands, --only sections) the Bash command actually runs: the cad word must stand in
+    command position (`cad`, `.../scripts/cad`, `$CAD`, `sh .../cad`, or any variable the command sets to a cad path,
+    as v2 builders wrote `Q=.../scripts/cad; $Q q model.blend list ...`). Heredoc bodies written to files, comments and
+    prose in quoted strings don't count. `cad q` with no command (its help) counts as a `q` run, not a q command."""
+    names = {"CAD"} | set(CAD_VAR_RE.findall(cmd))
+    subs, qs, only, env = [], [], [], {}
+    for toks in _segments(cmd):
+        w = _command_words(toks, env)
+        if w and w[0] in ("sh", "bash") and len(w) > 1:
+            w = w[1:]
+        if not w:
+            continue
+        var = re.match(r"^\$\{?(\w+)\}?$", w[0])
+        if var and "/scripts/cad" in env.get(var.group(1), ""):     # Q=".../scripts/cad q model.blend"; $Q ray ...
+            w = env[var.group(1)].split() + w[1:]
+            var = None
+        head = w[0]
+        is_cad = head == "cad" or head.endswith("/scripts/cad") or bool(var and var.group(1) in names)
+        if is_cad and len(w) > 1 and w[1] in CAD_SUBS:
+            subs.append(w[1])
+            if w[1] == "q" and len(w) > 3 and re.match(r"^[a-z]+$", w[3]):
+                qs.append(w[3])
+            only += [x for i, t in enumerate(w) for x in ((w[i + 1] if t == "--only" and i + 1 < len(w) else
+                                                            t[7:] if t.startswith("--only=") else "").split(",")) if x]
+        elif not is_cad:
+            # a script run by hand under Blender: `Blender -b x.blend --python .../cadcheck.py -- ...`
+            for i, t in enumerate(w):
+                if t == "--python" and i + 1 < len(w):
+                    m = CAD_SCRIPT_RE.search(w[i + 1])
+                    if m:
+                        subs.append(CAD_SCRIPT_SUB[m.group(1)])
+    return subs, qs, only
 
 
 def _expand(tok: str, env: dict) -> str:
     return re.sub(r"\$\{?(\w+)\}?", lambda m: env.get(m.group(1), m.group(0)), tok)
 
 
-def bash_reads(cmd: str) -> list[tuple[str, str]]:
-    """(path, program) for each file a Bash command reads with cat/sed/head/grep/...; `cd X;` and simple VAR=/path
-    assignments are followed."""
-    import shlex
+def _join(cwd: str | None, p: str) -> str:
+    return p if p.startswith(("/", "~", "$")) or cwd is None else cwd.rstrip("/") + "/" + p
+
+
+def bash_reads(cmd: str) -> list[tuple[str, str, bool]]:
+    """(path, program, recursive) for each path a Bash command hands to cat/sed/head/grep/...; `cd X` and VAR=/path
+    assignments are followed, redirections (`2>/dev/null`, `> out`) and the pattern of grep/sed/awk are dropped. Any
+    argument may still be junk (`40` of `head -n 40`); `resolve` keeps only real files of the skill tree."""
     cwd, env, out = None, {}, []
-    for seg in re.split(r"\n|;|&&|\|\||\|", cmd):
-        try:
-            toks = shlex.split(seg, comments=False)
-        except ValueError:
-            toks = seg.split()
-        while toks and re.match(r"^\w+=", toks[0]):
-            k, v = toks[0].split("=", 1)
-            env[k] = _expand(v, env)
-            toks = toks[1:]
-        if not toks:
-            continue
+    for toks in _segments(cmd):
         toks = [_expand(t, env) for t in toks]
-        if toks[0] == "cd" and len(toks) > 1:
-            cwd = toks[1] if toks[1].startswith("/") or cwd is None else cwd.rstrip("/") + "/" + toks[1]
+        w = _command_words(toks, env)
+        env = {k: _expand(v, env) for k, v in env.items()}
+        if not w:
             continue
-        prog = toks[0].rsplit("/", 1)[-1]
+        if w[0] == "cd" and len(w) > 1:
+            cwd = _join(cwd, w[1]) if not w[1].startswith(("/", "~")) else w[1]
+            continue
+        prog = w[0].rsplit("/", 1)[-1]
         if prog not in READERS:
             continue
-        args = [t for t in toks[1:] if not t.startswith("-") and not t.startswith(">") and not t.startswith("<")]
-        if prog in PATTERN_FIRST and args and not any(t in ("-e", "-f") for t in toks[1:]):
-            args = args[1:]
-        for t in args:
-            if "/" not in t and "." not in t:
+        args, skip = [], False
+        for t in w[1:]:
+            if skip:
+                skip = False
                 continue
-            out.append((t if t.startswith("/") or cwd is None else cwd.rstrip("/") + "/" + t, prog))
+            if REDIR_RE.match(t):
+                skip = REDIR_RE.sub("", t) == ""     # `> file`: the file is the next token
+                continue
+            if t.startswith("-"):
+                continue
+            args.append(t)
+        if prog in PATTERN_FIRST and args and not any(t in ("-e", "-f") for t in w[1:]):
+            args = args[1:]
+        rec = prog == "rg" or (prog in ("grep", "egrep") and any(
+            t in ("--recursive", "-R") or (re.match(r"^-[A-Za-z]+$", t) and ("r" in t or "R" in t)) for t in w[1:]))
+        for t in args:
+            out.append((_join(cwd, t), prog, rec))
     return out
 
 
-def skill_file(path: str) -> tuple[str, str, str] | None:
-    """(skill, path inside the skill, 'doc' | 'source') for a path in either skill, else None."""
-    m = SKILL_FILE_RE.search(path or "")
-    if not m:
-        return None
-    rel = m.group(2) or ""
-    kind = "doc" if rel.endswith(".md") else "source"
-    return m.group(1), rel, kind
+class SkillTree:
+    """The skills/ tree at a git ref (an agent's tools pin): file sizes, and file text on demand for content matching."""
+    _cache: dict = {}
+
+    def __init__(self, ref: str):
+        self.ref = ref
+        self.files, self.dirs = {}, set()
+        try:
+            out = subprocess.run(["git", "-C", str(REPO), "ls-tree", "-r", "-l", ref, "--", "skills"],
+                                 capture_output=True, text=True, check=True).stdout
+        except Exception:
+            out = ""
+        for ln in out.splitlines():
+            meta, path = ln.split("\t", 1)
+            parts = path.split("/")
+            if len(parts) < 3 or "__pycache__" in parts:
+                continue
+            self.files[(parts[1], "/".join(parts[2:]))] = int(meta.split()[3])
+            for k in range(2, len(parts)):
+                self.dirs.add((parts[1], "/".join(parts[2:k])))
+        self._text, self._lines = {}, {}
+
+    @classmethod
+    def at(cls, ref: str) -> "SkillTree":
+        if ref not in cls._cache:
+            cls._cache[ref] = cls(ref)
+        return cls._cache[ref]
+
+    def text(self, key: tuple) -> str:
+        if key not in self._text:
+            r = subprocess.run(["git", "-C", str(REPO), "show", "%s:skills/%s/%s" % (self.ref, key[0], key[1])],
+                               capture_output=True, text=True)
+            self._text[key] = r.stdout if r.returncode == 0 else ""
+        return self._text[key]
+
+    def lines(self, key: tuple) -> set:
+        if key not in self._lines:
+            self._lines[key] = {l.strip() for l in self.text(key).splitlines() if l.strip()}
+        return self._lines[key]
+
+    def resolve(self, path: str, recursive: bool = False) -> list[tuple]:
+        """Skill files (skill, rel) a path names: the file, a glob's matches, or (recursive) every file under a
+        directory. Paths that aren't real at this ref give nothing (`.`, `/2` of `2>/dev/null`, `../..`, `head -n 40`)."""
+        import fnmatch
+        import posixpath
+        m = SKILL_FILE_RE.search(posixpath.normpath(path or ""))
+        if not m:
+            return []
+        skill, rel = m.group(1), posixpath.normpath(m.group(2) or ".")
+        rel = "" if rel == "." else rel
+        if rel.startswith(".."):
+            return []
+        if any(c in rel for c in "*?"):
+            return sorted(k for k in self.files if k[0] == skill and fnmatch.fnmatch(k[1], rel))
+        if (skill, rel) in self.files:
+            return [(skill, rel)]
+        if (skill, rel) in self.dirs and recursive:
+            return sorted(k for k in self.files if k[0] == skill and (not rel or k[1].startswith(rel + "/")))
+        return []
+
+
+def kind_of(key: tuple) -> str:
+    return "doc" if key[1].endswith(".md") else "source"
+
+
+LINENO_RE = re.compile(r"^\s*\d+(?:[:\t-]|→)")
+
+
+def attribute(tc: "ToolCall", keys: list, tree: SkillTree) -> tuple[dict, str]:
+    """({file: result chars that came from it}, method). A Read result is its file's. Otherwise each result line goes
+    to the file whose text has it (after a grep `path:` / line-number prefix), blank lines to the file of the line
+    before: a multi-file `cat` that stopped part way (V2R7 call #0: `echo =====` failed in zsh after the first file)
+    credits only what was printed, and other output in the same call (wc, git log) credits no file. When no line
+    matches (the agent read another checkout than the pin), the result is split evenly ('even')."""
+    if tc.name == "Read" and len(keys) == 1:
+        return {keys[0]: tc.result_chars}, "read"
+    got = {k: 0 for k in keys}
+    prev = None
+    for ln in tc.result_text.splitlines():
+        s = ln.strip()
+        if not s:
+            if prev is not None:
+                got[prev] += 1
+            continue
+        hit = None
+        pm = re.match(r"^(\S+?\.\w+):(?:\d+[:-])?", ln)
+        if pm:
+            hit = next((k for k in keys if pm.group(1) == k[1] or pm.group(1).endswith("/" + k[1])), None)
+            if hit:
+                s = ln[pm.end():].strip()
+        if hit is None:
+            s2 = LINENO_RE.sub("", ln, count=1).strip()
+            for cand in ([prev] if prev else []) + keys:
+                if s in tree.lines(cand) or (s2 and s2 in tree.lines(cand)):
+                    hit = cand
+                    break
+        if hit is not None:
+            got[hit] += len(ln) + 1
+        prev = hit
+    if sum(got.values()) == 0 and tc.result_chars:
+        return {k: tc.result_chars / len(keys) for k in keys}, "even"
+    return got, "content"
+
+
+def _design_write(path: str, cmd: str | None = None) -> bool:
+    """A write to the design project: not a temp-dir probe and not into a skills checkout. Heredoc paths are expanded
+    with the command's own VAR= assignments and its last `cd` before the heredoc."""
+    p = path or ""
+    if cmd is not None:
+        pos = cmd.find(p)
+        env, cwd = {}, None
+        for toks in _segments(cmd[:pos] if pos > 0 else ""):
+            toks = [_expand(t, env) for t in toks]
+            w = _command_words(toks, env)
+            if w and w[0] == "cd" and len(w) > 1:
+                cwd = _join(cwd, w[1]) if not w[1].startswith(("/", "~")) else w[1]
+        p = _join(cwd, _expand(p, env))
+    if p.startswith(TMP_PREFIXES) or "/tmp/" in p[:12]:
+        return False
+    if re.search(r"skills/(print-cad-blender|cad-design-review)/|alex-3d-skills", p):
+        return False
+    return True
+
+
+def first_design_edit(tr: Transcript) -> int | None:
+    """Index of the first .py/.json write to the design project (a /tmp probe script is not the first edit)."""
+    for tc in tr.tools:
+        i = tc.input
+        if tc.name in ("Write", "Edit"):
+            p = i.get("file_path", "")
+            if re.search(r"\.(py|json)$", p) and _design_write(p):
+                return tc.idx
+        elif tc.name == "Bash":
+            cmd = i.get("command", "")
+            for m in HEREDOC_RE.finditer(cmd):
+                if re.search(r"\.(py|json)$", m.group(1)) and _design_write(m.group(1), cmd):
+                    return tc.idx
+    return None
 
 
 def _written(tc: ToolCall) -> list[tuple[str, str]]:
@@ -651,65 +891,64 @@ def _written(tc: ToolCall) -> list[tuple[str, str]]:
     return []
 
 
-def bench_digest(tr: Transcript, skill_files: dict | None = None) -> dict:
-    """Per-agent cost telemetry for tools/bench: skill doc tokens read before the first edit (by file), tool and
+def reads_of(tc: ToolCall, tree: SkillTree) -> list[tuple]:
+    """Skill files a call read (resolved at the agent's pin)."""
+    if tc.name == "Read":
+        return tree.resolve(tc.input.get("file_path", ""))
+    if tc.name == "Grep":
+        return tree.resolve(tc.input.get("path", ""), recursive=True)
+    if tc.name == "Bash":
+        keys = []
+        for p, prog, rec in bash_reads(tc.input.get("command", "")):
+            keys += [k for k in tree.resolve(p, rec) if k not in keys]
+        return keys
+    return []
+
+
+def bench_digest(tr: Transcript, tree: SkillTree | None = None, cpt: float | None = None) -> dict:
+    """Per-agent cost telemetry for tools/bench: skill doc tokens read before the first design edit (by file), tool and
     library source reads (doc gaps), failed cad/Blender runs, and the cad subcommands, cad q commands, --only sections,
-    config keys and cadlib functions the agent used. Tokens are result characters / 4. A call that reads several files
-    splits its result by file size when every file is read whole (Read, cat) and sizes are known (skill_files:
-    {(skill, rel): bytes}, from this checkout, not the pin the agent read), else evenly."""
+    config keys and cadlib functions the agent used. Reads resolve against the skills tree at the agent's tools pin
+    (tree; HEAD when it had none) and result characters are credited per file by content (`attribute`). Tokens are
+    characters / cpt, the ratio measured by `calibrate` (tools/bench/tokens.json)."""
     from collections import Counter, defaultdict
-    from fnmatch import fnmatch
-    skill_files = skill_files or {}
-    edits = [f for f in files_written(tr) if re.search(r"\.(py|json)$", f["path"] or "")]
-    first_edit = min((f["idx"] for f in edits), default=None)
+    tree = tree or SkillTree.at("HEAD")
+    cpt = cpt or chars_per_token()[0]
+    first_edit = first_design_edit(tr)
     docs_before, docs_all, src = defaultdict(float), defaultdict(float), defaultdict(float)
-    src_calls = []
+    src_calls, methods, reads_log = [], Counter(), []
     for tc in tr.tools:
-        reads = []
-        if tc.name == "Read":
-            reads = [(tc.input.get("file_path", ""), "cat")]
-        elif tc.name == "Grep":
-            reads = [(tc.input.get("path", ""), "grep")]
-        elif tc.name == "Bash":
-            reads = bash_reads(tc.input.get("command", ""))
-        entries = []   # (skill file or None, weight or None)
-        for p, prog in reads:
-            sf = skill_file(p)
-            if sf and "*" in sf[1]:
-                exp = [(k, r, "doc" if r.endswith(".md") else "source") for (k, r) in skill_files if k == sf[0] and fnmatch(r, sf[1])]
-                entries += [(e, skill_files.get(e[:2]) if prog == "cat" else None) for e in exp] or [(None, None)]
-            else:
-                entries.append((sf, skill_files.get(sf[:2]) if sf and prog == "cat" else None))
-        if not any(e for e, _ in entries):
+        keys = reads_of(tc, tree)
+        if not keys:
             continue
-        whole = all(w for _, w in entries)
-        tot_w = sum(w for _, w in entries) if whole else len(entries)
-        for e, w in entries:
-            if e is None:
+        got, how = attribute(tc, keys, tree)
+        methods[how] += 1
+        methods["files_not_in_result"] += sum(1 for v in got.values() if not v)
+        for k, ch in got.items():
+            if not ch:
                 continue
-            share = tc.result_chars / 4.0 * ((w if whole else 1) / tot_w)
-            key = "%s/%s" % (e[0], os.path.normpath(e[1]))
-            if e[2] == "doc":
-                docs_all[key] += share
+            key = "%s/%s" % k
+            tok = ch / cpt
+            if len(reads_log) < 80:
+                reads_log.append({"idx": tc.idx, "file": key, "chars": int(ch), "method": how})
+            if kind_of(k) == "doc":
+                docs_all[key] += tok
                 if first_edit is None or tc.idx < first_edit:
-                    docs_before[key] += share
+                    docs_before[key] += tok
             else:
-                src[key] += share
+                src[key] += tok
                 src_calls.append(tc.idx)
     cad_sub, cadq, only, keys, funcs = Counter(), Counter(), Counter(), Counter(), Counter()
     cad_runs, cad_failed = 0, []
     for tc in tr.tools:
         if tc.name == "Bash":
             cmd = tc.input.get("command", "")
-            subs, qs = cad_calls(cmd)
-            subs = subs + [{"cadcheck": "check", "cadq": "q", "cadrows": "rows", "cadbom": "bom",
-                                               "printcheck": "printcheck", "cadslice": "slice"}[s]
-                                              for s in CAD_SCRIPT_RE.findall(cmd) if "--python" in cmd or "python" in cmd]
+            subs, qs, onl = cad_calls(cmd)
             for s in set(subs):
                 cad_sub[s] += 1
-            for q in set(q for q in qs if q.isalpha() and q.islower()):
+            for q in set(qs):
                 cadq[q] += 1
-            for o in set(x for grp in ONLY_RE.findall(cmd) for x in grp.split(",") if x):
+            for o in set(onl):
                 only[o] += 1
             if subs or is_blender(tc):
                 cad_runs += 1
@@ -729,43 +968,49 @@ def bench_digest(tr: Transcript, skill_files: dict | None = None) -> dict:
     u = usage_totals(tr)
     return {"agent_id": tr.agent_id, "label": tr.label, "wall_min": round(((tr.t_end or 0) - (tr.t_start or 0)) / 60, 1),
             "output_tokens": u["output"] + u["est_missing_output"], "tool_calls": len(tr.tools),
-            "first_edit_idx": first_edit,
+            "tools_ref": tree.ref, "chars_per_token": cpt, "first_edit_idx": first_edit,
             "doc_tokens_before_edit": int(round(sum(docs_before.values()))), "docs_before_edit": r1(docs_before),
             "doc_tokens_total": int(round(sum(docs_all.values()))), "docs_total": r1(docs_all),
             "source_read_calls": len(set(src_calls)), "source_read_tokens": int(round(sum(src.values()))), "source_reads": r1(src),
+            "read_methods": dict(methods), "reads": reads_log,
             "cad_runs": cad_runs, "cad_failed": len(cad_failed), "cad_failed_list": cad_failed[:12],
             "cad_subcommands": dict(cad_sub), "cadq_commands": dict(cadq), "only_sections": dict(only),
             "config_keys": dict(keys), "cadlib_functions": dict(funcs)}
 
 
-def cmd_bench(_tr, a) -> None:
-    """Per-agent bench telemetry for the agents in tools/bench/agents.json (or the transcripts / workflow dirs given)."""
-    targets = []
-    if a.transcript:
+def bench_targets(a) -> tuple[list[dict], dict]:
+    """[{name, attempt, role, file, pin}] from --agents (or the transcripts given), and the agents spec."""
+    targets, spec = [], {"pins": {}}
+    if getattr(a, "transcript", None):
         for t in a.transcript:
             p = Path(t).expanduser()
             for f in (sorted(p.glob("agent-*.jsonl")) if p.is_dir() else [p]):
-                targets.append({"name": f.stem, "attempt": None, "role": None, "file": f})
+                targets.append({"name": f.stem, "attempt": None, "role": None, "file": f, "pin": None})
     else:
         spec = json.load(open(a.agents))
         root = Path(spec["wf_root"]).expanduser()
         for g in spec["agents"]:
-            if a.attempt and g["attempt"] not in a.attempt.split(","):
+            if getattr(a, "attempt", None) and g["attempt"] not in a.attempt.split(","):
                 continue
-            targets.append({**g, "file": root / g["path"]})
-    sk = Path(__file__).resolve().parents[2] / "skills"   # sizes split multi-file reads; globs expand
-    skill_files = {(p.relative_to(sk).parts[0], "/".join(p.relative_to(sk).parts[1:])): p.stat().st_size
-                   for p in sk.rglob("*") if p.is_file() and "__pycache__" not in p.parts} if sk.is_dir() else {}
+            targets.append({**g, "file": root / g["path"], "pin": spec.get("pins", {}).get(g["attempt"])})
+    return targets, spec
+
+
+def cmd_bench(_tr, a) -> None:
+    """Per-agent bench telemetry for the agents in tools/bench/agents.json (or the transcripts / workflow dirs given)."""
+    targets, _ = bench_targets(a)
+    cpt, src = chars_per_token()
     rows = []
     for t in targets:
         if not Path(t["file"]).exists():
-            rows.append({k: v for k, v in t.items() if k != "file"} | {"missing": str(t["file"])})
+            rows.append({k: v for k, v in t.items() if k not in ("file", "path")} | {"missing": str(t["file"])})
             continue
-        d = bench_digest(load(t["file"]), skill_files)
+        d = bench_digest(load(t["file"]), SkillTree.at(t["pin"] or "HEAD"), cpt)
         rows.append({k: v for k, v in t.items() if k not in ("file", "path")} | d)
     if a.json:
         print(json.dumps(rows, indent=1))
         return
+    print("tokens = chars / %.2f (%s); reads resolved at each attempt's tools pin (v1: HEAD), credited by content" % (cpt, src))
     print("agent        attempt role      wall  out_tok  doc_tok<edit  doc_tok  src_reads(tok)  cad runs/failed  subcommands")
     for r in rows:
         if "missing" in r:
@@ -775,6 +1020,79 @@ def cmd_bench(_tr, a) -> None:
             r["name"], r.get("attempt") or "-", r.get("role") or "-", r["wall_min"], r["output_tokens"], r["doc_tokens_before_edit"],
             r["doc_tokens_total"], r["source_read_calls"], r["source_read_tokens"], r["cad_runs"], r["cad_failed"],
             " ".join("%s:%d" % kv for kv in sorted(r["cad_subcommands"].items()))))
+
+
+def _ctx(u: dict) -> int:
+    return sum((u or {}).get(k, 0) or 0 for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
+
+
+def calibration(targets: list[dict], min_chars: int = 2000, min_doc_share: float = 0.9) -> dict:
+    """Chars per token of skill-doc tool results, from the usage the API reported. For an API call that made exactly one
+    tool call, the next call's context (input + cache write + cache read) minus this call's is this call's output plus
+    the tool result: result tokens = delta - output_tokens. Thinking tokens count in that output: on calls with a tiny
+    result, delta equals output_tokens including thinking (within the tool loop the thinking blocks stay in context).
+    Only calls whose result is >= min_chars and >= min_doc_share skill-doc text (by content) are used; calls without
+    their final usage line (incomplete) are skipped."""
+    import statistics
+    samples = []
+    for t in targets:
+        if not Path(t["file"]).exists():
+            continue
+        tr = load(t["file"])
+        tree = SkillTree.at(t.get("pin") or "HEAD")
+        inc = {id(ac) for ac, _ in incomplete_usage(tr)}
+        tools = {tc.id: tc for tc in tr.tools}
+        for i, ac in enumerate(tr.api_calls[:-1]):
+            nx = tr.api_calls[i + 1]
+            if len(ac.tool_ids) != 1 or id(ac) in inc or id(nx) in inc or not ac.usage or not nx.usage:
+                continue
+            tc = tools.get(ac.tool_ids[0])
+            if tc is None or tc.result_chars < min_chars or tc.images:
+                continue
+            keys = [k for k in reads_of(tc, tree) if kind_of(k) == "doc"]
+            if not keys:
+                continue
+            got, how = attribute(tc, keys, tree)
+            doc = sum(got.values())
+            if how == "even" or doc < min_doc_share * tc.result_chars:
+                continue
+            res_tok = _ctx(nx.usage) - _ctx(ac.usage) - (ac.usage.get("output_tokens") or 0)
+            if res_tok <= 0:
+                continue
+            samples.append({"agent": t["name"], "idx": tc.idx, "tool": tc.name, "chars": tc.result_chars, "tokens": res_tok,
+                            "ratio": round(tc.result_chars / res_tok, 3), "files": ["%s/%s" % k for k, v in got.items() if v]})
+    r = sorted(s["ratio"] for s in samples)
+    if not r:
+        return {"n": 0}
+    q = statistics.quantiles(r, n=4) if len(r) >= 4 else [r[0], statistics.median(r), r[-1]]
+    pooled = sum(s["chars"] for s in samples) / sum(s["tokens"] for s in samples)
+    return {"chars_per_token": round(statistics.median(r), 2), "pooled": round(pooled, 2), "iqr": [round(q[0], 2), round(q[2], 2)],
+            "range": [r[0], r[-1]], "n": len(r), "method": "median of per-call ratios, result chars / result tokens from the API usage of consecutive calls",
+            "rule": "result tokens = next call (input + cache_creation + cache_read) - this call's - this call's output_tokens "
+                    "(thinking included: it stays in context within the tool loop)",
+            "filter": "single-tool API calls, complete usage, result >= %d chars, >= %d%% of it skill-doc text by content" % (min_chars, 100 * min_doc_share),
+            "measured_on": "%d agents of tools/bench/agents.json" % len({s["agent"] for s in samples}), "samples": samples}
+
+
+def cmd_calibrate(_tr, a) -> None:
+    """Measure chars/token on skill-doc reads from the transcripts' own usage numbers (tools/bench/tokens.json)."""
+    targets, _ = bench_targets(a)
+    c = calibration(targets)
+    if not c["n"]:
+        print("calibrate: no usable samples")
+        return
+    print("chars/token on skill-doc tool results: median %.2f, IQR %.2f-%.2f, range %.2f-%.2f, pooled %.2f, n %d (%s)" % (
+        c["chars_per_token"], c["iqr"][0], c["iqr"][1], c["range"][0], c["range"][1], c["pooled"], c["n"], c["measured_on"]))
+    print("rule: " + c["rule"])
+    print("filter: " + c["filter"])
+    # thinking check: calls with a tiny result and much thinking; delta vs output with and without thinking
+    if a.json:
+        print(json.dumps(c, indent=1))
+    if a.write:
+        out = {k: v for k, v in c.items() if k != "samples"}
+        out["samples_head"] = c["samples"][:10]
+        (BENCH_DIR / "tokens.json").write_text(json.dumps(out, indent=1) + "\n")
+        print("wrote %s" % (BENCH_DIR / "tokens.json"))
 
 
 def _iter_lines(path):
@@ -798,6 +1116,12 @@ def main(argv=None) -> None:
     b.add_argument("--agents", default=str(Path(__file__).resolve().parents[1] / "bench" / "agents.json"))
     b.add_argument("--attempt", help="comma list of attempts from --agents (a1, v2a3, ...)")
     b.add_argument("--json", action="store_true")
+    c = sub.add_parser("calibrate", help="chars/token of skill-doc reads from the transcripts' usage (tools/bench/tokens.json)")
+    c.add_argument("transcript", nargs="*", help="agent-*.jsonl or workflow dirs; default: the agents in --agents")
+    c.add_argument("--agents", default=str(Path(__file__).resolve().parents[1] / "bench" / "agents.json"))
+    c.add_argument("--attempt", help="comma list of attempts from --agents")
+    c.add_argument("--json", action="store_true", help="also print every sample")
+    c.add_argument("--write", action="store_true", help="save the ratio to tools/bench/tokens.json (doccost, bench and features use it)")
     for name in ("summary", "timeline", "bash", "files", "images", "renders", "usage", "json", "show", "thinking", "grep",
                  "workflow"):
         s = sub.add_parser(name)
@@ -814,7 +1138,7 @@ def main(argv=None) -> None:
             s.add_argument("which", help="tool_use id or index (#N in other views)")
             s.add_argument("--max", type=int, default=6000)
     a = p.parse_args(argv)
-    tr = None if a.cmd in ("workflow", "bench") else load(a.transcript)
+    tr = None if a.cmd in ("workflow", "bench", "calibrate") else load(a.transcript)
     globals()["cmd_" + a.cmd](tr, a)
 
 

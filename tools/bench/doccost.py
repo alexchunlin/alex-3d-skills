@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Static doc cost of the skills at any git ref: bytes and approximate tokens per doc and per section.
 
-Tokens are approximate: characters / 4 (no tokenizer; the ratio is what matters between refs). A doc is 'always'
+Tokens are characters / the chars-per-token ratio measured on the v1/v2 transcripts' own usage numbers
+(tools/bench/tokens.json, written by `cc_transcript.py calibrate --write`: about 2.25 on these docs, not 4). No
+tokenizer; if tokens.json is missing the ratio falls back to 4 and the output says so. A doc is 'always'
 read when tools/bench/docs.json says so (the SKILL.md body and the docs it tells the agent to read unconditionally);
 the rest are conditional. Sections are the markdown headings; inside a section, each bold-lead list item
 ("- **Name.** ...", "3. **Build ...**") and each tool-table row ("| `cad rows ...` | ...") is an item of its own, so a
@@ -23,7 +25,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CONF = json.load(open(Path(__file__).resolve().parent / "docs.json"))
-CHARS_PER_TOKEN = 4.0
+
+def _ratio() -> tuple[float, str]:
+    try:
+        d = json.load(open(Path(__file__).resolve().parent / "tokens.json"))
+        return float(d["chars_per_token"]), "measured: median of %d doc reads, IQR %s (tools/bench/tokens.json)" % (d["n"], d["iqr"])
+    except Exception:
+        return 4.0, "DEFAULT 4.0: tools/bench/tokens.json missing, run cc_transcript.py calibrate --write"
+
+
+CHARS_PER_TOKEN, TOKENS_SOURCE = _ratio()
 
 HEAD_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 ITEM_RE = re.compile(r"^(?:\s*[-*]|\s*\d+\.)\s+\*\*(.+?)\*\*")
@@ -104,12 +115,12 @@ def report(ref: str, keep_text: bool = False) -> dict:
         if r["class"] == "always" and r["role"]:
             per_role[r["role"]] = per_role.get(r["role"], 0) + r["tokens"]
     return {"ref": ref, "commit": git("rev-parse", "--short=9", ref).strip() if ref != "WORKTREE" else "WORKTREE",
-            "chars_per_token": CHARS_PER_TOKEN, "docs": rows, "always_tokens_per_session": per_role,
+            "chars_per_token": CHARS_PER_TOKEN, "tokens_source": TOKENS_SOURCE, "docs": rows, "always_tokens_per_session": per_role,
             "always_tokens_total": sum(per_role.values())}
 
 
 def print_report(rep: dict, show_sections: bool) -> None:
-    print("doc cost at %s (%s); tokens ~ chars/%g" % (rep["ref"], rep["commit"], rep["chars_per_token"]))
+    print("doc cost at %s (%s); tokens ~ chars/%g (%s)" % (rep["ref"], rep["commit"], rep["chars_per_token"], rep["tokens_source"]))
     print("| doc | role | read | bytes | ~tokens |\n|---|---|---|---|---|")
     for r in rep["docs"]:
         print("| %s | %s | %s | %d | %d |" % (r["path"], r["role"] or "-", r["class"], r["bytes"], r["tokens"]))
@@ -160,7 +171,7 @@ def main(argv=None) -> int:
         if a.json:
             print(json.dumps(d, indent=1))
             return 0
-        print("doc cost %s vs %s (tokens ~ chars/%g)" % (a.ref, a.base, CHARS_PER_TOKEN))
+        print("doc cost %s vs %s (tokens ~ chars/%g, %s)" % (a.ref, a.base, CHARS_PER_TOKEN, TOKENS_SOURCE))
         for role, v in d["always_delta_per_session"].items():
             print("  %s: %+d always-read tokens per session" % (role, v))
         for r in d["docs"]:
