@@ -44,8 +44,10 @@ Checks (each one writes evidence into the JSON report, with an explicit `coverag
 Evidence for the rules here: docs/FINDINGS.md A1-F1, F3, F4, F5, F9, F10, F11, F13, F14, A2-F1 to F9, A3-F1 to F3, F7, F8 and A3-V1.
 """
 import bpy, bmesh, json, math, os, re, sys, time, fnmatch, glob, itertools
-from mathutils import Vector, Matrix, Euler
+from mathutils import Vector, Matrix
 from mathutils.bvhtree import BVHTree
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from cadlib import joints as JT   # noqa: E402  (joint specs and posing, shared with cadlib.route)
 
 ARGV = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 
@@ -214,9 +216,11 @@ ALL = SOLIDS + FASTENERS + CABLES
 # modelled on one body at one setting that ride on another in use (A3: the nip thumbwheel and its nut sit on the pod
 # in the model but ride on the backplate stud; swept as fixed they gave 4 false fails, FINDINGS A3-V1).
 bpy.context.view_layer.update()
+CARRIED = {}    # name -> original parent, so a tool that saves the blend (cadq route --save) can undo the carry
 for _g, _piv in CFG["carry"].items():
     for _o in [x for x in ALL if fnmatch.fnmatch(x.name, _g)]:
         _mw = _o.matrix_world.copy()
+        CARRIED.setdefault(_o.name, _o.parent)
         _o.parent = O[_piv]
         _o.matrix_world = _mw
 bpy.context.view_layer.update()
@@ -236,25 +240,8 @@ def is_joint(o):
     return o is not None and o.type == 'EMPTY' and o.name.startswith("PIV_")
 
 
-JOINTS = {}  # name -> spec dict
-for e in O:
-    if not is_joint(e):
-        continue
-    spec = {"axis": None, "lo": None, "hi": None, "home": 0.0, "step": None, "continuous": False}
-    # cadlib props, then legacy "axis" prop (attempt-1 blends), then config overrides
-    for k_src, k in (("joint_axis", "axis"), ("joint_lo", "lo"), ("joint_hi", "hi"), ("joint_home", "home"),
-                     ("joint_step", "step"), ("joint_continuous", "continuous")):
-        if k_src in e.keys():
-            spec[k] = e[k_src]
-    if spec["axis"] is None and "axis" in e.keys():
-        spec["axis"] = str(e["axis"]).strip()[:1].upper()
-    spec.update(CFG["joints"].get(e.name, {}))
-    if spec["axis"] not in ("X", "Y", "Z"):
-        spec["axis"] = None
-    spec["base_rot"] = tuple(e.rotation_euler)
-    spec["kind"] = str(e.get("joint_kind", spec.get("kind", "revolute")))
-    spec["base_loc"] = tuple(e["joint_base_loc"]) if "joint_base_loc" in e.keys() else tuple(e.location)
-    JOINTS[e.name] = spec
+# name -> spec dict: cadlib props, then legacy "axis" prop (attempt-1 blends), then config overrides (cadlib/joints.py)
+JOINTS = {e.name: JT.spec(e, CFG["joints"].get(e.name, {})) for e in O if is_joint(e)}
 OT_TEXT = "%.1f deg" % CFG["overtravel_deg"] + (" (%g mm on slides)" % CFG["overtravel_mm"] if any(s["kind"] == "prismatic" for s in JOINTS.values()) else "")
 COUPLE = dict(CFG["couplings"])
 for e in O:
@@ -292,26 +279,8 @@ def relevant_joints(a, b):
 
 
 def set_pose(pose):
-    """pose: {driver_joint: deg}. Unlisted joints go to home. Couplings applied."""
-    vals = {}
-    for n, s in JOINTS.items():
-        vals[n] = pose.get(n, s.get("home", 0.0) or 0.0)
-    for n, c in COUPLE.items():
-        src = c["to"]
-        vals[n] = vals.get(src, 0.0) * c["ratio"] + c.get("offset", 0.0)
-    for n, s in JOINTS.items():
-        if s["axis"] is None:
-            continue
-        e = O[n]
-        if s["kind"] == "prismatic":
-            # slide along the joint's own axis, in mm (cadlib asm.joint(prismatic=True))
-            ax = Vector([1.0 if i == "XYZ".index(s["axis"]) else 0.0 for i in range(3)])
-            e.location = Vector(s["base_loc"]) + (Euler(s["base_rot"]).to_matrix() @ ax) * float(vals[n])
-            continue
-        r = list(s["base_rot"])
-        r["XYZ".index(s["axis"])] = math.radians(vals[n])
-        e.rotation_euler = r
-    bpy.context.view_layer.update()
+    """pose: {driver_joint: deg, or mm on a slide}. Unlisted joints go to home. Couplings applied (cadlib/joints.py)."""
+    JT.apply(JOINTS, COUPLE, pose, O)
 
 
 HOME = {}
@@ -442,8 +411,9 @@ def tmpcoll():
     return _TMPC
 
 
-def inter_volume(a, b):
-    """Intersection volume (mm^3) and region bbox using a world-space copy; Manifold when both are manifold."""
+def inter_volume(a, b, _swapped=False):
+    """Intersection volume (mm^3) and region bbox using a world-space copy; Manifold when both are manifold, else
+    EXACT (retried in the other order when the result looks like the open operand's own volume, see below)."""
     def wcopy(o):
         me = bpy.data.meshes.new(o.name + "_w")
         bm = world_bm(o)
@@ -473,7 +443,23 @@ def inter_volume(a, b):
         bpy.data.objects.remove(o)
         bpy.data.meshes.remove(d)
     bpy.data.meshes.remove(me)
+    # EXACT with a non-manifold cutter can return the cutter's whole volume: A1-A3's hand-made CAB_12v_ctrl tube (open
+    # cap rings) gave 1331.9 mm3 "through BUY_servo_controller", its own volume (1332.0); the other order gives 38.0.
+    # Only that signature (>= 98% of a non-manifold operand's own volume) triggers the swapped order, and only a smaller
+    # swapped result replaces it, so a real full containment still reports its whole volume.
+    if solver == 'EXACT' and not _swapped and v > 0 and any(
+            v >= 0.98 * own_volume(o) for o in (a, b) if not manifold_ok(o)):
+        v2, region2, _ = inter_volume(b, a, _swapped=True)
+        if v2 < v:
+            return v2, region2, solver
     return v, region, solver
+
+
+def own_volume(o):
+    bm = world_bm(o)
+    v = abs(bm.calc_volume())
+    bm.free()
+    return v
 
 
 def sample_pts(o, cap=4000):

@@ -11,7 +11,7 @@ Conventions (what cadcheck and the web viewer rely on):
 - write_manifest() dumps parts, joints, fasteners, cables, features and parameters as JSON, so a
   reviewer doesn't have to reverse-engineer the script (attempt 1: 7 calls reading code, A1-T8).
 """
-import bpy, json, math, os
+import bpy, bmesh, json, math, os
 from mathutils import Vector, Matrix
 from . import geom, features
 
@@ -243,9 +243,8 @@ def nut(name, at, into, joint=None, af=None, h=None, step=None):
     return ob
 
 
-def cable(name, pts, r, color="cable_blk", joint=None, lead_len=None, step=None):
-    """Tube along a polyline. Stores path_len (and lead_len if given) so cadcheck can compare them
-    (attempt 1: the bullet joints of 80 mm leads landed at a moving bend, A1-F12)."""
+def tube_mesh(name, pts, r):
+    """Mesh of a round tube of radius r along a polyline (world coordinates), capped at both ends."""
     cu = bpy.data.curves.new(name, 'CURVE')
     cu.dimensions = '3D'
     sp = cu.splines.new('POLY')
@@ -261,14 +260,28 @@ def cable(name, pts, r, color="cable_blk", joint=None, lead_len=None, step=None)
     me = bpy.data.meshes.new_from_object(tmp.evaluated_get(dg))
     bpy.data.objects.remove(tmp)
     bpy.data.curves.remove(cu)
-    ob = bpy.data.objects.new(name, me)
+    # the bevel's cap rings are separate copies of the end rings: weld them so the tube is a closed solid (an open
+    # tube as a boolean cutter returned its own volume as "overlap": CAB_12v_ctrl 1331.9 mm3 in A1-A3)
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-4)
+    bm.to_mesh(me)
+    bm.free()
+    return me
+
+
+def cable(name, pts, r, color="cable_blk", joint=None, lead_len=None, step=None):
+    """Tube along a polyline. Stores path_len (and lead_len if given) so cadcheck can compare them
+    (attempt 1: the bullet joints of 80 mm leads landed at a moving bend, A1-F12)."""
+    ob = bpy.data.objects.new(name, tube_mesh(name, pts, r))
     geom.scratch().objects.link(ob)
     L = sum((Vector(pts[i + 1]) - Vector(pts[i])).length for i in range(len(pts) - 1))
     ob = part(ob, name, 'CAB', color, joint, part="cable route", step=step or "")
     ob["path_len"] = float(L)
     # both ends at home, world mm: cadcheck finds cables that meet with no connector there (V2A3-F3)
     ob["cab_ends"] = [float(c) for c in list(pts[0]) + list(pts[-1])]
-    # the whole polyline and tube radius, for cadcheck's kink and shared-run tests (V2A7-F2)
+    # the whole polyline and tube radius, for cadcheck's kink and shared-run tests (V2A7-F2); cadlib.route and
+    # `cad q route` read the centre line back from them
     ob["cab_path"] = [float(c) for p in pts for c in p]
     ob["cab_r"] = float(r)
     if lead_len:

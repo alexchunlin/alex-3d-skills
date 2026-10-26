@@ -53,6 +53,7 @@ Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X
 | `fastener(name, at, into, length, spec="M3_cap", joint=None, host=None, step=None)` | `spec`: `M3_cap`, `M3_pan`, `M3_csk`, `M3_selftap_pan`, `M3_hex`, `M2_pan`, `M2.5_cap`, `M2.5_pan`; use stocked lengths (cadcheck warns otherwise) |
 | `nut(name, at, into, joint=None, af=None, h=None, step=None)` | hex nut, bearing face at `at`; cadcheck checks the bolt on its axis reaches through it |
 | `cable(name, pts, r, color, joint=None, lead_len=None)` | stores `path_len` and both ends; cadcheck compares it with `lead_len`, and flags ends that meet another cable with no connector (declare `cable_chains`) |
+| `route.cable(name, start, end, r, color, via=[...])` | routes a cable around every solid and moving part, then `cable()`: [route.md](route.md) |
 | `write_manifest(path)` | parts, joints, fasteners, cables, features, params |
 
 ### A screw, its hole and its nut (one `at`, one `into`)
