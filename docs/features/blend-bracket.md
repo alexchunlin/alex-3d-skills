@@ -18,11 +18,12 @@ with concave fillets between the arms. The goal is "place the parts, then grow a
 | Piece | Where |
 |---|---|
 | `geom.swept_envelope(obs, pivot, axis, lo, hi, tol=0.25, voxel=0.5)` | `skills/print-cad-blender/scripts/cadlib/geom.py` |
-| `blend.Tube`, `blend.Block` (holds), `rod/capsule/sphere/rbox/mesh_field` (members), `blend.grow`, `blend.measure`, `blend.overhang` | `skills/print-cad-blender/scripts/cadlib/blend.py` |
+| `blend.Tube`, `blend.Block` (holds), `rod/capsule/sphere/rbox/mesh_field` (members), `blend.grow`, `blend.measure`, `blend.best_orientation` | `skills/print-cad-blender/scripts/cadlib/blend.py` |
+| Agent reference, read on demand | `skills/print-cad-blender/reference/blend.md` |
 | 6-way node example | `examples/blend-node/build.py` |
 | Servo and board bracket with a swept keep-out | `examples/blend-bracket/build.py` |
 | Prior-art harnesses | `tools/prior_art/blend_compare.py`, `tools/prior_art/sweep_compare.py` |
-| Regression | `tools/verify.d/blend_bracket.sh` (+ `blend_bracket_sweep.py`) |
+| Regression | `tools/verify.d/blend_bracket.sh` (+ `blend_bracket_sweep.py`, `_guard.py`, `_holds.py`, `_orient.py`) |
 
 How `grow` works:
 1. Every hold and member is a signed distance field on a numpy grid (float32, 0.5 mm voxels by default).
@@ -40,9 +41,11 @@ How `grow` works:
 So fits are exact, and only the outer skin carries voxel error.
 
 swept_envelope builds one OpenVDB level set from the triangle soup of all poses. Poses are `2 * tol / r_max` apart
-and the mesh is taken at `+pad`, where `pad = r_max * step / 2 + voxel / 4`. A point moves at most
-`r_max * step / 2` between poses and a distance field is 1-Lipschitz, so every in-between pose is inside by
-construction. The cost is about `pad` of oversize.
+and the mesh is taken at `+pad`, where `pad = r_max * step / 2 + voxel` (a slide: `step / 2 + voxel`). A point moves
+at most `r_max * step / 2` between poses and a distance field is 1-Lipschitz. The voxel term covers the level set's
+sampling and meshing error: the first version used `voxel / 4`, and the second review found points up to 0.65 mm outside
+at voxel 1 / tol 0.05 (see "Second review" below). The cost is about `pad` of oversize: `tol + voxel`, 0.75 mm at the
+defaults.
 
 ## Prior art: what exists, and what I measured
 
@@ -105,6 +108,18 @@ What the numbers say:
   4. **It needs a mesh input.** The holds would have to be booleaned into a mesh first. Grip regions, keep-out
      clearances and rounded cuts would need a node graph built from Python (SDF Grid Boolean, Offset). In (e) each of
      these is one numpy line.
+- **SDF closing (second review).** Geometry nodes can also do a morphological closing: Mesh to SDF Grid, SDF Grid
+  Offset +6, Offset -6, Grid to Mesh, decimated to 30k like (e). There the radius **is** a parameter. Now rows
+  `a3_closing_*` of `blend_compare.py`; measured with the same node graph, on the same node with the same exact socket cuts:
+
+  | Approach | Time s | Triangles | Min wall | Arm dev | Fill edge / corner |
+  |---|---|---|---|---|---|
+  | closing r 6, voxel 0.5, band 16 | 47.0 | 33,248 | 3.99 | 0.013 | 2.60 / 1.49 |
+  | closing r 6, voxel 0.5, band 24 | 56.4 | 33,348 | 3.99 | 0.013 | 2.60 / 1.49 |
+  | (e) in the same run | 5.5 | 33,184 | 4.02 | 0.02 | 2.51 / 3.12 |
+
+  The reviewer measured 57-62 s against 7.7 s. The closing is a rolling-ball blend, so its three-way corner fills less
+  (1.49 mm); that is a different look, not a fault. So the choice between them rests on speed: about 8-10x.
 - So the smallest change that closes the gap is not configuration. It is a thin field layer, about 480 lines, over
   two things Blender already ships: OpenVDB for meshing and level sets, and Manifold for the exact cuts.
 
@@ -121,9 +136,12 @@ part at sampled poses, joined with Manifold (`method="union"`).
 | union, 5 deg | 11 | 0.36 | 59,172 | yes | **2.28 (3,570)** | 0.08 / 0.00 |
 | union, 2 deg | 26 | 1.41 | 135,438 | yes | **0.91 (658)** | 0.10 / 0.00 |
 | union, 1 deg | 50 | 4.68 | 295,558 | yes | **0.46 (372)** | 0.00 / 0.00 |
-| **sdf, tol 0.25, voxel 0.5 (default)** | 156 | 2.32 | 460,060 | yes | **0 (0)** | 0.50 / 0.37 |
+| **sdf, tol 0.25, voxel 0.5 (default)**\* | 156 | 2.32 | 460,060 | yes | **0 (0)** | 0.50 / 0.37 |
 | sdf, + adaptivity 0.1 | 156 | 1.62 | 29,920 | yes | 0.12 (360) | 0.65 / 0.37 |
 | sdf, tol 0.5, voxel 1.0 | 79 | 0.50 | 115,160 | yes | 0 (0) | 1.16 / 0.74 |
+
+\* Measured with the first `voxel / 4` pad. The pad is now `voxel` (0.375 mm more at voxel 0.5), so the oversize is
+about 0.375 mm larger. With the new pad the nacelle check in `blend_bracket.sh` finds 0 of 1,712,975 points outside.
 
 - The union of poses pokes out roughly in proportion to the step (2.28, 0.91, 0.46 mm at 5, 2, 1 deg). Corners lead
   the motion, so the error is first order, not the `r * step^2 / 8` of a smooth arc.
@@ -150,7 +168,7 @@ the centre. Three solid tubes can't share the centre point, so the core between 
 | Wall, radial from every socket | min 4.016 mm against 4.0 spec |
 | `cad check --only parts` | 0 fails, 0 warns. Fits P1S (80 x 80 x 80 mm), wall probe min 4.02 |
 | `cad printcheck stl` (layer check) | 4 cantilevers of 20.1 mm at z 25.8 (the four horizontal sleeves' undersides) and 6 more over the 1 mm warn; 0 islands; bridges to 20.0 mm. As `supports: no` that is 4 fails; the part declares supports, so `cad check` passes it |
-| Print orientation | standing on the -Z sleeve rim: 3,018 mm2 overhang + 1,042 mm2 ceilings (20.4 mm bridge), 171 mm2 on the bed, `supports=yes` (the four horizontal sleeves and their sockets). Along the (1,1,1) corner: 3,984 mm2 overhang and 0.4 mm2 on the bed, so no better. |
+| Print orientation | `best_orientation` over the -Z sleeve rim and the (1,1,1) corner. The -Z rim: 171 mm2 on the bed, 4 printcheck fails (the 20.1 mm sleeve undersides), so `supports=yes`. The corner: 0 fails and 3 warns, but it stands on 0.4 mm2 and has 3,984 mm2 of faces steeper than 45 deg. printcheck passes it only because of the gap below, so best_orientation ranks anything under 50 mm2 of bed last. |
 
 Render: `/tmp/alex3d-bb-node/node.png`: tubes near-black, connector red.
 
@@ -169,7 +187,7 @@ fillet 15 and sleeves that end 36 mm from the centre (21.8 mm sockets, about 4 m
 | Wall | min 4.015 mm |
 | `cad check --only parts` | 0 fails, 0 warns. 72 x 72 x 72 mm, wall probe 4.00 |
 | `cad printcheck stl_organic` (layer check) | 4 cantilevers of 7.0 mm at z 21.8 and 8 more over the 1 mm warn; 0 islands. Shorter than the default's 20.1 mm, but still over the 3 mm fail: supports stay declared |
-| Print orientation | 2,416 mm2 overhang + 738 mm2 ceilings, 98 mm2 on the bed: still `supports=yes` |
+| Print orientation | -Z rim: 4 fails (7.0 mm cantilevers), 97.6 mm2 on the bed, `supports=yes`. The corner: 1 fail, 0 mm2 on the bed |
 
 Render: `/tmp/alex3d-bb-node/node_organic.png`.
 
@@ -219,6 +237,7 @@ Hiwonder servo and the Hiwonder controller board from `components/placeholders.p
 | Triangles | 31,750, closed |
 | Servo fit, 5 axis rays | 0.200 mm on every closed face; wall 3.02 against 3.0 |
 | `cad check --only parts` | 0 fails, 0 warns. 162 x 58 x 26 mm, **0 mm2 overhang**, 9,312 mm2 on the bed, `supports=no`, wall probe min 2.26 (post wall around the pilot) |
+| `best_orientation` | the clip face (plate on the bed): 0 fails, 0 warns, 9,312 mm2 on the bed. Every world axis on its side fails 1-9 times |
 | `cad printcheck stl` (layer check) | 0 regions: no bridge, ledge or island, so `supports=no` holds |
 
 Renders:
@@ -226,9 +245,69 @@ Renders:
 - `/tmp/alex3d-bb-bracket/bracket_keepout.png`: a section at y = 0 through the keep-out, showing the arm's swept
   profile over the notched fin and the servo in its cradle.
 
+## Second review (PR #4)
+
+| Finding | Fix | Evidence |
+|---|---|---|
+| `swept_envelope` leaked at a coarse voxel or tight tol: up to 0.65 mm outside at voxel 1 / tol 0.05 | `pad = r_max * step / 2 + voxel` (was `+ voxel / 4`); `GridTooLarge` from a sweep now says the pad grows with the voxel and not to tighten tol | Every mid-angle between poses of a sharp L arm (611k points): old pad 74,113 outside (0.55 mm) at 1.0/0.05, 32,811 (0.19 mm) at 0.5/0.05, 12 at 1.0/0.25; new pad 0 at 1.0/0.05, 0.5/0.05, 2.0/0.25. The review's own cases (`sweep_adv.py`) also go to 0 |
+| Prismatic joints were rotated; continuous joints raised TypeError | slides sweep as translations (`pad = step / 2 + voxel`), continuous joints with no lo/hi sweep 0..360; a small reader marked `TODO: use cadlib.joints after #3 lands` | 50 mm slide: envelope x -10.75..60.75 (was -10.4..10.4, a rotation); wheel: 0 of 6,800 points outside |
+| `overhang()` picked point-balanced orientations | `best_orientation(ob, candidates)` runs `printcheck.analyze_cached` over tube rims, clip faces and the 6 world axes, ranked by (stands, fails, warns, bed area); `overhang()` is gone | n3: tube0 rim (0 fails, 0 warns, 187 mm2); n4: tube1 rim (0/0, 172 mm2); brc: world +z down, the cradle rim (0/0, 179 mm2). The least-overhang direction failed with a mid-air island on n3 and n4 (0.0-0.1 mm2 on the bed); on brc it passed with 6 warns |
+| `measure` dropped holds with the same default name | unnamed holds are numbered `tube0`, `tube1`, `block0`; duplicate names raise | review's doc example: `tube0`, `tube1` both reported |
+| Docs: radial clearance, retention, teardrops | `Tube.clearance` documented as radial (0.4 diametral = `fit_loose`); no retention, screw or glue; `Tube(print_up=)` teardrop bore, point cut flat to keep 1.6 mm of sleeve | horizontal 20 mm tube: up 12.60 mm (flat), 1.62 mm sleeve above, fit 0.191-0.199 |
+| Token cost | reference moved to `reference/blend.md` (read on demand); SKILL.md has one line, api.md one row | always-read SKILL.md + api.md: +2,852 chars over `next` before, +354 now |
+| `cadlib/__init__` loaded numpy and openvdb on every import | `blend` loads on first use (module `__getattr__`) | full `verify_all` |
+
+## The printcheck gap (report; fix to come as its own PR against `next`)
+
+**What printcheck does.** It rasterizes each 0.2 mm layer and compares it with the layer below only. New pixels within
+the 45 deg allowance (0.2 mm plus half a pixel) are supported. An unsupported region narrower than `min_feature_mm`
+(0.4) is dropped as a sliver. A ledge up to `cantilever_warn_mm` (1.0) is "ok". Either way, the next layer then treats it
+as solid ground.
+
+**Why gradual overhangs pass.** A downward face at angle a from horizontal moves 0.2 / tan(a) mm per layer:
+- At a = 20-40 deg, that excess over the allowance is 0.04-0.3 mm per layer. It is dropped as a sliver, or accepted as a
+  sub-1 mm ledge.
+- Each layer is then judged against the accepted one, so the overhang never builds up.
+
+**Synthetic repro** (`printcheck.analyze` on triangles built in numpy; the script goes with the fix PR). A 10 x 20 mm column with a wedge whose
+underside rises at a from horizontal, reaching 20 mm out. A PLA slicer at 45-50 deg from vertical supports every row
+from 5 to 40:
+
+| a from horizontal | from vertical | underside mm2 | printcheck fails / warns | max cantilever mm |
+|---|---|---|---|---|
+| 5 | 85 | 402 | 0 / 8 | 2.1 |
+| 10 | 80 | 406 | 0 / 7 | 1.4 |
+| 15 | 75 | 414 | 0 / 0 | 0.8 |
+| 20-40 | 70-50 | 426-522 | 0 / 0 | 0.6-0.9 |
+| 45-60 | 45-30 | 566-693 | 0 / 0 | 0 (self-supporting) |
+
+**On a grown part.** Take n4, the review's 4-way node (three 20 mm sleeves 20 deg below horizontal, one straight up):
+- Orientation: `best_orientation`'s pick, standing on tube1's rim (down = (-0.397, 0.852, -0.342)), 72.2 mm tall.
+- Downward faces by angle from horizontal (mm2): 0-10: 326 (the bore ceilings, bridged at 20 mm), 10-20: 266,
+  20-30: 749, 30-40: 1,154, 40-50: 948, 50-60: 929, 60-70: 1,234, 70-80: 1,192, 80-90: 1,813.
+- So 2,944 mm2 lies within 45 deg of horizontal, and 2,495 mm2 within 40 deg.
+- printcheck: 0 fails, 0 warns, `needs_support: false`. Max cantilever 0.7 mm, 183 regions, 457 slivers dropped.
+- n3 on tube0's rim reads the same way: 1,931 mm2 within 45 deg, 0 / 0. So does brc on the cradle rim: 1,995 mm2, 0 / 0.
+
+A slicer would put support under most of those faces. In v2, this is how prints needed supports that the tools said
+they didn't.
+
+**Proposed fix.** Add a face-normal overhang pass on the same STL, next to the layer check:
+- For each triangle off the bed (centroid z > one layer) whose normal points down, measure its angle from vertical.
+  Sum the area steeper than `overhang_face_deg`, configurable, default 45 (PLA 45-50).
+- Make the summed regions findings, connected by shared edges:
+  - fail when a region's area exceeds `overhang_face_mm2` (for example 25) on a part marked `supports: no`;
+  - warn when it exceeds a few mm2.
+  - Report the region's location like the layer findings.
+- Keep bridges out of it: a near-flat face whose layer-check region is a bridge anchored on both sides stays the layer
+  check's call.
+- Run it in `cad printcheck` and cadcheck's layer check. `best_orientation` gets the same verdicts for free.
+- Regression cases: the ramp table above (fail from 5 to 40 deg at the default), n4 on tube1's rim (fail), and the
+  shipped v2 STLs.
+
 ## Verification
 
-`tools/verify.d/blend_bracket.sh` (about 20 s) asserts:
+`tools/verify.d/blend_bracket.sh` (about 6 min cold, mostly printcheck runs) asserts:
 - The organic node (fillet 15) passes the same fit and wall assertions.
 - The size guard refuses oversized `grow` and `swept_envelope` requests before allocating.
 - The node is closed; all 6 sockets are within ±0.05 mm of the 0.2 mm fit with no missed rays; the wall is at least
@@ -238,8 +317,12 @@ Renders:
 - The swept envelope contains every vertex and edge midpoint of 25 random poses of a sharp-cornered L arm and of the
   A3 nacelle, and both envelopes are closed.
 - A negative control: the same check fails the 5 deg pose union (398 of 1,550 points outside), so the check can fail.
-- The bracket is closed, the servo fits within 0.05 mm, the wall is at least 3, and it has no overhang. `cad check
-  --only parts` with the layer check on its exported STL finds nothing needing support, so `supports: no` has evidence.
+- The bracket is closed, the servo fits within 0.05 mm, the wall is at least 3, and `best_orientation` picks the clip
+  face with 0 fails and 0 warns. `cad check --only parts` with the layer check on its exported STL finds nothing needing
+  support, so `supports: no` has evidence.
+- Second review additions: swept envelopes at voxel/tol 1.0/0.05, 0.5/0.05 and 2.0/0.25 checked at every mid-angle
+  between poses; a slide joint and a continuous joint; hold auto-names, duplicate names and the teardrop bore;
+  `best_orientation` on the review's three connectors.
 
 ## Limits and follow-ups
 
@@ -249,11 +332,15 @@ Renders:
   at voxel 0.5 hit the 40M-cell guard. They need a coarser voxel (the error names it), splitting, or sparse
   evaluation near the surface (not done).
 - **Printability is reported, not designed in.** The node needs supports in every orientation. There is no overhang-
-  aware field term (for example a 45 deg chamfer under horizontal sleeves) yet.
+  aware field term (for example a 45 deg chamfer under horizontal sleeves) yet. `best_orientation` can only be as good
+  as printcheck, which misses gradual overhangs (see "The printcheck gap").
+- **Grown sockets don't retain the tube.** The fit is a 0.4 mm diametral slip (0.2 radial). Use a screw through the
+  sleeve (`holes=features.screw_hole(...)`) or glue.
+- **`clip` is a world-axis box.** For a tilted flat, subtract a rotated `geom.box` through `holes`.
 - **The fillet is circular per pair.** At three-way corners the n-ary round union gives a 3.11 mm fill. Changing that
   shape needs a different blend operator; the radius is the only knob.
-- **OpenVDB uses every core** (about 400-1100% CPU in these runs) even at nice 10. That is fine for 2 s calls, but a
-  heavy sweep competes with a live loop for its duration.
+- **OpenVDB uses every core** (about 400-1100% CPU in these runs) even at nice 10. Blender's `-t N` caps it;
+  `cad build` doesn't pass one.
 - **Not done:** the slicer view (`cad slice` was not run here; HARVEST_BRIEF "Printer safety, revised"), so `cad printcheck`
   is the supports evidence; a print test of the fit;
   and use by a v2 designer.

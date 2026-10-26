@@ -254,6 +254,32 @@ for it, bw, vx in ((10, 16, VOX), (40, 16, VOX), (70, 16, VOX), (100, 16, VOX), 
     G.apply_mods(s)
     rows.append(metrics("a2_sdf_fillet%d_v%g" % (it, vx), s, time.time() - t0, "Mesh to SDF Grid %.2f band %d, SDF Grid Fillet x%d, Grid to Mesh" % (vx, bw, it)))
 
+# (a3) SDF closing: Mesh to SDF Grid -> Offset +r -> Offset -r -> Grid to Mesh, decimated to 30k like (e). The radius is
+# a parameter here (PR #4 second review); it is a rolling-ball blend, so the 3-arm corner fills less than (e)'s
+for bw in (16, 24):
+    t0 = time.time()
+    s = sharp_union()
+
+    def build(ng, g, bw=bw):
+        sdf = node(ng, 'GeometryNodeMeshToSDFGrid', g, Voxel_Size=VOX)
+        sdf.inputs["Band Width"].default_value = bw
+        o1 = ng.nodes.new('GeometryNodeSDFGridOffset')
+        ng.links.new(sdf.outputs[0], o1.inputs[0])
+        o1.inputs["Distance"].default_value = FIL
+        o2 = ng.nodes.new('GeometryNodeSDFGridOffset')
+        ng.links.new(o1.outputs[0], o2.inputs[0])
+        o2.inputs["Distance"].default_value = -FIL
+        gm = ng.nodes.new('GeometryNodeGridToMesh')
+        ng.links.new(o2.outputs[0], gm.inputs[0])
+        gm.inputs["Threshold"].default_value = 0.0
+        return gm.outputs[0]
+    gn_modifier(s, build)
+    G.apply_mods(s)
+    m = s.modifiers.new("dec", 'DECIMATE')
+    m.ratio, m.use_collapse_triangulate = 30000 / max(B.tri_count(s), 1), True
+    G.apply_mods(s)
+    rows.append(metrics("a3_closing_r%g_bw%d" % (FIL, bw), s, time.time() - t0, "Mesh to SDF Grid %.1f band %d, Offset +%g, Offset -%g, Grid to Mesh, collapse to 30k" % (VOX, bw, FIL, FIL)))
+
 # (b) Remesh modifier (voxel) + Laplacian smoothing
 for it in (10, 40):
     t0 = time.time()
