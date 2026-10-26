@@ -149,6 +149,7 @@ the centre. Three solid tubes can't share the centre point, so the core between 
 | Fit, 6 sockets x 12 stations x 24 rays (1,728) | 0.190-0.199 mm against 0.2 spec; 0 rays missed |
 | Wall, radial from every socket | min 4.016 mm against 4.0 spec |
 | `cad check --only parts` | 0 fails, 0 warns. Fits P1S (80 x 80 x 80 mm), wall probe min 4.02 |
+| `cad printcheck stl` (layer check) | 4 cantilevers of 20.1 mm at z 25.8 (the four horizontal sleeves' undersides) and 6 more over the 1 mm warn; 0 islands; bridges to 20.0 mm. As `supports: no` that is 4 fails; the part declares supports, so `cad check` passes it |
 | Print orientation | standing on the -Z sleeve rim: 3,018 mm2 overhang + 1,042 mm2 ceilings (20.4 mm bridge), 171 mm2 on the bed, `supports=yes` (the four horizontal sleeves and their sockets). Along the (1,1,1) corner: 3,984 mm2 overhang and 0.4 mm2 on the bed, so no better. |
 
 Render: `/tmp/alex3d-bb-node/node.png`: tubes near-black, connector red.
@@ -167,6 +168,7 @@ fillet 15 and sleeves that end 36 mm from the centre (21.8 mm sockets, about 4 m
 | Fit | 0.190-0.199 mm over 1,296 rays |
 | Wall | min 4.015 mm |
 | `cad check --only parts` | 0 fails, 0 warns. 72 x 72 x 72 mm, wall probe 4.00 |
+| `cad printcheck stl_organic` (layer check) | 4 cantilevers of 7.0 mm at z 21.8 and 8 more over the 1 mm warn; 0 islands. Shorter than the default's 20.1 mm, but still over the 3 mm fail: supports stay declared |
 | Print orientation | 2,416 mm2 overhang + 738 mm2 ceilings, 98 mm2 on the bed: still `supports=yes` |
 
 Render: `/tmp/alex3d-bb-node/node_organic.png`.
@@ -217,6 +219,7 @@ Hiwonder servo and the Hiwonder controller board from `components/placeholders.p
 | Triangles | 31,750, closed |
 | Servo fit, 5 axis rays | 0.200 mm on every closed face; wall 3.02 against 3.0 |
 | `cad check --only parts` | 0 fails, 0 warns. 162 x 58 x 26 mm, **0 mm2 overhang**, 9,312 mm2 on the bed, `supports=no`, wall probe min 2.26 (post wall around the pilot) |
+| `cad printcheck stl` (layer check) | 0 regions: no bridge, ledge or island, so `supports=no` holds |
 
 Renders:
 - `/tmp/alex3d-bb-bracket/bracket.png`
@@ -230,11 +233,13 @@ Renders:
 - The size guard refuses oversized `grow` and `swept_envelope` requests before allocating.
 - The node is closed; all 6 sockets are within ±0.05 mm of the 0.2 mm fit with no missed rays; the wall is at least
   4.0; it has under 60k triangles.
-- `cad check --only parts` on the node: 0 fails, fits P1S, wall probe at least 4.0.
+- `cad check --only parts` on the node, layer check on: 0 fails, fits P1S, wall probe at least 4.0, and the layer check
+  agrees the node needs the supports it declares.
 - The swept envelope contains every vertex and edge midpoint of 25 random poses of a sharp-cornered L arm and of the
   A3 nacelle, and both envelopes are closed.
 - A negative control: the same check fails the 5 deg pose union (398 of 1,550 points outside), so the check can fail.
-- The bracket is closed, the servo fits within 0.05 mm, the wall is at least 3, and it has no overhang.
+- The bracket is closed, the servo fits within 0.05 mm, the wall is at least 3, and it has no overhang. `cad check
+  --only parts` with the layer check on its exported STL finds nothing needing support, so `supports: no` has evidence.
 
 ## Limits and follow-ups
 
@@ -249,5 +254,6 @@ Renders:
   shape needs a different blend operator; the radius is the only knob.
 - **OpenVDB uses every core** (about 400-1100% CPU in these runs) even at nice 10. That is fine for 2 s calls, but a
   heavy sweep competes with a live loop for its duration.
-- **Not done:** the slicer view, which is forbidden here (HARVEST_BRIEF "Printer safety"); a print test of the fit;
+- **Not done:** the slicer view (`cad slice` was not run here; HARVEST_BRIEF "Printer safety, revised"), so `cad printcheck`
+  is the supports evidence; a print test of the fit;
   and use by a v2 designer.

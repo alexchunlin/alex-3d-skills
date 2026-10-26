@@ -38,7 +38,7 @@ then the fits, holes and clip are cut exactly with Manifold. `docs/features/blen
 | `rod(a, b, r, edge)`, `capsule(a, b, r)`, `sphere(c, r)`, `rbox(M, size, r)`, `mesh_field(ob)` | extra members: plates, posts, fins, struts |
 | `grow(name, holds, fillet=5, extra=[], keepout=[], keepout_clear=0.5, clip=None, holes=[], voxel=0.5)` | returns `(ob, report)`. `clip` is a world box intersected exactly (flat bed face). `holes` takes `features.screw_hole(...)` lists. About 2 s, under 45k triangles. Over `max_cells` (default 40M grid cells, about 1.7 GB) it raises `GridTooLarge` before allocating, naming the smallest voxel that fits; it never coarsens silently. `swept_envelope` has the same guard. |
 | `measure(ob, holds)` | fit clearance and wall per hold, by rays on the finished mesh |
-| `overhang(ob, R)` | `(overhang mm2, bed mm2)` for a print rotation. Run it on every grown part before you accept it: fillets and sleeves make overhangs that a box design doesn't have (the node needs supports in every orientation). |
+| `overhang(ob, R)` | `(overhang mm2, bed mm2)` for a print rotation. Run it on every grown part before you accept it: fillets and sleeves make overhangs that a box design doesn't have (the node needs supports in every orientation). It compares orientations; the evidence for `supports: no` is still `cad printcheck` on the exported STL. |
 
 ## features: print features
 
