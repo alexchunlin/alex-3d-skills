@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import os
 import json
 import re
 import sys
@@ -563,6 +564,219 @@ def cmd_workflow(_tr, a) -> None:
         print(f"{r[0]:<20} {r[1]:<12} {r[2]:<18} {r[3]:>5} {r[4]:>6} {r[5]:>5} {r[6]:>5} {r[7]:>9,} {r[8]:>10,} {r[9]:>10,} {r[10]:>9,} {r[11]:>9,} {r[12]:>4} {r[13]:>3}  {r[14]}")
 
 
+# ---------------------------------------------------------------- bench: doc reads, source reads, feature use
+
+# a file of either skill, wherever the checkout lives (the v2 loop read a pinned copy, alex-3d-skills-pin)
+SKILL_FILE_RE = re.compile(r"skills/(print-cad-blender|cad-design-review)(?:/([\w./*-]*))?")
+# `cad <sub>` through the wrapper (cad, .../scripts/cad, $CAD, "$PCB/scripts/cad"), and the scripts run by hand
+CAD_SUBS = "build|check|q|py|rows|bom|sheet|printcheck|slice"
+CAD_VAR_RE = re.compile(r"\b(\w+)=[\"']?[^\s;\"']*/scripts/cad[\"']?(?=[\s;&|]|$)")
+CAD_SCRIPT_RE = re.compile(r"\b(cadcheck|cadq|cadrows|cadbom|printcheck|cadslice)\.py\b")
+
+ONLY_RE = re.compile(r"--only[ =]([\w,]+)")
+CADLIB_CALL_RE = re.compile(r"\b(G|F|A|E|R|geom|features|asm|export|render)\.(\w+)\s*\(")
+CADLIB_ALIAS = {"G": "geom", "F": "features", "A": "asm", "E": "export", "R": "render"}
+# a key written as a dict literal, or a subscript that is appended to or assigned (reading a report doesn't count)
+JSON_KEY_RE = re.compile(r"[\"'](\w+)[\"']\s*:|\[\s*[\"'](\w+)[\"']\s*\]\s*(?:\.append|\.extend|\.insert|\.update|=(?!=))")
+CONFIG_FILE_RE = re.compile(r"(checks|review_rows|overlay)\w*\.json")
+READERS = {"cat", "sed", "head", "tail", "grep", "rg", "awk", "less", "nl", "bat", "egrep"}
+PATTERN_FIRST = {"grep", "rg", "egrep", "sed", "awk"}
+
+
+def cad_calls(cmd: str) -> tuple[list[str], list[str]]:
+    """(cad subcommands, cad q commands) in a Bash command: `cad`, `.../scripts/cad`, `$CAD`, and any variable the command
+    sets to a cad path first (v2 builders wrote `Q=.../scripts/cad; $Q q model.blend list ...`)."""
+    names = ["CAD"] + CAD_VAR_RE.findall(cmd)
+    pre = r"(?:\bcad|\$\{?(?:%s)\}?)[\"']?\s+" % "|".join(map(re.escape, names))
+    return re.findall(pre + r"(%s)\b" % CAD_SUBS, cmd), re.findall(pre + r"q\s+\S+\s+(\w+)", cmd)
+
+
+def _expand(tok: str, env: dict) -> str:
+    return re.sub(r"\$\{?(\w+)\}?", lambda m: env.get(m.group(1), m.group(0)), tok)
+
+
+def bash_reads(cmd: str) -> list[tuple[str, str]]:
+    """(path, program) for each file a Bash command reads with cat/sed/head/grep/...; `cd X;` and simple VAR=/path
+    assignments are followed."""
+    import shlex
+    cwd, env, out = None, {}, []
+    for seg in re.split(r"\n|;|&&|\|\||\|", cmd):
+        try:
+            toks = shlex.split(seg, comments=False)
+        except ValueError:
+            toks = seg.split()
+        while toks and re.match(r"^\w+=", toks[0]):
+            k, v = toks[0].split("=", 1)
+            env[k] = _expand(v, env)
+            toks = toks[1:]
+        if not toks:
+            continue
+        toks = [_expand(t, env) for t in toks]
+        if toks[0] == "cd" and len(toks) > 1:
+            cwd = toks[1] if toks[1].startswith("/") or cwd is None else cwd.rstrip("/") + "/" + toks[1]
+            continue
+        prog = toks[0].rsplit("/", 1)[-1]
+        if prog not in READERS:
+            continue
+        args = [t for t in toks[1:] if not t.startswith("-") and not t.startswith(">") and not t.startswith("<")]
+        if prog in PATTERN_FIRST and args and not any(t in ("-e", "-f") for t in toks[1:]):
+            args = args[1:]
+        for t in args:
+            if "/" not in t and "." not in t:
+                continue
+            out.append((t if t.startswith("/") or cwd is None else cwd.rstrip("/") + "/" + t, prog))
+    return out
+
+
+def skill_file(path: str) -> tuple[str, str, str] | None:
+    """(skill, path inside the skill, 'doc' | 'source') for a path in either skill, else None."""
+    m = SKILL_FILE_RE.search(path or "")
+    if not m:
+        return None
+    rel = m.group(2) or ""
+    kind = "doc" if rel.endswith(".md") else "source"
+    return m.group(1), rel, kind
+
+
+def _written(tc: ToolCall) -> list[tuple[str, str]]:
+    """(path or '<bash>', text) the call wrote or executed: Write content, Edit new_string, heredocs, the Bash command."""
+    i = tc.input
+    if tc.name == "Write":
+        return [(i.get("file_path", ""), i.get("content", ""))]
+    if tc.name == "Edit":
+        return [(i.get("file_path", ""), i.get("new_string", ""))]
+    if tc.name == "Bash":
+        cmd = i.get("command", "")
+        return [(m.group(1), m.group(3)) for m in HEREDOC_RE.finditer(cmd)] + [("<bash>", cmd)]
+    return []
+
+
+def bench_digest(tr: Transcript, skill_files: dict | None = None) -> dict:
+    """Per-agent cost telemetry for tools/bench: skill doc tokens read before the first edit (by file), tool and
+    library source reads (doc gaps), failed cad/Blender runs, and the cad subcommands, cad q commands, --only sections,
+    config keys and cadlib functions the agent used. Tokens are result characters / 4. A call that reads several files
+    splits its result by file size when every file is read whole (Read, cat) and sizes are known (skill_files:
+    {(skill, rel): bytes}, from this checkout, not the pin the agent read), else evenly."""
+    from collections import Counter, defaultdict
+    from fnmatch import fnmatch
+    skill_files = skill_files or {}
+    edits = [f for f in files_written(tr) if re.search(r"\.(py|json)$", f["path"] or "")]
+    first_edit = min((f["idx"] for f in edits), default=None)
+    docs_before, docs_all, src = defaultdict(float), defaultdict(float), defaultdict(float)
+    src_calls = []
+    for tc in tr.tools:
+        reads = []
+        if tc.name == "Read":
+            reads = [(tc.input.get("file_path", ""), "cat")]
+        elif tc.name == "Grep":
+            reads = [(tc.input.get("path", ""), "grep")]
+        elif tc.name == "Bash":
+            reads = bash_reads(tc.input.get("command", ""))
+        entries = []   # (skill file or None, weight or None)
+        for p, prog in reads:
+            sf = skill_file(p)
+            if sf and "*" in sf[1]:
+                exp = [(k, r, "doc" if r.endswith(".md") else "source") for (k, r) in skill_files if k == sf[0] and fnmatch(r, sf[1])]
+                entries += [(e, skill_files.get(e[:2]) if prog == "cat" else None) for e in exp] or [(None, None)]
+            else:
+                entries.append((sf, skill_files.get(sf[:2]) if sf and prog == "cat" else None))
+        if not any(e for e, _ in entries):
+            continue
+        whole = all(w for _, w in entries)
+        tot_w = sum(w for _, w in entries) if whole else len(entries)
+        for e, w in entries:
+            if e is None:
+                continue
+            share = tc.result_chars / 4.0 * ((w if whole else 1) / tot_w)
+            key = "%s/%s" % (e[0], os.path.normpath(e[1]))
+            if e[2] == "doc":
+                docs_all[key] += share
+                if first_edit is None or tc.idx < first_edit:
+                    docs_before[key] += share
+            else:
+                src[key] += share
+                src_calls.append(tc.idx)
+    cad_sub, cadq, only, keys, funcs = Counter(), Counter(), Counter(), Counter(), Counter()
+    cad_runs, cad_failed = 0, []
+    for tc in tr.tools:
+        if tc.name == "Bash":
+            cmd = tc.input.get("command", "")
+            subs, qs = cad_calls(cmd)
+            subs = subs + [{"cadcheck": "check", "cadq": "q", "cadrows": "rows", "cadbom": "bom",
+                                               "printcheck": "printcheck", "cadslice": "slice"}[s]
+                                              for s in CAD_SCRIPT_RE.findall(cmd) if "--python" in cmd or "python" in cmd]
+            for s in set(subs):
+                cad_sub[s] += 1
+            for q in set(q for q in qs if q.isalpha() and q.islower()):
+                cadq[q] += 1
+            for o in set(x for grp in ONLY_RE.findall(cmd) for x in grp.split(",") if x):
+                only[o] += 1
+            if subs or is_blender(tc):
+                cad_runs += 1
+                if bash_failed(tc) or "BUILD FAILED" in tc.result_text:
+                    cad_failed.append({"idx": tc.idx, "what": tc.brief(80), "err": error_lines(tc.result_text, 2)})
+        seen_k, seen_f = set(), set()
+        for path, text in _written(tc):
+            if CONFIG_FILE_RE.search(path) or (path == "<bash>" and CONFIG_FILE_RE.search(text)):
+                seen_k |= {a or b for a, b in JSON_KEY_RE.findall(text)}
+                if re.search(r":\s*\"=", text):
+                    seen_k.add("=EXPR")
+            if path.endswith(".py") or path == "<bash>":
+                seen_f |= {"%s.%s" % (CADLIB_ALIAS.get(m, m), f) for m, f in CADLIB_CALL_RE.findall(text)}
+        keys.update(seen_k)
+        funcs.update(seen_f)
+    r1 = lambda d: {k: int(round(v)) for k, v in sorted(d.items(), key=lambda x: -x[1])}
+    u = usage_totals(tr)
+    return {"agent_id": tr.agent_id, "label": tr.label, "wall_min": round(((tr.t_end or 0) - (tr.t_start or 0)) / 60, 1),
+            "output_tokens": u["output"] + u["est_missing_output"], "tool_calls": len(tr.tools),
+            "first_edit_idx": first_edit,
+            "doc_tokens_before_edit": int(round(sum(docs_before.values()))), "docs_before_edit": r1(docs_before),
+            "doc_tokens_total": int(round(sum(docs_all.values()))), "docs_total": r1(docs_all),
+            "source_read_calls": len(set(src_calls)), "source_read_tokens": int(round(sum(src.values()))), "source_reads": r1(src),
+            "cad_runs": cad_runs, "cad_failed": len(cad_failed), "cad_failed_list": cad_failed[:12],
+            "cad_subcommands": dict(cad_sub), "cadq_commands": dict(cadq), "only_sections": dict(only),
+            "config_keys": dict(keys), "cadlib_functions": dict(funcs)}
+
+
+def cmd_bench(_tr, a) -> None:
+    """Per-agent bench telemetry for the agents in tools/bench/agents.json (or the transcripts / workflow dirs given)."""
+    targets = []
+    if a.transcript:
+        for t in a.transcript:
+            p = Path(t).expanduser()
+            for f in (sorted(p.glob("agent-*.jsonl")) if p.is_dir() else [p]):
+                targets.append({"name": f.stem, "attempt": None, "role": None, "file": f})
+    else:
+        spec = json.load(open(a.agents))
+        root = Path(spec["wf_root"]).expanduser()
+        for g in spec["agents"]:
+            if a.attempt and g["attempt"] not in a.attempt.split(","):
+                continue
+            targets.append({**g, "file": root / g["path"]})
+    sk = Path(__file__).resolve().parents[2] / "skills"   # sizes split multi-file reads; globs expand
+    skill_files = {(p.relative_to(sk).parts[0], "/".join(p.relative_to(sk).parts[1:])): p.stat().st_size
+                   for p in sk.rglob("*") if p.is_file() and "__pycache__" not in p.parts} if sk.is_dir() else {}
+    rows = []
+    for t in targets:
+        if not Path(t["file"]).exists():
+            rows.append({k: v for k, v in t.items() if k != "file"} | {"missing": str(t["file"])})
+            continue
+        d = bench_digest(load(t["file"]), skill_files)
+        rows.append({k: v for k, v in t.items() if k not in ("file", "path")} | d)
+    if a.json:
+        print(json.dumps(rows, indent=1))
+        return
+    print("agent        attempt role      wall  out_tok  doc_tok<edit  doc_tok  src_reads(tok)  cad runs/failed  subcommands")
+    for r in rows:
+        if "missing" in r:
+            print("%-12s %-7s MISSING %s" % (r["name"], r.get("attempt"), r["missing"]))
+            continue
+        print("%-12s %-7s %-8s %5.1f %8d %13d %8d %5d (%6d) %8d/%-6d  %s" % (
+            r["name"], r.get("attempt") or "-", r.get("role") or "-", r["wall_min"], r["output_tokens"], r["doc_tokens_before_edit"],
+            r["doc_tokens_total"], r["source_read_calls"], r["source_read_tokens"], r["cad_runs"], r["cad_failed"],
+            " ".join("%s:%d" % kv for kv in sorted(r["cad_subcommands"].items()))))
+
+
 def _iter_lines(path):
     with open(path, "rb") as fh:
         for raw in fh:
@@ -579,6 +793,11 @@ def cmd_json(tr: Transcript, a) -> None:
 def main(argv=None) -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
+    b = sub.add_parser("bench", help="per-agent doc/source reads, failed cad runs and feature use (tools/bench)")
+    b.add_argument("transcript", nargs="*", help="agent-*.jsonl or workflow dirs; default: the agents in --agents")
+    b.add_argument("--agents", default=str(Path(__file__).resolve().parents[1] / "bench" / "agents.json"))
+    b.add_argument("--attempt", help="comma list of attempts from --agents (a1, v2a3, ...)")
+    b.add_argument("--json", action="store_true")
     for name in ("summary", "timeline", "bash", "files", "images", "renders", "usage", "json", "show", "thinking", "grep",
                  "workflow"):
         s = sub.add_parser(name)
@@ -595,7 +814,7 @@ def main(argv=None) -> None:
             s.add_argument("which", help="tool_use id or index (#N in other views)")
             s.add_argument("--max", type=int, default=6000)
     a = p.parse_args(argv)
-    tr = None if a.cmd == "workflow" else load(a.transcript)
+    tr = None if a.cmd in ("workflow", "bench") else load(a.transcript)
     globals()["cmd_" + a.cmd](tr, a)
 
 

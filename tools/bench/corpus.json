@@ -1,0 +1,77 @@
+{
+ "_doc": [
+  "The replay corpus: the 10 archived designs and, per design, the cad runs tools/verify_all.sh makes on it (same configs,",
+  "overlays, --only sets and CAD_LAYER_CHECK), so a verify_all scratch dir can be scored without re-running Blender",
+  "(replay.py --from-verify DIR; verify_out is the file name verify_all writes under its run dir).",
+  "kind 'designer': what the designer's own config and the always-on tools report (what an agent sees at hand-off).",
+  "kind 'review': the same model with the rows each reviewer showed were missing (overlays), so it measures a check given the row.",
+  "Runs with no verify_out are bench-only (verify_all has no pure designer run on v2 A1: it always adds R1's overlays).",
+  "{dir} in args is the attempt's example directory."
+ ],
+ "attempts": {
+  "a1": {"dir": "examples/mm-launcher-a1", "blend": "mm_launcher_a1.blend.gz", "as": "mm_launcher.blend", "reviewer": "R1",
+         "tools_at_handoff": null, "findings": "Attempt 1",
+         "runs": [
+          {"id": "designer", "kind": "designer", "type": "check", "config": "checks.json", "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "a1/cadcheck.json"},
+          {"id": "layer", "kind": "designer", "type": "check", "config": "checks.json", "args": ["--only", "parts"], "env": {"CAD_LAYER_CHECK": "1"}, "verify_out": "a1/layer.json"}]},
+  "a2": {"dir": "examples/mm-launcher-a2", "blend": "mm_launcher_a2.blend.gz", "as": "mm_launcher.blend", "reviewer": "R2",
+         "tools_at_handoff": null, "findings": "Attempt 2",
+         "runs": [
+          {"id": "designer", "kind": "designer", "type": "check", "config": "checks.json", "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "a2/cadcheck.json"},
+          {"id": "layer", "kind": "designer", "type": "check", "config": "checks.json", "args": ["--only", "parts"], "env": {"CAD_LAYER_CHECK": "1"}, "verify_out": "a2/layer.json"}]},
+  "a3": {"dir": "examples/mm-launcher-a3", "blend": "mm_launcher_a3.blend.gz", "as": "mm_launcher.blend", "reviewer": "R3",
+         "tools_at_handoff": null, "findings": "Attempt 3",
+         "runs": [
+          {"id": "designer", "kind": "designer", "type": "check", "config": "checks.json", "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "a3/cadcheck.json"},
+          {"id": "layer", "kind": "designer", "type": "check", "config": "checks.json", "args": ["--only", "parts"], "env": {"CAD_LAYER_CHECK": "1"}, "verify_out": "a3/layer.json"}]},
+  "v2a1": {"dir": "examples/mm-launcher-v2a1", "blend": "mm_launcher_v2a1.blend.gz", "as": "model.blend", "reviewer": "V2R1",
+           "tools_at_handoff": "2197aac", "findings": "v2 Attempt 1",
+           "runs": [
+            {"id": "designer", "kind": "designer", "type": "check", "config": "checks.json", "env": {"CAD_LAYER_CHECK": "0"}},
+            {"id": "layer", "kind": "designer", "type": "check", "config": "checks.json", "args": ["--only", "parts"], "env": {"CAD_LAYER_CHECK": "1"}, "verify_out": "v2a1/layer.json"},
+            {"id": "r1_rows", "kind": "review", "type": "check", "config": "checks.json", "args": ["--overlay", "{dir}/overlay_drop.json", "--overlay", "{dir}/overlay_fits.json"], "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "v2a1/cadcheck.json"}]},
+  "v2a2": {"dir": "examples/mm-launcher-v2a2", "blend": "mm_launcher_v2a2.blend.gz", "as": "model.blend", "reviewer": "V2R2",
+           "tools_at_handoff": "6b62667", "findings": "v2 Attempt 2",
+           "runs": [
+            {"id": "designer", "kind": "designer", "type": "check", "config": "checks.json", "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "v2a2/cadcheck.json"},
+            {"id": "layer", "kind": "designer", "type": "check", "config": "checks.json", "args": ["--only", "parts"], "env": {"CAD_LAYER_CHECK": "1"}, "verify_out": "v2a2/layer.json"},
+            {"id": "r2_rows", "kind": "review", "type": "check", "config": "checks.json", "args": ["--overlay", "{dir}/overlay_v2a2.json", "--overlay-only", "--only", "payload,sightlines,slide,distances"], "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "v2a2/overlay.json"}]},
+  "v2a3": {"dir": "examples/mm-launcher-v2a3", "blend": "mm_launcher_v2a3.blend.gz", "as": "model.blend", "copy": ["manifest.json"], "reviewer": "V2R3",
+           "tools_at_handoff": "f039205", "findings": "v2 Attempt 3",
+           "runs": [
+            {"id": "designer", "kind": "designer", "type": "check", "config": "checks.json", "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "v2a3/cadcheck.json"},
+            {"id": "layer", "kind": "designer", "type": "check", "config": "checks.json", "args": ["--only", "parts"], "env": {"CAD_LAYER_CHECK": "1"}, "verify_out": "v2a3/layer.json"},
+            {"id": "bom", "kind": "designer", "type": "bom", "bom": "BOM_AND_ASSEMBLY.md", "manifest": "manifest.json", "verify_out": "v2a3/bom.txt"},
+            {"id": "r3_rows", "kind": "review", "type": "check", "config": "checks.json", "args": ["--overlay", "{dir}/overlay_v2a3.json", "--overlay-only", "--only", "drop,slide,distances,payload,cables"], "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "v2a3/overlay.json"}]},
+  "v2a4": {"dir": "examples/mm-launcher-v2a4", "blend": "mm_launcher_v2a4.blend.gz", "as": "model.blend", "copy": ["manifest.json"], "reviewer": "V2R4",
+           "tools_at_handoff": "a20a4d7", "findings": "v2 Attempt 4",
+           "runs": [
+            {"id": "designer", "kind": "designer", "type": "check", "config": "checks.json", "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "v2a4/cadcheck.json"},
+            {"id": "layer", "kind": "designer", "type": "check", "config": "checks.json", "args": ["--only", "parts"], "env": {"CAD_LAYER_CHECK": "1"}, "verify_out": "v2a4/layer.json"},
+            {"id": "r4_sweep", "kind": "review", "type": "check", "config": "checks.json", "args": ["--overlay", "{dir}/overlay_v2a4.json", "--overlay-only", "--only", "distances"], "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "v2a4/sweep.json"}]},
+  "v2a5": {"dir": "examples/mm-launcher-v2a5", "blend": "mm_launcher_v2a5.blend.gz", "as": "model.blend", "copy": ["manifest.json"], "reviewer": "V2R5",
+           "tools_at_handoff": "dea6536", "findings": "v2 Attempt 5",
+           "runs": [
+            {"id": "designer", "kind": "designer", "type": "check", "config": "checks.json", "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "v2a5/cadcheck.json"},
+            {"id": "layer", "kind": "designer", "type": "check", "config": "checks.json", "args": ["--only", "parts"], "env": {"CAD_LAYER_CHECK": "1"}, "verify_out": "v2a5/layer.json"},
+            {"id": "r5_sweep", "kind": "review", "type": "check", "config": "checks.json", "args": ["--overlay", "{dir}/overlay_v2a5.json", "--overlay-only", "--only", "distances"], "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "v2a5/sweep.json"},
+            {"id": "r5_band", "kind": "review", "type": "check", "config": "checks.json", "args": ["--only", "stacks,interference", "--overlay", "{dir}/overlay_v2a5_band.json"], "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "v2a5/band.json"}]},
+  "v2a6": {"dir": "examples/mm-launcher-v2a6", "blend": "mm_launcher_v2a6.blend.gz", "as": "model.blend", "copy": ["manifest.json"], "reviewer": "V2R6",
+           "tools_at_handoff": "36189b8", "findings": "v2 Attempt 6",
+           "runs": [
+            {"id": "designer", "kind": "designer", "type": "check", "config": "checks.json", "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "v2a6/cadcheck.json"},
+            {"id": "layer", "kind": "designer", "type": "check", "config": "checks.json", "args": ["--only", "parts"], "env": {"CAD_LAYER_CHECK": "1"}, "verify_out": "v2a6/layer.json"},
+            {"id": "step_facts", "kind": "review", "type": "check", "config": "checks.json", "args": ["--only", "insertion", "--overlay", "{dir}/overlay_v2a6_steps.json", "--overlay-only"], "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "v2a6/ins.json"},
+            {"id": "r6_rows", "kind": "review", "type": "check", "config": "checks.json", "args": ["--only", "slide,service", "--overlay", "{dir}/review_rows_v2a6.json", "--overlay-only"], "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "v2a6/rows.json"}]},
+  "v2a7": {"dir": "examples/mm-launcher-v2a7", "blend": "mm_launcher_v2a7.blend.gz", "as": "model.blend", "copy": ["manifest.json"], "reviewer": "V2R7",
+           "tools_at_handoff": "6025133", "findings": "v2 Attempt 7",
+           "runs": [
+            {"id": "designer", "kind": "designer", "type": "check", "config": "checks.json", "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "v2a7/cadcheck.json"},
+            {"id": "layer", "kind": "designer", "type": "check", "config": "checks.json", "args": ["--only", "parts"], "env": {"CAD_LAYER_CHECK": "1"}, "verify_out": "v2a7/layer.json"},
+            {"id": "printcheck", "kind": "designer", "type": "printcheck", "stl_tar": "stl.tar.gz", "manifest": "manifest.json", "verify_out": "pc-v2/printcheck.json"},
+            {"id": "bom", "kind": "designer", "type": "bom", "bom": "BOM_AND_ASSEMBLY.md", "manifest": "manifest.json"},
+            {"id": "step_facts", "kind": "review", "type": "check", "config": "checks.json", "args": ["--only", "insertion", "--overlay", "{dir}/overlay_v2a7_steps.json", "--overlay-only"], "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "v2a7/ins.json"},
+            {"id": "step_held", "kind": "review", "type": "check", "config": "checks.json", "args": ["--only", "fasteners,assembly", "--overlay", "{dir}/overlay_v2a7_steps.json", "--overlay-only"], "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "v2a7/held.json"},
+            {"id": "r7_rows", "kind": "review", "type": "check", "config": "checks.json", "args": ["--only", "slide", "--overlay", "{dir}/review_rows_v2a7.json", "--overlay-only"], "env": {"CAD_LAYER_CHECK": "0"}, "verify_out": "v2a7/rows.json"}]}
+ }
+}

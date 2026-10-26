@@ -14,7 +14,12 @@ python3 -I tools/transcript/cc_transcript.py bash     $WF/agent-ID.jsonl --error
 python3 -I tools/transcript/cc_transcript.py images|renders|files $WF/agent-ID.jsonl
 python3 -I tools/transcript/cc_transcript.py grep     $WF/agent-ID.jsonl 'tilt sweep'
 python3 -I tools/transcript/cc_transcript.py show     $WF/agent-ID.jsonl 43           # full input/output of tool call #43
+python3 -I tools/transcript/cc_transcript.py bench    [--attempt v2a7] [--json]       # tools/bench tier 2: doc/source reads, feature use
 ```
+
+`bench` reads the agents in `tools/bench/agents.json` (or the transcripts given): skill-doc tokens read before the first
+`.py`/`.json` edit, cadcheck/cadlib source reads, failed cad runs, and the cad subcommands, `cad q` commands, `--only`
+sections, checks.json keys and cadlib calls each agent used. See `tools/bench/README.md`.
 
 How the numbers are computed:
 - **model time** of an API call = previous event (tool result or prompt) to the last streamed block of
