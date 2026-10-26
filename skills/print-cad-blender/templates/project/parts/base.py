@@ -4,9 +4,9 @@ from cadlib import geom as G, features as F, asm as A
 
 def build(P):
     h = P.BASE / 2
-    shell = G.prism("base", G.rrect(-h, h, -h, h, 6), 0, P.BASE_H, 'Z')
-    G.bevel(shell, 0.8)
-    cav = G.prism("cav", G.rrect(-h + P.WALL, h - P.WALL, -h + P.WALL, h - P.WALL, 4), -1, P.BASE_H - P.WALL, 'Z')
+    shell = G.prism("base", G.rrect(-h, h, -h, h, P.CR), 0, P.BASE_H, 'Z')
+    G.bevel(shell, P.EB)
+    cav = G.prism("cav", G.rrect(-h + P.WALL, h - P.WALL, -h + P.WALL, h - P.WALL, P.CR_S), -1, P.BASE_H - P.WALL, 'Z')
     shell = G.csg(shell, sub=[cav])
     bosses, cuts, screws = [], [], []
     for sx in (-1, 1):
