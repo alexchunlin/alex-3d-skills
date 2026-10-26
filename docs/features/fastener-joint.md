@@ -23,8 +23,9 @@ G.csg(shell, sub=cuts[shell.name])
 ## What it does
 
 1. **Size table.** `SIZES` covers M2, M2.5, M3, M4 and M5: pitch, clearance, self-tap pilot, PLA-tap hole, cap/pan/csk
-   head d and h, nut AF and h, trap AF, insert hole and length, `min_engagement` (2 d), `tapped_engagement` (1.5 d) and the
-   stock ISO lengths. The M3 row reads the `m3_*` entries of `RULES` at lookup, so tuning `RULES` still works and every
+   head d and h, nut AF and h, trap AF, insert hole and length, `min_engagement` (2 d) and `tapped_engagement` (1.5 d).
+   The stock lengths come from cadcheck's default `fasteners.stock_lengths` (read like `max_protrusion`, below), so the
+   joint never picks a length cadcheck's stock-length check warns about. The M3 row reads the `m3_*` entries of `RULES` at lookup, so tuning `RULES` still works and every
    existing M3 hole keeps its diameter. Changing the size is one argument: the template now has `P.SCREW = "M3"`.
 2. **Stack.** `axis_stack` ray-casts each given part along `at`/`into`, using a BVH of the world-space mesh and a line
    offset 0.01 mm so it never runs down an edge. For each part it keeps the first stretch of material ahead of `at`.
@@ -87,20 +88,26 @@ round holes, and the min (across flats) for the hex trap.
 
 ## Conversions (cadcheck before / after, `next` cadlib vs this branch)
 
+Re-measured after the rebase onto `next` d9cd12d (main's printability task: the demo base and barrel declare
+`supports: yes`, the template's floor bosses run to the deck, and the demo and template are checked with
+`CAD_LAYER_CHECK=1`). The first run, on the older `next`, gave 8 -> 7 demo warns.
+
 | Build | Before | After |
 |---|---|---|
-| `examples/demo-turret/build.py` clean (7 joints converted) | 0 fails, 8 warns | **0 fails, 7 warns** |
+| `examples/demo-turret/build.py` clean (7 joints converted) | 0 fails, 9 warns | **0 fails, 8 warns** |
 | demo `--bug` | 4/4 planted bugs caught | 4/4 caught (`FST_side stops 0.40 mm short` is forced with `length=2, strict=False`) |
-| template (`P.SCREW`, 4 floor screws) | 0 fails, 1 warn | 0 fails, 1 warn; with `SCREW = "M4"`: 0 fails, M4_pan x 8, Ø3.3 pilots |
+| template (`P.SCREW`, 4 floor screws) | 0 fails, 1 warn | 0 fails, 1 warn (M3_pan x 6); with `SCREW = "M4"`: 0 fails, 1 warn, M4_pan x 8, Ø3.3 pilots |
 
 The warning that went away was a real defect. The hand-picked M3 x 10 floor screws had their pilot running to 11 mm in
 a 12 mm boss, which left a 1.01 mm skin: `PRT_base: 32 wall samples < 1.6 mm`, all at the boss tops (±33, ±33, z 11-12).
 The rule picks M3 x 6. The hand-picked M3 x 8 side bolt protruded 3.2 mm past its nut, over the 3.0 limit; the rule
 picks 6 (1.2 mm). The arm screws stay at 10, which both the hand pick and the rule chose.
 
-`tools/verify_all.sh` now passes `CAD_SKILL="$ROOT/skills/print-cad-blender"` to the template build. Without it, the
-template imports cadlib from the main checkout, so a worktree or branch run was testing `main`'s library rather than
-its own.
+Before the rebase, this branch made `tools/verify_all.sh` pass `CAD_SKILL="$ROOT/skills/print-cad-blender"` to the
+template build, because the template imported cadlib from the main checkout. main has since fixed that in `cad build`,
+which exports `CAD_SKILL` from its own checkout, so the line was dropped in the rebase. The template's floor bosses
+now run to the deck (main), so the self-tap window is 6-33 mm; the rule still picks the shortest stock screw, M3 x 6,
+where main's hand-placed screw was M3 x 10.
 
 ## Real data (archived blends, read-only copies)
 
@@ -151,6 +158,8 @@ arguments, a `tap` kind, and clearance past an insert.
 - **The parts must exist uncut when you call it.** The stack is measured, so v2's pattern breaks: v2 builds cut lists
   before the parts (`build_shell(P, g, sh)`). Adopting the call means building the solids, then the joints, then one csg
   per part. The demo and the template show that order.
+- Stock lengths come from cadcheck's DEFAULTS. A project that overrides `fasteners.stock_lengths` in its
+  `checks.json` is not seen by the joint, which can then pick a length the project's check warns about.
 - The 2 d self-tap rule is stricter than cadcheck's 4.0 mm warn. Of the 30 v2 screws under it, each would get a longer
   screw or a `FastenerError` unless `min_engagement=` is passed. That may be correct, but it is a behaviour change for
   anyone porting v2.
