@@ -87,9 +87,12 @@ for x, y in mounts:
 bracket, rep = B.grow("bracket", [cradle], fillet=FILLET, extra=[plate, fin] + posts, keepout=[env], keepout_clear=KEEP_CLR,
                       keepout_edge=1.0, clip=((-300, -300, 0), (300, 300, 300)), holes=holes, voxel=VOXEL)
 meas = B.measure(bracket, [cradle])
-orient = dict(zip(("overhang_mm2", "bed_mm2"), B.overhang(bracket, Matrix.Identity(3))))
-A.part(bracket, "PRT_bracket", 'PRT', (0.89, 0.14, 0.11, 1.0), stl="bracket", print_rot=A.R_ID, orient="plate on the bed",
-       supports="no", infill=25)
+# print orientation: printcheck on the clip face and the 6 world axes, best first (the plate on the bed wins)
+ranked = B.best_orientation(bracket)
+best = ranked[0]
+orient = {"best": best["label"], "ranked": [{k: o[k] for k in ("label", "fails", "warns", "bed_mm2", "overhang_mm2")} for o in ranked]}
+A.part(bracket, "PRT_bracket", 'PRT', (0.89, 0.14, 0.11, 1.0), stl="bracket", print_rot=Matrix(best["print_rot"]), orient=best["label"],
+       supports="no" if best["fails"] == 0 else "yes", infill=25)
 
 os.makedirs(OUT, exist_ok=True)
 qty = E.export_stls(os.path.join(OUT, "stl"))

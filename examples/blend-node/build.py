@@ -46,12 +46,12 @@ for i, ax in enumerate("XYZ"):
 node, rep = B.grow(TAG, holds, fillet=FILLET, voxel=VOXEL)
 meas = B.measure(node, holds)
 
-# print orientation: stand on the -Z sleeve, or on a corner along (1, 1, 1) (no flat face)
-cands = {"z_sleeve_down": Matrix.Identity(3),
-         "corner_111_up": Vector((1, 1, 1)).normalized().rotation_difference(Vector((0, 0, 1))).to_matrix()}
-orient = {k: dict(zip(("overhang_mm2", "bed_mm2"), B.overhang(node, Rm))) for k, Rm in cands.items()}
-A.part(node, "PRT_" + TAG, 'PRT', (0.89, 0.14, 0.11, 1.0), stl=TAG, print_rot=cands["z_sleeve_down"],
-       orient="standing on the -Z sleeve rim", supports="yes: tree supports under the 4 horizontal sleeves and in their sockets",
+# print orientation: printcheck on the -Z sleeve rim and on a corner along (1, 1, 1) (the six rims are alike)
+ranked = B.best_orientation(node, {"-z sleeve rim down": (0, 0, -1), "corner (1,1,1) up": (-1, -1, -1)})
+best = ranked[0]
+orient = {o["label"]: {k: o[k] for k in ("fails", "warns", "bed_mm2", "overhang_mm2", "findings")} for o in ranked}
+A.part(node, "PRT_" + TAG, 'PRT', (0.89, 0.14, 0.11, 1.0), stl=TAG, print_rot=Matrix(best["print_rot"]), orient=best["label"],
+       supports="no" if best["fails"] == 0 else "yes: tree supports under the 4 horizontal sleeves and in their sockets",
        infill=30)
 
 for h in holds:

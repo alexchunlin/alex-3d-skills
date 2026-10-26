@@ -1,5 +1,7 @@
 # blend-bracket: cadlib.blend grows the 6-way tube node and the servo bracket; geom.swept_envelope holds every pose.
-# Sourced by tools/verify_all.sh (uses $ROOT $CAD $V $BL, calls ok/bad). About 20 s. Evidence: docs/features/blend-bracket.md.
+# Sourced by tools/verify_all.sh (uses $ROOT $CAD $V $BL, calls ok/bad). About 6 min cold on a loaded machine (1.5 warm), most of it
+# best_orientation running printcheck on 2-10 orientations per part (cached by triangles after the first run).
+# Evidence: docs/features/blend-bracket.md.
 BB="$V/bb"; mkdir -p "$BB"
 SCR="$ROOT/skills/print-cad-blender/scripts"
 
@@ -18,8 +20,8 @@ CAD_LAYER_CHECK=1 $CAD check "$BB/node/node.blend" --only parts --out "$BB/node/
 python3 -I -c "
 import json,sys; d=json.load(open(sys.argv[1])); r=d['checks']['parts']['rows'][0]; L=r['layer_check']
 sys.exit(0 if d['summary']['fails']==0 and r['non_manifold_edges']==0 and r['fits']['P1S'] and r['min_wall_mm']>=4.0 \
-  and str(r['supports']).startswith('yes') and L['needs_support'] and L['n_islands']==0 else 1)" "$BB/node/cadcheck.json" \
-  && ok "blend node: cadcheck parts 0 fails, fits P1S, wall probe >= 4.0, layer check agrees it needs its declared supports" || bad "blend node: cadcheck parts"
+  and str(r['supports']).startswith('yes') == L['needs_support'] and L['n_islands']==0 else 1)" "$BB/node/cadcheck.json" \
+  && ok "blend node: cadcheck parts 0 fails, fits P1S, wall probe >= 4.0, layer check agrees with best_orientation's supports" || bad "blend node: cadcheck parts"
 
 # organic node (fillet 15, short grips): same fit and wall assertions
 $CAD build "$ROOT/examples/blend-node/build.py" -- --out "$BB/node" --organic >/dev/null
@@ -76,8 +78,13 @@ fi
 $CAD build "$ROOT/examples/blend-bracket/build.py" -- --out "$BB/bracket" >/dev/null
 python3 -I -c "
 import json,sys; r=json.load(open(sys.argv[1])); g=r['grow']; s=r['holds']['servo']
-sys.exit(0 if g['non_manifold_edges']==0 and s['fit_ok'] and s['missed']==0 and s['wall_min']>=3.0 and r['orientation']['overhang_mm2']<50 else 1)" "$BB/bracket/report.json" \
-  && ok "blend bracket: closed, servo fit within 0.05 mm, wall >= 3, no overhang" || bad "blend bracket: $(head -c 400 "$BB/bracket/report.json")"
+o=r['orientation']; b=o['ranked'][0]
+sys.exit(0 if g['non_manifold_edges']==0 and s['fit_ok'] and s['missed']==0 and s['wall_min']>=3.0 and o['best']=='clip -z face down' and b['fails']==0 and b['warns']==0 else 1)" "$BB/bracket/report.json" \
+  && ok "blend bracket: closed, servo fit within 0.05 mm, wall >= 3, best_orientation picks the clip face with 0 printcheck fails or warns" || bad "blend bracket: $(head -c 400 "$BB/bracket/report.json")"
+# best_orientation on the review's three connectors: the pick passes printcheck where the least-overhang direction did not
+O=$(nice -n 10 "$BL" -b --factory-startup -t 4 --python "$ROOT/tools/verify.d/blend_bracket_orient.py" -- "$SCR" 2>&1 | grep '^ORIENT' | sed 's/^ORIENT //')
+echo "$O" | grep -q '^ORIENT_ALL {"ok": true}' && ok "best_orientation picks a printcheck pass on n3, n4, brc: $(echo "$O" | grep -o '"part": "[^"]*", "ok": [a-z]*, "pick": "[^"]*"' | tr '\n' ' ')" \
+  || bad "best_orientation on the review connectors: $(echo "$O" | cut -c1-300)"
 # "supports: no" needs printcheck evidence (SKILL step 5): the layer check on the exported STL, 0 regions needing support
 CAD_LAYER_CHECK=1 $CAD check "$BB/bracket/bracket.blend" --only parts --out "$BB/bracket/cadcheck.json" >/dev/null
 python3 -I -c "
