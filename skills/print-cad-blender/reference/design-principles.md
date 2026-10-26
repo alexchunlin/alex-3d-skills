@@ -10,15 +10,16 @@ Evidence is either a `<repo>/docs/FINDINGS.md` ID or a review issue. "R2 #10" is
 
 ## Form language
 
-Form language capped Aesthetics at 5-6 in all three attempts, and no tool moved it. A3 held a 1 mm edge break on
+Form language capped Aesthetics at 5-6 in all three v1 attempts, and no tool moved it. A3 held a 1 mm edge break on
 every part and still scored 6, because each subsystem had its own shape (R3 #4: "a kit of boxes"). Decide DP1, DP2
 and DP4 at the plan checkpoint and write them into the design log, before you model the first visible part.
 
 **DP1. Declare one radius and chamfer set, and use only that set.** In `params.py`, declare one edge break
-(`EB = 1.0`), at most two corner radii (for example `R_S = 6`, `R_L = 16`) and one chamfer angle. Every
-`geom.bevel`, `rrect` and chamfer cut takes a name from the set, never a literal. A1 had edge breaks of 0.6-1.5 mm
+(`BEVEL = 1.0`), at most two corner radii (for example `RADIUS_S = 6`, `RADIUS_L = 16`) and one chamfer angle. Every
+`G.bevel`, `G.rrect` and chamfer cut takes a name from the set, never a literal. A1 had edge breaks of 0.6-1.5 mm
 and radii of 4-16 mm (R1 #17). A2 moved to 1.0 mm and R6 "throughout" (R2 prev #17), and A went from 5 to 6.
-*Enforced by:* reviewer (grep the params).
+*Enforced by:* reviewer (grep the params for BEVEL/RADIUS). cadcheck `parts` warns when Blender's overlap clamp
+shrinks a declared edge break (V2A6-T2).
 
 **DP2. Build arms, housings and shrouds from one section.** Write one profile function from the set: the declared
 radius plus the chamfer, as D3's `pod_chamfer_cut` did for the pod. Extrude every arm, servo housing and shroud from
@@ -44,7 +45,7 @@ unrelated boxes (the pod, the tilt-servo housing and the feeder box), so the acc
 **DP5. Hide hardware, wires and purchased parts, and size every window.** The standard views show no wire, PCB
 edge, motor can, nut or screw tip.
 - Shroud purchased parts (DP2), except the faces the user touches: battery, USB and switch.
-- Counterbore visible screw heads (`features.screw_hole(sink=...)` or `head="csk"`).
+- Counterbore visible screw heads (`F.screw_hole(sink=...)` or `head="csk"`).
 - Recess adjusters into the part: a flush thumbwheel, not jack nuts under the pod.
 - Cut every opening to what passes through it plus 2 mm, and give it a chamfered lead-in frame.
 
@@ -91,4 +92,4 @@ referenced the nacelle bore, giving a worst case of 0.55-0.75 mm against a 0.3 m
 **DP11. Stop every limited joint in plastic.** Give each joint with a range a printed hard stop just past the
 firmware limit, and model the stop so the sweep tests it. A1 had 0.21 mm of clearance at 45° and contact at 46°
 (A1-F5). A2's printed stops at -3° and +46° fixed it (R2 prev #5). *Enforced by:* cadcheck `interference` with
-overtravel, and `clearance`.
+overtravel, `clearance`, and a `distances` row at each limit naming the two parts that touch (V2A2-F1).
