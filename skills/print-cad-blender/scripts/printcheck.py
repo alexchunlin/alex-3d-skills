@@ -682,7 +682,9 @@ def stl_edges(tris, C):
     """Edges shared by more than two faces in the triangles as an STL stores them: float32 corners, welded only where
     they are equal (as a slicer's loader does), collapsed faces dropped, edges under nm_min_edge_mm ignored. v2
     base_shell has 7: r 5 mm cylinders touching the inner wall along a line. The model keeps those vertex pairs apart,
-    so its own manifold test passes, and the export makes them one (PR #6 review)."""
+    so its own manifold test passes, and the export makes them one (PR #6 review). v2 hood's one 22.45 mm edge in 4
+    faces is not counted: two of the faces are 4 nm wide (4e-5 mm2, opposite normals), a zero-volume sliver that slices
+    to nothing, not two solids touching."""
     T = np.asarray(tris, np.float32).astype(np.float64)
     u, inv = np.unique(T.reshape(-1, 3), axis=0, return_inverse=True)
     F = inv.reshape(-1, 3)
@@ -721,8 +723,8 @@ def _findings(regions, faces=(), nm=None):
                         "from vertical, z %.1f-%.1f) at z %.1f (print %s%s)" % (what, g["projected_mm2"], d0, d1, g["z_mm"][0], g["z_mm"][1], g["z_mm"][0],
                         g["at_print"], ", world %s" % g["at_world"] if "at_world" in g else "")})
     if nm and nm["n"]:
-        out.append({"status": "warn", "kind": "nonmanifold", "z_mm": None, "msg": "%d edges shared by more than 2 faces in the STL (solids "
-                    "touching along a line; a slicer's mesh check counts them; overlap them by 0.1 mm or more) at print %s" % (
+        out.append({"status": "warn", "kind": "nonmanifold", "z_mm": None, "msg": "%d edges shared by more than 2 faces as exported (float32 STL: "
+                    "solids touching along a line; a slicer's mesh check counts them; overlap them by 0.1 mm or more) at print %s" % (
                     nm["n"], "; ".join(str(a) for a in nm["at"][:3]))})
     return out
 
