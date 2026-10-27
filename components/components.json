@@ -1,5 +1,5 @@
 {
- "_about": "Purchased parts already characterised for the mm-launcher project. Dimensions in mm, with source and status. status: confirmed (user or datasheet or measured from the supplied model), measured (by an agent from a reference file), estimated (from a photo or envelope). Placeholders: components/placeholders.py. Reference files live in ~/code-stuff/mmlauncher/mm-launcher/mm-launch-hw/reference/ (REF below) and are not copied here.",
+ "_about": "Purchased parts already characterised for the mm-launcher project. Dimensions in mm, with source and status. status: confirmed (user or datasheet or measured from the supplied model), measured (by an agent from a reference file), estimated (from a photo or envelope). Placeholders: components/placeholders.py. Reference files live in ~/code-stuff/mmlauncher/mm-launcher/mm-launch-hw/reference/ (REF below) and are not copied here. connectors: named frames for cadlib.mates (mates.from_component) in the placeholder's local frame: origin on the mating face, z out of the part, optional x, a pattern in minimal form ([\"rect\", px, py], [\"circle\", pcd, n, a0_deg], [\"line\", pitch, n], [\"points\", [[x, y], ...]]) seen from outside the face, and the hole size.",
 
  "motorgo_axis": {
   "what": "MotorGo Axis ESP32-S3 BLDC driver",
@@ -13,6 +13,7 @@
   "header_pins_below_z": -7.25,
   "min_standoff": 8.0,
   "usb_c": {"type": "vertical receptacle, opening faces +Z", "centre": [57.6, -14.0], "opening_z": 7.97, "opening": [8.9, 3.4], "plug_overmold": [12.5, 7.0], "plug_clear": 1.0, "straight_run": 25.0, "min_bend_r": 15.0},
+  "connectors": {"mount": {"origin": [29.0, -24.5, 0], "z": [0, 0, -1], "pattern": ["rect", 58.0, 49.0], "hole": "M3", "note": "PCB underside at the hole-pattern centre (STEP frame: first hole at the origin)"}},
   "mass_g": 25,
   "status": "confirmed (brief change notice 4) except tallest_top_z: the brief says header 9.0, the STL bbox says 12.216 (D1 measured 12.2); design to 12.3",
   "src": ["DESIGN_BRIEF.md MotorGo row", "D1 transcript 0:00:52-0:01:00 (underside map)", "this repo: Blender STL bbox, 2026-10-24"]
@@ -26,6 +27,8 @@
   "holes": {"d": 2.5, "square": 16.0, "centred": true},
   "ic_centre": [0, 0], "ic_top_above_pcb_back": 3.25,
   "magnet": {"d": 6.0, "t": 2.5, "type": "diametric", "air_gap": [0.5, 2.0], "coaxial_tol": 0.3},
+  "connectors": {"back": {"origin": [0, 0, 0], "z": [0, 0, -1], "pattern": ["rect", 16.0, 16.0], "hole": "M2", "note": "PCB back; holes 16 x 16 centred, d 2.5"},
+                 "ic": {"origin": [0, 0, 3.25], "z": [0, 0, 1], "note": "IC top on the axis: the magnet face goes 0.5-2.0 above it (magnet.air_gap)"}},
   "mass_g": 3,
   "status": "measured",
   "src": ["DESIGN_BRIEF.md Plink row", "D1 transcript 0:00:24-0:00:38 (STEP cylinders, z levels)", "R1 review.md measurements (holes 16 x 16 centred, IC on axis)"],
@@ -39,6 +42,7 @@
   "front_holes": {"thread": "M3", "pcd": 25.0, "n": 4},
   "rear_access_hole_d": 8.0, "rear_shaft_recess": [0.0, 1.0],
   "leads": {"n": 3, "bullet_d": 4.0, "len": 80.0, "exit": "rear side"},
+  "connectors": {"front": {"origin": [0, 0, 0], "z": [1, 0, 0], "hole": "M3", "note": "front face on the shaft axis; 4 x M3 on pcd 25 at an angle the drawing doesn't give: add the pattern once measured"}},
   "mass_g": 200,
   "status": "confirmed (drawing + user); mass estimated",
   "src": ["REF/bldc_xteam_3674_drawing.png", "DESIGN_BRIEF.md BLDC row and change notice 1"]
@@ -51,6 +55,8 @@
   "idler_boss": {"protrudes": 3.9, "coaxial": true},
   "mounting": "tapped holes on the case faces; use a pocket + clamp",
   "bus": "daisy-chained 3-pin",
+  "connectors": {"spline": {"origin": [0, 0, 3.9], "z": [0, 0, 1], "note": "spline top: the horn hub seats here, turning about z"},
+                 "bottom": {"origin": [-10.0, 0, -40.0], "z": [0, 0, -1], "note": "case bottom centre (the body centre is 10 mm from the spline along -X)"}},
   "mass_g": 66,
   "status": "confirmed envelope (drawing); spline boss Ø6 estimated",
   "src": ["REF/servo_hiwonder_drawing.png", "DESIGN_BRIEF.md servo row", "D1 build_assembly.py SERVO_* parameters"]
@@ -61,6 +67,8 @@
   "disc": {"d": 20.0, "t": 2.5}, "hub": {"d": 9.0, "h": 1.4},
   "holes": {"n": 8, "d": 2.2, "bolt_circle_d": 14.0},
   "interface": "1.0 mm recess at disc + 0.2, pilot dimples only, drill through using the horn as a template, centre-screw access hole",
+  "connectors": {"hub": {"origin": [0, 0, 0], "z": [0, 0, -1], "note": "hub underside, on the spline top"},
+                 "face": {"origin": [0, 0, 3.9], "z": [0, 0, 1], "pattern": ["circle", 14.0, 8, 0], "hole": "M2", "note": "disc top: 8 x 2.2 holes on the 14 bolt circle"}},
   "mass_g": 4,
   "status": "confirmed (user, change notice 3)",
   "src": ["DESIGN_BRIEF.md servo row", "R1 review.md item 4 (centre-screw access)"]

@@ -2,10 +2,11 @@
 
 ```python
 import sys; sys.path.insert(0, "<skill>/scripts")
-from cadlib import geom as G, features as F, asm as A, export as E, render as R
+from cadlib import geom as G, features as F, asm as A, mates as M, export as E, render as R
 ```
 
-Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X' maps (u, v, w) to (y, z, x),
+Units are mm. Angles are degrees in `asm`, `mates`, `features` and `cad q`, but **radians** in `geom.circle`, `arc`,
+`hexagon` and `revolve` (`a0`, `a1`). 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X' maps (u, v, w) to (y, z, x),
 'Y' maps to (x, z, y) and 'Z' maps to (x, y, z). Every solid function returns a new mesh object in the scratch collection.
 
 ## geom: shapes and booleans
@@ -43,6 +44,39 @@ Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X
 | `bore(name, c, r_shaft, w0, w1, axis, fit="running")` | journal bore with the fit's clearance |
 | `RULES` | all PLA and fastener numbers; change them here, not inline |
 | `SIZES`, `size_rules(size)` | M2-M5: pitch, clearance, pilot, tap, cap/pan/csk head d and h, nut AF and h, trap AF, insert hole, insert length. The M3 row reads the `m3_*` entries of `RULES`. `size_rules` adds cadcheck's stock lengths and thread engagement (2 d, 1.5 d tapped), project `checks.json` first |
+
+## mates: place parts by their interfaces
+
+Model each part in its own frame (mesh coordinates, object at identity). Name a **connector** where it meets another
+part, **mate** connectors, and let `assemble` place everything. A connector's `z` points out of the part from the mating
+face; a mate puts two connectors face to face (origins together, z opposed, x together). With default x, two parts
+modelled in the same orientation mate without turning.
+
+| Call | Notes |
+|---|---|
+| `connector(ob, name, origin, z, x=None, pattern=None, hole=None, note=None)` | stored on the object; returns `"PART:name"`. `pattern`: `rect(px, py)`, `circle(pcd, n, a0_deg)`, `line(pitch, n)`, `points([(x, y), ...])`, seen from outside the face (a board's underside sees its top-view pattern mirrored in y). `hole`: `"M3"` |
+| `from_component(ob, components_json_entry)` | the entry's `"connectors"` block, in the placeholder's frame: a purchased part's interfaces come from its datasheet once |
+| `part(ob, name, kind, color, **info)` | as `asm.part`, but `print_rot` is in the part's own frame; `assemble` registers it |
+| `mate(a, b, kind, name=None, gap=0, rot=0, fit=None, lo, hi, home=0, sweep_step=None, fastener=None, step=None, note=None)` | `kind`: `rigid`, `fastened`, `revolute` (degrees about a's z), `prismatic` (mm along a's z, + = apart). Revolute/prismatic make `asm.joint(name)`: `name` is the `PIV_`, the part farther from the ground moves. `fit`: `press`, `slip`, `clearance`, `snap` |
+| `fastener=dict(size, style, head, sink, head_on="b", name, head_depth, stack, ...)` | fastened: one `features.fastener_joint` per pattern point, head on `head_on`'s far face (measured), shank toward the other part; other keys pass through (`trap`, `through_ok`, `length`, ...) |
+| `fasten(conn, name, size, style, head, ...)` | screws into one part (floor screws, a bolt through a wall): head on the connector's face, shank against its z |
+| `assemble(ground, at=None)` | places every declared part from `ground`, makes the joints, checks the patterns, cuts the holes, registers the parts. Raises `MateError` on a loop, an unreached part, a pattern mismatch (both specs printed) or a revolute/prismatic axis that is not a world axis |
+| `frame_of("PART:name")`, `world_points("PART:name")`, `pattern_points(pattern)` | a connector's world frame and hole points at the current pose (they move with the part); a pattern's points, to build bosses from the same numbers |
+
+```python
+deck = G.box("deck", -40, 40, -30, 30, 0, 4)
+pcb = M.rect(42, 32)
+deck = G.csg(deck, add=[G.cyl("post", (x, y), 3.5, 3.9, 12) for x, y in M.pattern_points(pcb)])
+M.connector(deck, "pcb", (0, 0, 12), (0, 0, 1), pattern=pcb, hole="M2.5")
+M.part(deck, "PRT_deck", 'PRT', "pla_a", stl="deck", print_rot=A.R_ID, orient="flat", supports="no", infill=20)
+M.from_component(board, C["my_board"])            # "mount": origin [0,0,0], z [0,0,-1], pattern ["rect", 42, 32]
+M.part(board, "BUY_board", 'BUY', "pcb", mass_g=8, src="datasheet")
+M.mate("PRT_deck:pcb", "BUY_board:mount", "fastened", name="pcb", fastener=dict(style="selftap", head="pan"))
+M.assemble("PRT_deck")
+```
+
+`cad mates manifest.json [REGEX] [--connectors]` prints one line per mate (also from a `.blend`); `cad rows manifest.json`
+includes them.
 
 ## asm: assembly
 
