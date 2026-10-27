@@ -254,6 +254,14 @@
     {
      "check": "fasteners",
      "objects": [
+      "FST_motor_*",
+      "PRT_launcher_body"
+     ],
+     "kind": "head overlaps"
+    },
+    {
+     "check": "fasteners",
+     "objects": [
       "FST_motor_*"
      ],
      "kind": "cannot be driven"

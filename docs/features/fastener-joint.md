@@ -253,7 +253,10 @@ or wrapper on the old functions provides those. The new code stays small: `faste
   insert, trap per size) before trusting a fit. `insert_d` and `tap_d` especially.
 - Hole diameters are still not checked by cadcheck (its `not_checked` says so). The manifest record holds them.
 
-## cadcheck gap found in review (not fixed here): a part overlapping a screw head above the bearing face
+## cadcheck gap found in review: a part overlapping a screw head above the bearing face
+
+Fixed since: cadcheck's head and nut overlap test (`check_fastener_overlaps`, tools/verify.d/fastener_overlap.sh) fails
+the repro below, "FST_m4 head overlaps PRT_rib by 1.6 mm3 on the same body". The rest of this section is the gap as found.
 
 Repro (`tools/prior_art/cadcheck_head_overlap_repro.py`, 3 boxes): an M4 cap screw (head Ø7.0 x 4.0) placed by `fastener_joint` through a
 4 mm plate into an 11 mm block, and a third printed part, `PRT_rib`, from 3.2 mm off the axis and 0.5 mm above the
