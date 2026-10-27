@@ -24,10 +24,10 @@ def unknown(cfg):
     return C.unknown_keys(cfg, DEF, R, N)
 
 
-# 1 the doc's jsonc example reads with no unknown key, and every key cadcheck knows is in the doc
+# 1 the doc's jsonc example reads with no unknown key, and shows every key cadcheck knows in its own section
 doc = open(os.path.join(ROOT, "skills/print-cad-blender/reference/checks-config.md")).read()
 block = re.search(r"```jsonc\n(.*?)```", doc, re.S).group(1)
-j = re.sub(r",(\s*[}\]])", r"\1", re.sub(r"//[^\n]*", "", block).replace("{...}", "{}"))
+want("the jsonc stripper keeps // inside a string", json.loads(C.strip_jsonc('{"a": "x//y", // note\n "b": [1,],}')) == {"a": "x//y", "b": [1]})
 
 
 def merge(pairs):      # the example repeats "fasteners"
@@ -40,12 +40,33 @@ def merge(pairs):      # the example repeats "fasteners"
     return out
 
 
-ex = json.loads(j, object_pairs_hook=merge)
+ex = json.loads(C.strip_jsonc(block), object_pairs_hook=merge)
 u = unknown(ex)
 want("checks-config.md example has no key cadcheck doesn't read", not u, u)
-known = set(D) | {k for s, v in D.items() if isinstance(v, dict) and s not in N for k in v} | {f for v in R.values() for f in v}
-miss = sorted(k for k in known if not re.search(r"[`\"]%s[`\"]" % re.escape(k), doc))
-want("every DEFAULTS key and CONFIG_ROWS field is in checks-config.md (%d keys)" % len(known), not miss, miss)
+seen = {"top level": set(ex)}
+
+
+def walk(spec, rws):
+    for r in rws:
+        seen.setdefault(spec, set()).update(r)
+        for k, sub in r.items():
+            if spec + "." + k in R:
+                walk(spec + "." + k, [x for x in (sub if isinstance(sub, list) else [sub]) if isinstance(x, dict)])
+
+
+for sec, v in ex.items():
+    if sec in R and isinstance(v, list):
+        walk(sec, [r for r in v if isinstance(r, dict)])
+    elif sec in R and sec in N:
+        walk(sec, [r for r in v.values() if isinstance(r, dict)])
+    elif isinstance(v, dict) and sec not in N:
+        seen.setdefault(sec, set()).update(v)
+need = {"top level": set(D)}
+need.update({sec: set(v) for sec, v in D.items() if isinstance(v, dict) and sec not in N})
+for sec, fs in R.items():
+    need.setdefault(sec, set()).update(fs)
+miss = {sec: sorted(fs - seen.get(sec, set())) for sec, fs in need.items() if fs - seen.get(sec, set())}
+want("the doc example shows every DEFAULTS key and CONFIG_ROWS field in its own section (%d sections)" % len(need), not miss, miss)
 # every row field is one cadcheck (or cadlib.joints) reads: the schema can't list a key nothing uses
 code = open(CC).read()
 code = code[:code.index("CONFIG_ROWS = {")] + code[code.index("CONFIG_NAMED = ["):] + \
@@ -86,48 +107,78 @@ W = ["parts: PRT_tray_L: 4 wall samples < 1.6 mm (min 1.02)",
      "parts: PRT_tray_LR: 9 wall samples < 1.6 mm (min 1.2)",
      "clearance: PRT_hood to FST_nipstop 0.76 mm at hood=2.83",
      "fasteners: FST_M5_bolt_4 needs a 98 mm+ bit/extension (head 88 mm below open space)",
-     "build: the model is older than parts/a.py"]
+     "build: the model is older than parts/a.py",
+     "fasteners: FST_Jack_swivel_nut has no bolt on its axis"]
 old = {"match": "PRT_tray_L: ", "why": "w"}
-new = {"check": "parts", "object": "PRT_tray_L", "kind": "wall samples", "why": "w"}
-want("old substring accept still accepts (backward compatible): 'PRT_tray_L: ' takes 2 warns of 2 kinds",
-     [w for w in W if C.accepts(old, w)] == W[:2], [w for w in W if C.accepts(old, w)])
-want("structured accept takes only its kind on its object (not PRT_tray_LR, not the overhang or the bridge)",
-     [w for w in W if C.accepts(new, w)] == W[:1])
-want("object is a whole token, globs work, a list needs all",
-     not C.accepts({"check": "parts", "object": "PRT_tray", "kind": "wall samples"}, W[0])
-     and C.accepts({"check": "parts", "object": "PRT_tray_*", "kind": "wall samples"}, W[3])
-     and C.accepts({"check": "clearance", "object": ["PRT_hood", "FST_nipstop"], "kind": "mm at"}, W[4])
-     and not C.accepts({"check": "clearance", "object": ["PRT_hood", "FST_other"], "kind": "mm at"}, W[4]))
+new = {"check": "parts", "object": "PRT_tray_L", "kind": "wall samples", "any": True, "why": "w"}
+TM = C.templates(CC)
+acc_of = lambda a: [w for w in W if C.accepts(a, w)]
+want("old substring accept still accepts (backward compatible): 'PRT_tray_L: ' takes 2 warns of 2 kinds", acc_of(old) == W[:2], acc_of(old))
+want("structured accept takes only its kind on its object (not PRT_tray_LR, not the overhang or the bridge)", acc_of(new) == W[:1])
+want("object is a whole token, globs ([..] too) work, a list needs all",
+     not C.accepts({"check": "parts", "object": "PRT_tray", "kind": "wall samples", "any": True}, W[0])
+     and C.accepts({"check": "parts", "object": "PRT_tray_*", "kind": "wall samples", "any": True}, W[3])
+     and C.accepts({"check": "parts", "object": "PRT_tray_[LR]", "kind": "wall samples", "any": True}, W[0])
+     and not C.accepts({"check": "parts", "object": "PRT_tray_[XY]", "kind": "wall samples", "any": True}, W[0])
+     and C.accepts({"check": "clearance", "object": ["PRT_hood", "FST_nipstop"], "kind": "mm at", "any": True}, W[4])
+     and not C.accepts({"check": "clearance", "object": ["PRT_hood", "FST_other"], "kind": "mm at", "any": True}, W[4]))
 want("wrong check or missing kind accepts nothing",
-     not C.accepts({"check": "clearance", "object": "PRT_tray_L", "kind": "wall samples"}, W[0])
-     and not C.accepts({"check": "parts", "object": "PRT_tray_L"}, W[0]))
-pr = C.accept_problems([{"check": "part", "kind": "x"}, {"check": "parts"}, {"match": ""}, {"check": "parts", "kind": "x", "match": "y"}],
-                       ["parts", "clearance"])
-want("malformed accepts are config warns", len(pr) == 4 and "did you mean 'parts'" in pr[0], pr)
-sug = C.suggest(old, W, C.templates(CC))
-want("suggestions for 'PRT_tray_L: ' are one structured accept per kind",
-     [(s["check"], s["object"], s["kind"]) for s in sug] ==
-     [("parts", "PRT_tray_L", "wall samples"), ("parts", "PRT_tray_L", "sloped overhang steeper than")], sug)
-want("suggested kinds: bridge, clearance, bit", [C.kind_of(w.split(": ")[0], w.split(": ", 1)[1], C.templates(CC)) for w in W[2:6]] ==
+     not C.accepts({"check": "clearance", "object": "PRT_tray_L", "kind": "wall samples", "any": True}, W[0])
+     and not C.accepts({"check": "parts", "object": "PRT_tray_L", "any": True}, W[0]))
+# review case 1: a structured accept that drops the number hid a worse warn (demo base wall 2.4 -> 1.2, min 2.21 -> 0.46)
+ok_w = "parts: PRT_base: 427 wall samples < 3.0 mm (min 2.21)"
+thin = "parts: PRT_base: 512 wall samples < 3.0 mm (min 0.46)"
+leg = {"match": "PRT_base: 427 wall samples < 3.0 mm (min 2.21)", "why": "ribs"}
+sg = C.suggest(leg, [ok_w], TM)
+want("a suggestion keeps a pinned number in \"match\": it takes the accepted warn, not the worse one",
+     sg == [{"check": "parts", "kind": "wall samples", "object": "PRT_base", "match": leg["match"], "why": "ribs"}]
+     and C.accepts(sg[0], ok_w) and not C.accepts(sg[0], thin), sg)
+bare = {"check": "parts", "object": "PRT_base", "kind": "wall samples"}
+t = C.triage([bare], [thin], None)
+want("a structured accept without match or any takes no warn with a measured value, and says so (config warn)",
+     thin in t["untriaged"] and len(t["unpinned"]) == 1 and "\"any\": true" in t["unpinned"][0], t["unpinned"])
+want("\"any\": true takes any value; a warn with no number needs neither",
+     C.accepts(dict(bare, any=True), thin) and C.accepts({"check": "fasteners", "object": "FST_Jack_swivel_nut", "kind": "has no bolt"}, W[7]))
+# review case 2: kind inside an object name
+want("kind matches whole words outside object names (\"bridge\" is not in PRT_bridge_plate's wall warn)",
+     not C.accepts({"check": "parts", "object": "PRT_bridge_plate", "kind": "bridge", "any": True},
+                   "parts: PRT_bridge_plate: 4 wall samples < 1.6 mm (min 1.02)")
+     and C.accepts({"check": "parts", "object": "PRT_bridge_plate", "kind": "bridge", "any": True},
+                   "parts: PRT_bridge_plate (model): a 30.1 mm bridge at z 4.0 (print [0, 0, 4], world [0, 0, 4])"))
+pr = C.accept_problems([{"check": "part", "kind": "x", "object": "PRT_a"}, {"check": "parts", "object": "PRT_a"}, {"match": ""},
+                        {"check": "parts", "kind": "x"}, {"check": "parts", "kind": "x", "any": True}], ["parts", "clearance"])
+want("malformed accepts are config warns: no such check, no kind, empty match, no object without any",
+     len(pr) == 4 and "did you mean 'parts'" in pr[0] and "no \"object\"" in pr[3], pr)
+sug = C.suggest(old, W, TM)
+want("suggestions for 'PRT_tray_L: ' are one structured accept per kind, with \"any\" where it took any value",
+     [(s["check"], s["object"], s["kind"], s.get("any")) for s in sug] ==
+     [("parts", "PRT_tray_L", "wall samples", True), ("parts", "PRT_tray_L", "sloped overhang steeper than", True)], sug)
+want("suggested kinds: bridge, clearance, bit", [C.kind_of(w.split(": ")[0], w.split(": ", 1)[1], TM) for w in W[2:6]] ==
      ["bridge", "wall samples", "mm at", "bit/extension"])
 want("a partial object name in an old accept becomes a glob",
      C.suggest({"match": "x CAB_Amp_to_ESP32_"}, ["interference: cable BUY_amp_L x CAB_Amp_to_ESP32_L overlap 5.2 mm3 (route through solid?)"],
-               C.templates(CC))[0]["object"] == "CAB_Amp_to_ESP32_*")
+               TM)[0]["object"] == "CAB_Amp_to_ESP32_*")
 
 # 4 triage: stale and not evaluated (PA-A4-T10a: under --only no stale accept was ever reported)
-acc = [new, {"check": "parts", "kind": "island", "why": "fixed?"}, {"check": "stacks", "kind": "worst case"},
+acc = [new, {"check": "parts", "kind": "island", "object": "PRT_x", "why": "fixed?"}, {"check": "stacks", "kind": "worst case", "any": True},
        {"match": "head stands"}, {"match": "older than"}]
 t = C.triage(acc, W, {"parts", "config", "build"})
 want("--only: accepted, stale (check ran, matched nothing), not evaluated (check did not run; old form unmatched)",
-     list(t["accepted"]) == W[:1] and t["stale"] == ["parts: island"] and
+     list(t["accepted"]) == W[:1] and t["stale"] == ["parts: PRT_x island"] and
      t["not_evaluated"] == ["stacks: worst case", "head stands", "older than"], t)
 want("a stale-model warn is never accepted", W[6] in t["untriaged"] and W[6] not in t["accepted"])
 t = C.triage(acc, W, None)
 want("full run: every accept that matched nothing is stale, the old form too",
-     t["stale"] == ["parts: island", "stacks: worst case", "head stands", "older than"] and not t["not_evaluated"], t)
+     t["stale"] == ["parts: PRT_x island", "stacks: worst case", "head stands", "older than"] and not t["not_evaluated"], t)
 want("the old form gets one deprecation warn naming a wide accept",
-     "2 of 3 entries" in (C.legacy_msg(C.triage([old, {"match": "needs a"}, new], W, None)["legacy"], 3, W, C.templates(CC)) or "")
-     and "'PRT_tray_L: '" in C.legacy_msg(C.triage([old, new], W, None)["legacy"], 2, W, C.templates(CC)))
+     "2 of 3 entries" in (C.legacy_msg(C.triage([old, {"match": "needs a"}, new], W, None)["legacy"], 3, W, TM) or "")
+     and "'PRT_tray_L: '" in C.legacy_msg(C.triage([old, new], W, None)["legacy"], 2, W, TM))
+
+# nested keys (review case 4): expect.angle and ray.sweep rows are checked too
+nt = {"drop_tests": [{"name": "d", "emit": {}, "expect": {"angle": {"center": "PIV_a", "rnage": [0, 10]}}}],
+      "distances": [{"a": "PRT_a", "b": "PRT_b", "ray": {"origin": [0, 0, 0], "dir": [0, 0, 1], "sweep": {"form": 0, "to": 9}}}]}
+got = {(k, c) for _, k, c in unknown(nt)}
+want("typo'd keys inside expect.angle ('rnage') and ray.sweep ('form') warn", got == {("rnage", "range"), ("form", "from")}, got)
 
 # 5 on verify's own designer reports: the suggestions accept exactly the warns the old accepts did
 for rep, cfg in zip(sys.argv[2::2], sys.argv[3::2]):

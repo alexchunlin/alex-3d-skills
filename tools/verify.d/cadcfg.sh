@@ -29,7 +29,7 @@ sys.exit(0 if ok else 1)" "$CF/stacks_bad.json" "$CF/stacks_ok.json" 2>/dev/null
 cat > "$CF/only.json" <<'EOF'
 {"flexure": [{"part": "PRT_x", "dir": [1, 0, 0]}],
  "stacks": [{"name": "wc", "limit": 0.3, "terms": [{"what": "a", "tol": 0.2}, {"what": "b", "tol": 0.2}]}],
- "accepted_warns": [{"check": "stacks", "kind": "worst case", "why": "ok"}, {"check": "stacks", "kind": "RSS too big"},
+ "accepted_warns": [{"check": "stacks", "kind": "worst case", "any": true, "why": "ok"}, {"check": "stacks", "kind": "RSS too big"},
                     {"check": "parts", "kind": "wall samples"}, {"match": "nothing like this"}, {"match": "worst case"}]}
 EOF
 "$BL" -b --factory-startup --python "$CCK" -- --config "$CF/only.json" --only stacks,slide,flexure,flexures --out "$CF/only_run.json" > "$CF/only_run.log" 2>&1
@@ -39,13 +39,39 @@ import json, sys
 o, f = json.load(open(sys.argv[1]))['summary'], json.load(open(sys.argv[2]))['summary']
 cw = ' | '.join(o['config_warns'])
 ok = (o['warns'] == 1 and o['untriaged_warns'] == 0 and len(o['accepted_warns']) == 1
-      and 'slide: no slide_out rows in the config, nothing checked' in o['not_checked'] and o['only_without_rows'] == ['slide', 'flexures']
+      and 'slide: no slide_out rows in the config, nothing checked' in o['not_checked'] and o['only_without_rows'] == ['slide']
       and \"unknown key 'flexure', ignored (did you mean 'flexures'?)\" in cw and \"--only: 'flexure' is not a check\" in cw
       and '2 of 5 entries use the old substring' in cw
       and o['stale_accepts'] == ['stacks: RSS too big'] and o['accepts_not_evaluated'] == ['parts: wall samples', 'nothing like this']
-      and o['accept_suggestions'][0]['use'] == [{'check': 'stacks', 'kind': 'worst case'}]
+      and o['accept_suggestions'][0]['use'] == [{'check': 'stacks', 'kind': 'worst case', 'any': True}]
+      and 'takes this kind of warn on every part' in cw
       and f['stale_accepts'] == ['stacks: RSS too big', 'parts: wall samples', 'nothing like this'] and not f['accepts_not_evaluated']
       and not f['only_without_rows'] and f['warns'] == 1)
 sys.exit(0 if ok else 1)" "$CF/only_run.json" "$CF/full_run.json" 2>/dev/null \
-  && ok "--only: rowless checks in not_checked and only_without_rows; typo'd key and --only name are config warns, not design warns; stale vs not-evaluated accepts, under --only and in a full run" \
+  && ok "--only: rowless checks in not_checked and only_without_rows (flexures says its own); typo'd key and --only name are config warns, not design warns; stale vs not-evaluated accepts, under --only and in a full run" \
   || bad "--only gaps / config warns / accept triage (see $CF/only_run.json, $CF/full_run.json)"
+# the review's crash cases on the demo turret (section 1 builds it): a failed =expr in a coupling ratio and in
+# fasteners.min_engagement (TypeErrors, no report), a typo'd ray.sweep key (KeyError), and an --only naming no check
+DB="$V/demo-clean/demo.blend"
+if [ -f "$DB" ]; then
+  printf '{"couplings": {"PIV_tilt": {"to": "PIV_pan", "ratio": "=NOPE"}}}' > "$CF/x_coupling.json"
+  printf '{"fasteners": {"min_engagement": "=NOPE"}}' > "$CF/x_fmineng.json"
+  printf '{"distances": [{"a": "PRT_pan", "b": "PRT_base", "min": 0.1, "ray": {"origin": [0, 0, 0], "dir": [0, 0, 1], "sweep": {"center": [0, 0, 0], "axis": [1, 0, 0], "form": 0, "to": 10}}}]}' > "$CF/x_form.json"
+  for x in coupling fmineng; do
+    "$BL" -b --factory-startup "$DB" --python "$CCK" -- --config "$CF/x_$x.json" --only stacks,fasteners,stability --out "$CF/x_$x.out.json" > "$CF/x_$x.log" 2>&1
+  done
+  "$BL" -b --factory-startup "$DB" --python "$CCK" -- --config "$CF/x_form.json" --only distances --out "$CF/x_form.out.json" > "$CF/x_form.log" 2>&1
+  "$BL" -b --factory-startup "$DB" --python "$CCK" -- --config "$CF/x_form.json" --only flexure,distnces --out "$CF/x_none.out.json" > "$CF/x_none.log" 2>&1
+  python3 -I -c "
+import json, sys
+d = sys.argv[1]
+f = {x: ' | '.join(json.load(open('%s/x_%s.out.json' % (d, x)))['summary']['fail_list']) for x in ('coupling', 'fmineng', 'form', 'none')}
+cw = ' | '.join(json.load(open(d + '/x_form.out.json'))['summary']['config_warns'])
+ok = (\"couplings.PIV_tilt.ratio: expression '=NOPE' failed\" in f['coupling'] and \"couplings 'PIV_tilt' dropped\" in f['coupling']
+      and \"fasteners.min_engagement: expression '=NOPE' failed\" in f['fmineng'] and 'fasteners.min_engagement dropped' in f['fmineng']
+      and \"ray.sweep has no 'from'; row skipped\" in f['form'] and \"unknown key 'form', ignored (did you mean 'from'?)\" in cw
+      and 'names no check, so nothing ran' in f['none'])
+sys.exit(0 if ok else 1)" "$CF" 2>/dev/null && ! grep -l Traceback "$CF"/x_*.log >/dev/null \
+    && ok "failed =expr in a coupling ratio and in fasteners.min_engagement, a typo'd ray.sweep key, an --only of no check: config fails, reports written (were TypeError/KeyError crashes)" \
+    || bad "review crash cases (see $CF/x_*.log)"
+fi
