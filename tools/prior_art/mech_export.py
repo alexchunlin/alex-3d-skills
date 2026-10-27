@@ -2,6 +2,11 @@
 
     Blender -b model.blend --factory-startup --python-exit-code 1 -P mech_export.py -- <out_dir> OBJ [OBJ ...]
 
+The objects mech_compare.py uses, on examples/mm-launcher-a1/mm_launcher_a1.blend.gz (gunzip first):
+13 parts  PRT_hopper PRT_feeder_plate PRT_arm_cover_L FST_cap_R-1 PRT_trunnion_L PRT_launcher_body PRT_launcher_cover
+          FST_motor_0 FST_motor_1 FST_motor_2 FST_motor_3 PRT_flywheel PRT_feeder_disc
+15 parts  the 13 plus PRT_yoke_arm_L PRT_arm_cap_L (the tilt journal; the yoke arm becomes the hinge parent)
+
 Writes <out_dir>/<OBJ>.stl (binary, mm, world coordinates at the blend's saved pose) and <out_dir>/scene.json: per
 object its PIV_* chain (nearest first), per PIV_* empty its world origin and local X / Z axes.
 """

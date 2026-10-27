@@ -3,8 +3,12 @@
     Blender -b --factory-startup --python-exit-code 1 -P print3d_toolbox_compare.py -- \
         <pkg_dir> <stl_dir> <printcheck.json> [extra.stl ...] > result.json
 
+    git clone https://projects.blender.org/extensions/print3d_toolbox.git /tmp/x/tb && git -C /tmp/x/tb checkout bc94744
+    mkdir /tmp/x/pkg && cp -R /tmp/x/tb/source /tmp/x/pkg/print3d_toolbox          # <pkg_dir> = /tmp/x/pkg
+
 <pkg_dir> holds a copy of the extension's `source/` folder named `print3d_toolbox` (the extension is not installed:
-it is imported from there and registered for this run only, so Blender's user config is untouched). Each check's
+it is imported from there and registered for this run only, so Blender's user config is untouched). The toolbox is
+GPL-3.0-or-later: importing it to measure is fine, copying its code into this repo is not. Each check's
 `main_check` runs directly on the imported STL, with the toolbox's own settings: overhang 45 deg, thickness 1.2 mm
 (FDM, text-to-cad's process-limits row) and 0.8 mm. The overhang check counts faces, so the script also sums their
 area and the area of those off the bed (centroid z > min z + 0.1) to give it the same footing as dfam_compare.py.
