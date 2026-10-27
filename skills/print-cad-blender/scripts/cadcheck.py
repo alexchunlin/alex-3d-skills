@@ -1559,29 +1559,45 @@ def check_fastener_overlaps(rows, nut_rows, geo, nut_of, trees):
         if o.name in by_nut:
             bolt, t0, t1 = by_nut[o.name]
             at, d = geo[bolt][0], geo[bolt][2]
-        else:       # no bolt: the nut's axis is the normal of its largest face
-            at = sum(vs, Vector()) / len(vs)
-            f = max(o.data.polygons, key=lambda p: p.area)
-            d = (o.matrix_world.to_3x3() @ f.normal).normalized()
+        else:       # no bolt: the nut's axis is the face normal with the most area (both faces; a triangulated
+            at = sum(vs, Vector()) / len(vs)        # nut's largest single polygon can be a side triangle)
+            dirs = []
+            for p in o.data.polygons:
+                n = (o.matrix_world.to_3x3() @ p.normal).normalized()
+                k = next((i for i, (m, a) in enumerate(dirs) if abs(m.dot(n)) > 0.99), None)
+                if k is None:
+                    dirs.append((n, p.area))
+                else:
+                    dirs[k] = (dirs[k][0], dirs[k][1] + p.area)
+            d = max(dirs, key=lambda x: x[1])[0]
             t0, t1 = min((v - at).dot(d) for v in vs), max((v - at).dot(d) for v in vs)
         # its inscribed cylinder (across the flats): a hex nut modelled turned 30 deg from its hex pocket overlaps the
         # pocket at its corners, though the real nut turns to fit (v2 A1-A3 flywheel and thumbwheel nuts: 1.0 and 2.1 mm3
         # with the whole hex; fastener_joint's nut_rot_deg turns the trap, not the asm.nut model)
+        # Outward side faces only: a modelled bore's walls face the axis, and as "flats" they made the probe the
+        # bore itself, empty, so a bored nut was never tested (PR #9 review)
         M3 = o.matrix_world.to_3x3()
-        side = [abs((o.matrix_world @ p.center - at).dot(n)) for p in o.data.polygons
-                for n in [(M3 @ p.normal).normalized()] if abs(n.dot(d)) < 0.3]
+        side = [w.dot(n) for p in o.data.polygons for n in [(M3 @ p.normal).normalized()] if abs(n.dot(d)) < 0.3
+                for w in [(o.matrix_world @ p.center - at) - d * (o.matrix_world @ p.center - at).dot(d)]]
+        side = [x for x in side if x > 0]
         work.append((r, o, o.name, at, d, t0 + SEAT_TOL, t1 - SEAT_TOL, min(side) if side else None))
-    n_tests = 0
+    n_tests, tested, empty = 0, [], []
     for r, o, what, at, d, t0, t1, rin in work:
         me, out = body(o), {}
         r["overlaps"] = out
-        if t1 - t0 < 0.05:
-            continue
-        P = fastener_probe(o, at, d, t0, t1, rin)
+        P = fastener_probe(o, at, d, t0, t1, rin) if t1 - t0 >= 0.05 else None
         if P is None:
+            r["overlaps"] = None
+            empty.append(o.name)
             continue
+        tested.append(what)
         pt, pb = bvh_world(P), bbox_world(P)
-        pc = sum((v.co for v in P.data.vertices), Vector()) / len(P.data.vertices)
+        # a point in the probe's material, for the wholly-inside test: on the axis for a solid probe; past the bore
+        # wall for a bored nut (its centroid sits in the bore, which may line up with a hole in the part)
+        u_, _ = perp_basis(d)
+        mid = at + d * ((t0 + t1) / 2)
+        R = rin or max((v.co - mid).length for v in P.data.vertices)
+        pc = next((q for q in (mid + u_ * (R * k / 8) for k in range(8)) if inside(pt, q, pb)), mid)
         for s in SOLIDS:
             if body(s) != me or s.name in r.get("inside_purchased", {}):
                 continue
@@ -1617,8 +1633,11 @@ def check_fastener_overlaps(rows, nut_rows, geo, nut_of, trees):
         bpy.data.meshes.remove(pm)
     REPORT["coverage"].append("fasteners: head and nut overlap with same-body solids (%d heads behind the bearing face, %d nuts between "
                               "their faces, %.2f mm in from each seat; %d pair tests; skipped %d countersunk, headless or captive: %s)" % (
-        sum(1 for w in work if w[2].endswith(" head")), sum(1 for w in work if not w[2].endswith(" head")), SEAT_TOL, n_tests,
+        sum(1 for w in tested if w.endswith(" head")), sum(1 for w in tested if not w.endswith(" head")), SEAT_TOL, n_tests,
         len(skipped), ", ".join(skipped[:6]) + (" ..." if len(skipped) > 6 else "")))
+    if empty:
+        REPORT["not_checked"].append("fasteners: head or nut overlap for %s (the probe came out empty: no head behind the bearing face, "
+                                     "or no material inside the nut's flats)" % ", ".join(empty))
 
 
 def check_service():
