@@ -1,0 +1,5 @@
+#!/bin/sh
+# Drawing-reading tools (see drawtool.py). Needs /tmp/drawtools-venv: sh tools/drawing/setup_venv.sh
+PY="${DRAWTOOLS_PY:-/tmp/drawtools-venv/bin/python}"
+[ -x "$PY" ] || { echo "draw: $PY missing; run sh $(dirname "$0")/setup_venv.sh" >&2; exit 2; }
+exec "$PY" -I "$(cd "$(dirname "$0")" && pwd)/drawtool.py" "$@"

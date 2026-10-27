@@ -60,7 +60,9 @@ Nothing from these repos is copied into this one. The scripts call or import the
 - cadsmith: MIT, (c) 2026 Jonathan Fermin. `mech_compare.py` imports `mech` from a clone.
 - Blender 3D-Print Toolbox: GPL-3.0-or-later. `print3d_toolbox_compare.py` imports a copy of its `source/` from a /tmp
   clone for the run, which is fine for measurement. Don't copy its code into this repo.
-- Copying MIT code from either MIT repo means keeping its copyright and permission notice with it. This repo has no
+- eDOCr2 ([javvi51/edocr2](https://github.com/javvi51/edocr2) f6f9651): MIT, (c) 2024 javvi51. `drawing_ocr_compare.py`
+  imports it from a clone in `/tmp/dt-prior/edocr2`; its recogniser weights come from the repo's v1.0.0 release.
+- Copying MIT code from any of the MIT repos means keeping its copyright and permission notice with it. This repo has no
   LICENSE file, so the notice goes in a header on the file that carries the code, or in a `THIRD_PARTY_NOTICES` file at
   the root.
 
@@ -69,3 +71,9 @@ Clones used (2026-10-27): `git clone https://github.com/earthtojake/text-to-cad`
 `git clone https://projects.blender.org/extensions/print3d_toolbox.git` (bc94744; copy `source/` to
 `<pkg_dir>/print3d_toolbox`). Results of the 2026-10-27 runs: `/tmp/alex3d-pa2-{v2a7,ramp,a1}/` on the measuring
 machine (temporary); every number above comes from the committed scripts.
+
+## Drawing-reading prior art (2026-10-27)
+
+OCR engines (RapidOCR defaults, EasyOCR, eDOCr2), OpenCV HoughCircles, cadgenbench's renderer and build123d's
+hidden-line projection, measured against `tools/drawing` on the CADGenBench dev drawings: the table is in
+`docs/features/drawing-tools.md` ("Why not the existing code"); the OCR harness is `drawing_ocr_compare.py`.

@@ -9,6 +9,7 @@ mm-launcher design/review loop, and the evidence behind every rule is in `docs/F
 | `skills/cad-design-review/` | Skill for reviewers: check-first protocol, scoring anchors, evidence checklist |
 | `templates/cad-loop.workflow.js` | Design/review loop for the Workflow tool: plan, then one build agent per subsystem, then finish, then review. Resumable. |
 | `components/` | Purchased-part data with sources (`components.json`) and Blender placeholders |
+| `tools/drawing/draw` | Drawing-reading CLI for the CADGenBench pilot: dimension text with boxes, px/mm scale, measurements, holes and patterns in mm, and a render-and-diff overlay that catches a part turned or mirrored against a view (`docs/features/drawing-tools.md`). Own venv: `sh tools/drawing/setup_venv.sh` |
 | `tools/transcript/cc_transcript.py` | Digest Claude Code agent transcripts: time split, long generations, tokens, cache misses, Blender runs, images |
 | `tools/verify_all.sh` | Re-proves everything (about 21 minutes, writes only under `/tmp/alex3d-verify`) |
 | `examples/` | `demo-turret` and `slide-gate` (clean and planted-bug builds); `mm-launcher-{a1,a2,a3,v2a1,v2a2,v2a3}` (check config and archived blend per attempt, plus the reviewer's missing rows as overlays) |
@@ -16,7 +17,7 @@ mm-launcher design/review loop, and the evidence behind every rule is in `docs/F
 ## Requirements
 
 Blender 5.1+ at `/Applications/Blender.app` (or set `BLENDER`), python3, and node (for the workflow test only).
-There are no pip dependencies.
+There are no pip dependencies, except for `tools/drawing`, which installs its own venv in `/tmp/drawtools-venv` (`tools/drawing/setup_venv.sh`).
 
 ## Install (manual; nothing here installs itself)
 
