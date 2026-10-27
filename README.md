@@ -32,8 +32,8 @@ Optionally, put the wrapper on PATH: `ln -s ~/code-stuff/alex-3d-skills/skills/p
 To use the loop, copy `templates/cad-loop.workflow.js` and set `CONFIG.hw` and `CONFIG.subsystems` (or pass them as
 Workflow `args`). `models: {plan, build, finish, review}` picks each role's model (`null` = the session's model); the default runs
 builders on Sonnet. Each value goes to `agent()`'s `model` option, which the workflow-authoring skill types only as a string
-with no documented values; `'sonnet'`, `'opus'` and `'haiku'` are the names the Agent tool accepts in this environment (a
-live Workflow check is pending). An unknown role, an empty string or a non-object `models` throws. To resume after a crash,
+with no documented values; `'sonnet'`, `'opus'` and `'haiku'` are the names the Agent tool accepts in this environment (a live
+Workflow run on 2026-10-27 confirmed 'sonnet' and 'haiku' reach claude-sonnet-5-5 and claude-haiku-5-5, including through `args.models`). An unknown role, an empty string or a non-object `models` throws. To resume after a crash,
 pass `start_attempt` and `history`, or use `resumeFromRunId`; changing a role's model invalidates that cache from the role
 onward.
 
