@@ -30,9 +30,12 @@ ln -s ~/code-stuff/alex-3d-skills/skills/cad-design-review ~/.claude/skills/cad-
 Optionally, put the wrapper on PATH: `ln -s ~/code-stuff/alex-3d-skills/skills/print-cad-blender/scripts/cad /usr/local/bin/cad`.
 
 To use the loop, copy `templates/cad-loop.workflow.js` and set `CONFIG.hw` and `CONFIG.subsystems` (or pass them as
-Workflow `args`). `models: {plan, build, finish, review}` picks each role's model (`'sonnet'`, `'opus'`, `'haiku'`; `null` =
-the session's model); the default runs builders on Sonnet. To resume after a crash, pass `start_attempt` and `history`,
-or use `resumeFromRunId`.
+Workflow `args`). `models: {plan, build, finish, review}` picks each role's model (`null` = the session's model); the default runs
+builders on Sonnet. Each value goes to `agent()`'s `model` option, which the workflow-authoring skill types only as a string
+with no documented values; `'sonnet'`, `'opus'` and `'haiku'` are the names the Agent tool accepts in this environment (a
+live Workflow check is pending). An unknown role, an empty string or a non-object `models` throws. To resume after a crash,
+pass `start_attempt` and `history`, or use `resumeFromRunId`; changing a role's model invalidates that cache from the role
+onward.
 
 Project template: copy `skills/print-cad-blender/templates/project/` to `<project>/blender/`. The build finds cadlib through
 `CAD_SKILL` (default `~/code-stuff/alex-3d-skills/skills/print-cad-blender`).

@@ -26,7 +26,10 @@ export const meta = {
 //    a run has proven it.
 //  - Models per role (CONFIG.models, merged per role from args.models): builders run on Sonnet, plan, finish and review
 //    on the session's model (null). On the pan-tilt mates task Sonnet got 24/24 rows like Opus at about half the cost;
-//    Haiku was slower, missed a row and used 5-7x the tokens. Values are agent()'s opts.model ('sonnet', 'opus', 'haiku').
+//    Haiku was slower, missed a row and used 5-7x the tokens. Each value goes to agent()'s opts.model, which the
+//    workflow-authoring skill types only as a string and lists no values for; 'sonnet', 'opus' and 'haiku' are the
+//    names the Agent tool accepts in this environment (a live Workflow check is pending). Bad roles or values throw.
+//    Changing a role's model invalidates the resumeFromRunId cache from that role's first agent() call onward.
 // No filesystem access in workflow scripts, so state crosses runs through args and files on disk.
 // To resume a killed run with cached agents, use Workflow({scriptPath, resumeFromRunId}).
 // ---------------------------------------------------------------------------------------------
@@ -46,6 +49,15 @@ const CONFIG = Object.assign({
 }, typeof args === 'object' && args ? args : {})
 // Per-role agent() model; null = the workflow's default (the session model). args.models overrides single roles.
 const MODELS = Object.assign({ plan: null, build: 'sonnet', finish: null, review: null }, CONFIG.models)
+{
+  const m = CONFIG.models, roles = ['plan', 'build', 'finish', 'review']
+  const plain = typeof m === 'object' && m !== null && !Array.isArray(m) && [Object.prototype, null].includes(Object.getPrototypeOf(m))
+  if (!plain) throw new Error(`cad-loop: args.models must be an object like {build: 'sonnet'}, got ${JSON.stringify(m)} (${Array.isArray(m) ? 'array' : typeof m})`)
+  for (const [k, v] of Object.entries(m)) {
+    if (!roles.includes(k)) throw new Error(`cad-loop: args.models has unknown role "${k}"; roles are ${roles.join(', ')}`)
+    if (v !== null && (typeof v !== 'string' || !v.trim())) throw new Error(`cad-loop: args.models.${k} must be null (session model) or a model name like 'sonnet', got ${JSON.stringify(v)}`)
+  }
+}
 CONFIG.models = MODELS
 const withModel = (role, opts) => MODELS[role] ? { ...opts, model: MODELS[role] } : opts
 
