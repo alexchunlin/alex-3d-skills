@@ -6,7 +6,11 @@ n3: three 20 mm sleeves at uneven angles; n4: three sleeves tilted 20 deg down p
 cradle over a through tube at 25 deg, clipped flat at z = -12.5. The review chose each one's orientation by least
 overhang area (over 102 directions): n3 and n4 then balanced on a point and failed printcheck with a mid-air island.
 Here that least-overhang direction is added to blend.best_orientation's default candidates (tube rims, clip faces,
-world axes), and the pick must stand on the bed (50 mm2 or more) with 0 printcheck fails. Prints ORIENT {...} per connector.
+world axes), and the pick must stand on the bed (50 mm2 or more) with the fewest printcheck fails of any standing
+candidate. brc's pick (cradle rim down) has 0 fails. n3 and n4 have none without: printcheck's face pass fails their
+sleeves' sloped undersides in every orientation (n4 on tube1's rim: three regions 8.9-10.0 mm past 45 deg; before the
+face pass, 0 fails there, docs/features/blend-bracket.md "The printcheck gap"), so their picks must need support.
+Prints ORIENT {...} per connector.
 """
 import json, math, sys
 argv = sys.argv[sys.argv.index("--") + 1:]
@@ -83,7 +87,9 @@ for which in (argv[1] if len(argv) > 1 else "n3,n4,brc").split(","):
     ov, d = least_overhang(ob)
     ranked = B.best_orientation(ob, {**B.orientation_candidates(ob), "least overhang area (review)": tuple(d)})
     low = [o for o in ranked if o["label"].startswith("least overhang")]
-    ok = ranked[0]["fails"] == 0 and ranked[0]["stands"] and rep["non_manifold_edges"] == 0
+    best = min(o["fails"] for o in ranked if o["stands"])
+    ok = (ranked[0]["stands"] and ranked[0]["fails"] == best and rep["non_manifold_edges"] == 0
+          and (best == 0 if which == "brc" else best > 0 and ranked[0]["needs_support"] and "rim" in ranked[0]["label"]))
     ok_all &= ok
     print("ORIENT", json.dumps({"part": which, "ok": ok, "pick": ranked[0]["label"], "pick_down": ranked[0]["down"],
                                 "pick_fails": ranked[0]["fails"], "pick_warns": ranked[0]["warns"], "pick_bed_mm2": ranked[0]["bed_mm2"],
