@@ -31,7 +31,13 @@ adds `carry`, `fasteners.captive` and `flexures`.
     // face pass: sloped regions measured past the overhang_deg cone from their anchored edges (overhang_deg comes from
     // the top-level key); warn past face_warn_mm, fail past cantilever_mm when face_fail_mm2 or more (projected);
     // two anchors more than face_bridge_dz_mm apart in height make a cantilever, not a sloped bridge
-    "face_warn_mm": 2.0, "face_fail_mm2": 5, "face_min_mm2": 2, "face_flat_deg": 1.0, "face_bridge_dz_mm": 2.0},
+    "face_warn_mm": 2.0, "face_fail_mm2": 5, "face_min_mm2": 2, "face_flat_deg": 1.0, "face_bridge_dz_mm": 2.0,
+    // two bands: slopes flatter than overhang_fail_deg (from vertical; 60 = 30 from horizontal, about Bambu/Orca's default
+    // support threshold) fail past cantilever_mm; between it and overhang_deg (45) they only warn
+    "overhang_fail_deg": 60,
+    // tangent bed contact: under contact_min_mm wide (two extrusion lines) over contact_len_mm or more, below an
+    // underside of radius contact_r_mm or more (a cylinder lying on the bed); fix: cut a flat about 0.3 x r
+    "contact_min_mm": 0.9, "contact_len_mm": 3.0, "contact_r_mm": 3.5},
 
   "assembly_order": [             // tool access is tested against the parts present at each step
     {"step": "base", "objects": ["PRT_base_*", "FST_floor_*"]},

@@ -3,8 +3,9 @@
     python3 -I printcheck_overhangs_cases.py <skill scripts dir> <v2 stl dir> <v2 manifest> <scratch dir> [review stl dir]
 
 Prints one CASE {...} line per case with "ok". The cases:
-  ramp      the 20 mm ramp of docs/features/blend-bracket.md ("The printcheck gap"): underside 5-40 deg from horizontal
-            must fail by the face pass (the layer check alone gave 0 fails); 45 and 50 deg must not be flagged
+  ramp      the 20 mm ramp of docs/features/blend-bracket.md ("The printcheck gap"): underside 5-25 deg from horizontal
+            fails by the face pass (the layer check alone gave 0 fails), 30-40 deg warns (the user's two bands), 45 and 50
+            deg are not flagged
   tube      a 20 mm tube 30 mm off one wall fails (its underside is anchored at one end); the same tube spanning 20 mm
             between two walls is a sloped bridge, and horizontal holes of 6 and 20 mm through a block are sloped bridges: no finding
   v2        the 36 shipped v2 STLs: the face pass adds no fail or warn; the layer check still fails exactly jar_valve,
@@ -17,7 +18,8 @@ Prints one CASE {...} line per case with "ok". The cases:
             heights, a slab in a corner, a 3 mm tab at 10 deg, a lying cylinder and a wedge from the bed, a fillet under
             an 8 mm shelf fail; teardrops, horizontal holes, a tube between walls, 45 deg chamfers, domes, a slab between
             a wall and a 1.2 mm fin and a 2 mm filleted ledge do not fail
-  facets    a lying r 15 cylinder fails at 24 to 128 facets and r 5 passes (the bed-band anchor, not the facet count)
+  tangent   r 5 / 10 / 15 cylinders lying on the bed at 24 / 36 / 64 facets each fail once as a tangent bed contact; with
+            a 0.3 r flat cut on the underside they do not
   sheet     two boxes sharing a face (a coplanar join) are a zero-thickness sheet, two touching along an edge a line
             contact: each reported as itself
   jar_valve the user's print (2026-10-26, labels.json PF-jar_valve print_evidence: drooped without supports):
@@ -80,17 +82,17 @@ def faces_flagged(r):
 
 
 # ramp: a 10 x 20 mm column with a wedge whose underside rises at a from horizontal, reaching 20 mm out
-for a in (5, 10, 15, 20, 30, 40, 45, 50):
+for a in (5, 10, 15, 20, 25, 30, 35, 40, 45, 50):
     t = math.tan(math.radians(a))
     L = min(20.0, 30.0 / t)
     T = np.concatenate([box(0, 20, 0, 10, 0, 40), prism_x([(10, 5), (10 + L, 5 + L * t), (10 + L, 40), (10, 40)], 0, 20)])
     SYN["ramp_%d" % a] = T
     r = PC.analyze(T, supports="no")
     f = faces_flagged(r)
-    want = a <= 40
+    want = "fail" if a < 30 else "warn" if a < 45 else None      # two bands: under 30 deg from horizontal fails, 30-45 warns
     if a in (20, 30, 40):
         SYN["ramp_%d_pc" % a] = max(g["projected_mm2"] for g in r["faces"])
-    case("ramp_%d" % a, (f and all(x["status"] == "fail" for x in f) and r["max_face_overhang_mm"] > 3.0) if want else not f,
+    case("ramp_%d" % a, [x["status"] for x in f] == [want] if want else not f, want=want,
          face_findings=[x["msg"][:70] for x in f], layer_fails=sum(x["status"] == "fail" for x in r["findings"] if x["kind"] != "overhang"))
 
 # tubes and holes: 20 mm tube (r 10, 24-gon) off one wall, between two walls; 6 and 20 mm holes through a block
@@ -126,9 +128,9 @@ case("prior_art_area_rule", ramp_ok and big.get("hole_20", 0) >= 100 and big.get
 
 # the PR #11 review's parts: verdict of the face pass ("-": no sloped finding; warn: a sloped bridge over 25 mm)
 REV = {"A_corner_10deg": "fail", "A0_ramp_one_wall_10deg": "fail", "B_pillars_rise20": "fail", "B2_pillars_rise10_30mm": "fail",
-       "D_ramp10_needle": "fail", "D2_wall_and_fin_0.05mm": "fail", "E_bed_wedge20": "fail", "E2_lying_cyl_r10": "fail",
-       "E2_lying_cyl_r15": "fail", "H_shelf8_fillet4": "fail", "J_rib_w3_10deg": "fail", "J_rib_w4_10deg": "fail",
-       "C_gable20deg_20mm": "-", "D2_wall_and_fin_1.2mm": "-", "E2_lying_cyl_r5": "-", "F0_tube20_round_bore": "-",
+       "D_ramp10_needle": "fail", "D2_wall_and_fin_0.05mm": "fail", "E_bed_wedge20": "fail", "E2_lying_cyl_r10": "warn+tangent",
+       "E2_lying_cyl_r15": "warn+tangent", "E2_lying_cyl_r5": "-+tangent", "H_shelf8_fillet4": "fail", "J_rib_w3_10deg": "fail", "J_rib_w4_10deg": "fail",
+       "C_gable20deg_20mm": "-", "D2_wall_and_fin_1.2mm": "-", "F0_tube20_round_bore": "-",
        "F_screw_hole_print_up": "-", "F_teardrop_20": "-", "F_teardrop_20_rot30": "-", "F_teardrop_6": "-", "F_tube20_print_up": "-",
        "G_box_bevel_1p5": "-", "G_shelf_on_45_gusset": "-", "H_shelf2_fillet2": "-", "I_dome_ri9": "-", "J_rib_w3_flat": "-",
        "C_gable20deg_40mm": "warn", "C_hole40": "warn", "I_dome_ri18": "warn"}
@@ -139,18 +141,36 @@ if len(sys.argv) > 5:
         if not os.path.isfile(fp):
             got[n] = "missing"
             continue
-        st = [f["status"] for f in faces_flagged(PC.analyze(PC.read_stl(fp), supports="no"))]
-        got[n] = "fail" if "fail" in st else "warn" if st else "-"
+        r = PC.analyze(PC.read_stl(fp), supports="no")
+        st = [f["status"] for f in faces_flagged(r)]
+        got[n] = ("fail" if "fail" in st else "warn" if st else "-") + ("+tangent" if any(
+            f["kind"] == "tangent" and f["status"] == "fail" for f in r["findings"]) else "")
     case("review_parts", got == REV, wrong={n: (got[n], REV[n]) for n in REV if got[n] != REV[n]}, parts=len(got))
 
-# a cylinder lying on the bed, by facet count: anchored on the bed band, whatever height the facets put its edge
-ver = {}
-for r_, nf in [(15, n) for n in (24, 36, 48, 64, 96, 128)] + [(5, 36), (5, 96)]:
-    prof = [(r_ * math.cos(2 * math.pi * i / nf + math.pi * (nf % 4 != 0) / nf), r_ + r_ * math.sin(2 * math.pi * i / nf)) for i in range(nf)]
+# a cylinder lying on the bed, vertex down as cadlib's cyl builds it: a tangent bed contact at every radius and facet
+# count; the same cylinder with a flat 0.3 r wide cut on its underside is not one
+def lying(r_, nf, flat=0.0):
+    raw = [(r_ * math.cos(-math.pi / 2 + 2 * math.pi * i / nf), r_ * math.sin(-math.pi / 2 + 2 * math.pi * i / nf)) for i in range(nf)]
+    zc = -math.sqrt(r_ * r_ - (flat / 2) ** 2) if flat else -2 * r_
+    prof = []
+    for i in range(nf):
+        p0, p1 = raw[i], raw[(i + 1) % nf]
+        if p0[1] >= zc:
+            prof.append(p0)
+        if (p0[1] - zc) * (p1[1] - zc) < 0:
+            t = (zc - p0[1]) / (p1[1] - p0[1])
+            prof.append((p0[0] + t * (p1[0] - p0[0]), zc))
     z0 = min(z for _, z in prof)
-    r = PC.analyze(prism_x([(y, z - z0) for y, z in prof], 0, 40), supports="no")
-    ver["r%d_n%d" % (r_, nf)] = ("fail" if any(f["status"] == "fail" for f in faces_flagged(r)) else "-", r["max_face_overhang_mm"])
-case("lying_cylinder_facets", all(v[0] == ("fail" if k.startswith("r15") else "-") for k, v in ver.items()), verdicts=ver)
+    return prism_x([(y, z - z0) for y, z in prof], 0, 40)
+
+
+ver = {}
+for r_ in (5, 10, 15):
+    for nf in (24, 36, 64):
+        for fl in (0.0, 0.3 * r_):
+            r = PC.analyze(lying(r_, nf, fl), supports="no")
+            ver["r%d_n%d%s" % (r_, nf, "_flat" if fl else "")] = sum(f["kind"] == "tangent" and f["status"] == "fail" for f in r["findings"])
+case("lying_cylinder_tangent", all(v == (0 if k.endswith("_flat") else 1) for k, v in ver.items()), tangent_fails=ver)
 
 # zero-thickness sheet against a line contact
 sheet = PC.analyze(np.concatenate([box(0, 10, 0, 10, 0, 10), box(10, 20, 0, 10, 0, 10)]), supports="no")

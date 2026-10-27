@@ -25,7 +25,7 @@ screws. For a box-shaped mount, `geom` and `features` are simpler.
   (`holes=F.screw_hole(...)`) or glue it.
 - **Orientation:** take `best_orientation`'s pick, then run `cad printcheck` on the exported STL; printcheck is the
   authority for `supports`. Its face pass flags the sleeves' sloped undersides that the layer check alone passed (the
-  review's 4-way node on tube1's rim: three regions 8.9-10.0 mm past 45 deg); `cad printcheck --where` says where.
+  review's 4-way node on tube1's rim: two fail, 6.0-7.6 mm past 30° from horizontal, one warns); `cad printcheck --where` says where.
 
 ## swept_envelope: keep-outs for moving parts
 

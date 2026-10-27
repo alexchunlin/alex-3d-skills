@@ -11,8 +11,8 @@ mkdir -p "$PO/v2" && tar -C "$PO/v2" -xzf "$V27/stl.tar.gz"
 # the PR #11 review's parts, built with cadlib (one Blender run, about 1 min)
 nice -n 10 "$BL" -b --factory-startup --python "$ROOT/tools/verify.d/printcheck_overhangs_build.py" -- "$SCR" "$PO/review" >/dev/null 2>&1
 nice -n 10 python3 -I "$ROOT/tools/verify.d/printcheck_overhangs_cases.py" "$SCR" "$PO/v2/stl" "$V27/manifest.json" "$PO/out" "$PO/review" > "$PO/cases.txt" 2>&1
-for c in ramp_5 ramp_10 ramp_15 ramp_20 ramp_30 ramp_40; do
-  grep -q "\"case\": \"$c\", \"ok\": true" "$PO/cases.txt" && ok "printcheck face pass fails the $c ramp (the layer check alone: 0 fails)" || bad "printcheck $c: $(grep "\"$c\"" "$PO/cases.txt" | cut -c1-240)"
+for c in ramp_5 ramp_10 ramp_15 ramp_20 ramp_25 ramp_30 ramp_35 ramp_40; do   # under 30 deg from horizontal fails, 30-40 warns
+  grep -q "\"case\": \"$c\", \"ok\": true" "$PO/cases.txt" && ok "printcheck face pass on the $c ramp: $(grep "\"$c\"" "$PO/cases.txt" | grep -o '"want": "[a-z]*"') (the layer check alone: 0 fails)" || bad "printcheck $c: $(grep "\"$c\"" "$PO/cases.txt" | cut -c1-240)"
 done
 for c in ramp_45 ramp_50 tube_between_walls hole_6 hole_20; do   # negative controls: self-supporting slopes and sloped bridges
   grep -q "\"case\": \"$c\", \"ok\": true" "$PO/cases.txt" && ok "printcheck face pass leaves $c alone" || bad "printcheck $c: $(grep "\"$c\"" "$PO/cases.txt" | cut -c1-240)"
@@ -22,10 +22,10 @@ grep -q '"case": "prior_art_area_rule", "ok": true' "$PO/cases.txt" \
   && ok "prior_art/overhang_regions.py agrees on the ramps (400 mm2 projected) and would fail the 20 mm hole and the bridged tube (283 mm2)" \
   || bad "prior-art cross-check: $(grep prior_art "$PO/cases.txt" | cut -c1-300)"
 grep -q '"case": "review_parts", "ok": true, "wrong": {}, "parts": 29' "$PO/cases.txt" \
-  && ok "printcheck face pass on the review's 29 cadlib parts: pillars at two heights, a corner slab, a 3 mm tab at 10 deg, a lying cylinder fail; holes, teardrops, domes, a fin-anchored slab, 45 deg chamfers pass" \
+  && ok "printcheck face pass on the review's 29 cadlib parts: pillars at two heights, a corner slab, a 3 mm tab at 10 deg fail, lying cylinders fail as tangent contacts; holes, teardrops, domes, a fin-anchored slab, 45 deg chamfers pass" \
   || bad "printcheck review parts: $(grep review_parts "$PO/cases.txt" | cut -c1-400)"
-grep -q '"case": "lying_cylinder_facets", "ok": true' "$PO/cases.txt" \
-  && ok "printcheck face pass: a lying r 15 cylinder fails at 24-128 facets, r 5 passes (anchored on the bed band)" || bad "lying cylinder: $(grep lying_cyl "$PO/cases.txt" | cut -c1-400)"
+grep -q '"case": "lying_cylinder_tangent", "ok": true' "$PO/cases.txt" \
+  && ok "printcheck tangent bed contact: r 5/10/15 cylinders lying on the bed fail at 24/36/64 facets; with a 0.3 r flat they do not" || bad "lying cylinder: $(grep lying_cyl "$PO/cases.txt" | cut -c1-400)"
 grep -q '"case": "sheet_vs_line_contact", "ok": true' "$PO/cases.txt" \
   && ok "printcheck STL edges: a coplanar join reads as a zero-thickness sheet, two boxes on one edge as a line contact" || bad "sheet vs line contact: $(grep sheet_vs "$PO/cases.txt" | cut -c1-400)"
 grep -q '"case": "v2_face_pass", "ok": true' "$PO/cases.txt" \

@@ -8,8 +8,9 @@ overhang area (over 102 directions): n3 and n4 then balanced on a point and fail
 Here that least-overhang direction is added to blend.best_orientation's default candidates (tube rims, clip faces,
 world axes), and the pick must stand on the bed (50 mm2 or more) with the fewest printcheck fails of any standing
 candidate. brc's pick (cradle rim down) has 0 fails. n3 and n4 have none without: printcheck's face pass fails their
-sleeves' sloped undersides in every orientation (n4 on tube1's rim: three regions 8.9-10.0 mm past 45 deg; before the
-face pass, 0 fails there, docs/features/blend-bracket.md "The printcheck gap"), so their picks must need support.
+sleeves' sloped undersides in every orientation (n4 on tube1's rim: two regions 6.0-7.6 mm past 30 deg from horizontal
+fail; before the face pass, 0 fails there, docs/features/blend-bracket.md "The printcheck gap"), so their picks must need
+support.
 Prints ORIENT {...} per connector.
 """
 import json, math, sys
