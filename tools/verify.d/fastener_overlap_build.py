@@ -10,6 +10,10 @@ Must fail:
   FST_fo_buried    a nut inside a solid printed block with no pocket
   FST_fo_press_nut a nut in a hex pocket 0.3 mm under its width across flats; passes only through its captive entry
                    (fails in the run without checks.json)
+  FST_fo_bburied_nut  a hand-modelled nut with a Ø4 bore, on its bolt, inside a block with only the clearance hole
+  FST_fo_tri_nut   the same bored nut triangulated (an STL import), no bolt, inside a block with a Ø1 vent on its
+                   axis: the axis comes from summed face area, and the inside test from a point past the bore
+                   (PR #9 review: a bore's walls read as flats, the probe came out empty and the nut was skipped)
 Must warn:
   FST_fo_graze     cap head with a rib 3.4 mm off the axis, 0.5 mm above the bearing face: 0.2 mm3 at one corner
 Must pass (no overlap finding):
@@ -19,8 +23,10 @@ Must pass (no overlap finding):
                    into the pocket's walls (as the v2 flywheel and thumbwheel nuts); the nut probe is its inscribed
                    cylinder, which any hex pocket at least its width across flats clears
   FST_fo_slot      nut dropped into a side-entry slot (features.nut_trap slot_dir), not declared captive
+  FST_fo_btrap_nut the bored nut in the hex trap features.nut_trap cuts
 """
-import json, os, sys
+import json, math, os, sys
+import bmesh
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "skills", "print-cad-blender", "scripts"))
 from cadlib import geom as G, features as F, asm as A, export as E
@@ -80,6 +86,35 @@ for tag, x, nf, af, slot in (("slot", 240.0, 6.0, None, (1, 0, 0)), ("press", 28
     parts += [G.csg(plate, sub=hole()), G.csg(block, sub=hole() + trap)]
     A.fastener("FST_fo_%s" % tag, (x, 0, 15), DOWN, L, spec="M4_cap")
     A.nut("FST_fo_%s_nut" % tag, (x, 0, nf), DOWN, size="M4")
+
+
+def bored_nut(name, x, z0, tri=False):
+    """M4 hex nut z0 .. z0 + 3.2 with a Ø4 bore, as a hand-modelled or imported nut (not asm.nut)."""
+    r = 7.0 / 2 / math.cos(math.pi / 6)
+    ob = G.csg(G.cyl(name, (x, 0), r, z0, z0 + 3.2, 'Z', n=6), sub=[G.cyl(name + "_bore", (x, 0), 2.0, z0 - 1, z0 + 5, 'Z')])
+    if tri:
+        bm = bmesh.new()
+        bm.from_mesh(ob.data)
+        bmesh.ops.triangulate(bm, faces=bm.faces[:])
+        bm.to_mesh(ob.data)
+        bm.free()
+    ob = A.part(ob, name, 'FST', "screw", part="M4 hex nut")
+    ob["fst_kind"] = "nut"
+    return ob
+
+
+# the bored nut on its bolt: in a trap (pass), and in a block with only the clearance hole (fail)
+for tag, x, trap in (("btrap", 320.0, True), ("bburied", 360.0, False)):
+    plate, block = stack(tag, x)
+    hole = lambda: F.screw_hole((x, 0, 15), DOWN, 16, "clearance", head="cap", size="M4", name="fo_%s" % tag)
+    trap_c = F.nut_trap((x, 0, 3.5), DOWN, depth=4.1, size="M4", name="fo_%s_nut" % tag) if trap else []
+    parts += [G.csg(plate, sub=hole()), G.csg(block, sub=hole() + trap_c)]
+    A.fastener("FST_fo_%s" % tag, (x, 0, 15), DOWN, 16, spec="M4_cap")
+    bored_nut("FST_fo_%s_nut" % tag, x, 0.3)
+# the bored nut triangulated, no bolt, in a solid block with a Ø1 vent on its axis
+x = 400.0
+parts.append(G.csg(G.box("PRT_fo_tri_block", x - 10, x + 10, -10, 10, 0, 11), sub=[G.cyl("vent", (x, 0), 0.5, -1, 12, 'Z')]))
+bored_nut("FST_fo_tri_nut", x, 4.0, tri=True)
 for o in parts:
     A.part(o, o.name, 'PRT', "pla_a", stl=o.name[4:], **INFO)
 os.makedirs(OUT, exist_ok=True)
