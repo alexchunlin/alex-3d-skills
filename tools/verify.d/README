@@ -1,1 +1,7 @@
 # Per-feature verify scripts, sourced by tools/verify_all.sh. Each calls ok "..." or bad "...".
+# Each script starts with what it watches, for `verify_all.sh --changed` (tools/verify_select.py):
+#   # watch: @core examples/my-feature/** tools/verify.d/my_feature_*.py   (repo paths; * within a dir, ** across, !excl)
+#   # needs: 4k                                                            (sections whose $V output it reads; optional)
+# @core = the cad wrapper, cadcheck, cadq and cadlib; @layer = printcheck (verify_all.sh's #@ group lines). The script
+# itself is always watched. It runs when a watched path changes or a code line of it changes; verify_select.sh checks
+# that every $ROOT path, cad subcommand and layer check in it is covered by its watch, so keep the header current.

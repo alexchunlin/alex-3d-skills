@@ -10,7 +10,7 @@ mm-launcher design/review loop, and the evidence behind every rule is in `docs/F
 | `templates/cad-loop.workflow.js` | Design/review loop for the Workflow tool: plan, then one build agent per subsystem, then finish, then review. Resumable. |
 | `components/` | Purchased-part data with sources (`components.json`) and Blender placeholders |
 | `tools/transcript/cc_transcript.py` | Digest Claude Code agent transcripts: time split, long generations, tokens, cache misses, Blender runs, images |
-| `tools/verify_all.sh` | Re-proves everything (about 21 minutes, writes only under `/tmp/alex3d-verify`) |
+| `tools/verify_all.sh` | Re-proves everything (about 28 minutes, writes only under `/tmp/alex3d-verify`). `--changed [BASE]` runs only the sections and `tools/verify.d` scripts the change since `merge-base(BASE, HEAD)` affects (BASE defaults to `next`; `--dry-run` prints the plan); promoting `next` to `main` runs it all |
 | `examples/` | `demo-turret` and `slide-gate` (clean and planted-bug builds); `mm-launcher-{a1,a2,a3,v2a1,v2a2,v2a3}` (check config and archived blend per attempt, plus the reviewer's missing rows as overlays) |
 
 ## Requirements
@@ -54,5 +54,6 @@ $S/cad slice --detect                                    # slicers found and whe
 $S/cad slice my/stl                                      # sandboxed, crash-guarded slice: time, filament, where support goes
 $S/cad sheet my/stl /tmp/sheet.png
 python3 -I tools/transcript/cc_transcript.py workflow ~/.claude/projects/<proj>/<session>/subagents/workflows/wf_XXXX
-sh tools/verify_all.sh
+sh tools/verify_all.sh                                   # everything (next -> main)
+sh tools/verify_all.sh --changed --dry-run               # what this branch affects, vs next
 ```

@@ -1,9 +1,12 @@
 # tools/bench smoke test (sourced by verify_all.sh; uses $ROOT, $V and ok/bad).
+# watch: tools/bench/** !tools/bench/**/*.md @core @layer examples/mm-launcher-v2a6/** examples/mm-launcher-v2a7/**
+# needs: 4k
 # 1. The locator lint on labels.json: no top-level |, no check '*', every locator names an object, no pinned numbers.
 # 2. The scoring rules on JSON fixtures (no Blender), and two mutants of replay.py that must fail them.
 # 3. The scorer on verify_all's own v2 A7 reports (no Blender; the commit comes from $V/meta.json).
 # 4. The runner on one attempt, one run (v2 A6 layer check, about 10 s): the 4 printability findings fail, nothing else.
 # 5. labels.json vs verify_all's per-attempt assertions: a report, never a failure.
+# 3 and 5 read 4k's v2a7 reports, hence needs: 4k in a --changed run.
 B="$ROOT/tools/bench/replay.py"
 mkdir -p "$V/bench"
 python3 -I "$B" lint > "$V/bench/lint.txt" 2>&1 && ok "bench labels: locator lint clean" || bad "bench labels: locator lint (see $V/bench/lint.txt)"
