@@ -57,7 +57,7 @@ IDs point into `<repo>/docs/FINDINGS.md`. "Caught" means cadcheck or cadq flags 
 | V2A5-F6 | Open `allow` on a riding detent hides any deeper clash in the gate sweep | `allow` `max_mm3`; `summary.unbounded_allows` | yes: listed; bounded at 0.1 it fails at 0.43 mm³ |
 
 **Rule from v2 A1:** 0 fails is not done. Read every warn on your objects: fix it, or list it under `accepted_warns`
-with a reason. Three of the first v2 reviewer's twelve issues were warns in the designer's own hand-off.
+(check, kind, object) with a reason. Three of the first v2 reviewer's twelve issues were warns in the designer's own hand-off.
 
 **Rule from A2:** every sentence in the BOM or design log that states a motion, timing or service claim ("park at 0, fire
 at +60", "change the gap without disassembly", "the flywheel comes off at tilt 45") gets a `checks.json` entry

@@ -1,15 +1,19 @@
 # checks.json
 
-Every key is optional. Defaults live in `scripts/cadcheck.py DEFAULTS`. A worked config for a real 102-object assembly is
+Every key is optional. Defaults live in `scripts/cadcheck.py DEFAULTS`, row fields in `CONFIG_ROWS`. A key cadcheck
+doesn't read is a config warn naming the closest known key (`summary.config_warns`, apart from the design warns); a key
+starting with `_` (`"_about"`) is a note. A worked config for a real 102-object assembly is
 `<repo>/examples/mm-launcher-a1/checks.json`; attempt 2 (`examples/mm-launcher-a2/checks.json`) uses most blocks below, and attempt 3 (`examples/mm-launcher-a3/checks.json`)
 adds `carry`, `fasteners.captive` and `flexures`.
 
 ```jsonc
 {
-  "joints": {"PIV_tilt": {"axis": "X", "lo": 0, "hi": 45, "step": 2.5}},   // only for blends without cadlib joint props
-  "couplings": {"PIV_pinion": {"to": "PIV_pan", "ratio": -1}},
+  "joints": {"PIV_tilt": {"axis": "X", "lo": 0, "hi": 45, "step": 2.5, "home": 0}, "PIV_pan": {"axis": "Z", "continuous": true},
+             "PIV_gate": {"axis": "X", "kind": "prismatic", "lo": 0, "hi": 56}},   // only for blends without cadlib joint props
+  "couplings": {"PIV_pinion": {"to": "PIV_pan", "ratio": -1, "offset": 0}},
   "carry": {"PRT_nip_wheel": "PIV_hood"},   // modelled on one body at one setting, rides on this joint in use (A3)
   "overtravel_deg": 2.5,          // sweep this far past each limit; hits there are warns ("no margin")
+  "overtravel_mm": 1.0,           // the same past the ends of a prismatic joint
   "max_poses_per_group": 48,      // grids over several joints are thinned to this
 
   "allow": [                      // designed overlap: the pair is skipped entirely
@@ -40,10 +44,10 @@ adds `carry`, `fasteners.captive` and `flexures`.
   "joint_drives": {"PIV_tilt": "BUY_servo_tilt", "PIV_hood": null},   // what holds a joint (default: BUY_*servo*_<joint>)
   "fasteners": {"driver_r": 3.0, "hand_r": 14.0, "max_reach": 60, "max_reach_ext": 150,
                 "min_engagement_d": 2.0, "tapped_engagement_d": 1.5,   // thread >= 2 d in PLA, 1.5 d in a tapped BUY part
-                // "min_engagement": 4.0 (mm) replaces both, as in configs before 2026-10; features.fastener_joint reads it too
-                "lkey_short": 18, "lkey_insert": 2.5, "lkey_long": 56, "lkey_swing_deg": 60,   // 2.5 mm hex key
+                "lkey_short": 18, "lkey_insert": 2.5, "lkey_long": 56, "lkey_r": 1.25, "lkey_swing_deg": 60,   // 2.5 mm hex key
                 "max_standoff": 2.0, "max_protrusion": 3.0,
-                "captive": {"FST_nip_stud": "hex head in a hex pocket; the thumbwheel nut turns"}},   // never driven
+                "captive": {"FST_nip_stud": "hex head in a hex pocket; the thumbwheel nut turns"},   // never driven
+                "min_engagement": 4.0},   // mm, replaces both _d rules, as in configs before 2026-10; fastener_joint reads it too
   "service": [                    // access on the BUILT machine (assembly_order only covers first assembly)
     {"op": "change the nip gap", "fasteners": ["FST_clamp_*", "FST_jack_*"]},          // home + joint limits
     {"op": "re-tighten flywheel", "pose": {"PIV_tilt": 45}, "remove": ["PRT_launcher_cover", "FST_cover_*"],
@@ -59,19 +63,22 @@ adds `carry`, `fasteners.captive` and `flexures`.
                          "positive": "-Y", "range": [0, 26]}}},              // zero/positive may be signed: "-Z" = BDC
     {"name": "feed_spout_to_tape", "mode": "slide", "stall_deg": 20, "stall_margin_deg": 5, "capture_mm": 0.5, "payload_mm": 7.0,
      "emit": {...}, "poses": {"PIV_tilt": [0, 15, 22.5, 30, 45, 46]}, // 46 = hard stop; stall below 20 deg, warn below 25
-     "expect": {"hit": ["PRT_flywheel"], "angle": {"center": "PIV_flywheel", "frame": "PIV_tilt", "zero": "-Z", "positive": "-Y", "range": [0, 135]}}}],
+     "expect": {"hit": ["PRT_flywheel"], "angle": {"center": "PIV_flywheel", "frame": "PIV_tilt", "zero": "-Z", "positive": "-Y", "range": [0, 135]}}},
+    {"name": "line of fire clear", "emit": {...}, "sweep": ["PIV_pan"], "expect": {"hit": [null]},   // every pan pose
+     "ignore": ["PRT_barrel"], "max_mm": 400, "home_only_ok": ["PIV_hood"]}],   // hood held at home on purpose
   "index_tests": [{                                     // one window = one release; count them over the motion
     "name": "feeder_one_candy_per_cycle", "joint": "PIV_feeder", "sequence": [0, 60, 0], "step": 2,
     "probe": {"frame": "PIV_pan", "center": [21, 0, 267], "dir": [0, 0, -1], "radius": 3, "depth": 23},
-    "blockers": ["PRT_feeder_disc", "PRT_feeder_plate"], "expect_windows": 1}],
+    "blockers": ["PRT_feeder_disc", "PRT_feeder_plate"], "expect_windows": 1, "pose": {"PIV_tilt": 0}}],
   "slide_out": [{"object": "BUY_battery", "dir": [1, 0, 0], "dist": 130, "step": 5, "min_clearance": 1.5},  // step: mm per station
                 {"name": "gate open stop", "object": "PRT_jar_gate", "dir": [1, 0, 0], "dist": 56, "step": 0.5,
-                 "expect": "blocked", "blocked_by": ["PRT_jar_adapter"], "at_mm": [52, 53]},      // an end stop: must stop there
+                 "expect": "blocked", "blocked_by": ["PRT_jar_adapter"], "at_mm": [52, 53],       // an end stop: must stop there
+                 "flex": {"PRT_gate_detent": 1.0}},                                                // the detent rides over (below)
                 {"name": "flywheel off", "objects": ["PRT_flywheel", "FST_fw_*"], "ignore": ["PRT_launcher_cover"],
                  "pose": {"PIV_tilt": 45}, "dir": [1, 0, 0], "dist": 140}],
   "distances": [{"a": "PRT_hood", "b": "PRT_flywheel", "min": 5.5, "max": 7.0, "why": "nip squeezes a 7 mm M&M",
                  "ray": {"frame": "PIV_tilt", "origin": [21, 37, 132], "dir": [0, 0, 1]},   // gap along a line, not nearest
-                 "payload_mm": 7.0, "tape_mm": 0.5, "compliant": "PRT_hood leaf spring"},   // squeeze > 0 needs a yielding part
+                 "payload_mm": 7.0, "tape_mm": 0.5, "compliant": "PRT_hood leaf spring", "pose": {"PIV_tilt": 0}},   // squeeze > 0 needs a yielding part
                 {"a": "PRT_hood", "b": "PRT_flywheel", "min": "=MM_T[1] + TAPE_T",      // over the whole entry arc, not one station
                  "ray": {"origin": [21, 37, 132], "dir": [0, 0, 1],                     // the station at sweep angle 0 (BDC)
                          "sweep": {"center": [21, 37, 170], "axis": [-1, 0, 0], "from": 0, "to": 100, "step": 5}},
@@ -81,15 +88,19 @@ adds `carry`, `fasteners.captive` and `flexures`.
      "frame": "PIV_feeder", "up": [0, 0, 1], "across": [1, 0, 0], "place": "pair_edge_on", "size": [12.5, 6.5],  // D x T, MIN size
      "shape": "lens", "expect": "blocked", "margin": 0.2},
     {"name": "pocket seats one flat", "against": ["PRT_feeder_disc"], "center": [10.5, 18.19, 263.0], "place": "flat",
-     "size": [13.5, 7.5], "expect": "fits"}],                                                              // MAX size
+     "size": [13.5, 7.5], "expect": "fits", "pose": {"PIV_feeder": 30}},                                   // MAX size
+    {"name": "tube holds a stack of three", "against": ["PRT_hopper"], "center": [0, 0, 250], "place": "stack_flat",
+     "count": 3, "gap": 0.2, "size": [13.5, 7.5], "expect": "fits"}],               // count: pair_edge_on, stack_flat; gap: lift off the floor
   "sightlines": [{"name": "finger reaches the thumbwheel through the slot", "frame": "PIV_tilt", "poses": [{}, {"PIV_tilt": 45}],
                   "origins": [[19.5, -2.33, 111.27], [15.5, -2.33, 111.27]], "dir": [0, -0.316, 0.949],
-                  "first_hit": "PRT_nip_wheel", "max_mm": 40, "through": []}],     // null = must hit nothing
+                  "first_hit": "PRT_nip_wheel", "max_mm": 40, "through": []},     // null = must hit nothing
+                 {"name": "view of the reveal", "origin": [0, -300, 120], "dir": [0, 1, 0], "pose": {"PIV_tilt": 0}, "first_hit": "PRT_beam"}],
   "stacks": [{"name": "magnet centring", "limit": 0.3, "terms": [{"what": "can in bore", "tol": 0.2}, {"what": "jig in bore", "tol": 0.1}]},
              {"name": "jar band clears its neighbours", "between": ["BUY_jar_band", "*"], "poses": [{}, {"PIV_jar": 30}],  // limit measured
               "terms": [{"what": "glass thread / band", "tol": 1.0}, {"what": "adapter disc in the band", "tol": 0.75}]}],
   "flexures": [{"part": "PRT_nip_cover", "name": "leaf spring", "dir": [0, -0.48, 0.88],   // beam length, world at home
-                "stress_mpa": 20.9}],                                                    // or "from"/"to" points
+                "stress_mpa": 20.9},
+               {"part": "PRT_gate_detent", "from": [0, 10, 5], "to": [0, 22, 5]}],      // or the beam's ends
   "interlayer_mpa": 15,
   "exposure": {"max_cable_mm": 5, "cables_ok": ["CAB_usb*"], "min_escape": 8, "view_frac": 0.1, "view_z": -0.2,
                "nuts_ok": ["FST_wheel_nut_*"]},
@@ -100,9 +111,13 @@ adds `carry`, `fasteners.captive` and `flexures`.
   "cable_junctions_ok": ["CAB_bus_*"],      // an inline connector no wider than the cable; a bigger one is a BUY_ part
   "cable_min_bend_od": 0.75,                // a corner tighter than this x OD (centreline radius) is a kink
   "fasteners": {"stock_ok": ["FST_custom_*"], "stock_lengths": {"3": [6, 8, 10, 12, 16, 20]}},   // override the stocked lengths
-  "accepted_warns": [{"match": "PRT_flywheel: ceiling region needs a 72 mm bridge", "why": "1 mm flange ring, prints as a bridge over infill"}],
+  "accepted_warns": [{"check": "parts", "object": "PRT_flywheel", "kind": "bridge", "match": "a 72.0 mm bridge",   // pins the span
+                      "why": "1 mm flange ring, prints as a bridge over infill"},
+                     {"check": "clearance", "object": ["PRT_hood", "FST_nipstop"], "kind": "just past the limit", "any": true, "why": "..."}],
   "printers": {"P1S": [256, 256, 256], "H2D": [325, 320, 325]}, "prefer_printer": "P1S",
-  "min_wall": 1.6, "overhang_deg": 45, "overhang_warn_mm2": 150, "max_bridge_mm": 25
+  "min_wall": 1.6, "overhang_deg": 45, "overhang_warn_mm2": 150, "max_bridge_mm": 25,
+  "pla_density": 1.24e-3, "flow_mm3_s": 12,   // mass and print-time estimates (g/mm3, mm3/s)
+  "collections": {"printed": "Printed", "purchased": "Purchased", "fasteners": "Fasteners", "cables": "Cables"}
 }
 ```
 
@@ -120,8 +135,12 @@ joint values in `poses`, `lead`.
 
 Write pass rows against the payload's declared **max** and blocking rows against its **min**, from the same params the
 geometry uses. v2 A3 declared `MM_T = (6.3, 7.5)` but typed its full-lift gap row as 7.5 (nominal 7.0 + tape), so the
-row passed while the reviewer's 8.0 row failed (FINDINGS V2A3-F1). A failed expression is a `config` fail naming the
-row; the report's `params.expressions` lists every value used.
+row passed while the reviewer's 8.0 row failed (FINDINGS V2A3-F1). A failed expression (a param that isn't there) is a
+`config` fail naming the row and the expression, and the row is skipped. A failed setting falls back to its default
+(`DEFAULTS`), or is dropped so the code's own fallback applies; an entry of a section keyed by name (`couplings.PIV_x`,
+`masses_g.BUY_x`) is dropped whole. Each says which in its fail. A None left in place crashed check_stacks (push-assist
+PA-A5-T26), cadlib.joints (a coupling ratio) and the fasteners check (`min_engagement`), each with no report. The
+report's `params.expressions` lists every value used.
 
 `cad rows cadcheck.json [REGEX]` prints one line per row of every check (and `cad rows manifest.json FST_` the parts),
 so you grep the report instead of writing a `json.load` snippet. Report layout, if you do script it:
@@ -143,6 +162,10 @@ doing that (FINDINGS V2A1-T6). CONFIG and OUT are optional, and a flag in their 
 
 A row that names an object not in the scene (a subsystem not built yet) gives one fail, "not in the scene; row
 skipped", and the run carries on. Keep the row; don't `--only` around it.
+
+A check that runs with no rows in its section (`--only stacks` with no `stacks`) adds "no stacks rows in the config,
+nothing checked" to `not_checked`, and under `--only` the summary lists it in `only_without_rows`. Push-assist A2 named 11
+checks in `--only`, 5 with no rows, and read PASS (PA-A2-T11). An `--only` name that is no check is a config warn.
 
 ## Reading the semantics
 
@@ -176,9 +199,18 @@ skipped", and the run carries on. Keep the row; don't `--only` around it.
   inside them went unmeasured (FINDINGS V2A1-V4). Add `contact_normal` (one `[x, y, z]` or a list, a home-pose world
   direction of the rule's `a` part, turning with it) and contact is accepted only on faces within 20° of ±that normal.
   The rest of the pair is measured against the rule's `min_clearance`, so set it to the journal's radial clearance.
-- **Warn triage.** List each warn you have looked at and accept under `accepted_warns` (a substring of its text, plus
-  why). The summary reports `untriaged_warns`, and `warn_list` holds only untriaged ones. An accept that matches no warn
-  is reported as stale. v2 A1 finished at 0 fails, 34 warns, and three of R1's issues were in those warns.
+- **Warn triage.** List each warn you have looked at and accept under `accepted_warns`: `check` (the text before the
+  first `: `), `kind` (whole words of the defect in the message, outside object names: `wall samples`, `bridge`,
+  `collide only`), `object` (a name, glob or list, each a whole token of the message) and `why`. A warn with a measured
+  value is accepted only with `match` (text that must be in the line, e.g. `"427 wall samples < 3.0 mm (min 2.21)"`; it
+  pins the number, so a worse wall is a new warn) or `"any": true`; a near miss is a config warn. An accept with no
+  `object` and no `any` is a config warn: it takes the kind on every part. The PR #10 review thinned the demo base's wall
+  from 2.4 to 1.2: an accept without the number swallowed the new 0.46 mm warn. The summary reports `untriaged_warns`, and `warn_list` holds only untriaged ones. An accept that matches no warn is stale
+  (`stale_accepts`); under `--only`, one whose check did not run is `accepts_not_evaluated`. v2 A1 finished at 0 fails,
+  34 warns, and three of R1's issues were in those warns. The old form, `{"match": "<substring>"}`, still works and is a
+  config warn: `"PRT_tray_L: "` accepted every warn on the part, later ones of another kind too, and it names no check,
+  so under `--only` an unmatched one can't be called stale (push-assist PA-A4-T10). `summary.accept_suggestions` gives
+  the structured accepts that cover what each old one covers in the run.
 - **Stability.** Every driver joint at lo, home and hi, and continuous joints every 45°, up to 4000 poses. The 10 worst
   rows are kept.
 - **Bodies.** An object's body is its nearest `PIV_` ancestor, or `static`. A pair is swept over the joints that separate the two bodies, with each coupled joint replaced by its driver.
@@ -271,5 +303,5 @@ skipped", and the run carries on. Keep the row; don't `--only` around it.
 - **Slide-out** sweeps against solids **and fasteners**. Pairs already overlapping at rest are listed in `overlapping_at_rest` and left to the interference and fastener checks.
 - **Drop slide margin.** Each pose row has `flattest_slide_deg`, the shallowest slide a hitting ray made. Rays whose slide was flatter than `stall_deg + stall_margin_deg` warn: friction varies, and A3's 21° slide over a 20° limit was a major (A3-F1).
 - **Drop coverage.** Each test lists `on_path`, the objects its rays touched. A ranged joint that moves one of them relative to the emitter, and is not in `poses` or `sweep`, is a warn: the test held it at home. Typical cases are an adjuster such as a nip-gap hinge, and a gate. Put both ends in `poses`, or list the joint under `home_only_ok` with a reason. v2 A1's nip drop ran at the home hood setting only, and R1 found stalls at the open end (FINDINGS V2A1-F1).
-- **Drop tests.** Default mode casts straight first-contact rays. `"mode": "slide"` falls, then slides down wall slopes, stalls below `stall_deg`, and counts a hit when the falling point passes within `capture_mm` of the target or a sliding point is within `payload_mm` of it in line of sight (the attempt-2 designer's tracer, generalised). No bounce or rolling. The angle is measured about `center` in `frame` coordinates, from the `zero` axis toward `positive`.
+- **Drop tests.** Default mode casts straight first-contact rays. `"mode": "slide"` falls, then slides down wall slopes, stalls below `stall_deg`, and counts a hit when the falling point passes within `capture_mm` of the target or a sliding point is within `payload_mm` of it in line of sight (the attempt-2 designer's tracer, generalised). No bounce or rolling. The angle is measured about `center` in `frame` coordinates, from the `zero` axis toward `positive`, so it turns about the third axis; `angle.axis`, if given, must be that one (a config fail otherwise).
 - **Coverage.** Every run lists `coverage` and `not_checked`. Quote both when you report results.

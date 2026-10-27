@@ -106,7 +106,7 @@ def report_summary(d):
     yield "summary  pass=%s  fails=%s  warns=%s  untriaged=%s  accepted=%d  stale_accepts=%s  poses_past_limits=%d  runtime_s=%s" % (
         s.get("pass"), s.get("fails"), s.get("warns"), s.get("untriaged_warns"), len(s.get("accepted_warns") or {}),
         short(s.get("stale_accepts") or []), len(s.get("poses_past_limits") or []), s.get("runtime_s"))
-    for k in ("unbounded_allows",):
+    for k in ("unbounded_allows", "config_warns", "only_without_rows", "accepts_not_evaluated"):
         for x in sorted(s.get(k) or []):
             yield "%s  %s" % (k, x)
     for x in s.get("coverage") or d.get("coverage") or []:
