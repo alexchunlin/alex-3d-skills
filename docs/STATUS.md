@@ -1,4 +1,4 @@
-# Status (updated 2026-10-25, after the printability and slicing task; before it, the revision run for v2 attempt 7)
+# Status (updated 2026-10-27, after harvesting the push-assist loop; before it, the printability and slicing task)
 
 ## Ingested
 - v1 (the no-tools baseline, attempts 1-3) is complete. Its rows are below; details are in FINDINGS A1-A3.
@@ -8,6 +8,17 @@
 - Not yet ingested: v2 plan #8 and everything after it, in `V2WF = WF/wf_8db95a5a-12a/` (journal line 108 onward).
 - Archived blends: `examples/mm-launcher-{a1,a2,a3,v2a1,...,v2a7}/`, each the blend its reviewer saw, with its checks.json.
   The v2 ones carry overlays of the rows each reviewer showed were missing; v2a3 to v2a7 also have manifest.json and BOM.
+
+## Push-assist loop (2026-10-26/27; FINDINGS "Push-assist loop", log in `docs/evidence-push-assist/loop-log.txt`)
+- A second project (`~/code-stuff/space-bar-push-assist`) ran 8 designer + reviewer attempts on tools `49aa21f`,
+  which has the same tree as `next` today. **No pass:** the best was 8/8/9 (A6, A8), and A7 fell to 4/4/9 on a cell
+  that could not be fitted. The run took 9.9 h: designers 7.6 h, reviewers 2.3 h, 2.33M output tokens.
+- The project never called `fastener_joint`, `cadlib.route` or `cadlib.blend` (PRs #2-#4), even though SKILL.md
+  pointed to them.
+- Of the 14 ranked tool candidates, two are planned and twelve are open:
+  - planned: the fastener head/nut vs same-body check (#12, PA-A2-T12) and the printcheck overhang pass (part of #6);
+  - top of the open list: `slide_out` drops allowed pairs from the sweep, and `insertion` skips same-step parts.
+    Together they hid the unfittable cell (PA-A7-T19).
 
 ## Printability and slicing (2026-10-25, docs/tasks/2026-10-25-printability-and-slicing.md; FINDINGS "v2 post-freeze")
 - **v2 shipped "supports: no" on 4 parts that need support:** jar_valve (3 tabs, 5.5 mm cantilevers at z 2), feeder_cover
