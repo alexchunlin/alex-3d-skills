@@ -19,7 +19,8 @@ Checks (each one writes evidence into the JSON report, with an explicit `coverag
                 check (printcheck.py: bridges, cantilevers, islands per 0.2 mm layer; sloped overhangs per face region)
                 on the exported STLs
   interference  every pair in ALL four collections, swept over the joints that separate the two bodies,
-                including overtravel past each limit; contacts between different bodies are failures
+                including overtravel past each limit; between the samples, swept bounds, then the swept envelopes of
+                the moving parts (cadlib.geom), then refinement of envelope hits; contacts between different bodies fail
   clearance     min distance between parts on different bodies over the same sweep
   fasteners     head not buried, head or nut overlapping a solid on its body, thread engagement (bolt-to-nut
                 pairing), shanks or nuts inside purchased parts, driver access (straight bit, then an L-key with a
@@ -71,6 +72,13 @@ DEFAULTS = {
     "overtravel_deg": 2.5,
     "overtravel_mm": 1.0,       # past the ends of a prismatic (slide) joint
     "max_poses_per_group": 48,
+    # between two sampled poses a part moves up to reach x step: interference sweeps each pair's bounds, then the moving
+    # part's geom.swept_envelope (oversize by sweep_tol + envelope_voxel), and refines only envelope hits (halving
+    # cells until a collision is found, no point can move more than sweep_tol unseen, or max_guard_poses are spent)
+    "sweep_tol": 0.25,
+    "max_guard_poses": 64,      # refinement poses per envelope hit; one settled by bounding boxes alone counts 1/16
+    "envelope_voxel": 1.0,      # geom.swept_envelope's voxel (pad = sweep_tol + voxel); doubled when the grid is too large
+    "envelope_max_poses": 3000, # a chain envelope (pan x tilt) coarsens its steps to stay under this many poses
     "allow": [],
     "vol_tol": 0.5,
     "moving_min_clearance": 0.5,
@@ -421,27 +429,30 @@ def thin(lst, k, keep=()):
     return [lst[i] for i in sorted(keep | pick)]
 
 
-def pose_grid(drv, quick=False, cap=None):
-    """Joint-angle combinations for a group of driver joints, thinned to `cap`. Thinning keeps each joint's limits and
-    overtravel poses: it used to keep only the list ends, which are the overtravel poses, so in a two-joint group the
-    in-range limits (tilt -3 and 46 in v2 A1) were never visited and a collision there showed only as an overtravel
-    warn (FINDINGS V2A1-V2)."""
+def pose_axes(drv, quick=False, cap=None):
+    """(sorted drivers, one [(value, overtravel)] list per driver): the lattice pose_grid takes the product of, thinned
+    to `cap` poses. Thinning keeps each joint's limits and overtravel poses: it used to keep only the list ends, which
+    are the overtravel poses, so in a two-joint group the in-range limits (tilt -3 and 46 in v2 A1) were never visited
+    and a collision there showed only as an overtravel warn (FINDINGS V2A1-V2)."""
     drv = sorted(drv)
-    if not drv:
-        return [({}, False)]
     per = [samples(j, quick) for j in drv]
     keeps = [(0, 1, -2, -1) if len(p) > 3 and p[0][1] else (0, -1) for p in per]
     cap = cap or CFG["max_poses_per_group"]
-    while math.prod(len(p) for p in per) > cap:
+    while per and math.prod(len(p) for p in per) > cap:
         i = max(range(len(per)), key=lambda k: len(per[k]) - len(keeps[k]))
         floor = len(keeps[i]) + (0 if len(keeps[i]) == 4 else 1)
         if len(per[i]) <= floor:
             break
         per[i] = thin(per[i], max(floor, len(per[i]) - 2), keeps[i])
-    out = []
-    for combo in itertools.product(*per):
-        out.append(({j: a for j, (a, _) in zip(drv, combo)}, any(ot for _, ot in combo)))
-    return out
+    return drv, per
+
+
+def pose_grid(drv, quick=False, cap=None):
+    """Joint-angle combinations for a group of driver joints: [(pose, overtravel)] over pose_axes' lattice."""
+    drv, per = pose_axes(drv, quick, cap)
+    if not drv:
+        return [({}, False)]
+    return [({j: a for j, (a, _) in zip(drv, combo)}, any(ot for _, ot in combo)) for combo in itertools.product(*per)]
 
 
 def pose_key(p):
@@ -450,23 +461,25 @@ def pose_key(p):
 
 # ------------------------------------------------------------------ geometry helpers
 
-def world_bm(o):
+def world_bm(o, M=None):
+    """o's mesh in world coordinates, at the current pose or at matrix_world M (the guard poses parts without the
+    depsgraph, cadlib.joints.world_at)."""
     bm = bmesh.new()
     if o.type == 'MESH':
         bm.from_mesh(o.data)
-    bm.transform(o.matrix_world)
+    bm.transform(o.matrix_world if M is None else M)
     return bm
 
 
-def bvh_world(o):
-    bm = world_bm(o)
+def bvh_world(o, M=None):
+    bm = world_bm(o, M)
     t = BVHTree.FromBMesh(bm)
     bm.free()
     return t
 
 
-def bbox_world(o):
-    bb = [o.matrix_world @ Vector(c) for c in o.bound_box]
+def bbox_world(o, M=None):
+    bb = [(o.matrix_world if M is None else M) @ Vector(c) for c in o.bound_box]
     return (Vector((min(v.x for v in bb), min(v.y for v in bb), min(v.z for v in bb))),
             Vector((max(v.x for v in bb), max(v.y for v in bb), max(v.z for v in bb))))
 
@@ -478,6 +491,276 @@ def bb_gap(A, B):
         d = max(lb[k] - ha[k], la[k] - hb[k], 0.0)
         g = max(g, d)
     return g
+
+
+def obb_gap(a, b, Ma=None, Mb=None):
+    """Gap between the two objects' own (oriented) bounding boxes: the largest separation along the 15 separating axes,
+    a lower bound on the distance between the parts (bb_gap uses world-aligned boxes, which grow as a part turns)."""
+    Ma, Mb = a.matrix_world if Ma is None else Ma, b.matrix_world if Mb is None else Mb
+    return box_gap([Ma @ Vector(c) for c in a.bound_box], [Ma.to_3x3().col[i] for i in range(3)],
+                   [Mb @ Vector(c) for c in b.bound_box], [Mb.to_3x3().col[i] for i in range(3)])
+
+
+def box_gap(ca, ua, cb, ub):
+    """Separating-axis gap between two boxes given as corners and edge directions."""
+    ua, ub = [x.normalized() for x in ua], [x.normalized() for x in ub]
+    best = 0.0
+    for u in ua + ub + [x.cross(y) for x in ua for y in ub]:
+        if u.length < 1e-6:
+            continue
+        u = u.normalized()
+        pa, pb = [u.dot(c) for c in ca], [u.dot(c) for c in cb]
+        best = max(best, min(pb) - max(pa), min(pa) - max(pb))
+    return best
+
+
+def spin_box(o, piv, u):
+    """Corners and edges (world, current pose) of a box around everything o can fill while spinning about the axis
+    (piv, u): its height range along the axis by its largest radius each way across it (the router's spin envelope,
+    cadlib.route._envelope, as a box)."""
+    piv, u = Vector(piv), Vector(u).normalized()
+    e1 = u.cross(Vector((1, 0, 0)) if abs(u.x) < 0.9 else Vector((0, 1, 0))).normalized()
+    e2 = u.cross(e1)
+    mw = o.matrix_world
+    vs = [mw @ v.co - piv for v in o.data.vertices]
+    hs = [v.dot(u) for v in vs]
+    R = max((v - u * v.dot(u)).length for v in vs)
+    return [piv + u * h + e1 * x + e2 * y for h in (min(hs), max(hs)) for x in (-R, R) for y in (-R, R)], [u, e1, e2]
+
+
+def turning(a, b, piv, u):
+    """For a and b where one turns about the axis (piv, u) against the other: a test clear(lo, hi) -> True when they
+    can't meet while a turns from lo to hi radians against b (from home, right-handed about u), starting apart.
+    Turning keeps each point's height h along the axis and radius r from it, and adds to its angle phi, so parts that
+    start apart can only meet where a triangle of each shares (h, r, phi). Each triangle lies in a box: its vertex
+    heights, radii from its closest approach to the axis out to its farthest vertex, and its vertices' angle range (all
+    of it when it spans the axis); a's angles widen by the turn. No box of a meeting a box of b proves the turn clear:
+    a disc over a plate or a hub in a bore at any angle, a journal next to its arm over a small turn. This is cadsmith
+    mech's "turning about a common hinge line" test (PR #6), on the mesh triangles. Box pairs that share (h, r) are
+    found once; each turn tests their angles only."""
+    import numpy as np
+    u = np.array(u, float) / np.linalg.norm(u)
+    e1 = np.cross(u, [1.0, 0, 0] if abs(u[0]) < 0.9 else [0, 1.0, 0])
+    e1 /= np.linalg.norm(e1)
+    e2 = np.cross(u, e1)
+
+    def boxes(o):
+        me = o.data
+        me.calc_loop_triangles()
+        co = np.empty(len(me.vertices) * 3)
+        me.vertices.foreach_get("co", co)
+        M = np.array(o.matrix_world)
+        co = co.reshape(-1, 3) @ M[:3, :3].T + M[:3, 3] - np.array(piv, float)
+        tri = np.empty(len(me.loop_triangles) * 3, dtype=np.int64)
+        me.loop_triangles.foreach_get("vertices", tri)
+        tri = tri.reshape(-1, 3)
+        h, P = (co @ u)[tri], np.stack([co @ e1, co @ e2], 1)[tri]       # (n, 3), (n, 3, 2)
+        rmin = np.full(len(tri), np.inf)
+        for i, j in ((0, 1), (1, 2), (2, 0)):       # each edge's closest approach to the axis (the origin here)
+            p0, e = P[:, i], P[:, j] - P[:, i]
+            t = np.clip(-(p0 * e).sum(1) / np.maximum((e * e).sum(1), 1e-18), 0, 1)
+            rmin = np.minimum(rmin, np.linalg.norm(p0 + e * t[:, None], axis=1))
+        cr = [(P[:, j, 0] - P[:, i, 0]) * -P[:, i, 1] - (P[:, j, 1] - P[:, i, 1]) * -P[:, i, 0] for i, j in ((0, 1), (1, 2), (2, 0))]
+        spans = ((cr[0] >= 0) & (cr[1] >= 0) & (cr[2] >= 0)) | ((cr[0] <= 0) & (cr[1] <= 0) & (cr[2] <= 0))
+        rmin[spans] = 0.0
+        ang = np.arctan2(P[..., 1], P[..., 0])
+        d = (ang - ang[:, :1] + np.pi) % (2 * np.pi) - np.pi
+        f0, f1 = ang[:, 0] + d.min(1), ang[:, 0] + d.max(1)
+        f0[spans], f1[spans] = -np.pi, 3 * np.pi       # the whole circle
+        return np.stack([h.min(1), h.max(1), rmin, np.linalg.norm(P, axis=2).max(1), f0, f1], 1)
+    A, B = boxes(a), boxes(b)
+    eps = 1e-4
+    if len(A) and len(B):
+        A = A[(A[:, 1] >= B[:, 0].min() - eps) & (A[:, 0] <= B[:, 1].max() + eps) & (A[:, 3] >= B[:, 2].min() - eps) & (A[:, 2] <= B[:, 3].max() + eps)]
+    if len(A) and len(B):
+        B = B[(B[:, 1] >= A[:, 0].min() - eps) & (B[:, 0] <= A[:, 1].max() + eps) & (B[:, 3] >= A[:, 2].min() - eps) & (B[:, 2] <= A[:, 3].max() + eps)]
+    pairs = []
+    n = 0
+    for i in range(0, len(A), max(1, 1000000 // max(1, len(B)))):
+        X = A[i:i + max(1, 1000000 // max(1, len(B)))]
+        ia, ib = np.nonzero((X[:, None, 1] >= B[None, :, 0] - eps) & (X[:, None, 0] <= B[None, :, 1] + eps)
+                            & (X[:, None, 3] >= B[None, :, 2] - eps) & (X[:, None, 2] <= B[None, :, 3] + eps))
+        pairs.append((X[ia, 4:], B[ib, 4:]))
+        n += len(ia)
+        if n > 2000000:
+            return lambda lo, hi: False         # too many to test each turn: leave it to the bisection
+    FA = np.concatenate([p[0] for p in pairs]) if pairs else np.zeros((0, 2))
+    FB = np.concatenate([p[1] for p in pairs]) if pairs else np.zeros((0, 2))
+
+    def clear(lo, hi):
+        if not len(FA):
+            return True
+        a0, wa = FA[:, 0] + lo - eps, FA[:, 1] - FA[:, 0] + (hi - lo) + 2 * eps
+        wb = FB[:, 1] - FB[:, 0]
+        dd = (FB[:, 0] - a0) % (2 * np.pi)
+        return not bool(((dd <= wa) | (dd + wb >= 2 * np.pi) | (wa >= 2 * np.pi) | (wb >= 2 * np.pi)).any())
+    return clear
+
+
+def motions(o, other, drv, info):
+    """How o moves against `other` over the group's driver joints: [(joint, kind, pivot, axis, lo, hi)], innermost
+    first, at home, lo/hi in deg (or mm) relative to home over the swept range with overtravel (0..360 for a wheel).
+    A coupled joint's range follows its driver's (joints.values). Joints both parts ride are left out."""
+    out = []
+    mine = [j for j in joint_chain(o) if j not in set(joint_chain(other)) and JT.ranged(j, JOINTS, COUPLE)]
+    home = JT.values(JOINTS, COUPLE, {})
+    for j in mine:
+        d = JT.driver_of(j, COUPLE)[0]
+        if d not in drv:
+            continue
+        sd = JOINTS[d]
+        if j not in info:
+            info[j] = JT.motion(j, JOINTS)
+        kind, piv, u = info[j]
+        if sd.get("continuous"):
+            lo, hi = 0.0, 360.0
+        else:
+            ot = CFG["overtravel_mm"] if sd.get("kind") == "prismatic" else CFG["overtravel_deg"]
+            v = [JT.values(JOINTS, COUPLE, {d: float(x)})[j] - home[j] for x in (sd["lo"] - ot, sd["hi"] + ot)]
+            lo, hi = min(v), max(v)
+        out.append((j, kind, Vector(piv), Vector(u).normalized(), lo, hi))
+    return out
+
+
+def _cyl(P, piv, u):
+    """Cylindrical bounds about the axis (piv, u) of the convex hull of points P: (h0, h1, r0, r1, f0, width); width
+    is 2 pi or more when the hull reaches the axis."""
+    e1 = u.cross(Vector((1, 0, 0)) if abs(u.x) < 0.9 else Vector((0, 1, 0))).normalized()
+    e2 = u.cross(e1)
+    rel = [p - piv for p in P]
+    hs = [q.dot(u) for q in rel]
+    xy = [(q.dot(e1), q.dot(e2)) for q in rel]
+    r1 = max(math.hypot(x, y) for x, y in xy)
+    ang = sorted(math.atan2(y, x) for x, y in xy)
+    gaps = [(ang[(i + 1) % len(ang)] - ang[i]) % (2 * math.pi) for i in range(len(ang))]
+    g = max(range(len(gaps)), key=lambda i: gaps[i])
+    if gaps[g] <= math.pi + 1e-9:       # the hull holds the axis
+        return min(hs), max(hs), 0.0, r1, -math.pi, 4 * math.pi
+    r0 = 1e18                           # outside: the nearest of all segments between points is the hull's nearest
+    for i in range(len(xy)):
+        for k in range(i, len(xy)):
+            (x0, y0), (x1, y1) = xy[i], xy[k]
+            ex, ey = x1 - x0, y1 - y0
+            t = max(0.0, min(1.0, -(x0 * ex + y0 * ey) / max(ex * ex + ey * ey, 1e-18)))
+            r0 = min(r0, math.hypot(x0 + ex * t, y0 + ey * t))
+    return min(hs), max(hs), r0, r1, ang[(g + 1) % len(ang)], 2 * math.pi - gaps[g]
+
+
+def _sweep_pts(P, m):
+    """Corners of a box holding the points P swept by motion m (joint, kind, pivot, axis, lo, hi)."""
+    _, kind, piv, u, lo, hi = m
+    if kind == "prismatic":
+        Q = [p + u * a for p in P for a in (lo, 0.0, hi)]
+        lo3 = Vector([min(q[i] for q in Q) for i in range(3)])
+        hi3 = Vector([max(q[i] for q in Q) for i in range(3)])
+        return _corners((lo3, hi3))
+    h0, h1, r0, r1, f0, w = _cyl(P, piv, u)
+    w += math.radians(hi - lo)
+    f0 += math.radians(lo)
+    e1 = u.cross(Vector((1, 0, 0)) if abs(u.x) < 0.9 else Vector((0, 1, 0))).normalized()
+    e2 = u.cross(e1)
+    if w >= 2 * math.pi:
+        xs = ys = (-r1, r1)
+    else:
+        angs = [f0, f0 + w] + [k * math.pi / 2 for k in range(-8, 9) if f0 < k * math.pi / 2 < f0 + w]
+        pts = [(r * math.cos(t), r * math.sin(t)) for t in angs for r in (r0, r1)]
+        xs, ys = (min(x for x, _ in pts), max(x for x, _ in pts)), (min(y for _, y in pts), max(y for _, y in pts))
+    return [piv + e1 * x + e2 * y + u * h for x in xs for y in ys for h in (h0, h1)]
+
+
+def _obb(o):
+    return [o.matrix_world @ Vector(c) for c in o.bound_box]
+
+
+def swept_apart(a, ma, b, mb, margin=0.01):
+    """Broad phase: can a (moving by ma) and b (by mb) never meet? A part's own box is swept through each motion but
+    the last into a bounding box; against a part that doesn't move, the last revolute motion stays a ring sector
+    [r0, r1] x [h0, h1] x angle about its axis and is compared with the other part's bounds about the same axis.
+    Otherwise both swept boxes are compared."""
+    if not ma and not mb:
+        return False
+    if ma and mb:
+        A, B = _obb(a), _obb(b)
+        for m in ma:
+            A = _sweep_pts(A, m)
+        for m in mb:
+            B = _sweep_pts(B, m)
+        return bb_gap(_aabb(A), _aabb(B)) > margin
+    (o, mo, other) = (a, ma, b) if ma else (b, mb, a)
+    P = _obb(o)
+    for m in mo[:-1]:
+        P = _sweep_pts(P, m)
+    last = mo[-1]
+    if last[1] == "prismatic":
+        return bb_gap(_aabb(_sweep_pts(P, last)), _aabb(_obb(other))) > margin
+    _, _, piv, u, lo, hi = last
+    A, B = _cyl(P, piv, u), _cyl(_obb(other), piv, u)
+    if A[0] > B[1] + margin or B[0] > A[1] + margin or A[2] > B[3] + margin or B[2] > A[3] + margin:
+        return True
+    wa = A[5] + math.radians(hi - lo) + 2 * margin / max(1.0, min(A[3], B[3]))
+    if wa >= 2 * math.pi or B[5] >= 2 * math.pi:
+        return False
+    d = (B[4] - (A[4] + math.radians(lo) - margin / max(1.0, min(A[3], B[3])))) % (2 * math.pi)
+    return not (d <= wa or d + B[5] >= 2 * math.pi)
+
+
+def _aabb(P):
+    return (Vector([min(p[i] for p in P) for i in range(3)]), Vector([max(p[i] for p in P) for i in range(3)]))
+
+
+def envelope_of(o, mo, cache, guard):
+    """geom.swept_envelope of o over its motions (swept_envelope_chain for 2+), cached per part and motion chain, with
+    its BVH. None when it can't be built (grid too large even at a coarse voxel)."""
+    key = (o.name, tuple(m[0] for m in mo))
+    if key in cache:
+        return cache[key]
+    from cadlib import geom as G, blend as BL
+    out, voxel = None, CFG["envelope_voxel"]
+    for _ in range(4):
+        try:
+            if len(mo) == 1:
+                _, kind, piv, u, lo, hi = mo[0]
+                ob = G.swept_envelope([o], piv, axis=u, lo=lo, hi=hi, tol=CFG["sweep_tol"], voxel=voxel,
+                                      prismatic=kind == "prismatic", name="CADCHECK_env_" + o.name)
+            else:
+                ob = G.swept_envelope_chain([o], [m[1:] for m in mo], tol=CFG["sweep_tol"], voxel=voxel,
+                                            max_poses=CFG["envelope_max_poses"], name="CADCHECK_env_" + o.name)
+            out = (ob, bvh_world(ob), bbox_world(ob))
+            log("envelope %s over %s: %s" % (o.name, [m[0] for m in mo], {k: ob["envelope"][k] for k in ("poses", "pad", "tris", "t_s") if k in ob["envelope"]}))
+            guard["envelopes"] += 1
+            guard["envelope_tris"] += ob["envelope"]["tris"]
+            break
+        except BL.GridTooLarge:
+            voxel *= 2
+    if out is None:
+        guard["envelope_failed"].append(o.name)
+    cache[key] = out
+    return out
+
+
+def envelope_meets(a, ma, b, mb, cache, guard):
+    """Narrow phase: does the envelope of each moving side meet the other side (its envelope, or the part at home)?
+    False proves the pair clear over the whole range; True (or None: no envelope) sends it to refinement."""
+    sides = []
+    for o, mo in ((a, ma), (b, mb)):
+        if mo:
+            e = envelope_of(o, mo, cache, guard)
+            if e is None:
+                return None
+            sides.append(e[1:] + (e[0],))
+        else:
+            if ("home", o.name) not in cache:
+                cache[("home", o.name)] = (bvh_world(o), bbox_world(o), o)
+            sides.append(cache[("home", o.name)])
+    (ta, ba, oa), (tb, bb, ob) = sides
+    if bb_gap(ba, bb) > 0:
+        return False
+    if ta.overlap(tb):
+        return True
+    # no surfaces cross: one inside the other is still a meeting
+    pa = oa.matrix_world @ oa.data.vertices[0].co if len(oa.data.vertices) else None
+    pb = ob.matrix_world @ ob.data.vertices[0].co if len(ob.data.vertices) else None
+    return bool((pa is not None and inside(tb, pa, bb)) or (pb is not None and inside(ta, pb, ba)))
 
 
 MANIFOLD_OK = {}
@@ -557,8 +840,8 @@ def own_volume(o):
 _LOCAL_PTS = {}
 
 
-def sample_pts(o, cap=4000):
-    """Vertices then triangle centres (thinned to cap), in world at the current pose. The local points are
+def sample_pts(o, cap=4000, M=None):
+    """Vertices then triangle centres (thinned to cap), in world at the current pose or at M. The local points are
     kept per mesh: reading t.center for every triangle at every pose was most of min_dist's time."""
     me = o.data
     key = (me.as_pointer(), len(me.vertices), cap)
@@ -570,19 +853,19 @@ def sample_pts(o, cap=4000):
             st = len(loc) / cap
             loc = [loc[int(i * st)] for i in range(cap)]
         _LOCAL_PTS[key] = loc
-    mw = o.matrix_world
+    mw = o.matrix_world if M is None else M
     return [mw @ p for p in _LOCAL_PTS[key]]
 
 
-def min_dist(a, b, ta, tb):
+def min_dist(a, b, ta, tb, Ma=None, Mb=None):
     """Nearest sampled distance between a and b (each one's sample points against the other's BVH). Each query is
     capped at the best so far, which gives the same result with less of the tree searched."""
     best = (1e9, None)
-    for p in sample_pts(a):
+    for p in sample_pts(a, M=Ma):
         r = tb.find_nearest(p, best[0])
         if r[0] is not None and r[3] < best[0]:
             best = (r[3], p)
-    for p in sample_pts(b):
+    for p in sample_pts(b, M=Mb):
         r = ta.find_nearest(p, best[0])
         if r[0] is not None and r[3] < best[0]:
             best = (r[3], p)
@@ -983,81 +1266,289 @@ def check_interference():
         groups.setdefault(relevant_joints(a, b), []).append((a, b, cls, rule))
     res = {"groups": [], "collisions": [], "contacts": [], "solid_overlaps": [], "cable_overlaps": [], "min_clearance": [], "allowed_max": []}
     worst = {}
-    tested_pairs = 0
+    tested = [0]
+    info = {}       # joint -> JT.motion at home, for the reach bound
+
+    def measure(a, b, cls, rule, pose, over, geo, guard_pose=None, need=0.0):
+        """One pair at one pose: collisions, contacts and clearance go into `worst`. Returns (clearance, loose): 0 when
+        they overlap or touch, else the nearest distance, or the box gap when the boxes are further apart than the warn
+        margin (loose: the world-aligned boxes only). None when the pair is skipped. The sampled poses are set in the
+        scene; a guard pose (between samples) is not: geo gives each part's matrix (joints.world_at), the gap is also
+        taken between the parts' own boxes, and the scene is posed only to measure an overlap's volume."""
+        why = rule if rule and rule["kind"] == "allow" else None
+        fit = rule if rule and rule["kind"] == "fits" else None
+        between = guard_pose is not None
+        ga, gb = geo(a), geo(b)
+        gap = bb_gap(ga[1], gb[1])
+        margin = CFG["moving_warn_clearance"] if cls == "moving" else 0.01
+        if gap > margin and not between:
+            return gap, True
+        if between and gap <= need:     # the guard asks only whether the gap beats `need`
+            gap = max(gap, obb_gap(a, b, ga[2], gb[2]))
+        if between and gap > margin:
+            return gap, False
+        tested[0] += 1
+        ta, tb = tree(a, geo), tree(b, geo)
+        ov = ta.overlap(tb)
+        key = (a.name, b.name)
+        isc = contact_faces(fit, a, b) if fit and fit.get("contact") else None
+        if ov and isc and all(isc(a.matrix_world.to_3x3() @ a.data.polygons[i].normal) for i, _ in ov):
+            ov = None     # touching only on declared contact faces; the rest of the pair is measured below
+        if ov:
+            if why and why.get("max_mm3") is None:
+                if cls == "moving":
+                    UNBOUNDED_ALLOWS.setdefault("%s x %s" % key, why.get("why", ""))
+                return None
+            if between:
+                set_pose(guard_pose)
+            vol, region, solver = inter_volume(a, b)
+            if why:
+                # a bounded allow: a riding detent or a crush rib may overlap up to max_mm3, a deeper clash
+                # still fails. An unbounded allow across a joint hid any clash in every sweep (V2R5 A5-06)
+                bound = float(why["max_mm3"])
+                b_rec = worst.setdefault(("allowed_max", key), {"a": a.name, "b": b.name, "max_mm3": bound, "volume_mm3": 0.0,
+                                                                "pose": None, "why": why.get("why")})
+                if vol > b_rec["volume_mm3"]:
+                    b_rec.update(volume_mm3=round(vol, 2), pose=pose_key(pose))
+                if vol <= bound:
+                    return 0.0, False
+            rec = {"a": a.name, "b": b.name, "pose": pose_key(pose), "overtravel": over, "tri_overlaps": len(ov),
+                   "volume_mm3": round(vol, 2), "region": region, "solver": solver}
+            if between:
+                rec["between_samples"] = True
+            if cls == "moving":
+                tag = "collisions" if vol >= CFG["vol_tol"] else ("contacts" if not (fit and fit.get("contact") and not isc) else None)
+            elif cls == "cable":
+                tag = "cable_overlaps" if vol >= CFG["vol_tol"] else None
+            else:
+                tag = "solid_overlaps" if vol >= CFG["vol_tol"] else None
+            if why:   # past a bounded allow's max_mm3: a clash, whatever vol_tol says
+                tag = {"moving": "collisions", "cable": "cable_overlaps"}.get(cls, "solid_overlaps")
+                rec["allow_max_mm3"] = float(why["max_mm3"])
+            if tag:
+                prev = worst.get((tag, key))
+                # a pose between samples replaces the worst only when it is worse by more than float noise
+                if prev is None or rec["volume_mm3"] > prev["volume_mm3"] + (0.05 if between else 0) or (prev["overtravel"] and not over):
+                    rec["n_poses"] = (prev or {}).get("n_poses", 0) + 1
+                    rec["in_range_poses"] = (prev or {}).get("in_range_poses", 0) + (0 if over else 1)
+                    worst[(tag, key)] = rec
+                else:
+                    prev["n_poses"] += 1
+                    prev["in_range_poses"] += 0 if over else 1
+            return 0.0, False
+        if cls == "moving" and not why and (isc or not (fit and fit.get("contact"))):
+            d, p = min_dist_off(a, b, ta, tb, isc) if isc else min_dist(a, b, ta, tb, ga[2], gb[2])
+            prev = worst.get(("min_clearance", key))
+            if prev is None or d < prev["mm"] - (0.005 if between else 0):
+                worst[("min_clearance", key)] = {"a": a.name, "b": b.name, "mm": round(d, 3), "pose": pose_key(pose),
+                                                 "overtravel": over, "at": [round(c, 1) for c in p] if p else None,
+                                                 "fit": fit.get("why") if fit else None,
+                                                 "min": fit.get("min_clearance", CFG["moving_min_clearance"]) if fit else CFG["moving_min_clearance"]}
+                if between:
+                    worst[("min_clearance", key)]["between_samples"] = True
+            return d, False
+        return None
+
+    def tree(o, geo):
+        g = geo(o)
+        if g[0] is None:
+            g[0] = bvh_world(o, g[2])
+        return g[0]
+
+    guard = {"candidates": 0, "broad_culled": 0, "narrow_culled": 0, "fits_flagged": [], "envelopes": 0, "envelope_tris": 0,
+             "envelope_failed": [], "pairs": 0, "turning": 0, "spin": 0, "poses": 0, "pair_poses": 0, "bisected": 0, "at_tol": 0,
+             "unproven": {}, "broad_s": 0.0, "narrow_s": 0.0, "refine_s": 0.0}
+    env_cache = {}
     for drv, pairs in sorted(groups.items(), key=lambda kv: len(kv[0])):
-        grid = pose_grid(drv, QUICK)
+        drv, per = pose_axes(drv, QUICK)
         objs = {o.name: o for p in pairs for o in p[:2]}
-        moving = {n for n, o in objs.items() if drivers(joint_chain(o)) & drv}
-        static_cache = {}
+        moving = {n for n, o in objs.items() if drivers(joint_chain(o)) & set(drv)}
+        static_geo = {}     # parts that don't move in this group: their home BVH and box serve every pose
         set_pose({})
-        for n in objs:
-            if n not in moving:
-                static_cache[n] = (bvh_world(objs[n]), bbox_world(objs[n]))
-        res["groups"].append({"joints": sorted(drv), "poses": len(grid), "pairs": len(pairs)})
-        log("interference group %s: %d pairs x %d poses" % (sorted(drv) or "static", len(pairs), len(grid)))
-        for pose, over in grid:
-            set_pose(pose)
-            cache = dict(static_cache)
-            for n in moving:
-                cache[n] = (bvh_world(objs[n]), bbox_world(objs[n]))
-            for a, b, cls, rule in pairs:
-                why = rule if rule and rule["kind"] == "allow" else None
-                fit = rule if rule and rule["kind"] == "fits" else None
-                (ta, ba), (tb, bb) = cache[a.name], cache[b.name]
-                gap = bb_gap(ba, bb)
-                margin = CFG["moving_warn_clearance"] if cls == "moving" else 0.01
-                if gap > margin:
+        # between samples: pairs across a joint with no allow rule (fits only counted, refined never, as before)
+        cand = [(a, b, cls, rule) for a, b, cls, rule in pairs if drv and cls == "moving" and not (rule and rule["kind"] == "allow")]
+        gvals = {(a.name, b.name): {} for a, b, cls, rule in cand if not rule}
+        spent = {k: 0.0 for k in gvals}
+        cyc = [bool(JOINTS[j].get("continuous")) for j in drv]
+        npose = math.prod(len(p) for p in per) if drv else 1
+        res["groups"].append({"joints": drv, "poses": npose, "pairs": len(pairs)})
+        log("interference group %s: %d pairs x %d poses" % (drv or "static", len(pairs), npose))
+
+        def norm(vals):     # sample values are rounded where they are made; a continuous joint's 360 is its 0
+            return tuple(v - 360.0 if c and v >= 360.0 else v for v, c in zip(vals, cyc)) if any(cyc) else vals
+
+        def run_pose(vals, over, todo, guard_pose=False):
+            """Measure each (a, b, cls, rule) of todo at one pose; the guard's pairs keep the result. A sampled pose is
+            set in the scene; a guard pose only computes the parts' matrices."""
+            pose = dict(zip(drv, vals))
+            posed, mats = {}, {}
+            if guard_pose:
+                jv = JT.values(JOINTS, COUPLE, pose)
+            else:
+                set_pose(pose)
+
+            def geo(o):
+                d = posed if o.name in moving else static_geo
+                if o.name not in d:
+                    M = JT.world_at(o.name, JOINTS, jv, mats, O) if guard_pose and o.name in moving else o.matrix_world.copy()
+                    d[o.name] = [None, bbox_world(o, M), M]
+                return d[o.name]
+            for a, b, cls, rule, *need in todo:
+                t0 = tested[0]
+                g = measure(a, b, cls, rule, pose, over, geo, pose if guard_pose else None, *need)
+                if (a.name, b.name) in gvals:
+                    gvals[(a.name, b.name)][norm(vals)] = g
+                if guard_pose:      # a pose that needed the meshes costs 1, one settled by boxes 1/16
+                    spent[(a.name, b.name)] += 1.0 if tested[0] > t0 else 0.0625
+        for combo in (itertools.product(*per) if drv else [()]):
+            run_pose(tuple(v for v, _ in combo), any(ot for _, ot in combo), pairs)
+        if not cand:
+            continue
+        done = {k for (tag, k), r in worst.items() if tag in ("collisions", "contacts") and r["in_range_poses"]}
+        watch, cull = [], {}
+        # 1 broad phase: each side's bounds swept over its joints' ranges (a ring sector about a revolute joint, the box
+        # extruded along a slide) against the other's; only comparisons
+        t1 = time.time()
+        mot = {}
+        set_pose({})
+        for a, b, cls, rule in cand:
+            if (a.name, b.name) in done:
+                continue
+            ma = mot.setdefault((a.name, b.name, 0), motions(a, b, drv, info))
+            mb = mot.setdefault((a.name, b.name, 1), motions(b, a, drv, info))
+            if swept_apart(a, ma, b, mb):
+                cull["broad"] = cull.get("broad", 0) + 1
+            else:
+                watch.append((a, b, cls, rule))
+        guard["broad_s"] += time.time() - t1
+        # 2 narrow phase: geom.swept_envelope of each moving side (one per part and motion chain, cached), tested once
+        # against the other side: no overlap means no collision anywhere in the range, sampled or not
+        t2 = time.time()
+        hits = []
+        for a, b, cls, rule in watch:
+            r = envelope_meets(a, mot[(a.name, b.name, 0)], b, mot[(a.name, b.name, 1)], env_cache, guard)
+            if r is False:
+                cull["narrow"] = cull.get("narrow", 0) + 1
+            elif rule:
+                guard["fits_flagged"].append("%s x %s" % (a.name, b.name))     # inside the pad, excluded as before
+            else:
+                hits.append((a, b, cls, rule))
+        guard["narrow_s"] += time.time() - t2
+        guard["broad_culled"] += cull.get("broad", 0)
+        guard["narrow_culled"] += cull.get("narrow", 0)
+        guard["candidates"] += len(cand)
+        watch = hits
+        if not watch:
+            continue
+        # 3 refinement, only for envelope hits: find the collision (or prove the pair clear) between the samples
+        t3 = time.time()
+        set_pose({})
+        rates, axis, spin = {}, {}, {}
+        for a, b, _, _ in watch:
+            terms = JT.move_terms(_corners(bbox_world(a)), joint_chain(a), joint_chain(b), JOINTS, COUPLE, info)
+            rel = [j for j in set(joint_chain(a)) ^ set(joint_chain(b)) if JT.ranged(j, JOINTS, COUPLE)]
+            if len(rel) == 1 and info[rel[0]][0] == "revolute":   # one turns about one fixed axis against the other
+                d, kk = JT.driver_of(rel[0], COUPLE)
+                axis[(a.name, b.name)] = [info[rel[0]][1:], kk * (1 if rel[0] in joint_chain(a) else -1),
+                                          float(JOINTS[d].get("home", 0.0) or 0.0), None]
+            elif len(drv) > 1:
+                for o, other in ((a, b), (b, a)):   # a wheel spinning on its own joint, carried by the others
+                    ch = [j for j in joint_chain(o) if JT.ranged(j, JOINTS, COUPLE)]
+                    if ch and ch[0] in drv and JOINTS[ch[0]].get("continuous") and info[ch[0]][0] == "revolute":
+                        c = ch[0]
+                        up = O[c].parent.name if O[c].parent else None
+                        corners, axes = spin_box(o, *info[c][1:])
+                        # the box's own reach over the other joints (its corners stand out past the wheel's box)
+                        pa, pb = (corners, _corners(bbox_world(b))) if o is a else (_corners(bbox_world(a)), corners)
+                        t2 = JT.move_terms(pa, joint_chain(a), joint_chain(b), JOINTS, COUPLE, info)
+                        r2 = [0.0 if j == c else JT.move_rate(t2.get(j, []), pb) for j in drv]
+                        spin[(a.name, b.name)] = (drv.index(c), corners, axes, up, O[up].matrix_world.inverted() if up else None, other, r2)
+                        break
+            rates[(a.name, b.name)] = [JT.move_rate(terms.get(j, []), _corners(bbox_world(b))) for j in drv]
+        # Refinement of an envelope hit: a cell of the lattice is clear when its corners' clearance beats the most any
+        # point can move to the nearest corner (cadlib.joints.move_rate x the steps, the router's reach bound). Else,
+        # cheapest first: a wheel's spin box against the other part; the oriented boxes at corners known only by their
+        # world box gap; for a pair turning about one axis, the triangles' (h, r, phi) boxes (turning); then the cell is
+        # halved along its longest move and the new poses measured, until clear, a collision found, the move under
+        # sweep_tol, or max_guard_poses spent on the pair (cadsmith mech's between-frame bound, PR #6). Refinement poses
+        # come from the joint chain (joints.world_at), not set in the scene.
+        lims = [(JOINTS[j]["lo"], JOINTS[j]["hi"]) for j in drv]
+        spans = []
+        for p, c in zip(per, cyc):
+            vals = [v for v, _ in p]
+            spans.append(list(zip(vals, vals[1:])) + ([(vals[-1], vals[0] + 360.0)] if c else []))
+        spin_g = {}
+        work = [(k, cell) for k in rates if k not in done for cell in itertools.product(*spans)]
+        byname = {(a.name, b.name): (a, b, cls, rule) for a, b, cls, rule in watch}
+        guard["pairs"] += len({k for k, _ in work})
+        while work:
+            want, nxt = {}, []
+            for k, cell in work:
+                if k in done:
                     continue
-                tested_pairs += 1
-                ov = ta.overlap(tb)
-                key = (a.name, b.name)
-                isc = contact_faces(fit, a, b) if fit and fit.get("contact") else None
-                if ov and isc and all(isc(a.matrix_world.to_3x3() @ a.data.polygons[i].normal) for i, _ in ov):
-                    ov = None     # touching only on declared contact faces; the rest of the pair is measured below
-                if ov:
-                    if why and why.get("max_mm3") is None:
-                        if cls == "moving":
-                            UNBOUNDED_ALLOWS.setdefault("%s x %s" % key, why.get("why", ""))
+                corners = list(itertools.product(*cell))
+                gl = [gvals[k][norm(c)] for c in corners]
+                if None in gl or min(g for g, _ in gl) <= 0:
+                    continue        # a corner collides: reported there
+                gs = [g for g, _ in gl]
+                moves = [r * (hi - lo) for r, (lo, hi) in zip(rates[k], cell)]
+                bound = sum(moves)
+                if (sum(gs) / 2 if len(cell) == 1 else min(gs)) > bound:
+                    continue
+                if k in spin:       # the wheel's spin box at each corner, against the other moves only
+                    ci, corners0, axes0, up, inv, other, r2 = spin[k]
+                    sg = []
+                    for c in corners:
+                        key = (k, norm(c)[:ci] + norm(c)[ci + 1:])
+                        if key not in spin_g:
+                            jv, mats = JT.values(JOINTS, COUPLE, dict(zip(drv, c))), {}
+                            T = JT.world_at(up, JOINTS, jv, mats, O) @ inv if up else Matrix.Identity(4)
+                            Mo = JT.world_at(other.name, JOINTS, jv, mats, O) if other.name in moving else other.matrix_world
+                            spin_g[key] = box_gap([T @ x for x in corners0], [T.to_3x3() @ x for x in axes0],
+                                                  [Mo @ Vector(x) for x in other.bound_box], [Mo.to_3x3().col[i] for i in range(3)])
+                        sg.append(spin_g[key])
+                    if min(sg) > sum(r * (hi - lo) for r, (lo, hi) in zip(r2, cell)):
+                        guard["spin"] += 1
                         continue
-                    vol, region, solver = inter_volume(a, b)
-                    if why:
-                        # a bounded allow: a riding detent or a crush rib may overlap up to max_mm3, a deeper clash
-                        # still fails. An unbounded allow across a joint hid any clash in every sweep (V2R5 A5-06)
-                        bound = float(why["max_mm3"])
-                        b_rec = worst.setdefault(("allowed_max", key), {"a": a.name, "b": b.name, "max_mm3": bound, "volume_mm3": 0.0,
-                                                                        "pose": None, "why": why.get("why")})
-                        if vol > b_rec["volume_mm3"]:
-                            b_rec.update(volume_mm3=round(vol, 2), pose=pose_key(pose))
-                        if vol <= bound:
-                            continue
-                    rec = {"a": a.name, "b": b.name, "pose": pose_key(pose), "overtravel": over, "tri_overlaps": len(ov),
-                           "volume_mm3": round(vol, 2), "region": region, "solver": solver}
-                    if cls == "moving":
-                        tag = "collisions" if vol >= CFG["vol_tol"] else ("contacts" if not (fit and fit.get("contact") and not isc) else None)
-                    elif cls == "cable":
-                        tag = "cable_overlaps" if vol >= CFG["vol_tol"] else None
-                    else:
-                        tag = "solid_overlaps" if vol >= CFG["vol_tol"] else None
-                    if why:   # past a bounded allow's max_mm3: a clash, whatever vol_tol says
-                        tag = {"moving": "collisions", "cable": "cable_overlaps"}.get(cls, "solid_overlaps")
-                        rec["allow_max_mm3"] = float(why["max_mm3"])
-                    if tag:
-                        prev = worst.get((tag, key))
-                        if prev is None or rec["volume_mm3"] > prev["volume_mm3"] or (prev["overtravel"] and not over):
-                            rec["n_poses"] = (prev or {}).get("n_poses", 0) + 1
-                            rec["in_range_poses"] = (prev or {}).get("in_range_poses", 0) + (0 if over else 1)
-                            worst[(tag, key)] = rec
-                        else:
-                            prev["n_poses"] += 1
-                            prev["in_range_poses"] += 0 if over else 1
-                elif cls == "moving" and not why and (isc or not (fit and fit.get("contact"))):
-                    d, p = min_dist_off(a, b, ta, tb, isc) if isc else min_dist(a, b, ta, tb)
-                    prev = worst.get(("min_clearance", key))
-                    if prev is None or d < prev["mm"]:
-                        worst[("min_clearance", key)] = {"a": a.name, "b": b.name, "mm": round(d, 3), "pose": pose_key(pose),
-                                                         "overtravel": over, "at": [round(c, 1) for c in p] if p else None,
-                                                         "fit": fit.get("why") if fit else None,
-                                                         "min": fit.get("min_clearance", CFG["moving_min_clearance"]) if fit else CFG["moving_min_clearance"]}
+                if spent[k] >= CFG["max_guard_poses"]:
+                    guard["unproven"][k] = guard["unproven"].get(k, 0) + 1
+                    continue
+                loose = [c for c, (_, ls) in zip(corners, gl) if ls]
+                if loose:           # world box gaps only: take the oriented boxes' gap there, then look again
+                    for c in loose:
+                        w = want.setdefault(c, {})
+                        w[k] = max(bound, w.get(k, 0.0))
+                    nxt.append((k, cell))
+                    continue
+                if k in axis:       # before halving: turning about one axis, the parts' triangles may never meet
+                    ax = axis[k]
+                    if ax[3] is None:
+                        set_pose({})
+                        ax[3] = turning(byname[k][0], byname[k][1], *ax[0])
+                    lo_, hi_ = sorted(math.radians(ax[1] * (v - ax[2])) for v in cell[0])
+                    if ax[3](lo_, hi_):
+                        guard["turning"] += 1
+                        continue
+                if bound <= CFG["sweep_tol"]:
+                    guard["at_tol"] += 1
+                    continue
+                i = max(range(len(moves)), key=lambda x: moves[x])
+                lo, hi = cell[i]
+                m = round((lo + hi) / 2, 4)
+                guard["bisected"] += 1
+                for c in itertools.product(*[(m,) if x == i else cl for x, cl in enumerate(cell)]):
+                    if norm(c) not in gvals[k]:
+                        w = want.setdefault(c, {})
+                        w[k] = max(bound, w.get(k, 0.0))
+                nxt += [(k, cell[:i] + (h,) + cell[i + 1:]) for h in ((lo, m), (m, hi))]
+            for vals, ks in want.items():
+                over = any(not c and (v < lo - 1e-9 or v > hi + 1e-9) for v, c, (lo, hi) in zip(vals, cyc, lims))
+                run_pose(vals, over, [byname[k] + (ks[k],) for k in sorted(ks)], guard_pose=True)
+                guard["poses"] += 1
+                guard["pair_poses"] += len(ks)
+                done |= {k for k in ks if gvals[k][norm(vals)] and gvals[k][norm(vals)][0] == 0 and not over}
+            work = nxt
+        guard["refine_s"] += time.time() - t3
     set_pose({})
     for (tag, key), rec in worst.items():
         res[tag].append(rec)
@@ -1066,7 +1557,8 @@ def check_interference():
             res[tag].sort(key=lambda r: -r.get("volume_mm3", 0) if "volume_mm3" in r else r.get("mm", 0))
     for r in res["collisions"]:
         if r["in_range_poses"]:
-            finding("interference", "fail", "%s x %s collide on different bodies: %.1f mm3 at %s%s" % (r["a"], r["b"], r["volume_mm3"], r["pose"],
+            finding("interference", "fail", "%s x %s collide on different bodies: %.1f mm3 at %s%s%s" % (r["a"], r["b"], r["volume_mm3"], r["pose"],
+                    " (between the sampled poses)" if r.get("between_samples") else "",
                     " (over the allow's max_mm3 %g)" % r["allow_max_mm3"] if "allow_max_mm3" in r else ""), **r)
         else:
             finding("interference", "warn", "%s x %s collide only %s past the joint limit (%s): no margin" % (r["a"], r["b"], OT_TEXT, r["pose"]), **r)
@@ -1089,10 +1581,30 @@ def check_interference():
             finding("clearance", "warn", "%s to %s %.2f mm just past the limit (%s)" % (r["a"], r["b"], r["mm"], r["pose"]), **r)
         elif r["mm"] < CFG["moving_warn_clearance"] and not r["fit"]:
             finding("clearance", "warn", "%s to %s %.2f mm at %s" % (r["a"], r["b"], r["mm"], r["pose"]), **r)
+    for k, e in env_cache.items():          # the envelopes live in the scratch collection: drop them
+        if e is not None and k[0] != "home":
+            me = e[0].data
+            bpy.data.objects.remove(e[0])
+            bpy.data.meshes.remove(me)
+    res["between_samples"] = dict(guard, unproven=["%s x %s" % k for k in sorted(guard["unproven"])],
+                                  **{k: round(guard[k], 1) for k in ("broad_s", "narrow_s", "refine_s")})
     REPORT["checks"].setdefault("interference", {"findings": []}).update(res)
     swept = sorted({j for g in res["groups"] for j in g["joints"]})
     REPORT["coverage"].append("interference/clearance: %d objects in %s, %d pair-pose tests, joints swept %s with %.1f deg overtravel" % (
-        len(ALL), list(COLL.values()), tested_pairs, swept, CFG["overtravel_deg"]))
+        len(ALL), list(COLL.values()), tested[0], swept, CFG["overtravel_deg"]))
+    REPORT["coverage"].append("interference between samples: %d pairs across a joint; %d apart by their swept bounds, %d clear of "
+                              "the swept envelopes (%d envelopes, pad sweep_tol %g + voxel %g mm), %d refined between the samples "
+                              "(%d cells halved, %d extra pair-pose tests); %d declared fits inside the envelope pad not refined" % (
+                                  guard["candidates"], guard["broad_culled"], guard["narrow_culled"], guard["envelopes"],
+                                  CFG["sweep_tol"], CFG["envelope_voxel"], guard["pairs"], guard["bisected"], guard["pair_poses"],
+                                  len(guard["fits_flagged"])))
+    if guard["envelope_failed"]:
+        REPORT["not_checked"].append("interference between samples: no swept envelope (grid too large) for %s; their pairs are "
+                                     "refined by bisection only" % sorted(set(guard["envelope_failed"]))[:6])
+    if guard["unproven"]:
+        REPORT["not_checked"].append("interference between samples: %d pairs not proven clear between every two sampled poses after "
+                                     "max_guard_poses %d (give the joint a finer step): %s" % (
+                                         len(guard["unproven"]), CFG["max_guard_poses"], res["between_samples"]["unproven"][:6]))
     unswept = [n for n, s in JOINTS.items() if n not in COUPLE and (s["axis"] is None or (not s.get("continuous") and (s["lo"] is None or s["hi"] is None)))]
     if unswept:
         REPORT["not_checked"].append("joints with no range (home pose only): %s" % unswept)
