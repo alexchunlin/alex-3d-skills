@@ -51,7 +51,7 @@ const CONFIG = Object.assign({
 const MODELS = Object.assign({ plan: null, build: 'sonnet', finish: null, review: null }, CONFIG.models)
 {
   const m = CONFIG.models, roles = ['plan', 'build', 'finish', 'review']
-  const plain = typeof m === 'object' && m !== null && !Array.isArray(m) && [Object.prototype, null].includes(Object.getPrototypeOf(m))
+  const plain = typeof m === 'object' && m !== null && !Array.isArray(m) && Object.prototype.toString.call(m) === '[object Object]'   // not a prototype test: args may come from another JS realm
   if (!plain) throw new Error(`cad-loop: args.models must be an object like {build: 'sonnet'}, got ${JSON.stringify(m)} (${Array.isArray(m) ? 'array' : typeof m})`)
   for (const [k, v] of Object.entries(m)) {
     if (!roles.includes(k)) throw new Error(`cad-loop: args.models has unknown role "${k}"; roles are ${roles.join(', ')}`)
