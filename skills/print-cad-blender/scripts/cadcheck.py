@@ -20,9 +20,9 @@ Checks (each one writes evidence into the JSON report, with an explicit `coverag
   interference  every pair in ALL four collections, swept over the joints that separate the two bodies,
                 including overtravel past each limit; contacts between different bodies are failures
   clearance     min distance between parts on different bodies over the same sweep
-  fasteners     head not buried, thread engagement (bolt-to-nut pairing), shanks or nuts inside purchased
-                parts, driver access (straight bit, then an L-key with a swing arc) per pose, including the
-                fastener's own continuous joints; head stand-off and protruding thread
+  fasteners     head not buried, head or nut overlapping a solid on its body, thread engagement (bolt-to-nut
+                pairing), shanks or nuts inside purchased parts, driver access (straight bit, then an L-key with a
+                swing arc) per pose, including the fastener's own continuous joints; head stand-off and protruding thread
   service       tool access for service operations from config ("service"): whole assembly present,
                 listed parts removed, at the stated pose
   drop          drop tests from config ("drop_tests"): straight rays, or mode "slide" (fall, slide on walls,
@@ -852,7 +852,7 @@ def pair_class(a, b):
         if kinds == {"FST"}:
             return None if (is_nut(a) or is_nut(b)) else "fst_fst"  # bolt through its nut: fastener check pairs them
         if "FST" in kinds and kinds & {"PRT", "BUY"}:
-            return None  # threads bite into the part they hold; fastener check covers heads
+            return None  # threads bite into the part they hold; check_fastener_overlaps tests heads and nuts
         if kinds == {"CAB"}:
             return None
         return "cable"
@@ -1293,6 +1293,8 @@ def check_fasteners():
     for pose, pk in poses:
         set_pose(pose)
         trees = {o.name: (bvh_world(o), bbox_world(o)) for o in SOLIDS}
+        if not pose:
+            home_trees = trees
         tree_cache = {}
         for o in screws:
             head, tip, d, hr, sr = fastener_axis(o) if pose else geo[o.name]
@@ -1352,6 +1354,7 @@ def check_fasteners():
         elif best[1]["reach_mm"] > fc["max_reach"]:
             finding("fasteners", "warn", "%s needs a %.0f mm+ bit/extension (head %.0f mm below open space)" % (n, best[1]["reach_mm"] + 10, best[1]["reach_mm"]), object=n)
     nut_rows = check_nuts(nuts, nut_of, full_tree)
+    check_fastener_overlaps(rows, nut_rows, geo, nut_of, home_trees)
     # lengths you can buy (v2 A3 specified an M3 x 9 self-tap; the reviewer docked it, V2A3-F5)
     stock = {float(k): v for k, v in fc["stock_lengths"].items()}
     odd = {}
@@ -1482,6 +1485,140 @@ def check_nuts(nuts, nut_of, full_tree):
         for b, f in inside_buy.items():
             finding("fasteners", "fail", "%s sits inside purchased part %s (%d%% of its volume samples)" % (nn, b, 100 * f), object=nn, purchased=b)
     return rows
+
+
+SEAT_TOL = 0.25     # mm behind a bearing face (or inside a nut face) that may touch its seat: the head-buried probe's depth
+
+
+def fastener_probe(o, at, d, t0, t1, R=None):
+    """World-space temp object: fastener o cut to the slab t0..t1 mm along d from `at` and to radius R about that axis
+    (default: all of it), or None when nothing is left."""
+    if R is None:
+        R = max(((v - at) - d * (v - at).dot(d)).length for v in (o.matrix_world @ x.co for x in o.data.vertices)) + 1.0
+    u, w = perp_basis(d)
+    M = Matrix((u, w, d)).transposed().to_4x4()
+    M.translation = at + d * ((t0 + t1) / 2)
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=16, radius1=R, radius2=R, depth=t1 - t0, matrix=M)
+    clip = bpy.data.objects.new("_clip", bpy.data.meshes.new("_clip"))
+    bm.to_mesh(clip.data)
+    bm.free()
+    bm = world_bm(o)
+    A = bpy.data.objects.new("_probe_src", bpy.data.meshes.new("_probe_src"))
+    bm.to_mesh(A.data)
+    bm.free()
+    for x in (clip, A):
+        tmpcoll().objects.link(x)
+    m = A.modifiers.new("i", 'BOOLEAN')
+    m.operation, m.object = 'INTERSECT', clip
+    m.solver = 'MANIFOLD' if manifold_ok(o) else 'EXACT'
+    me = bpy.data.meshes.new_from_object(A.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+    for x in (A, clip):
+        d_ = x.data
+        bpy.data.objects.remove(x)
+        bpy.data.meshes.remove(d_)
+    if not len(me.vertices):
+        bpy.data.meshes.remove(me)
+        return None
+    P = bpy.data.objects.new("_probe_" + o.name, me)
+    tmpcoll().objects.link(P)
+    return P
+
+
+def check_fastener_overlaps(rows, nut_rows, geo, nut_of, trees):
+    """A screw head or a nut overlapping a solid on its own body. Interference skips same-body FST pairs (a thread
+    bites into the part it holds), so a rib through a head (PR #2 review: tools/prior_art/cadcheck_head_overlap_repro.py)
+    or a nut through a printed part (push-assist A2: 1.5 mm3 of stop nut in the sliding piston, PA-A2-T12) was checked
+    by nothing. Probe: the head behind its bearing face, or the nut between its two faces, less SEAT_TOL at each face
+    (the seat, a nut-trap floor and a spot-faced slope stay out), intersected with every solid on the same body by
+    inter_volume. A correct counterbore or nut trap leaves the probe in air; one too small for it overlaps."""
+    fc = CFG["fasteners"]
+    vt = CFG["vol_tol"]
+    by_nut = {v[0]: (k,) + tuple(v[1:]) for k, v in nut_of.items()}
+    work, skipped = [], []
+    for r in rows:
+        o = O[r["object"]]
+        if r.get("captive"):
+            skipped.append(o.name)
+            continue
+        head, tip, d, hr, sr = geo[o.name]
+        hb = head_height(o, head, d, sr)
+        back = min((o.matrix_world @ v.co - head).dot(d) for v in o.data.vertices)
+        if hb - SEAT_TOL - back < 0.05:     # countersunk (the cone is in the countersink) or headless
+            r["overlaps"] = None
+            skipped.append(o.name)
+            continue
+        work.append((r, o, "%s head" % o.name, head, d, back - 0.5, hb - SEAT_TOL, None))
+    for r in nut_rows:
+        o = O[r["object"]]
+        if any(fnmatch.fnmatch(o.name, g) for g in fc.get("captive", {})):
+            r["captive"] = next(why for g, why in fc["captive"].items() if fnmatch.fnmatch(o.name, g))
+            skipped.append(o.name)
+            continue
+        vs = [o.matrix_world @ v.co for v in o.data.vertices]
+        if o.name in by_nut:
+            bolt, t0, t1 = by_nut[o.name]
+            at, d = geo[bolt][0], geo[bolt][2]
+        else:       # no bolt: the nut's axis is the normal of its largest face
+            at = sum(vs, Vector()) / len(vs)
+            f = max(o.data.polygons, key=lambda p: p.area)
+            d = (o.matrix_world.to_3x3() @ f.normal).normalized()
+            t0, t1 = min((v - at).dot(d) for v in vs), max((v - at).dot(d) for v in vs)
+        # its inscribed cylinder (across the flats): a hex nut modelled turned 30 deg from its hex pocket overlaps the
+        # pocket at its corners, though the real nut turns to fit (v2 A1-A3 flywheel and thumbwheel nuts: 1.0 and 2.1 mm3
+        # with the whole hex; fastener_joint's nut_rot_deg turns the trap, not the asm.nut model)
+        M3 = o.matrix_world.to_3x3()
+        side = [abs((o.matrix_world @ p.center - at).dot(n)) for p in o.data.polygons
+                for n in [(M3 @ p.normal).normalized()] if abs(n.dot(d)) < 0.3]
+        work.append((r, o, o.name, at, d, t0 + SEAT_TOL, t1 - SEAT_TOL, min(side) if side else None))
+    n_tests = 0
+    for r, o, what, at, d, t0, t1, rin in work:
+        me, out = body(o), {}
+        r["overlaps"] = out
+        if t1 - t0 < 0.05:
+            continue
+        P = fastener_probe(o, at, d, t0, t1, rin)
+        if P is None:
+            continue
+        pt, pb = bvh_world(P), bbox_world(P)
+        pc = sum((v.co for v in P.data.vertices), Vector()) / len(P.data.vertices)
+        for s in SOLIDS:
+            if body(s) != me or s.name in r.get("inside_purchased", {}):
+                continue
+            rule = rule_for(o.name, s.name)
+            why = rule if rule and rule["kind"] == "allow" else None
+            if why and why.get("max_mm3") is None:
+                continue
+            t, bb = trees[s.name]
+            if bb_gap(pb, bb) > 0.01:
+                continue
+            n_tests += 1
+            if t.overlap(pt):
+                vol, region, solver = inter_volume(P, s)
+            elif inside(t, pc, bb):         # the probe lies wholly inside the solid: no pocket at all
+                vol, region, solver = own_volume(P), [[round(c, 1) for c in pb[0]], [round(c, 1) for c in pb[1]]], "inside"
+            else:
+                continue
+            if vol < 1e-3:
+                continue
+            out[s.name] = round(vol, 2)
+            bound = float(why["max_mm3"]) if why else None
+            rec = dict(object=o.name, part=s.name, volume_mm3=round(vol, 2), region=region, solver=solver)
+            if vol >= (bound if why else vt):
+                finding("fasteners", "fail", "%s overlaps %s by %.1f mm3 on the same body%s" % (
+                    what, s.name, vol, " (over the allow's max_mm3 %g)" % bound if why else
+                    ": a part through the head, or a counterbore too small for it" if what.endswith(" head") else
+                    ": no pocket for the nut, or one too small for it"), **rec)
+            elif not why:
+                finding("fasteners", "warn", "%s grazes %s (%.2f mm3, under vol_tol %g): no clearance around it" % (
+                    what, s.name, vol, vt), **rec)
+        pm = P.data
+        bpy.data.objects.remove(P)
+        bpy.data.meshes.remove(pm)
+    REPORT["coverage"].append("fasteners: head and nut overlap with same-body solids (%d heads behind the bearing face, %d nuts between "
+                              "their faces, %.2f mm in from each seat; %d pair tests; skipped %d countersunk, headless or captive: %s)" % (
+        sum(1 for w in work if w[2].endswith(" head")), sum(1 for w in work if not w[2].endswith(" head")), SEAT_TOL, n_tests,
+        len(skipped), ", ".join(skipped[:6]) + (" ..." if len(skipped) > 6 else "")))
 
 
 def check_service():
