@@ -136,12 +136,14 @@ CONFIG_ROWS = {
                    "payload_mm", "max_mm", "ignore", "home_only_ok"],
     "drop_tests.emit": ["frame", "center", "normal", "radius", "step"],
     "drop_tests.expect": ["hit", "angle"],
+    "drop_tests.expect.angle": ["center", "frame", "axis", "zero", "positive", "range"],
     "index_tests": ["joint", "sequence", "step", "probe", "blockers", "expect_windows", "pose"],
     "index_tests.probe": ["frame", "center", "dir", "radius", "depth"],
     "slide_out": ["object", "objects", "dir", "dist", "step", "min_clearance", "expect", "blocked_by", "at_mm", "ignore",
                   "pose", "flex"],
     "distances": ["a", "b", "min", "max", "ray", "payload_mm", "tape_mm", "compliant", "pose", "poses"],
     "distances.ray": ["frame", "origin", "dir", "sweep"],
+    "distances.ray.sweep": ["center", "axis", "from", "to", "step"],
     "payload_fit": ["against", "center", "frame", "up", "across", "place", "count", "gap", "size", "shape", "expect",
                     "margin", "pose"],
     "sightlines": ["frame", "pose", "poses", "origin", "origins", "dir", "first_hit", "max_mm", "through"],
@@ -149,7 +151,7 @@ CONFIG_ROWS = {
     "stacks.terms": ["what", "tol"],
     "flexures": ["part", "dir", "from", "to", "stress_mpa"],
     "cable_chains": ["cables", "lead"],
-    "accepted_warns": ["check", "kind", "object", "match"],
+    "accepted_warns": ["check", "kind", "object", "match", "any"],
     "joints": ["axis", "lo", "hi", "home", "step", "continuous", "kind"],
     "couplings": ["to", "ratio", "offset"],
     "fasteners": ["min_engagement"],
@@ -225,13 +227,14 @@ def _eval_exprs(x, at):
     return x
 
 
+ROW_INDEX = {}   # section -> each kept row's index in the config, for labels after a skipped row
 for _k in list(CFG):
     if _k == "accepted_warns":
         continue
     if isinstance(CFG[_k], list):
         # a row with a failed expression is skipped, named in its config fail: a None in a row crashed the check that
         # read it (check_stacks: float(None), push-assist PA-A5-T26) and took the whole report with it
-        _keep = []
+        _keep, ROW_INDEX[_k] = [], []
         for _i, _r in enumerate(CFG[_k]):
             _n = len(EXPRS)
             _v = _eval_exprs(_r, "%s[%d]" % (_k, _i))
@@ -240,16 +243,35 @@ for _k in list(CFG):
                 e["skipped"] = "%s row%s" % (_k, " '%s'" % CC.row_label(_r) if isinstance(_r, dict) and CC.row_label(_r) else "")
             if not _bad:
                 _keep.append(_v)
+                ROW_INDEX[_k].append(_i)
         CFG[_k] = _keep
-    else:
-        _n = len(EXPRS)
-        CFG[_k] = _eval_exprs(CFG[_k], _k)
-        for e in EXPRS[_n:]:     # a setting goes back to its default, if it has one
-            _p = e["at"].split(".")
-            if "error" in e and len(_p) == 1 and _k in DEFAULTS:
+        continue
+    _n = len(EXPRS)
+    CFG[_k] = _eval_exprs(CFG[_k], _k)
+    for e in EXPRS[_n:]:
+        # a failed setting: its default if DEFAULTS has one, else the key goes, so the code's own fallback applies; an
+        # entry of a section keyed by name (couplings.PIV_x, masses_g.BUY_x) goes whole. A None left in place crashed
+        # cadlib.joints (a coupling ratio) and the fasteners check (min_engagement) with no report (PR #10 review)
+        if "error" not in e:
+            continue
+        _p = [x.split("[")[0] for x in e["at"].split(".")]
+        if len(_p) == 1:
+            if _k in DEFAULTS:
                 CFG[_k] = e["default"] = json.loads(json.dumps(DEFAULTS[_k]))
-            elif "error" in e and len(_p) == 2 and isinstance(DEFAULTS.get(_k), dict) and _p[1] in DEFAULTS[_k]:
-                CFG[_k][_p[1]] = e["default"] = json.loads(json.dumps(DEFAULTS[_k][_p[1]]))
+            else:
+                CFG.pop(_k, None)
+                e["dropped"] = _k
+        elif _k in CONFIG_NAMED or len(_p) > 2:
+            _d = CFG[_k] if _k in CONFIG_NAMED else CFG[_k].get(_p[1])
+            _e = _p[1] if _k in CONFIG_NAMED else _p[2]
+            if isinstance(_d, dict) and _e in _d:
+                _d.pop(_e)
+                e["dropped"] = "%s '%s'" % (_k if _k in CONFIG_NAMED else "%s.%s" % (_k, _p[1]), _e)
+        elif isinstance(DEFAULTS.get(_k), dict) and _p[1] in DEFAULTS[_k]:
+            CFG[_k][_p[1]] = e["default"] = json.loads(json.dumps(DEFAULTS[_k][_p[1]]))
+        elif isinstance(CFG[_k], dict):
+            CFG[_k].pop(_p[1], None)
+            e["dropped"] = "%s.%s" % (_k, _p[1])
 QUICK = "--quick" in ARGV
 ONLY = set(_arg("--only", "").split(",")) - {""}
 OUT = _arg("--out") or os.path.join(os.path.dirname(bpy.data.filepath) or ".", "cadcheck.json")
@@ -1894,6 +1916,13 @@ def check_drop():
         exp = T.get("expect", {})
         want_hit = exp.get("hit")
         ang = exp.get("angle")
+        if ang and ang.get("axis"):
+            # the angle turns about the axis normal to zero and positive; "axis" is read only to check the row says so
+            ks = [str(ang.get(k, d))[-1:].upper() for k, d in (("axis", ""), ("zero", "Z"), ("positive", "-Y"))]
+            if len(set(ks)) < 3:
+                finding("config", "fail", "drop '%s': expect.angle axis %s, zero %s, positive %s: the angle is measured from zero toward "
+                        "positive, about the third axis; make axis that one" % (T["name"], ang["axis"], ang.get("zero", "Z"),
+                                                                               ang.get("positive", "-Y")), test=T["name"])
         rows = []
         on_path = set()      # objects the payload touched or first hit, at any pose
         for pose in poses:
@@ -2190,7 +2219,11 @@ def check_distances():
         poses = D.get("poses", [D.get("pose", {})])
         if not present("distances", "%s to %s" % (D["a"], D["b"]), [D["a"], D["b"], (D.get("ray") or {}).get("frame")]):
             continue
-        stations = ray_stations(D["ray"]) if D.get("ray") else []
+        try:
+            stations = ray_stations(D["ray"]) if D.get("ray") else []
+        except KeyError as ex:   # ray.sweep without from/to/center/axis (a typo'd key is also a config warn)
+            finding("config", "fail", "distances %s to %s: ray.sweep has no %s; row skipped" % (D["a"], D["b"], ex), a=D["a"], b=D["b"])
+            continue
         home_hits = {}
         if D.get("ray") and any(poses):
             set_pose({})
@@ -3281,7 +3314,10 @@ def check_pose_values():
                 PAST_LIMITS.append({"at": at, "joint": jn, "value": val, "lo": sp["lo"], "hi": sp["hi"]})
 
     for key, v in CFG.items():
-        if key not in ("accepted_warns", "joints", "couplings", "carry"):
+        if key in ROW_INDEX:     # label rows by their index in the config file, skipped rows included
+            for i, r in zip(ROW_INDEX[key], v):
+                walk(r, "%s[%d]" % (key, i))
+        elif key not in ("accepted_warns", "joints", "couplings", "carry"):
             walk(v, key)
 
 
@@ -3304,9 +3340,10 @@ CHECKS = (("parts", check_parts), ("interference", check_interference), ("fasten
           ("distances", check_distances), ("payload", check_payload), ("sightlines", check_sightlines),
           ("assembly", check_assembly), ("insertion", check_insertion), ("stacks", check_stacks), ("flexures", check_flexures),
           ("stability", check_stability), ("cables", check_cables))
+# flexures is not here: it also checks compliant distances rows and slide flexes, and says so in not_checked itself
 ROWS_OF = {"service": "service", "drop": "drop_tests", "index": "index_tests", "slide": "slide_out", "distances": "distances",
            "payload": "payload_fit", "sightlines": "sightlines", "assembly": "assembly_order", "insertion": "assembly_order",
-           "stacks": "stacks", "flexures": "flexures"}
+           "stacks": "stacks"}
 
 
 def config_warns(acc, tri):
@@ -3318,7 +3355,7 @@ def config_warns(acc, tri):
         out += CC.unknown_msgs(os.path.basename(path), raw, dict(DEFAULTS, printcheck=pc), CONFIG_ROWS, CONFIG_NAMED)
     names = [n for n, _ in CHECKS] + ["clearance"]
     out += CC.only_problems(ONLY, names)
-    out += CC.accept_problems(acc, names + ["config"])
+    out += CC.accept_problems(acc, names + ["config"]) + tri["unpinned"]
     m = CC.legacy_msg(tri["legacy"], len(acc), WARNS, CC.templates(os.path.abspath(__file__)) if tri["legacy"] else None)
     return out + ([m] if m else [])
 
@@ -3332,8 +3369,11 @@ def main():
             if "error" in e:
                 finding("config", "fail", "%s: expression '=%s' failed (%s; params from %s)%s" % (
                     e["at"], e["expr"], e["error"], PARAMS_SRC, "; %s skipped" % e["skipped"] if "skipped" in e else
-                    "; using the default %s" % json.dumps(e["default"]) if "default" in e else ""), **e)
+                    "; using the default %s" % json.dumps(e["default"]) if "default" in e else
+                    "; %s dropped" % e["dropped"] if "dropped" in e else ""), **e)
     check_pose_values()
+    if ONLY and not ONLY & ({n for n, _ in CHECKS} | {"clearance"}):
+        finding("config", "fail", "--only %s names no check, so nothing ran" % ",".join(sorted(ONLY)), only=sorted(ONLY))
     old_srcs = stale_model()
     if old_srcs:
         REPORT["stale_model"] = old_srcs
@@ -3378,8 +3418,9 @@ def main():
     os.makedirs(os.path.dirname(os.path.abspath(OUT)), exist_ok=True)
     with open(OUT, "w") as f:
         json.dump(REPORT, f, indent=1, default=str)
-    print("CADCHECK %s: %d fail, %d warn (%d untriaged, %d accepted) -> %s" % (
-        "PASS" if not FAILS else "FAIL", len(FAILS), len(WARNS), len(untriaged), len(accepted), OUT))
+    print("CADCHECK %s: %d fail, %d warn (%d untriaged, %d accepted), %d config warn%s -> %s" % (
+        "PASS" if not FAILS else "FAIL", len(FAILS), len(WARNS), len(untriaged), len(accepted), len(cfg_warns),
+        "" if len(cfg_warns) == 1 else "s", OUT))
     for s in FAILS[:40]:
         print("  FAIL", s)
     for s in untriaged[:25]:

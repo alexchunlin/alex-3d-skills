@@ -58,16 +58,15 @@ def unknown_keys(cfg, defaults, rows, named):
             if not (isinstance(k, str) and k.startswith(NOTE)) and k not in known:
                 out.append((where, k, closest(k, known)))
 
-    def row(r, sec, where):
-        lab = row_label(r)
+    def row(r, sec, where, top=True):
+        lab = row_label(r) if top else None
         where = "%s (%s)" % (where, lab) if lab else where
         chk(r, set(rows[sec]) | set(COMMON), where)
-        for k, sub in r.items():
+        for k, sub in r.items():     # "drop_tests.expect", then "drop_tests.expect.angle", ...
             if sec + "." + k in rows:
-                subs = sub if isinstance(sub, list) else [sub]
-                for j, s in enumerate(subs):
+                for j, s in enumerate(sub if isinstance(sub, list) else [sub]):
                     if isinstance(s, dict):
-                        chk(s, set(rows[sec + "." + k]) | set(COMMON), "%s.%s" % (where, k) + ("[%d]" % j if isinstance(sub, list) else ""))
+                        row(s, sec + "." + k, "%s.%s" % (where, k) + ("[%d]" % j if isinstance(sub, list) else ""), False)
 
     chk(cfg, set(defaults), "top level")
     for sec, v in cfg.items():
@@ -95,10 +94,21 @@ def unknown_msgs(src, cfg, defaults, rows, named):
 # ------------------------------------------------------------------ accepted_warns
 
 def _obj_re(o):
-    """An object name as a whole token; * and ? glob over a family (tools/bench/replay.py's locator rule)."""
-    out = ""
-    for c in o:
-        out += r"[\w.-]*" if c == "*" else r"\w" if c == "?" else re.escape(c)
+    """An object name as a whole token; * and ? and [..] glob over a family (tools/bench/replay.py's locator rule)."""
+    out, i = "", 0
+    while i < len(o):
+        c = o[i]
+        if c == "*":
+            out += r"[\w.-]*"
+        elif c == "?":
+            out += r"\w"
+        elif c == "[" and "]" in o[i:]:
+            j = o.index("]", i)
+            out += o[i:j + 1]
+            i = j
+        else:
+            out += re.escape(c)
+        i += 1
     return re.compile(r"(?<![\w-])" + out + r"(?![\w-])")
 
 
@@ -106,23 +116,42 @@ def structured(a):
     return "check" in a or "kind" in a or "object" in a
 
 
-def accepts(a, w):
-    """True when accept `a` covers warn line w ("check: message"). Structured: the check is w's, kind is in the message,
-    and each object names a whole token of it. Old form: a["match"] is anywhere in w."""
+def _bare(msg):
+    """The message with object names blanked out, so a kind can't match inside one ("bridge" in PRT_bridge_plate)."""
+    return OBJ.sub(lambda m: " " * len(m.group()), msg)
+
+
+def _has_number(t):
+    return re.search(r"\d", _bare(t)) is not None
+
+
+def accepts(a, w, loose=False):
+    """True when accept `a` covers warn line w ("check: message"). Structured: the check is w's, kind is whole words of
+    the message outside object names, each object is a whole token of it, and "match" (if given) is in w. A warn with a
+    measured value needs "match" (which pins it) or "any": true: an accept that drops the number also takes a worse
+    warn of the same kind (PR #10 review: the demo base's wall at 1.2 mm under an accept written for 2.21; 6 of 8
+    worsened push-assist variants). loose skips that rule. Old form: a["match"] is anywhere in w."""
     if not structured(a):
         return bool(a.get("match")) and a["match"] in w
     chk, _, msg = w.partition(": ")
-    if chk != a.get("check") or not a.get("kind") or a["kind"] not in msg:
+    k = a.get("kind")
+    if chk != a.get("check") or not isinstance(k, str) or not k.strip() or \
+            not re.search(r"(?<!\w)%s(?!\w)" % re.escape(k), _bare(msg)):
         return False
     objs = a.get("object") or []
-    return all(_obj_re(o).search(msg) for o in ([objs] if isinstance(objs, str) else objs))
+    if not all(_obj_re(o).search(msg) for o in ([objs] if isinstance(objs, str) else objs)):
+        return False
+    if "match" in a:
+        return isinstance(a["match"], str) and a["match"] in w
+    return loose or bool(a.get("any")) or not _has_number(msg)
 
 
 def accept_label(a):
     if not structured(a):
         return a.get("match")
     o = a.get("object")
-    return "%s: %s%s" % (a.get("check"), "%s " % (o if isinstance(o, str) else " ".join(o)) if o else "", a.get("kind"))
+    return "%s: %s%s%s" % (a.get("check"), "%s " % (o if isinstance(o, str) else " ".join(o)) if o else "", a.get("kind"),
+                           " ('%s')" % a["match"] if isinstance(a.get("match"), str) else "")
 
 
 def _trim(t):
@@ -198,6 +227,10 @@ def suggest(a, warns, tmpl=None):
         s = {"check": chk, "kind": kind_of(chk, msg, tmpl)}
         if objs:
             s["object"] = objs[0] if len(objs) == 1 else objs
+        if _has_number(a["match"]):
+            s["match"] = a["match"]     # it pinned a number: keep it, so a worse value is a new warn
+        elif _has_number(msg) or not objs:
+            s["any"] = True             # it took any value (or any part): say so
         if a.get("why"):
             s["why"] = a["why"]
         if s not in out:
@@ -206,7 +239,8 @@ def suggest(a, warns, tmpl=None):
 
 
 def accept_problems(acc, checks):
-    """Config warns for malformed accepts: a structured one with no check or kind, or a check that is not one."""
+    """Config warns for malformed accepts: a structured one with no check or kind, a check that is not one, or no
+    object without "any": true (it takes the kind on every part)."""
     out = []
     for i, a in enumerate(acc):
         if not isinstance(a, dict):
@@ -218,8 +252,9 @@ def accept_problems(acc, checks):
                 c = closest(a["check"], checks)
                 out.append("accepted_warns[%d]: check '%s' is not a check, so it accepts nothing%s" % (
                     i, a["check"], " (did you mean '%s'?)" % c if c else ""))
-            if "match" in a:
-                out.append("accepted_warns[%d] (%s): \"match\" is ignored next to \"check\"/\"kind\"" % (i, accept_label(a)))
+            if not a.get("object") and not a.get("any"):
+                out.append("accepted_warns[%d] (%s): no \"object\", so it takes this kind of warn on every part; name the "
+                           "object, or say \"any\": true" % (i, accept_label(a)))
         elif not a.get("match"):
             out.append("accepted_warns[%d]: no \"match\" and no \"check\"/\"kind\", so it accepts nothing" % i)
     return out
@@ -230,13 +265,18 @@ def triage(acc, warns, ran, never=("build: ",)):
     ran: the checks that ran (None: all of them). An accept whose check did not run is not evaluated; an old substring
     accept names no check, so under --only one that matched nothing is not evaluated either."""
     acc = [a for a in acc if isinstance(a, dict)]
-    accepted = {}
+    accepted, unpinned = {}, []
     for w in warns:
         if w.startswith(never):     # a stale model is never accepted
             continue
         a = next((a for a in acc if accepts(a, w)), None)
         if a is not None:
             accepted[w] = a.get("why", "")
+            continue
+        a = next((a for a in acc if structured(a) and accepts(a, w, loose=True)), None)
+        if a is not None:
+            unpinned.append("accepted_warns[%d] (%s) would take '%s' but for its measured value: add \"match\" with the "
+                            "text you accept (it pins the number), or \"any\": true" % (acc.index(a), accept_label(a), w))
     stale, not_eval, legacy = [], [], []
     for a in acc:
         hit = [w for w in warns if not w.startswith(never) and accepts(a, w)]
@@ -249,7 +289,7 @@ def triage(acc, warns, ran, never=("build: ",)):
         else:
             not_eval.append(accept_label(a))
     return {"accepted": accepted, "untriaged": [w for w in warns if w not in accepted], "stale": stale,
-            "not_evaluated": not_eval, "legacy": legacy}
+            "not_evaluated": not_eval, "legacy": legacy, "unpinned": unpinned}
 
 
 def legacy_msg(legacy, n_acc, warns, tmpl=None):
@@ -261,11 +301,34 @@ def legacy_msg(legacy, n_acc, warns, tmpl=None):
         x["use"] = suggest(x, warns, tmpl) if x["accepts"] else []
     wide = [x for x in legacy if len({(s["check"], s["kind"]) for s in x["use"]}) > 1]
     return ("accepted_warns: %d of %d entries use the old substring \"match\" (deprecated: it accepts any warn containing "
-            "the text%s). Write {\"check\", \"kind\", \"object\", \"why\"} instead; summary.accept_suggestions has the form "
-            "for each one that matched a warn in this run" % (
+            "the text%s). Write {\"check\", \"kind\", \"object\", \"why\"} (plus \"match\" to pin a number, or \"any\": true) "
+            "instead; summary.accept_suggestions has the form for each one that matched a warn in this run" % (
                 len(legacy), n_acc, "; %d of them accept warns of more than one kind, e.g. '%s'" % (len(wide), wide[0]["match"]) if wide else ""))
 
 
 def only_problems(only, checks):
     return ["--only: '%s' is not a check, nothing ran for it%s" % (n, " (did you mean '%s'?)" % closest(n, checks) if closest(n, checks) else "")
             for n in sorted(only) if n not in checks]
+
+
+def strip_jsonc(t):
+    """JSON from jsonc: // comments dropped outside strings, "{...}" placeholders emptied, trailing commas removed."""
+    out, i, ins = [], 0, False
+    while i < len(t):
+        c = t[i]
+        if ins:
+            out.append(c)
+            if c == "\\":
+                out.append(t[i + 1]); i += 1
+            elif c == '"':
+                ins = False
+        elif c == '"':
+            ins = True; out.append(c)
+        elif t.startswith("//", i):
+            while i < len(t) and t[i] != "\n":
+                i += 1
+            continue
+        else:
+            out.append(c)
+        i += 1
+    return re.sub(r",(\s*[}\]])", r"\1", "".join(out).replace("{...}", "{}"))
