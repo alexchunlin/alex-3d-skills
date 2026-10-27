@@ -72,8 +72,8 @@ datum letters, and balloon numbers. A read matches a label when its normalised t
 
 Per drawing (tuned set), P / R: 102 0.95/0.98, 103 0.99/0.82, 139 0.96/0.96, 145 0.90/0.95, 147 1.00/1.00. 103 is
 the hard case: 10 px text, many small vertical and 45 deg labels. What is still missed: rotated text at 45 deg, a Ø
-that the recogniser drops entirely (Ø66.94 read as 66.94), and a few small vertical numbers. A whole sheet takes 15-30
-s under load, cached after the first read. `text --crop` on one view is faster.
+that the recogniser drops entirely (Ø66.94 read as 66.94), and a few small vertical numbers. A whole sheet takes 15-60
+s under load (mean 33 s over 34 dev sheets at load 40-58), cached after the first read. `text --crop` on one view is faster.
 
 ### scale and measure
 
@@ -83,7 +83,12 @@ s under load, cached after the first read. `text --crop` on one view is faster.
 - **Views differ in scale.** On 102, the plan view is 1.7561 px/mm (from its Ø120 circle) and the section 1.7111: 2.6%
   apart. Other sheets have 2-3 clusters (139: 1.148 and 1.561; 145: 5.36 and 3.17). Calibrate per view.
 - **Leave-one-out over the dev sheets** (`eval_dev.py scale`; each dimension in a cluster of 3 or more, re-measured at
-  the scale of the others): LOO_RESULT
+  the scale of the others; `eval_dev.py scale`, all 39 sheets): 36 of 39 sheets have a cluster of 3 or more agreeing
+  dimensions, and 20 have two or more scales. 552 of the 998 dimension lines found join a cluster. For those, the
+  median error is 0.08 mm, p90 0.31 mm and max 1.35 mm; 96% are within 0.5 mm and 95% within 1%. These are the
+  dimensions that agree within 1.5%, so the numbers show how precisely a calibrated view measures, not how often
+  auto-scale finds the right dimension line. The other 446 lines are dimensions whose text sits away from their own line
+  (leaders, angles, radii misread as linear), or that belong to a view with fewer than 3 dimensions.
 - **Circle diameters against their callouts** (`eval_dev.py circles`, scale from one linear dimension or circle):
   7 of 8 found, mean |error| 0.15 mm, max 0.40 mm. On 145: Ø116.00 → 115.60, Ø66.94 dash-dot → 66.75, Ø40.00 →
   39.93, Ø15.00 → 14.98, Ø10.00 (6X) → 9.97, and the 6 holes' PCD (2 x 13.75) → 27.49 with a step of 60.0 deg. On 102,
