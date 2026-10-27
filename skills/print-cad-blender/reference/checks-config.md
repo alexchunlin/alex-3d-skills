@@ -1,13 +1,15 @@
 # checks.json
 
-Every key is optional. Defaults live in `scripts/cadcheck.py DEFAULTS`. A worked config for a real 102-object assembly is
+Every key is optional. Defaults live in `scripts/cadcheck.py DEFAULTS`, row fields in `CONFIG_ROWS`. A key cadcheck
+doesn't read is a config warn naming the closest known key (`summary.config_warns`, apart from the design warns); a key
+starting with `_` (`"_about"`) is a note. A worked config for a real 102-object assembly is
 `<repo>/examples/mm-launcher-a1/checks.json`; attempt 2 (`examples/mm-launcher-a2/checks.json`) uses most blocks below, and attempt 3 (`examples/mm-launcher-a3/checks.json`)
 adds `carry`, `fasteners.captive` and `flexures`.
 
 ```jsonc
 {
-  "joints": {"PIV_tilt": {"axis": "X", "lo": 0, "hi": 45, "step": 2.5}},   // only for blends without cadlib joint props
-  "couplings": {"PIV_pinion": {"to": "PIV_pan", "ratio": -1}},
+  "joints": {"PIV_tilt": {"axis": "X", "lo": 0, "hi": 45, "step": 2.5}, "PIV_pan": {"axis": "Z", "continuous": true}},   // only for blends without cadlib joint props
+  "couplings": {"PIV_pinion": {"to": "PIV_pan", "ratio": -1, "offset": 0}},
   "carry": {"PRT_nip_wheel": "PIV_hood"},   // modelled on one body at one setting, rides on this joint in use (A3)
   "overtravel_deg": 2.5,          // sweep this far past each limit; hits there are warns ("no margin")
   "max_poses_per_group": 48,      // grids over several joints are thinned to this
@@ -41,7 +43,7 @@ adds `carry`, `fasteners.captive` and `flexures`.
   "fasteners": {"driver_r": 3.0, "hand_r": 14.0, "max_reach": 60, "max_reach_ext": 150,
                 "min_engagement_d": 2.0, "tapped_engagement_d": 1.5,   // thread >= 2 d in PLA, 1.5 d in a tapped BUY part
                 // "min_engagement": 4.0 (mm) replaces both, as in configs before 2026-10; features.fastener_joint reads it too
-                "lkey_short": 18, "lkey_insert": 2.5, "lkey_long": 56, "lkey_swing_deg": 60,   // 2.5 mm hex key
+                "lkey_short": 18, "lkey_insert": 2.5, "lkey_long": 56, "lkey_r": 1.25, "lkey_swing_deg": 60,   // 2.5 mm hex key
                 "max_standoff": 2.0, "max_protrusion": 3.0,
                 "captive": {"FST_nip_stud": "hex head in a hex pocket; the thumbwheel nut turns"}},   // never driven
   "service": [                    // access on the BUILT machine (assembly_order only covers first assembly)
@@ -81,7 +83,9 @@ adds `carry`, `fasteners.captive` and `flexures`.
      "frame": "PIV_feeder", "up": [0, 0, 1], "across": [1, 0, 0], "place": "pair_edge_on", "size": [12.5, 6.5],  // D x T, MIN size
      "shape": "lens", "expect": "blocked", "margin": 0.2},
     {"name": "pocket seats one flat", "against": ["PRT_feeder_disc"], "center": [10.5, 18.19, 263.0], "place": "flat",
-     "size": [13.5, 7.5], "expect": "fits"}],                                                              // MAX size
+     "size": [13.5, 7.5], "expect": "fits"},                                                               // MAX size
+    {"name": "tube holds a stack of three", "against": ["PRT_hopper"], "center": [0, 0, 250], "place": "stack_flat",
+     "count": 3, "gap": 0.2, "size": [13.5, 7.5], "expect": "fits"}],               // count: pair_edge_on, stack_flat; gap: lift off the floor
   "sightlines": [{"name": "finger reaches the thumbwheel through the slot", "frame": "PIV_tilt", "poses": [{}, {"PIV_tilt": 45}],
                   "origins": [[19.5, -2.33, 111.27], [15.5, -2.33, 111.27]], "dir": [0, -0.316, 0.949],
                   "first_hit": "PRT_nip_wheel", "max_mm": 40, "through": []}],     // null = must hit nothing
@@ -100,9 +104,12 @@ adds `carry`, `fasteners.captive` and `flexures`.
   "cable_junctions_ok": ["CAB_bus_*"],      // an inline connector no wider than the cable; a bigger one is a BUY_ part
   "cable_min_bend_od": 0.75,                // a corner tighter than this x OD (centreline radius) is a kink
   "fasteners": {"stock_ok": ["FST_custom_*"], "stock_lengths": {"3": [6, 8, 10, 12, 16, 20]}},   // override the stocked lengths
-  "accepted_warns": [{"match": "PRT_flywheel: ceiling region needs a 72 mm bridge", "why": "1 mm flange ring, prints as a bridge over infill"}],
+  "accepted_warns": [{"check": "parts", "object": "PRT_flywheel", "kind": "bridge", "why": "1 mm flange ring, prints as a bridge over infill"},
+                     {"check": "clearance", "object": ["PRT_hood", "FST_nipstop"], "kind": "just past the limit", "why": "..."}],
   "printers": {"P1S": [256, 256, 256], "H2D": [325, 320, 325]}, "prefer_printer": "P1S",
-  "min_wall": 1.6, "overhang_deg": 45, "overhang_warn_mm2": 150, "max_bridge_mm": 25
+  "min_wall": 1.6, "overhang_deg": 45, "overhang_warn_mm2": 150, "max_bridge_mm": 25,
+  "pla_density": 1.24e-3, "flow_mm3_s": 12,   // mass and print-time estimates (g/mm3, mm3/s)
+  "collections": {"printed": "Printed", "purchased": "Purchased", "fasteners": "Fasteners", "cables": "Cables"}
 }
 ```
 
@@ -120,8 +127,10 @@ joint values in `poses`, `lead`.
 
 Write pass rows against the payload's declared **max** and blocking rows against its **min**, from the same params the
 geometry uses. v2 A3 declared `MM_T = (6.3, 7.5)` but typed its full-lift gap row as 7.5 (nominal 7.0 + tape), so the
-row passed while the reviewer's 8.0 row failed (FINDINGS V2A3-F1). A failed expression is a `config` fail naming the
-row; the report's `params.expressions` lists every value used.
+row passed while the reviewer's 8.0 row failed (FINDINGS V2A3-F1). A failed expression (a param that isn't there) is a
+`config` fail naming the row and the expression, and the row is skipped; a failed setting falls back to its default. It
+used to leave a None in the row, and check_stacks died on it with a TypeError and no report (push-assist PA-A5-T26). The
+report's `params.expressions` lists every value used.
 
 `cad rows cadcheck.json [REGEX]` prints one line per row of every check (and `cad rows manifest.json FST_` the parts),
 so you grep the report instead of writing a `json.load` snippet. Report layout, if you do script it:
@@ -143,6 +152,10 @@ doing that (FINDINGS V2A1-T6). CONFIG and OUT are optional, and a flag in their 
 
 A row that names an object not in the scene (a subsystem not built yet) gives one fail, "not in the scene; row
 skipped", and the run carries on. Keep the row; don't `--only` around it.
+
+A check that runs with no rows in its section (`--only stacks` with no `stacks`) adds "no stacks rows in the config,
+nothing checked" to `not_checked`, and under `--only` the summary lists it in `only_without_rows`. Push-assist A2 named 11
+checks in `--only`, 5 with no rows, and read PASS (PA-A2-T11). An `--only` name that is no check is a config warn.
 
 ## Reading the semantics
 
@@ -176,9 +189,15 @@ skipped", and the run carries on. Keep the row; don't `--only` around it.
   inside them went unmeasured (FINDINGS V2A1-V4). Add `contact_normal` (one `[x, y, z]` or a list, a home-pose world
   direction of the rule's `a` part, turning with it) and contact is accepted only on faces within 20° of ±that normal.
   The rest of the pair is measured against the rule's `min_clearance`, so set it to the journal's radial clearance.
-- **Warn triage.** List each warn you have looked at and accept under `accepted_warns` (a substring of its text, plus
-  why). The summary reports `untriaged_warns`, and `warn_list` holds only untriaged ones. An accept that matches no warn
-  is reported as stale. v2 A1 finished at 0 fails, 34 warns, and three of R1's issues were in those warns.
+- **Warn triage.** List each warn you have looked at and accept under `accepted_warns`: `check` (the text before the
+  first `: `), `kind` (words of the defect that are in the message, such as `wall samples`, `bridge`, `collide only`;
+  leave the numbers out), `object` (a name, glob or list, each a whole token of the message; optional) and `why`. The
+  summary reports `untriaged_warns`, and `warn_list` holds only untriaged ones. An accept that matches no warn is stale
+  (`stale_accepts`); under `--only`, one whose check did not run is `accepts_not_evaluated`. v2 A1 finished at 0 fails,
+  34 warns, and three of R1's issues were in those warns. The old form, `{"match": "<substring>"}`, still works and is a
+  config warn: `"PRT_tray_L: "` accepted every warn on the part, later ones of another kind too, and it names no check,
+  so under `--only` an unmatched one can't be called stale (push-assist PA-A4-T10). `summary.accept_suggestions` gives
+  the structured accepts that cover what each old one covers in the run.
 - **Stability.** Every driver joint at lo, home and hi, and continuous joints every 45°, up to 4000 poses. The 10 worst
   rows are kept.
 - **Bodies.** An object's body is its nearest `PIV_` ancestor, or `static`. A pair is swept over the joints that separate the two bodies, with each coupled joint replaced by its driver.
