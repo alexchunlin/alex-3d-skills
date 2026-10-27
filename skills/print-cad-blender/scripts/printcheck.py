@@ -75,6 +75,7 @@ DEFAULTS = {
     "face_fail_mm2": 20.0,
     "face_min_mm2": 2.0,      # smaller face regions are listed, never flagged
     "face_probe_mm": 0.5,     # boundary edges are probed for an anchor every this many mm
+    "face_probe_reach_mm": 2.0,  # and at most this far out (downhill edges of flat slopes; see face_regions)
     "nm_min_edge_mm": 0.01,   # STL edge count: shorter edges are slivers (v2 hood's nanometre edges)
 }
 
@@ -406,14 +407,23 @@ def face_regions(tris, C, zmin=0.0):
         mid = (a[:, :2] + b[:, :2]) / 2
         flip = ((c[:, :2] - mid) * o).sum(1) > 0
         o[flip] *= -1                                       # outward: away from the face's third corner
+        # how far out to look: one allowance past the layer's raster slack, or, across a downhill edge (where the slope
+        # carries on down: a bed-side chamfer's foot, a bore's sides), as far as a slope this flat moves in 1.5 layers
+        r = h * math.tan(math.radians(C["overhang_deg"]))
+        nx = nrm[fid][f, :2] / np.maximum(a2[fid][f], 1e-30)[:, None]
+        down = (o * -nx).sum(1) > 0.5 * np.maximum(np.linalg.norm(nx, axis=1), 1e-9)
+        fhe = np.radians(np.maximum(fh[fid][f], 1.0))
+        reach = np.where(down, np.clip(1.5 * h / np.tan(fhe), 2 * r, C["face_probe_reach_mm"]), 2 * r)
         n = np.maximum(1, np.ceil(L / step)).astype(np.int64)
         e = np.repeat(np.arange(len(a)), n)
         t = (np.arange(int(n.sum())) - np.repeat(np.cumsum(n) - n, n) + 0.5) / np.repeat(n, n)
         P = a[e] + t[:, None] * (b[e] - a[e])
         reg = {"_faces": fid, "_pts": P, "_out": o[e], "_seg": np.repeat(L / n, n), "_dir": d[e] / np.maximum(L[e], 1e-9)[:, None],
-               "_sup": np.zeros(len(P), bool), "area_mm2": ar}
-        # probe the layer whose mid-height is 0.5-1.5 layers below the edge point; under the first layer is the bed
+               "_sup": np.zeros(len(P), bool), "_reach": reach[e], "area_mm2": ar}
+        # probe the layer whose mid-height is 0.5-1.5 layers below the edge point. Edges within the first layer border
+        # the bed band (faces there are the bed's), so they are anchored: v1 A3 feeder_shroud's flare starts at z 0.2
         kp = np.floor((P[:, 2] - zmin - 0.75 * h) / h).astype(np.int64)
+        kp[P[:, 2] - zmin <= h * 1.05] = -1
         reg["_sup"][kp < 0] = True
         for k in np.unique(kp[kp >= 0]):
             probes.setdefault(int(k), []).append((len(regions), np.nonzero(kp == k)[0]))
@@ -423,15 +433,16 @@ def face_regions(tris, C, zmin=0.0):
 
 
 def _probe(reg, ii, cur, x0, y0, p, W, H, C):
-    """Mark the probes ii of reg anchored when this layer has material just outside the edge (0.5 to 2 allowances out)."""
-    P, o = reg["_pts"][ii], reg["_out"][ii]
+    """Mark the probes ii of reg anchored when this layer has material just outside the edge: from half an allowance
+    out to the probe's reach, in half-allowance steps, plus half a raster pixel."""
+    P, o, reach = reg["_pts"][ii], reg["_out"][ii], reg["_reach"][ii]
     r = C["layer_h"] * math.tan(math.radians(C["overhang_deg"]))
     hit = np.zeros(len(ii), bool)
-    for s in (0.5, 1.0, 1.5, 2.0):
-        q = P[:, :2] + o * (s * r + 0.5 * p)
+    for s in np.arange(0.5 * r, float(reach.max()) + 1e-9, 0.5 * r):
+        q = P[:, :2] + o * (s + 0.5 * p)
         cx = np.floor((q[:, 0] - x0) / p).astype(np.int64)
         cy = np.floor((q[:, 1] - y0) / p).astype(np.int64)
-        inb = (cx >= 0) & (cx < W) & (cy >= 0) & (cy < H)
+        inb = (cx >= 0) & (cx < W) & (cy >= 0) & (cy < H) & (s <= reach + 1e-9)
         hit[inb] |= cur[cy[inb], cx[inb]]
     reg["_sup"][ii] |= hit
 
