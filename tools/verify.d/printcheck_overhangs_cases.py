@@ -1,6 +1,6 @@
 """printcheck's face pass and STL edge count, plain python3 (no Blender). Run by printcheck_overhangs.sh.
 
-    python3 -I printcheck_overhangs_cases.py <skill scripts dir> <v2 stl dir> <v2 manifest> <scratch dir>
+    python3 -I printcheck_overhangs_cases.py <skill scripts dir> <v2 stl dir> <v2 manifest> <scratch dir> [review stl dir]
 
 Prints one CASE {...} line per case with "ok". The cases:
   ramp      the 20 mm ramp of docs/features/blend-bracket.md ("The printcheck gap"): underside 5-40 deg from horizontal
@@ -13,6 +13,13 @@ Prints one CASE {...} line per case with "ok". The cases:
   prior    tools/prior_art/overhang_regions.py (PR #6, the per-region area rule its review proposed: fail at 100 mm2
             projected) on the same synthetic parts: its ramp regions match printcheck's projected area within 2 %, and
             it would fail the 20 mm hole and the tube between walls, which print as bridges
+  review    the PR #11 review's parts (printcheck_overhangs_build.py, cadlib): slabs between pillars at different
+            heights, a slab in a corner, a 3 mm tab at 10 deg, a lying cylinder and a wedge from the bed, a fillet under
+            an 8 mm shelf fail; teardrops, horizontal holes, a tube between walls, 45 deg chamfers, domes, a slab between
+            a wall and a 1.2 mm fin and a 2 mm filleted ledge do not fail
+  facets    a lying r 15 cylinder fails at 24 to 128 facets and r 5 passes (the bed-band anchor, not the facet count)
+  sheet     two boxes sharing a face (a coplanar join) are a zero-thickness sheet, two touching along an edge a line
+            contact: each reported as itself
   jar_valve the user's print (2026-10-26, labels.json PF-jar_valve print_evidence: drooped without supports):
             `printcheck.py jar_valve.stl --where --section auto` exits 1 and shows the 3 tabs at z 2 with world
             coordinates and as C on the layer section
@@ -116,6 +123,42 @@ except (ValueError, KeyError, TypeError) as e:
 ramp_ok = all(abs(big.get("ramp_%d" % a, 0) - SYN["ramp_%d_pc" % a]) <= 0.02 * SYN["ramp_%d_pc" % a] for a in (20, 30, 40))
 case("prior_art_area_rule", ramp_ok and big.get("hole_20", 0) >= 100 and big.get("tube_between_walls", 0) >= 100,
      prior_largest_projected_mm2=big, printcheck_ramp_projected_mm2={a: SYN["ramp_%d_pc" % a] for a in (20, 30, 40)})
+
+# the PR #11 review's parts: verdict of the face pass ("-": no sloped finding; warn: a sloped bridge over 25 mm)
+REV = {"A_corner_10deg": "fail", "A0_ramp_one_wall_10deg": "fail", "B_pillars_rise20": "fail", "B2_pillars_rise10_30mm": "fail",
+       "D_ramp10_needle": "fail", "D2_wall_and_fin_0.05mm": "fail", "E_bed_wedge20": "fail", "E2_lying_cyl_r10": "fail",
+       "E2_lying_cyl_r15": "fail", "H_shelf8_fillet4": "fail", "J_rib_w3_10deg": "fail", "J_rib_w4_10deg": "fail",
+       "C_gable20deg_20mm": "-", "D2_wall_and_fin_1.2mm": "-", "E2_lying_cyl_r5": "-", "F0_tube20_round_bore": "-",
+       "F_screw_hole_print_up": "-", "F_teardrop_20": "-", "F_teardrop_20_rot30": "-", "F_teardrop_6": "-", "F_tube20_print_up": "-",
+       "G_box_bevel_1p5": "-", "G_shelf_on_45_gusset": "-", "H_shelf2_fillet2": "-", "I_dome_ri9": "-", "J_rib_w3_flat": "-",
+       "C_gable20deg_40mm": "warn", "C_hole40": "warn", "I_dome_ri18": "warn"}
+if len(sys.argv) > 5:
+    got = {}
+    for n in REV:
+        fp = os.path.join(sys.argv[5], n + ".stl")
+        if not os.path.isfile(fp):
+            got[n] = "missing"
+            continue
+        st = [f["status"] for f in faces_flagged(PC.analyze(PC.read_stl(fp), supports="no"))]
+        got[n] = "fail" if "fail" in st else "warn" if st else "-"
+    case("review_parts", got == REV, wrong={n: (got[n], REV[n]) for n in REV if got[n] != REV[n]}, parts=len(got))
+
+# a cylinder lying on the bed, by facet count: anchored on the bed band, whatever height the facets put its edge
+ver = {}
+for r_, nf in [(15, n) for n in (24, 36, 48, 64, 96, 128)] + [(5, 36), (5, 96)]:
+    prof = [(r_ * math.cos(2 * math.pi * i / nf + math.pi * (nf % 4 != 0) / nf), r_ + r_ * math.sin(2 * math.pi * i / nf)) for i in range(nf)]
+    z0 = min(z for _, z in prof)
+    r = PC.analyze(prism_x([(y, z - z0) for y, z in prof], 0, 40), supports="no")
+    ver["r%d_n%d" % (r_, nf)] = ("fail" if any(f["status"] == "fail" for f in faces_flagged(r)) else "-", r["max_face_overhang_mm"])
+case("lying_cylinder_facets", all(v[0] == ("fail" if k.startswith("r15") else "-") for k, v in ver.items()), verdicts=ver)
+
+# zero-thickness sheet against a line contact
+sheet = PC.analyze(np.concatenate([box(0, 10, 0, 10, 0, 10), box(10, 20, 0, 10, 0, 10)]), supports="no")
+line = PC.analyze(np.concatenate([box(0, 10, 0, 10, 0, 10), box(10, 20, 10, 20, 0, 10)]), supports="no")
+msg = lambda r: [f["msg"][:110] for f in r["findings"] if f["kind"] == "nonmanifold"]
+case("sheet_vs_line_contact", sheet["stl_sheet_edges"] > 0 and sheet["stl_nonmanifold_edges"] == 0 and "back to back" in str(msg(sheet))
+     and "overlap them" not in str(msg(sheet)) and line["stl_nonmanifold_edges"] == 1 and line["stl_sheet_edges"] == 0,
+     sheet=msg(sheet), line=msg(line))
 
 # v2 shipped STLs
 rep = PC.run([V2], manifest=MAN, out=os.path.join(OUT, "v2.json"))

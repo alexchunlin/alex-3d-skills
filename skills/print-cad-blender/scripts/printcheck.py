@@ -17,13 +17,17 @@ plus half a pixel of raster slack each side). Each connected unsupported region 
 The face pass (face_regions) catches what the layer check cannot: it compares each layer with the one below only and
 accepts sub-millimetre steps, so a gradual overhang never builds up (a 20 mm ramp 5-40 deg from horizontal: 0 fails).
 Downward faces flatter than 45 deg from horizontal, off the bed, are grouped through shared vertices; each region's
-boundary is anchored where material continues down from it one layer lower. A region anchored on two sides is a sloped
-bridge (a horizontal bore's ceiling); otherwise overhang_mm is how far it reaches past the 45 deg cone of its nearest
-anchor. Warn past face_warn_mm (2), fail past cantilever_mm (3) with face_fail_mm2 (20) or more projected, on
-supports: no. All-flat regions are the layer check's. The STL's edges in more than two faces warn.
+boundary is anchored where material continues down from it one layer lower, or where it meets the first layer. A
+region anchored on two sides at heights within 2 mm is a sloped bridge (a horizontal bore's ceiling); otherwise
+overhang_mm is how far it reaches past the overhang_deg cone of its nearest anchor. Warn past face_warn_mm (2), fail
+past cantilever_mm (3) with face_fail_mm2 (5) or more projected, on supports: no. All-flat regions are the layer
+check's. overhang_deg is the support angle from vertical (45; Bambu/Orca's "threshold angle" 30 from horizontal is
+overhang_deg 60). The STL's edges in more than two faces warn: a line contact between solids, or, where faces lie
+back to back, a zero-thickness sheet from a coplanar boolean.
 Locations are in the print frame (the STL) and, with a manifest (print_rot, bbox_world_home) or from cadcheck, the
 world frame. --where lists every region that is not ok and every face region; --section prints layers as text (see
-section_lines). Exit status 1 when any part fails.
+section_lines; on a directory --where --section auto prints about 900 lines for v2's 36 parts: pass --only PART).
+Exit status 1 when any part fails.
 
 Why: v2 shipped "supports: no" on every part; jar_valve's three bayonet tabs start 2.1 mm above the bed, cantilevered
 about 10 mm, and feeder_cover's top screw ear is a 10.5 mm cantilever at z 32. cadcheck missed both: it measured every
@@ -66,16 +70,20 @@ DEFAULTS = {
     "min_feature_mm": 0.4,    # one extrusion line: an unsupported sliver with no core this wide is not printed (v1 A1/A3
                               # base_shell 0.2 mm fins, hopper's 0.1 mm funnel-lip hairline), so it neither fails nor supports
     "max_regions": 25,        # per part, in the report (counts stay complete)
-    # face pass: downward faces steeper than overhang_deg from vertical, grouped by shared edges, measured from their
-    # anchored edges along the 45 deg cone (see face_regions). v2's sloped faces reach 1.6 mm past it at most (beam's
-    # corner facets), the 40 deg ramp 3.3 and the grown 4-way node 8.9-12.5, so: warn past face_warn_mm, fail past
-    # cantilever_mm on a region of face_fail_mm2 or more (half v2's smallest real miss, base_shell's 40 mm2 block)
+    # face pass: downward faces steeper than overhang_deg from vertical, grouped through shared vertices, measured from
+    # their anchored edges along the overhang_deg cone (see face_regions). v2's sloped faces reach 1.6 mm past it at most
+    # (beam's corner facets), the 40 deg ramp 3.3 and the grown 4-way node 8.9-10.0, so: warn past face_warn_mm, fail
+    # past cantilever_mm on face_fail_mm2 or more projected (a 3 x 6 mm tab at 10 deg is 18 mm2 and fails, as its flat
+    # twin fails the layer check; PR #11 review). overhang_deg is the slicer's support angle measured from vertical: 45
+    # here is a 45 deg threshold; Bambu/Orca's "threshold angle" 30 (from horizontal) is overhang_deg 60
     "face_flat_deg": 1.0,     # a region of faces all flatter than this is the layer check's: it tells bridge from cantilever
     "face_warn_mm": 2.0,
-    "face_fail_mm2": 20.0,
+    "face_fail_mm2": 5.0,
     "face_min_mm2": 2.0,      # smaller face regions are listed, never flagged
     "face_probe_mm": 0.5,     # boundary edges are probed for an anchor every this many mm
     "face_probe_reach_mm": 2.0,  # and at most this far out (downhill edges of flat slopes; see face_regions)
+    "face_bridge_dz_mm": 2.0,    # a sloped bridge's two anchors differ in height by no more than this (0.4 added 4
+                                 # warns on v2 flywheel's bore tops)
     "nm_min_edge_mm": 0.01,   # STL edge count: shorter edges are slivers (v2 hood's nanometre edges)
 }
 
@@ -228,9 +236,11 @@ def _nearest(free, seed, cap=4000):
     return float(np.sqrt(best.max())) + 0.5
 
 
-def _chords(R, P, ys, xs, p, ndir=12, cap=800, dirs=None):
+def _chords(R, P, ys, xs, p, ndir=12, cap=800, dirs=None, Az=None, dz=None):
     """For each of ndir directions: share of R's pixels whose straight line through R ends on supported material P at
-    both ends, and the longest such line (mm). Lines are marched in 0.7 pixel steps."""
+    both ends, and the longest such line (mm). Lines are marched in 0.7 pixel steps. With Az (anchor height per pixel),
+    a line counts only when its two anchors are within dz in height: a slab whose underside climbs from a low pillar
+    to a high one is a cantilever off the low one, not a bridge (PR #11 review)."""
     if cap and len(ys) > cap:
         k = np.linspace(0, len(ys) - 1, cap).astype(int)
         ys, xs = ys[k], xs[k]
@@ -242,10 +252,11 @@ def _chords(R, P, ys, xs, p, ndir=12, cap=800, dirs=None):
         th = math.radians(deg)
         dy, dx = math.sin(th) * 0.7, math.cos(th) * 0.7
         st = np.arange(1, maxst + 1, dtype=np.float64)
-        ends, lens = [], []
+        ends, lens, ez = [], [], []
         for sgn in (1, -1):
             hitP = np.zeros(len(ys), bool)
             L = np.zeros(len(ys))
+            zz = np.full(len(ys), np.nan)
             for c0 in range(0, len(ys), 4000):
                 yy, xx = ys[c0:c0 + 4000, None], xs[c0:c0 + 4000, None]
                 cy = np.floor(yy + 0.5 + sgn * dy * st).astype(np.int64)
@@ -257,9 +268,15 @@ def _chords(R, P, ys, xs, p, ndir=12, cap=800, dirs=None):
                 rows = np.arange(len(first))
                 hitP[c0:c0 + 4000] = inb[rows, first] & P[cyc[rows, first], cxc[rows, first]]
                 L[c0:c0 + 4000] = st[first] * 0.7
+                if Az is not None:
+                    zz[c0:c0 + 4000] = Az[cyc[rows, first], cxc[rows, first]]
             ends.append(hitP)
             lens.append(L)
+            ez.append(zz)
         both = ends[0] & ends[1]
+        if Az is not None:
+            with np.errstate(invalid="ignore"):
+                both &= np.abs(ez[0] - ez[1]) <= dz
         span = float((lens[0] + lens[1])[both].max()) * p if both.any() else 0.0
         res.append((float(both.mean()), span, deg, both, ys, xs))
     return res
@@ -274,11 +291,12 @@ def _weld(tris, tol=1e-4):
     return inv.reshape(-1, 3)
 
 
-def _edge_keys(F):
-    """(3n,) sorted-edge keys and the face each comes from, corner order (0,1), (1,2), (2,0)."""
+def _edge_keys(F, nv=None):
+    """(3n,) sorted-edge keys and the face each comes from, corner order (0,1), (1,2), (2,0). Keys from two calls
+    compare only when both pass the same vertex count nv."""
     E = np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]])
     E = np.sort(E, 1)
-    return E[:, 0] * (int(F.max()) + 1) + E[:, 1], np.tile(np.arange(len(F)), 3)
+    return E[:, 0] * (nv or (int(F.max()) + 1 if len(F) else 1)) + E[:, 1], np.tile(np.arange(len(F)), 3)
 
 
 def _face_groups(F, idx):
@@ -384,6 +402,11 @@ def face_regions(tris, C, zmin=0.0):
     sel = np.nonzero(~deg & (a2 > 1e-12) & (nz < -cos_o - 1e-3) & (tris[:, :, 2].mean(1) > h))[0]
     if not len(sel):
         return [], {}
+    # the bed band: downward faces within the first layer. A region edge shared with one sits on the bed: anchored, at
+    # whatever height the facets put it (a lying r 15 cylinder's lowest kept edge is at z 0.23 with 36 facets)
+    nv = int(F.max()) + 1
+    bk, _ = _edge_keys(F[np.nonzero(~deg & (a2 > 1e-12) & (nz < 0) & (tris[:, :, 2].mean(1) <= h))[0]], nv)
+    bed_keys = np.unique(bk)
     A = a2 / 2
     regions, probes = [], {}
     step = C["face_probe_mm"]
@@ -394,9 +417,10 @@ def face_regions(tris, C, zmin=0.0):
             continue
         T = tris[fid]
         # boundary edges: in one face of the group only
-        key, fi = _edge_keys(F[fid])
+        key, fi = _edge_keys(F[fid], nv)
         uk, cnt = np.unique(key, return_counts=True)
         bnd = np.nonzero(cnt[np.searchsorted(uk, key)] == 1)[0]
+        on_bed = np.isin(key[bnd], bed_keys)
         e0 = np.array([0, 1, 2])[bnd // len(fid)]
         f = fi[bnd]
         a, b = T[f, e0], T[f, (e0 + 1) % 3]
@@ -423,7 +447,7 @@ def face_regions(tris, C, zmin=0.0):
         # probe the layer whose mid-height is 0.5-1.5 layers below the edge point. Edges within the first layer border
         # the bed band (faces there are the bed's), so they are anchored: v1 A3 feeder_shroud's flare starts at z 0.2
         kp = np.floor((P[:, 2] - zmin - 0.75 * h) / h).astype(np.int64)
-        kp[P[:, 2] - zmin <= h * 1.05] = -1
+        kp[(P[:, 2] - zmin <= h * 1.05) | on_bed[e]] = -1
         reg["_sup"][kp < 0] = True
         for k in np.unique(kp[kp >= 0]):
             probes.setdefault(int(k), []).append((len(regions), np.nonzero(kp == k)[0]))
@@ -456,12 +480,33 @@ def classify_face_region(reg, tris, p, C, zmin=0.0, print_to_world=None):
     fid = reg["_faces"]
     T = tris[fid]
     lo, hi = T.reshape(-1, 3).min(0), T.reshape(-1, 3).max(0)
+    S = reg["_sup"]
+    fh = reg["_fh"]
+    w = np.linalg.norm(np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]), axis=1)
+    out = {"area_mm2": round(reg["area_mm2"], 1), "projected_mm2": round(float((w * np.cos(np.radians(fh))).sum() / 2), 1),
+           "deg_limit": C["overhang_deg"],
+           "deg_from_vertical": [round(90 - float(fh.max()), 1), round(90 - float(fh.min()), 1)],
+           "mean_deg_from_vertical": round(90 - float((fh * w).sum() / w.sum()), 1),
+           "z_mm": [round(float(lo[2]), 2), round(float(hi[2]), 2)],
+           "anchored_edge_mm": round(float(reg["_seg"][S].sum()), 1), "edge_mm": round(float(reg["_seg"].sum()), 1)}
+    cen = (T.mean(1) * w[:, None]).sum(0) / w.sum()
+    out["at_print"] = [round(float(v), 1) for v in cen]
+    out["extent_mm"] = [round(float(v), 1) for v in (hi - lo)[:2]]
+    if print_to_world is not None:
+        Rw, tw = print_to_world
+        out["at_world"] = [round(float(v), 1) for v in np.asarray(Rw) @ (cen + [0, 0, zmin]) + np.asarray(tw)]
+    # the cheap verdicts first (PR #11 review: small parts went 0.64 -> 1.80 s measuring regions nobody judges)
+    if hi[2] - lo[2] <= C["layer_h"] + 1e-6 or fh.max() < C["face_flat_deg"]:
+        out["kind"] = "flat"
+        return out
+    if out["projected_mm2"] < C["face_min_mm2"]:
+        out["kind"] = "small"
+        return out
     marg = 4
     x0, y0 = lo[0] - marg * p, lo[1] - marg * p
     W = int(math.ceil((hi[0] - lo[0]) / p)) + 2 * marg
     H = int(math.ceil((hi[1] - lo[1]) / p)) + 2 * marg
     R, Z = _fill_tris(T, x0, y0, p, W, H)
-    S = reg["_sup"]
     Az = np.full((H, W), np.inf)
     if S.any():
         P, o, seg, dr = reg["_pts"][S], reg["_out"][S], reg["_seg"][S], reg["_dir"][S]
@@ -476,32 +521,18 @@ def classify_face_region(reg, tris, p, C, zmin=0.0, print_to_world=None):
             np.minimum.at(Az, (cy, cx), P[e, 2])
         Az[R | ~_dilate(R, N8)] = np.inf
     A = np.isfinite(Az)
-    fh = reg["_fh"]
-    w = np.linalg.norm(np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]), axis=1)
-    out = {"area_mm2": round(reg["area_mm2"], 1), "projected_mm2": round(float((w * np.cos(np.radians(fh))).sum() / 2), 1),
-           "deg_limit": C["overhang_deg"],
-           "deg_from_vertical": [round(90 - float(fh.max()), 1), round(90 - float(fh.min()), 1)],
-           "mean_deg_from_vertical": round(90 - float((fh * w).sum() / w.sum()), 1),
-           "z_mm": [round(float(lo[2]), 2), round(float(hi[2]), 2)],
-           "anchored_edge_mm": round(float(reg["_seg"][S].sum()), 1), "edge_mm": round(float(reg["_seg"].sum()), 1)}
     tan = math.tan(math.radians(C["overhang_deg"]))
     if not A.any():
         out.update(kind="floating", overhang_mm=round(float(max(hi[0] - lo[0], hi[1] - lo[1])), 1))
     else:
         ys, xs = np.nonzero(R)
-        ch = _chords(R, A, ys.astype(float), xs.astype(float), p)
+        ch = _chords(R, A, ys.astype(float), xs.astype(float), p, Az=Az, dz=C["face_bridge_dz_mm"])
         frac, span, ang, both, sy, sx = max(ch, key=lambda c: (round(c[0], 2), -c[1]))
         if frac >= C["bridge_frac"]:
             out.update(kind="bridge", span_mm=round(span, 1), anchored_frac=round(frac, 2))
         else:
             ex, _ = _excess(R, Z, Az, p, tan)
             out.update(kind="cantilever", overhang_mm=round(ex, 1), anchored_frac=round(frac, 2))
-    cen = (T.mean(1) * w[:, None]).sum(0) / w.sum()
-    out["at_print"] = [round(float(v), 1) for v in cen]
-    out["extent_mm"] = [round(float(v), 1) for v in (hi - lo)[:2]]
-    if print_to_world is not None:
-        Rw, tw = print_to_world
-        out["at_world"] = [round(float(v), 1) for v in np.asarray(Rw) @ (cen + [0, 0, zmin]) + np.asarray(tw)]
     return out
 
 
@@ -644,6 +675,7 @@ def analyze(tris, cfg=None, supports="no", print_to_world=None, keep_pixels=Fals
     nm = stl_edges(tris, C)
     if print_to_world is not None:
         nm["at_world"] = _to_world(nm["at"], print_to_world, zmin)
+        nm["sheet_at_world"] = _to_world(nm["sheet_at"], print_to_world, zmin)
     findings = _findings(regions, faces, nm)
     by = lambda kind: [g for g in regions if g["kind"] == kind]
     fl = [g for g in faces if g["status"] in ("fail", "support", "warn")]
@@ -658,7 +690,8 @@ def analyze(tris, cfg=None, supports="no", print_to_world=None, keep_pixels=Fals
            "max_face_overhang_mm": max([g["overhang_mm"] for g in faces if g["status"] != "layer" and "overhang_mm" in g] or [0.0]),
            "face_overhang_mm2": round(sum(g["projected_mm2"] for g in fl), 1), "n_face_regions": len(faces),
            "faces": [g for g in faces if g["projected_mm2"] >= C["face_min_mm2"]][:C["max_regions"]] if not keep_pixels else faces,
-           "stl_nonmanifold_edges": nm["n"], "stl_nonmanifold_at": nm["at"], "findings": findings}
+           "stl_nonmanifold_edges": nm["n"], "stl_nonmanifold_at": nm["at"], "stl_sheet_edges": nm["sheet"],
+           "stl_sheet_at": nm["sheet_at"], "findings": findings}
     return out
 
 
@@ -700,15 +733,40 @@ def stl_edges(tris, C):
     wide = np.linalg.norm(np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]), axis=1) / np.maximum(L, 1e-30) >= C["nm_min_edge_mm"] / 10
     F = F[(F[:, 0] != F[:, 1]) & (F[:, 1] != F[:, 2]) & (F[:, 2] != F[:, 0]) & wide]
     if not len(F):
-        return {"n": 0, "at": []}
-    key, _ = _edge_keys(F)
+        return {"n": 0, "at": [], "sheet": 0, "sheet_at": []}
+    key, fi = _edge_keys(F)
     uk, cnt = np.unique(key, return_counts=True)
     n1 = int(F.max()) + 1
     bad = uk[cnt > 2]
     a, b = u[bad // n1], u[bad % n1]
-    keep = np.linalg.norm(a - b, axis=1) >= C["nm_min_edge_mm"]
-    at = [[round(float(v), 1) for v in m] for m in ((a[keep] + b[keep]) / 2)[:5]]
-    return {"n": int(keep.sum()), "at": at}
+    bad = bad[np.linalg.norm(a - b, axis=1) >= C["nm_min_edge_mm"]]
+    # an edge where two of the faces lie back to back (coplanar, opposite normals) belongs to a zero-thickness sheet,
+    # usually left by a coplanar boolean, not to two solids touching along a line: push-assist tray_R has 653 such edges
+    # on x = -76.4 and 3 others (PR #11 review). Counted apart, with their own fix.
+    Fv = u[F]
+    N = np.cross(Fv[:, 1] - Fv[:, 0], Fv[:, 2] - Fv[:, 0])
+    N /= np.maximum(np.linalg.norm(N, axis=1), 1e-30)[:, None]
+    o = np.argsort(key, kind="stable")
+    ks, fs = key[o], fi[o]
+    lo = np.searchsorted(ks, bad)
+    hi = np.searchsorted(ks, bad, side="right")
+    cen = Fv.mean(1)
+
+    def back_to_back(k, ff):
+        """Two faces at the edge with opposite normals that lie on the same side of it (overlapping, not two coplanar
+        walls of solids meeting at the edge)."""
+        e0, e1 = u[k // n1], u[k % n1]
+        d = (e1 - e0) / max(np.linalg.norm(e1 - e0), 1e-30)
+        side = cen[ff] - e0
+        side -= np.outer(side @ d, d)
+        for i in range(len(ff)):
+            for j in range(i + 1, len(ff)):
+                if N[ff[i]] @ N[ff[j]] < -0.999 and side[i] @ side[j] > 0:
+                    return True
+        return False
+    is_sheet = np.array([back_to_back(k, fs[i:j]) for k, i, j in zip(bad, lo, hi)], bool)
+    mid = lambda kk: [[round(float(v), 1) for v in m] for m in ((u[kk // n1] + u[kk % n1]) / 2)[:5]]
+    return {"n": int((~is_sheet).sum()), "at": mid(bad[~is_sheet]), "sheet": int(is_sheet.sum()), "sheet_at": mid(bad[is_sheet])}
 
 
 def _findings(regions, faces=(), nm=None):
@@ -734,6 +792,11 @@ def _findings(regions, faces=(), nm=None):
                     "solids touching along a line; a slicer's mesh check counts them; overlap them by 0.1 mm or more) at print %s%s" % (
                     nm["n"], "; ".join(str(a) for a in nm["at"][:3]), ", world %s" % "; ".join(str(a) for a in nm["at_world"][:3])
                     if nm.get("at_world") else "")})
+    if nm and nm.get("sheet"):
+        out.append({"status": "warn", "kind": "nonmanifold", "z_mm": None, "msg": "%d edges in more than 2 faces as exported where faces lie back to back: "
+                    "a zero-thickness sheet, usually a coplanar boolean (extend the cutter 0.1 mm past the face it is flush with) "
+                    "at print %s%s" % (nm["sheet"], "; ".join(str(a) for a in nm["sheet_at"][:3]), ", world %s" % "; ".join(
+                        str(a) for a in nm["sheet_at_world"][:3]) if nm.get("sheet_at_world") else "")})
     return out
 
 
@@ -769,7 +832,9 @@ def analyze_cached(tris, cfg=None, supports="no", print_to_world=None):
         for g in res["regions"] + res["faces"]:
             g["at_world"] = [round(float(v), 1) for v in np.asarray(Rw) @ (np.array(g["at_print"]) + [0, 0, z0]) + np.asarray(tw)]
         res["findings"] = _findings(res["regions"], res["faces"], {"n": res["stl_nonmanifold_edges"], "at": res["stl_nonmanifold_at"],
-                                                                   "at_world": _to_world(res["stl_nonmanifold_at"], print_to_world, z0)})
+                                                                   "at_world": _to_world(res["stl_nonmanifold_at"], print_to_world, z0),
+                                                                   "sheet": res["stl_sheet_edges"], "sheet_at": res["stl_sheet_at"],
+                                                                   "sheet_at_world": _to_world(res["stl_sheet_at"], print_to_world, z0)})
     return res
 
 
@@ -872,6 +937,12 @@ def print_summary(rep, out=None):
 
 # ------------------------------------------------------------------ where: region list and layer sections as text
 
+def _face_what(g):
+    return {"bridge": lambda: "sloped bridge span %.1f mm" % g["span_mm"], "floating": lambda: "anchored nowhere",
+            "flat": lambda: "flat: the layer check's call", "small": lambda: "under face_min_mm2",
+            "cantilever": lambda: "%.1f mm past %g deg" % (g["overhang_mm"], g["deg_limit"])}[g["kind"]]()
+
+
 def where_lines(name, r):
     """One line per region worth reading: every layer-check region that is not ok, every face-pass region (sloped
     overhangs and the flat ones the layer check judges), worst first."""
@@ -887,8 +958,7 @@ def where_lines(name, r):
     for g in r["faces"]:
         if g["projected_mm2"] < DEFAULTS["face_min_mm2"]:
             continue
-        m = ("sloped bridge span %.1f mm" % g["span_mm"] if g["kind"] == "bridge" else
-             "anchored nowhere" if g["kind"] == "floating" else "%.1f mm past %g deg" % (g["overhang_mm"], g["deg_limit"]))
+        m = _face_what(g)
         out.append("%-7s faces z %5.1f-%-5.1f %-36s %.0f mm2 projected, %.0f-%.0f deg from vertical, anchored %.0f of %.0f mm edge  %s" % (
             g["status"].upper(), g["z_mm"][0], g["z_mm"][1], m, g["projected_mm2"], g["deg_from_vertical"][0], g["deg_from_vertical"][1],
             g["anchored_edge_mm"], g["edge_mm"], loc(g)))
@@ -906,7 +976,11 @@ def _section_zs(r, where):
         z = g["z_mm"] if not isinstance(g["z_mm"], list) else g["z_mm"][0] + r["layer_h"]
         c, e = g["at_print"], g["extent_mm"]
         win = [c[0] - e[0] / 2 - 6, c[1] - e[1] / 2 - 6, c[0] + e[0] / 2 + 6, c[1] + e[1] / 2 + 6]
-        if not any(abs(z - z0) < r["layer_h"] / 2 and w0 == win for z0, w0 in out):
+        for i, (z0, w0) in enumerate(out):
+            if abs(z - z0) < r["layer_h"] / 2:     # the same layer: one section, its window grown to hold both
+                out[i] = (z0, [min(w0[0], win[0]), min(w0[1], win[1]), max(w0[2], win[2]), max(w0[3], win[3])])
+                break
+        else:
             out.append((z, win))
     return out[:4]
 
@@ -954,8 +1028,7 @@ def section_lines(tris, zw, res, cfg=None, cell=None, window=None):
         flag = g["status"] in ("fail", "warn", "support")
         rank[m & cur] = np.maximum(rank[m & cur], 4 if flag else 3)
         notes.append("%s faces z %.1f-%.1f: %s, %.0f mm2 projected, %.0f-%.0f deg from vertical, %s" % (
-            "V" if flag else "v", g["z_mm"][0], g["z_mm"][1], "sloped bridge span %.1f mm" % g["span_mm"] if g["kind"] == "bridge" else
-            "anchored nowhere" if g["kind"] == "floating" else "%.1f mm past %g deg" % (g["overhang_mm"], g["deg_limit"]),
+            "V" if flag else "v", g["z_mm"][0], g["z_mm"][1], _face_what(g),
             g["projected_mm2"], g["deg_from_vertical"][0], g["deg_from_vertical"][1], g["status"]))
     for g in res["regions"]:
         if g.get("layer") != k or "_px" not in g:
