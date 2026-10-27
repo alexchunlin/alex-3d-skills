@@ -6,6 +6,7 @@
 #   cad py     -c "import params as P; print(P.X)" | script.py [args]   Python with bpy + cadlib + ./ and ./parts on the path
 #   cad rows   [cadcheck.json|manifest.json|checks.json] [REGEX] [--check a,b] [--findings]   one line per row; grep, don't json.load
 #   cad bom    BOM_AND_ASSEMBLY.md manifest.json      BOM fastener table vs the model: size, length, head, count, stock
+#   cad mates  manifest.json|model.blend [REGEX] [--connectors]   one line per mate (cadlib.mates): what, how, fastener, fit
 #   cad sheet  stl_dir out.png                       STL contact sheet in print orientation
 #   cad printcheck stl_dir|part.stl [--manifest m.json] [--out j] [--render DIR]   layer support check on the exported STLs
 #   cad slice  stl_dir|part.stl | --detect           real slicer, sandboxed and crash-guarded: support needed, time, filament
@@ -47,10 +48,16 @@ case "$cmd" in
       # (v2 A2: the launcher and feeder builders hand-stubbed bpy/cadlib to import params.py from plain python3)
       run --python-expr "import sys, os, runpy; sys.path[:0] = [os.getcwd(), os.path.join(os.getcwd(), 'parts'), '$HERE']; a = sys.argv[sys.argv.index('--') + 1:]; sys.argv = a; exec(a[1]) if a[0] == '-c' else runpy.run_path(a[0], run_name='__main__')" -- "$@" ;;
   rows) exec python3 "$HERE/cadrows.py" "$@" ;;   # plain python3, no Blender (v2 A3: 67 hand dump scripts, V2A3-T1)
-  bom) exec python3 "$HERE/cadbom.py" "$@" ;;       # plain python3 (v2 A3: stud M3 x 20 in the BOM, x 16 in the model, V2A3-F6)
+  bom) exec python3 "$HERE/cadbom.py" "$@" ;;
+  mates) case "${1:-}" in   # the mate table: plain python3 on a manifest; through Blender for a .blend
+           *.blend) b="$1"; shift
+                    run "$b" --python-expr "import bpy; print('CADMATES ' + bpy.context.scene.get('cad_mates', 'null'))" |
+                      sed -n 's/^CADMATES //p' | python3 "$HERE/cadmates.py" - "$@" ;;
+           *) exec python3 "$HERE/cadmates.py" "$@" ;;
+         esac ;;       # plain python3 (v2 A3: stud M3 x 20 in the BOM, x 16 in the model, V2A3-F6)
   sheet) run --python-expr "import sys; sys.path.insert(0, '$HERE'); from cadlib import render; render.contact_sheet('$1', '$2')" ;;
   printcheck) # layer-by-layer support analysis on the exported STLs; exit 1 on a fail (FINDINGS "v2 post-freeze")
       run --python "$HERE/printcheck.py" -- "$@" ;;
   slice) exec python3 "$HERE/cadslice.py" "$@" ;;   # the only way a slicer may run (HARVEST_BRIEF "Printer safety, revised")
-  *) sed -n '2,12p' "$0"; exit 2 ;;
+  *) sed -n '2,13p' "$0"; exit 2 ;;
 esac

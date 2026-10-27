@@ -18,6 +18,8 @@ from . import geom, features
 COLL_NAMES = {'PRT': 'Printed', 'BUY': 'Purchased', 'FST': 'Fasteners', 'CAB': 'Cables'}
 PARTS, JOINTS, MATS, COLLS = {}, {}, {}, {}
 PARAMS = {}
+# cadlib.mates: parts declared for assemble(), the mates in declaration order, and the solved mate table
+MATE_PARTS, MATES, MATE_TABLE = {}, [], []
 
 PALETTE = {
     # two coordinated PLA colours plus neutral purchased parts (brief: restrained palette)
@@ -39,7 +41,7 @@ def new_scene(params=None):
     sc.unit_settings.system = 'METRIC'
     sc.unit_settings.scale_length = 0.001
     sc.unit_settings.length_unit = 'MILLIMETERS'
-    for d in (PARTS, JOINTS, MATS, COLLS, PARAMS):
+    for d in (PARTS, JOINTS, MATS, COLLS, PARAMS, MATE_PARTS, MATES, MATE_TABLE):
         d.clear()
     features.LOG.clear()
     if params:
@@ -314,8 +316,14 @@ def manifest():
         lo = [round(min(v[i] for v in bb), 2) for i in range(3)]
         hi = [round(max(v[i] for v in bb), 2) for i in range(3)]
         parts[name] = {**{k: v for k, v in info.items() if k not in ("path",)}, "bbox_world_home": [lo, hi]}
-    return {"units": "mm", "params": PARAMS, "joints": js, "parts": parts, "features": features.LOG,
-            "fastener_summary": features.fastener_summary(PARTS)}
+        if "mate_connectors" in ob.keys():
+            from . import mates
+            parts[name]["connectors"] = mates.connectors_world(ob)
+    out = {"units": "mm", "params": PARAMS, "joints": js, "parts": parts, "features": features.LOG,
+           "fastener_summary": features.fastener_summary(PARTS)}
+    if MATE_TABLE:
+        out["mates"] = MATE_TABLE
+    return out
 
 
 def write_manifest(path):

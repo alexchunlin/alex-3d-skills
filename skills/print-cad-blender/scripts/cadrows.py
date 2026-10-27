@@ -2,7 +2,7 @@
 
     cad rows [cadcheck.json] [REGEX] [--check distances,drop] [--findings] [--max N]
     cad rows cadcheck.json --summary [REGEX]             # counts, coverage, not_checked, held poses, assembly.step_of
-    cad rows manifest.json [REGEX]                       # parts, fasteners, cables, joints, params
+    cad rows manifest.json [REGEX]                       # parts, fasteners, cables, joints, mates, params
     cad rows checks.json [REGEX] [--check allow,stacks]  # config rows: allow, fits, distances, stacks, slide_out, ...
 
 REGEX filters the printed lines (case-insensitive), e.g. `cad rows v2-A2`, `cad rows "hood.*flywheel"`,
@@ -128,6 +128,10 @@ def manifest_rows(m):
         yield "joint  %s  %s" % (n, "  ".join("%s=%s" % (k, short(v)) for k, v in p.items()))
     for n, p in sorted(m.get("parts", {}).items()):
         yield "%-6s %s  %s" % (p.get("kind", "?"), n, "  ".join("%s=%s" % (k, short(v)) for k, v in p.items() if k not in ("kind",)))
+    if m.get("mates"):
+        from cadmates import mate_line
+        for x in m["mates"]:
+            yield "mate   " + mate_line(x)
     for k, v in sorted(m.get("params", {}).items()):
         yield "param  %s = %s" % (k, short(v, 120))
 
