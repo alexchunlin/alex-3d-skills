@@ -2,7 +2,7 @@
 # 1. unit cases (tools/verify.d/mates_cases.py): frames, chains, flips, prismatic, patterns, loops, errors, print_rot
 # 2. the demo turret placed through mates (examples/demo-turret/build_mates.py) gives build.py's cadcheck rows
 # 3. its planted pattern mismatch fails the build with both specs; 4. `cad mates` on a manifest and a blend
-# 5. the mates_task scorer on its reference solution and a planted offset (tools/bench/mates_task)
+# 5. the mates_task and mates_task_v2 scorers on their reference solutions and planted errors (tools/bench/)
 mkdir -p "$V/mates"
 $CAD build "$ROOT/tools/verify.d/mates_cases.py" --out "$V/mates/cases" > "$V/mates/cases.log" 2>&1
 grep "^MATES \(PASS\|FAIL\)" "$V/mates/cases.log" | while read -r _ st msg; do echo "$st mates $msg"; done > "$V/mates/cases.txt"
@@ -38,10 +38,16 @@ $CAD mates "$V/mates/demo/demo.blend" > "$V/mates/mates_blend.txt" 2>&1
   && ok "cad mates: 7 demo mates, one line each, the same from manifest.json and demo.blend" || bad "cad mates ($V/mates/mates_manifest.txt)"
 $CAD mates "$V/mates/demo/manifest.json" "M3 nut" | grep -q "^side .*FST_side" && ok "cad mates REGEX: the side bolt by 'M3 nut'" || bad "cad mates REGEX"
 
-# 5. the evaluation kit's scorer
+# 5. the evaluation kits' scorers (v1: placement given; v2: pan-tilt from interfaces)
 if [ -f "$ROOT/tools/bench/mates_task/selftest.sh" ]; then
   sh "$ROOT/tools/bench/mates_task/selftest.sh" "$V/mates/kit" > "$V/mates/kit.log" 2>&1
   grep "^KIT \(PASS\|FAIL\)" "$V/mates/kit.log" | while read -r _ st msg; do echo "$st mates_task $msg"; done > "$V/mates/kit.txt"
   [ "$(grep -c . "$V/mates/kit.txt")" -ge 5 ] || echo "FAIL mates_task selftest: $(grep -c . "$V/mates/kit.txt") lines ($V/mates/kit.log)" >> "$V/mates/kit.txt"
   while read -r st msg; do [ "$st" = PASS ] && ok "$msg" || bad "$msg"; done < "$V/mates/kit.txt"
+fi
+if [ -f "$ROOT/tools/bench/mates_task_v2/selftest.sh" ]; then
+  sh "$ROOT/tools/bench/mates_task_v2/selftest.sh" "$V/mates/kit2" > "$V/mates/kit2.log" 2>&1
+  grep "^KIT \(PASS\|FAIL\)" "$V/mates/kit2.log" | while read -r _ st msg; do echo "$st mates_task_v2 $msg"; done > "$V/mates/kit2.txt"
+  [ "$(grep -c . "$V/mates/kit2.txt")" -ge 5 ] || echo "FAIL mates_task_v2 selftest: $(grep -c . "$V/mates/kit2.txt") lines ($V/mates/kit2.log)" >> "$V/mates/kit2.txt"
+  while read -r st msg; do [ "$st" = PASS ] && ok "$msg" || bad "$msg"; done < "$V/mates/kit2.txt"
 fi

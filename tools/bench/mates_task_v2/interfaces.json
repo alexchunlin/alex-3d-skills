@@ -1,0 +1,426 @@
+{
+ "_about": "What score.py measures for mates_task_v2 (tools/bench/mates_task/measure_blend.py). The answers below follow from the brief: deck top z 6, pan servo case top 46, pan horn disc top 53.8, tilt axis 40 above it at z 93.8 crossing the pan axis along Y, tilt servo spline top at y 23.9 (case y -20..20), camera lens on the board back at (25, 0, 93.8). Tolerances 0.2 mm and 1 deg. senses: the world axis a positive brief value turns about at home (pan counter-clockwise from above, tilt + raises); a design whose PIV turns the other way is posed with negated values. Clearances are measured over the brief's pan x tilt grid.",
+ "tol_mm": 0.2,
+ "tol_deg": 1.0,
+ "senses": {
+  "PIV_pan": [
+   0,
+   0,
+   1
+  ],
+  "PIV_tilt": [
+   0,
+   -1,
+   0
+  ]
+ },
+ "frames": {
+  "BUY_servo_pan": {
+   "origin": [
+    0,
+    0,
+    46
+   ],
+   "x": [
+    1,
+    0,
+    0
+   ],
+   "z": [
+    0,
+    0,
+    1
+   ],
+   "why": "upright on the deck top, spline on the pan axis, case toward -X"
+  },
+  "BUY_servo_tilt": {
+   "origin": [
+    0,
+    20,
+    93.8
+   ],
+   "x": [
+    0,
+    0,
+    1
+   ],
+   "z": [
+    0,
+    1,
+    0
+   ],
+   "why": "spline +Y on the tilt axis 40 above the pan horn top, case below the axis and centred on the pan axis"
+  },
+  "BUY_cam": {
+   "origin": [
+    25,
+    0,
+    93.8
+   ],
+   "x": [
+    0,
+    1,
+    0
+   ],
+   "z": [
+    1,
+    0,
+    0
+   ],
+   "why": "lens along +X through the tilt and pan axes, back 25 in front of the tilt axis, board up = +Z"
+  }
+ },
+ "axial": {
+  "BUY_horn_pan": {
+   "of": "BUY_servo_pan",
+   "origin": [
+    0,
+    0,
+    3.9
+   ],
+   "z": [
+    0,
+    0,
+    1
+   ],
+   "why": "pan horn on the pan spline"
+  },
+  "BUY_horn_tilt": {
+   "of": "BUY_servo_tilt",
+   "origin": [
+    0,
+    0,
+    3.9
+   ],
+   "z": [
+    0,
+    0,
+    1
+   ],
+   "why": "tilt horn on the tilt spline"
+  }
+ },
+ "joints": [
+  {
+   "name": "PIV_pan",
+   "through": [
+    0,
+    0
+   ],
+   "axis": "Z",
+   "range": [
+    -90,
+    90
+   ],
+   "carries": [
+    "BUY_horn_pan",
+    "PRT_pan_bracket",
+    "BUY_servo_tilt"
+   ],
+   "why": "pan about the pan axis, -90..90, carrying the bracket and the tilt servo"
+  },
+  {
+   "name": "PIV_tilt",
+   "point": [
+    0,
+    0,
+    93.8
+   ],
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "range": [
+    -25,
+    60
+   ],
+   "under": "PIV_pan",
+   "carries": [
+    "BUY_horn_tilt",
+    "PRT_tilt_bracket",
+    "BUY_cam"
+   ],
+   "why": "tilt about the tilt servo's spline, -25..60, riding on the pan"
+  }
+ ],
+ "screws": {
+  "pan_servo": {
+   "part": "BUY_servo_pan",
+   "holes": [
+    [
+     -26,
+     -6,
+     -40
+    ],
+    [
+     6,
+     -6,
+     -40
+    ],
+    [
+     -26,
+     6,
+     -40
+    ],
+    [
+     6,
+     6,
+     -40
+    ]
+   ],
+   "axis": [
+    0,
+    0,
+    1
+   ],
+   "size": "M2.5",
+   "why": "4 M2.5 into the pan servo's bottom tapped holes"
+  },
+  "pan_bracket": {
+   "part": "BUY_horn_pan",
+   "holes": [
+    [
+     7,
+     0
+    ],
+    [
+     0,
+     7
+    ],
+    [
+     -7,
+     0
+    ],
+    [
+     0,
+     -7
+    ]
+   ],
+   "axis": [
+    0,
+    0,
+    1
+   ],
+   "size": "M2",
+   "joint": "PIV_pan",
+   "why": "4 M2 through the pan horn's 0/90/180/270 holes, on the pan"
+  },
+  "tilt_servo": {
+   "part": "BUY_servo_tilt",
+   "holes": [
+    [
+     -24,
+     -10,
+     -34
+    ],
+    [
+     4,
+     -10,
+     -34
+    ],
+    [
+     -24,
+     -10,
+     -6
+    ],
+    [
+     4,
+     -10,
+     -6
+    ]
+   ],
+   "axis": [
+    0,
+    1,
+    0
+   ],
+   "size": "M2.5",
+   "joint": "PIV_pan",
+   "why": "4 M2.5 into the tilt servo's side tapped holes, on the pan"
+  },
+  "tilt_bracket": {
+   "part": "BUY_horn_tilt",
+   "holes": [
+    [
+     7,
+     0
+    ],
+    [
+     0,
+     7
+    ],
+    [
+     -7,
+     0
+    ],
+    [
+     0,
+     -7
+    ]
+   ],
+   "axis": [
+    0,
+    0,
+    1
+   ],
+   "size": "M2",
+   "joint": "PIV_tilt",
+   "why": "4 M2 through the tilt horn's 0/90/180/270 holes, on the tilt"
+  },
+  "camera": {
+   "part": "BUY_cam",
+   "holes": [
+    [
+     -10.5,
+     -9.25
+    ],
+    [
+     10.5,
+     -9.25
+    ],
+    [
+     -10.5,
+     3.25
+    ],
+    [
+     10.5,
+     3.25
+    ]
+   ],
+   "axis": [
+    0,
+    0,
+    1
+   ],
+   "size": "M2",
+   "joint": "PIV_tilt",
+   "why": "4 M2 through the camera board's holes, on the tilt"
+  },
+  "cover": {
+   "joins": [
+    "PRT_cover",
+    "PRT_deck"
+   ],
+   "count": 2,
+   "size": "M3",
+   "why": "2 M3 join the cover and the deck"
+  }
+ },
+ "poses": {
+  "part": "BUY_cam",
+  "home": {
+   "origin": [
+    25,
+    0,
+    93.8
+   ],
+   "x": [
+    0,
+    1,
+    0
+   ],
+   "z": [
+    1,
+    0,
+    0
+   ]
+  },
+  "chain": [
+   {
+    "joint": "PIV_tilt",
+    "point": [
+     0,
+     0,
+     93.8
+    ],
+    "axis": [
+     0,
+     -1,
+     0
+    ]
+   },
+   {
+    "joint": "PIV_pan",
+    "point": [
+     0,
+     0,
+     0
+    ],
+    "axis": [
+     0,
+     0,
+     1
+    ]
+   }
+  ],
+  "at": [
+   {
+    "PIV_pan": 0,
+    "PIV_tilt": 0
+   },
+   {
+    "PIV_pan": 45,
+    "PIV_tilt": 30
+   },
+   {
+    "PIV_pan": -90,
+    "PIV_tilt": -25
+   },
+   {
+    "PIV_pan": 90,
+    "PIV_tilt": 60
+   },
+   {
+    "PIV_pan": -30,
+    "PIV_tilt": 45
+   }
+  ],
+  "why": "the camera at (pan, tilt), brief signs (pan counter-clockwise from above, tilt + raises), against the analytic chain"
+ },
+ "clearances": {
+  "pairs": [
+   [
+    "PRT_tilt_bracket",
+    "BUY_servo_tilt"
+   ],
+   [
+    "BUY_cam",
+    "BUY_servo_tilt"
+   ],
+   [
+    "PRT_tilt_bracket",
+    "PRT_pan_bracket"
+   ],
+   [
+    "BUY_cam",
+    "PRT_pan_bracket"
+   ],
+   [
+    "PRT_pan_bracket",
+    "PRT_cover"
+   ],
+   [
+    "BUY_servo_tilt",
+    "PRT_cover"
+   ]
+  ],
+  "grid": {
+   "PIV_pan": [
+    -90,
+    -45,
+    0,
+    45,
+    90
+   ],
+   "PIV_tilt": [
+    -25,
+    0,
+    30,
+    60
+   ]
+  },
+  "min_mm": 1.0,
+  "why": "brief: moving parts keep 1 mm from what they don't touch over the pan x tilt range"
+ }
+}

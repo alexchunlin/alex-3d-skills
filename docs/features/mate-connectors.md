@@ -96,7 +96,27 @@ for the absolute arm, acceptance rows, and `score.py`: cadcheck fails, 7 interfa
 code. The reference solution scores 0 fails, 0 warns, 7/7, 131 lines; a copy with the board 0.5 mm off scores only
 `BUY_pcb` off, by 0.500 mm. How to run: the kit's README. The A/B runs are the coordinator's.
 
+### A/B results on v1, and v2
+The coordinator ran 3 designers per arm on v1. Every run: 0 cadcheck fails and 7/7 interfaces (mates-1 first scored
+6/7 because the scorer only counted lid screws driven from the lid side; fixed, re-scored 7/7, with a selftest case for
+the other direction). Wall time: absolute 3.3 / 4.0 / 5.5 min, mates 6.0 / 4.2 / 4.5. Lines: absolute 134 / 134 / 160,
+mates 159 / 144 / 145. v1's brief hands over the world positions, so neither arm had placement to reason about.
+
+`tools/bench/mates_task_v2/` is a two-servo pan-tilt with constraints only (tilt axis 40 above the pan horn and
+crossing the pan axis, tilt servo's case below the axis and centred on the pan axis, camera axis through both axes,
+board back 25 ahead): the tilt servo and camera are turned twice and carry tapped-hole patterns through the turns. It
+scores 24 rows, including the camera's frame at 5 (pan, tilt) poses against the analytic chain and clearances over a
+5 x 4 pan x tilt grid. The reference (mates) scores 0 fails and 24/24 in 153 lines. A camera planted 0.5 mm forward
+flags exactly the camera and its 5 poses; a tilt range typed in the wrong sense flags exactly `PIV_tilt`.
+
+Building the v2 reference found a limit that touches both arms: `asm.joint` turns only about +X/+Y/+Z, so with the
+tilt spline pointing +Y the joint's + lowers the camera, whatever the brief says. The brief now allows either sense,
+and the scorer maps the brief's sense onto the design's joint by its axis at home. A mate whose parent connector points
+along a negative axis has PIV values that are the mate's negated; `cad mates` now says so on that line.
+
 ## Limits, and what I'd change after building it
+- **Joint sense.** A joint can't count "+ about -Y" (above). A signed axis in `asm.joint` (`'-Y'`, as a base rotation
+  with the joint channel applied first) would let a mate's values and the PIV's values be the same numbers.
 - **Tilted axes.** A revolute or prismatic mate must turn about a world axis, because `asm.joint` and cadcheck pose
   joints by one Euler channel. Supporting a tilted hinge needs a base rotation on the PIV empty with rotation mode
   ZYX (so the joint channel is the local one); `joints.world_at` already reads the mode, `asm.set_pose` doesn't.

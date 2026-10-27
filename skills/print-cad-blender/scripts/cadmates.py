@@ -25,6 +25,8 @@ def mate_line(m):
         u = m.get("units", "deg")
         rng = "continuous" if m.get("continuous") else "%s..%s %s" % (g(m["lo"]), g(m["hi"]), u)
         bits.append("axis %s at %s  %s  home %s" % (m.get("axis"), vec(m.get("origin", (0, 0, 0))), rng, g(m.get("home", 0))))
+        if m.get("piv_sign") == -1:
+            bits.append("%s values are these negated (+ turns about %s)" % (m["joint"], "+" + m.get("axis", "?")[1:]))
     elif m.get("origin") and m.get("b"):
         bits.append("at %s z %s" % (vec(m["origin"]), vec(m.get("z", (0, 0, 1)))))
     if m.get("gap"):

@@ -169,7 +169,9 @@ def revolute_sign_flip():
     M.assemble("PRT_ceil")
     e = A.JOINTS["PIV_sw"]
     ok1 = e["joint_axis"] == "Z" and near((e["joint_lo"], e["joint_hi"], e["joint_home"]), (-60, 10, -5))
-    say(ok1, "parent z -Z: PIV_sw axis Z, lo/hi/home %s (mate -10..60 home 5)" % [e["joint_lo"], e["joint_hi"], e["joint_home"]])
+    say(ok1 and A.MATE_TABLE[0].get("piv_sign") == -1 and A.MATE_TABLE[0]["axis"] == "-Z",
+        "parent z -Z: PIV_sw axis Z, lo/hi/home %s (mate -10..60 home 5); the mate table marks the PIV values as negated" % [
+            e["joint_lo"], e["joint_hi"], e["joint_home"]])
     A.set_pose(PIV_sw=-30)   # mate value +30
     tip = bpy.data.objects["PRT_arm"].matrix_world @ Vector((40, 0, 45))
     exp = (40 * math.cos(math.radians(-30)), 40 * math.sin(math.radians(-30)), 45)

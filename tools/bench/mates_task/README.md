@@ -11,7 +11,7 @@ The coordinator runs the agents; nothing here calls an LLM.
 | `template_absolute/` | the project template as it was before mates (`5412b4f`), for the `absolute` arm. The `mates` arm copies `skills/print-cad-blender/templates/project/` |
 | `checks.json` | acceptance rows the scorer adds as a cadcheck overlay: arm-to-lid clearance over the swing, lid-to-board clearance, servo on the deck |
 | `interfaces.json`, `measure_blend.py` | what "on its interface" means and how it is measured, from the blend alone (no connectors or mate table read) |
-| `score.py` | the scorer |
+| `score.py` | the scorer; `--kit DIR` scores against another kit folder (`mates_task_v2`) |
 | `reference/blender/` | a mates solution: 0 cadcheck fails, 0 warns, 7 of 7 interfaces, 131 lines (47 of them template) |
 | `selftest.sh` | builds the reference, a copy with the board planted 0.5 mm off, and a copy with the lid screws driven from under the deck; the scorer must pass the first and third and flag only the board in the second (verify_all runs it) |
 
@@ -43,3 +43,9 @@ to place parts through mates; for a clean baseline run that arm against a skill 
 
 Compare arms on: runs with 0 fails and 0 interfaces off, interfaces off per run, wall time, output tokens
 (`tools/transcript/cc_transcript.py`), and lines of code.
+
+## Results (coordinator, 3 runs per arm, 2026-10-27)
+Every run: 0 cadcheck fails, 7/7 interfaces (mates-1 first scored 6/7: the scorer wanted the lid screws driven from
+the lid side; fixed, re-scored 7/7). Wall time absolute 3.3 / 4.0 / 5.5 min, mates 6.0 / 4.2 / 4.5; lines absolute
+134 / 134 / 160, mates 159 / 144 / 145. The brief gives the world positions, so the task sits at the ceiling: there is
+no placement reasoning for mates to save. `../mates_task_v2` gives constraints instead.

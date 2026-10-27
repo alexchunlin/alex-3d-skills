@@ -1,0 +1,34 @@
+{
+ "_about": "Acceptance rows for the mates_task_v2 brief, run by score.py as an overlay on the designer's checks.json. The pan x tilt clearance grid is measured by the scorer (interfaces.json clearances), which maps the brief's tilt sense onto the design's joint.",
+ "distances": [
+  {
+   "a": "PRT_pan_bracket",
+   "b": "PRT_cover",
+   "min": 1.0,
+   "poses": [
+    {
+     "PIV_pan": -90
+    },
+    {
+     "PIV_pan": -45
+    },
+    {
+     "PIV_pan": 0
+    },
+    {
+     "PIV_pan": 45
+    },
+    {
+     "PIV_pan": 90
+    }
+   ],
+   "why": "brief: the cover clears the pan bracket by 1 mm over the pan range"
+  },
+  {
+   "a": "BUY_servo_pan",
+   "b": "PRT_deck",
+   "max": 0.05,
+   "why": "brief: the pan servo stands on the deck top"
+  }
+ ]
+}

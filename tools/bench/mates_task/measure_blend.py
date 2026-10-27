@@ -101,31 +101,102 @@ for name, f in I["axial"].items():
     e_mm, e_deg = (o - want_o).length, ang(z, want_z)
     row(name, "axial", e_mm <= TOL_MM and e_deg <= TOL_DEG, e_mm, e_deg, f["why"], at=[round(c, 3) for c in o])
 
-jf = I["joint"]
-e = bpy.data.objects.get(jf["name"])
-if e is None or jf["name"] not in J:
-    row(jf["name"], "joint", False, why=jf["why"], error="no joint %s" % jf["name"])
-else:
+def _piv_axis(name):
+    e, s = bpy.data.objects.get(name), J.get(name)
+    if e is None or s is None or s["axis"] is None:
+        return None
+    return e.matrix_world.to_3x3() @ Vector([1.0 if i == "XYZ".index(s["axis"]) else 0.0 for i in range(3)])
+
+
+# "senses": the world axis a positive value turns about, in the brief ("+ raises the camera" = about -Y). asm.joint only
+# turns about +X/+Y/+Z, so a design may have to count the other way: brief values are mapped by the sign of
+# PIV axis . brief axis, measured at home. Joints not listed take values as they are.
+JT.apply(J, CP, {})
+SENSE = {}
+for jn, ax in (I.get("senses") or {}).items():
+    a = _piv_axis(jn)
+    SENSE[jn] = 1.0 if a is None or a.dot(Vector(ax)) >= 0 else -1.0
+
+
+def piv_values(pose):
+    return {k: SENSE.get(k, 1.0) * v for k, v in pose.items()}
+
+
+def _under(n, joint):
+    ob = bpy.data.objects.get(n)
+    while ob is not None:
+        if ob.name == joint:
+            return True
+        ob = ob.parent
+    return False
+
+
+for jf in I.get("joints") or [I["joint"]]:
+    # "through": [x, y] with "axis": "Z" (a vertical axis), or "point": [x, y, z] with "dir": [x, y, z]; at home
+    pt = Vector(jf["point"]) if "point" in jf else None
+    want = Vector(jf["dir"]) if "dir" in jf else Vector([1.0 if i == "XYZ".index(jf["axis"]) else 0.0 for i in range(3)])
+    e = bpy.data.objects.get(jf["name"])
+    if e is None or jf["name"] not in J or J[jf["name"]]["axis"] is None:
+        row(jf["name"], "joint", False, why=jf["why"], error="no joint %s" % jf["name"])
+        continue
     s = J[jf["name"]]
     ax = e.matrix_world.to_3x3() @ Vector([1.0 if i == "XYZ".index(s["axis"]) else 0.0 for i in range(3)])
     o = e.matrix_world.translation
-    want = Vector((0, 0, 1)) if jf["axis"] == "Z" else Vector([1.0 if i == "XYZ".index(jf["axis"]) else 0.0 for i in range(3)])
     e_deg = ang(ax, want, signless=True)
-    p = Vector((jf["through"][0], jf["through"][1], o.z))
-    e_mm = (o - p).length
+    if pt is None:
+        pt = Vector((jf["through"][0], jf["through"][1], o.z))
+    w = want.normalized()
+    v = o - pt
+    e_mm = (v - w * v.dot(w)).length                  # the joint origin's distance from the wanted axis line
     lo, hi = s.get("lo"), s.get("hi")
-    rng = s.get("continuous") or (lo is not None and lo <= jf["range"][0] + 1e-6 and hi >= jf["range"][1] - 1e-6)
+    need = sorted(SENSE.get(jf["name"], 1.0) * r for r in jf["range"])
+    rng = s.get("continuous") or (lo is not None and lo <= need[0] + 1e-6 and hi >= need[1] - 1e-6)
+    carried = {n: _under(n, jf["name"]) for n in jf["carries"]}
+    ok = e_mm <= TOL_MM and e_deg <= TOL_DEG and rng and all(carried.values())
+    if jf.get("under"):
+        ok = ok and _under(jf["name"], jf["under"])
+    row(jf["name"], "joint", ok, e_mm, e_deg, jf["why"], range=[lo, hi], carries=carried,
+        **({"under": _under(jf["name"], jf["under"])} if jf.get("under") else {}))
 
-    def under(n):
-        ob = bpy.data.objects.get(n)
-        while ob is not None:
-            if ob.name == jf["name"]:
-                return True
-            ob = ob.parent
-        return False
-    carried = {n: under(n) for n in jf["carries"]}
-    row(jf["name"], "joint", e_mm <= TOL_MM and e_deg <= TOL_DEG and rng and all(carried.values()), e_mm, e_deg, jf["why"],
-        range=[lo, hi], carries=carried)
+
+def _rot(point, axis, deg):
+    return (Matrix.Translation(Vector(point)) @ Matrix.Rotation(math.radians(deg), 4, Vector(axis).normalized())
+            @ Matrix.Translation(-Vector(point)))
+
+
+PS = I.get("poses")
+if PS:
+    # a part's frame at joint values (in the brief's sense) against the analytic chain: innermost rotation first,
+    # each about its axis at home, so world = R_outer @ ... @ R_inner @ home
+    hf = PS["home"]
+    H = Matrix.Identity(4)
+    x, z = Vector(hf["x"]).normalized(), Vector(hf["z"]).normalized()
+    yv = z.cross(x)
+    for k in range(3):
+        H[k][0], H[k][1], H[k][2], H[k][3] = x[k], yv[k], z[k], hf["origin"][k]
+    Mh, err = locate(PS["part"])
+    ob = bpy.data.objects.get(PS["part"])
+    for pose in PS["at"]:
+        name = "pose " + ",".join("%s=%g" % (k.replace("PIV_", ""), v) for k, v in pose.items())
+        if Mh is None:
+            row(name, "pose", False, why=PS["why"], error=err)
+            continue
+        if any(k not in J for k in pose):
+            row(name, "pose", False, why=PS["why"], error="missing joint(s) %s" % [k for k in pose if k not in J])
+            continue
+        JT.apply(J, CP, {})
+        Wh = ob.matrix_world.copy()
+        JT.apply(J, CP, piv_values(pose))
+        Mp = ob.matrix_world @ Wh.inverted() @ Mh
+        JT.apply(J, CP, {})
+        A = H
+        for c in PS["chain"]:
+            A = _rot(c["point"], c["axis"], pose.get(c["joint"], 0.0)) @ A
+        e_mm = (Mp.translation - A.translation).length
+        e_deg = max(ang(Mp.col[k][:3], A.col[k][:3]) for k in range(3))
+        row(name, "pose", e_mm <= TOL_MM and e_deg <= TOL_DEG, e_mm, e_deg, PS["why"],
+            at=[round(c, 2) for c in Mp.translation], want=[round(c, 2) for c in A.translation])
+
 
 def _tree(ob):
     from mathutils.bvhtree import BVHTree
@@ -154,7 +225,7 @@ def _ring_inside(tree, head, d, L, sd):
 
 FST = []
 for ob in bpy.data.objects:
-    if ob.name.startswith("FST_") and "fst_head" in ob.keys() and ob.get("fst_kind", "screw") == "screw":
+    if ob.type == 'MESH' and ob.name.startswith("FST_") and "fst_head" in ob.keys() and ob.get("fst_kind", "screw") == "screw":
         W = ob.matrix_world
         h = W @ Vector(ob["fst_head"])
         d = (W.to_3x3() @ Vector(ob["fst_dir"])).normalized()
@@ -168,8 +239,9 @@ for key, f in I["screws"].items():
             row("screws:" + key, "screws", False, why=f["why"], error=err)
             continue
         worst_mm, worst_deg, miss = 0.0, 0.0, []
-        for hx, hy in f["holes"]:
-            p = M @ Vector((hx, hy, 0))
+        for h in f["holes"]:
+            hx, hy = h[0], h[1]
+            p = M @ Vector((hx, hy, h[2] if len(h) > 2 else 0.0))
             a = M.to_3x3() @ Vector(f["axis"])
             best = None
             for s in FST:
@@ -212,5 +284,39 @@ for key, f in I["screws"].items():
         used.update(n)
         row("screws:" + key, "screws", len(n) == f["count"], why=f["why"], count=len(n), names=n)
 
-json.dump({"rows": rows, "tol_mm": TOL_MM, "tol_deg": TOL_DEG}, open(OUT, "w"), indent=1)
-print("MEASURED %d interfaces, %d off" % (len(rows), sum(not r["ok"] for r in rows)))
+CL = I.get("clearances")
+if CL:
+    # min distance between pairs over a grid of brief-convention poses (vertex to surface both ways; 0 = touching or
+    # overlapping), so a design that counts a joint the other way is posed where the brief means
+    from mathutils.bvhtree import BVHTree
+    import itertools
+
+    def mesh_world(ob):
+        W = ob.matrix_world
+        vs = [W @ v.co for v in ob.data.vertices]
+        return vs, BVHTree.FromPolygons(vs, [tuple(p.vertices) for p in ob.data.polygons])
+
+    names = sorted(CL["grid"])
+    grid = [dict(zip(names, vals)) for vals in itertools.product(*[CL["grid"][n] for n in names])]
+    for a, b in CL["pairs"]:
+        oa, ob_ = bpy.data.objects.get(a), bpy.data.objects.get(b)
+        if oa is None or ob_ is None:
+            row("clear %s/%s" % (a, b), "clearance", False, why=CL["why"], error="missing part")
+            continue
+        worst = None
+        for pose in grid:
+            JT.apply(J, CP, piv_values(pose))
+            va, ta = mesh_world(oa)
+            vb, tb = mesh_world(ob_)
+            if ta.overlap(tb):
+                d = 0.0
+            else:
+                d = min(min(ta.find_nearest(v)[3] for v in vb), min(tb.find_nearest(v)[3] for v in va))
+            if worst is None or d < worst[0]:
+                worst = (d, pose)
+        JT.apply(J, CP, {})
+        row("clear %s/%s" % (a.replace("PRT_", "").replace("BUY_", ""), b.replace("PRT_", "").replace("BUY_", "")),
+            "clearance", worst[0] >= CL["min_mm"], worst[0], None, CL["why"], at=worst[1], min_mm=CL["min_mm"])
+
+json.dump({"rows": rows, "tol_mm": TOL_MM, "tol_deg": TOL_DEG, "senses": SENSE}, open(OUT, "w"), indent=1)
+print("MEASURED %d interfaces, %d off; senses %s" % (len(rows), sum(not r["ok"] for r in rows), SENSE))

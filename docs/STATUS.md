@@ -17,7 +17,9 @@
   horn, MotorGo, Plink and motor.
 - Prior art measured: a board's hole pitch typed 1 mm long passes `fastener_joint` and cadcheck (0 fails, 0 warns).
 - Demo turret rebuilt through mates: the same 0 fails / 8 warns and 50 rows (48 verbatim, 2 at another pose of a tie).
-- Untested with agents: `tools/bench/mates_task/` is the A/B kit (brief, two prompts, scorer); the coordinator runs it.
+- A/B on `tools/bench/mates_task/` (3 runs per arm): all 0 fails, 7/7 after a scorer fix; mates no faster (4.2-6.0
+  vs 3.3-5.5 min) because the brief gives positions. `tools/bench/mates_task_v2/` (pan-tilt, constraints only, poses
+  and a clearance grid scored) is ready for the next A/B; its reference scores 0 fails, 24/24.
 
 ## Push-assist loop (2026-10-26/27; FINDINGS "Push-assist loop", log in `docs/evidence-push-assist/loop-log.txt`)
 - A second project (`~/code-stuff/space-bar-push-assist`) ran 8 designer + reviewer attempts on tools `49aa21f`,

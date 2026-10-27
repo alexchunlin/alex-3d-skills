@@ -1,0 +1,47 @@
+{
+ "_about": "Purchased parts for the mates_task_v2 brief (pan-tilt). Dimensions in mm. Placeholders: kit_parts.py builds each in the local frame its \"frame\" line gives; use them unmodified (don't cut or join them): the scorer finds each by its mesh. Tapped holes are not modelled in the placeholders (a screw into one is style 'tapped' with the depth below). connectors: named frames in that local frame for cadlib.mates (mates.from_component): origin on the mating face, z out of the part, x in the face (default: the frame's +X flattened into the face, +Z when z is along X), a hole pattern in minimal form ([\"rect\", px, py] along the connector's x and y, [\"circle\", pcd, n, a0_deg]) seen from outside the face, and the hole size.",
+
+ "servo": {
+  "what": "Bus servo, HTS-35H class; two are used (pan and tilt)",
+  "frame": "origin on the spline axis at the case top; spline up +Z; case below z = 0; the case's 40 mm length along X with its centre at x = -10; 20 mm width along Y",
+  "case": {"length_x": 40.0, "width_y": 20.0, "height_z": 40.0, "centre_x": -10.0},
+  "spline": {"d": 6.0, "protrudes": 3.9},
+  "tapped_holes": {
+   "bottom": {"thread": "M2.5", "depth": 5.0, "rect": [32.0, 12.0], "about": "case bottom centre, 32 along X"},
+   "side": {"thread": "M2.5", "depth": 5.0, "rect": [28.0, 28.0], "about": "centre of the case's -Y face (the 40 x 40 face), 28 along X and 28 along Z"}},
+  "mass_g": 66,
+  "src": "components/components.json hiwonder_bus_servo (drawing); tapped holes per the kit",
+  "connectors": {
+   "spline": {"origin": [0, 0, 3.9], "z": [0, 0, 1], "note": "spline top: the horn hub seats here and turns about z"},
+   "bottom": {"origin": [-10.0, 0, -40.0], "z": [0, 0, -1], "pattern": ["rect", 32.0, 12.0], "hole": "M2.5", "note": "case bottom centre; tapped M2.5, 5 deep"},
+   "side": {"origin": [-10.0, -10.0, -20.0], "z": [0, -1, 0], "x": [1, 0, 0], "pattern": ["rect", 28.0, 28.0], "hole": "M2.5", "note": "the -Y face's centre; tapped M2.5, 5 deep (connector y is the servo's +Z)"}}
+ },
+
+ "horn": {
+  "what": "Round 8-hole servo horn; two are used",
+  "frame": "origin on the axis at the hub underside (on the spline top); disc above; hole 0 on +X",
+  "hub": {"d": 9.0, "h": 1.4},
+  "disc": {"d": 20.0, "t": 2.5},
+  "holes": {"n": 8, "d": 2.2, "bolt_circle_d": 14.0, "a0_deg": 0, "for": "M2"},
+  "mass_g": 4,
+  "src": "components/components.json servo_horn_disc",
+  "connectors": {
+   "hub": {"origin": [0, 0, 0], "z": [0, 0, -1], "note": "hub underside, on the spline top"},
+   "face_4": {"origin": [0, 0, 3.9], "z": [0, 0, 1], "pattern": ["circle", 14.0, 4, 0], "hole": "M2", "note": "disc top, every other hole (0, 90, 180, 270 deg)"},
+   "under": {"origin": [0, 0, 1.4], "z": [0, 0, -1], "pattern": ["circle", 14.0, 4, 0], "hole": "M2", "note": "disc underside, every other hole"}}
+ },
+
+ "camera": {
+  "what": "Camera board, 25 x 24 x 1.0, lens on the front, 4 x M2 holes",
+  "frame": "origin at the lens centre on the board's back face; the lens looks along +Z; board 'up' is +Y; the board spans x -12.5..12.5, y -14..10, z 0..1; lens d 8 from z 1 to 6",
+  "board": {"x": [-12.5, 12.5], "y": [-14.0, 10.0], "t": 1.0},
+  "lens": {"d": 8.0, "h": 5.0},
+  "holes": {"d": 2.2, "rect": [21.0, 12.5], "centre": [0, -3.0], "for": "M2", "about": "the hole pattern's centre is 3 mm below the lens"},
+  "mass_g": 3,
+  "src": "kit (stand-in camera board)",
+  "connectors": {
+   "back": {"origin": [0, -3.0, 0], "z": [0, 0, -1], "pattern": ["rect", 21.0, 12.5], "hole": "M2", "note": "board back at the hole-pattern centre"},
+   "front": {"origin": [0, -3.0, 1.0], "z": [0, 0, 1], "pattern": ["rect", 21.0, 12.5], "hole": "M2", "note": "board front: screw heads bear here"},
+   "optical": {"origin": [0, 0, 0], "z": [0, 0, 1], "note": "on the lens axis at the board back; z along the optical axis"}}
+ }
+}

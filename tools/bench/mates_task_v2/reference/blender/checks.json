@@ -1,0 +1,19 @@
+{
+ "fits": [
+  {"a": "BUY_servo_pan", "b": "BUY_horn_pan", "contact": true, "why": "pan horn hub seated on the spline top"},
+  {"a": "BUY_servo_tilt", "b": "BUY_horn_tilt", "contact": true, "why": "tilt horn hub seated on the spline top"}
+ ],
+ "allow": [],
+ "assembly_order": [
+  {"step": "deck", "objects": ["PRT_deck"]},
+  {"step": "pan servo (deck on its back)", "objects": ["BUY_servo_pan", "FST_pan_servo_*"]},
+  {"step": "cover", "objects": ["PRT_cover", "FST_cover_*"]},
+  {"step": "camera onto the tilt bracket (bench)", "bench": "cam", "objects": ["PRT_tilt_bracket", "BUY_cam", "FST_cam_*"]},
+  {"step": "tilt bracket onto the tilt horn (bench)", "bench": "cam", "objects": ["BUY_horn_tilt", "FST_tbr_*"]},
+  {"step": "pan bracket onto the pan horn (bench)", "bench": "pan", "objects": ["BUY_horn_pan", "PRT_pan_bracket", "FST_pbr_*"]},
+  {"step": "tilt servo into the bracket (bench)", "bench": "pan", "objects": ["BUY_servo_tilt", "FST_tsrv_*"]},
+  {"step": "tilt horn onto the tilt spline", "bench": "pan", "merge": "cam", "objects": []},
+  {"step": "pan horn onto the pan spline", "merge": "pan", "objects": []}
+ ],
+ "drop_tests": [], "slide_out": [], "distances": [], "masses_g": {}
+}

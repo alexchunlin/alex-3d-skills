@@ -557,6 +557,9 @@ def _record(m):
     if m["kind"] in ("revolute", "prismatic"):
         r.update(joint=m["name"], axis=m.get("_axis"), lo=m["lo"], hi=m["hi"], home=m["home"],
                  continuous=m["continuous"], units="deg" if m["kind"] == "revolute" else "mm")
+        if (m.get("_axis") or "+")[0] == "-":
+            # asm.joint turns about +X/+Y/+Z, so this PIV's values (set_pose, checks.json poses) are the mate's negated
+            r["piv_sign"] = -1
     if m.get("_fst"):
         r["fastener"] = m["_fst"]
     return {k: v for k, v in r.items() if v is not None and v != "" and not (k in ("gap", "rot") and v == 0)}
