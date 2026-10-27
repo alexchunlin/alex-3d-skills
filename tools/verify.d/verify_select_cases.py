@@ -194,10 +194,11 @@ SELF = "verify_select.sh"
 ALLIDS = set(IDS)
 CORE = ALLIDS - {"6", "7", "4m-slice", "design_principles.sh", "verify_select.sh"}
 BENCH = {"bench.sh", "4k", "4m", "4n"}   # bench reads 4k's, 4m's and 4n's reports
+PCO = {"printcheck_overhangs.sh"}        # watches printcheck.py and the v2a7 STLs, reads 4m's model
 CASES = [   # the selector test always runs under --changed (review); it is added to every set here
     ("docs only", ["docs/STATUS.md", "README.md", "skills/print-cad-blender/reference/api.md", "skills/cad-design-review/SKILL.md",
                    "tools/verify.d/README", "tools/bench/README.md", "docs/tasks/x.md"], set()),
-    ("printcheck.py (3's output feeds 3b, 3c)", [S + "printcheck.py"], {"1", "3", "3b", "3c", "blend_bracket.sh"} | BENCH),
+    ("printcheck.py (3's output feeds 3b, 3c)", [S + "printcheck.py"], {"1", "3", "3b", "3c", "blend_bracket.sh"} | BENCH | PCO),
     ("a cadlib file", [S + "cadlib/geom.py"], CORE),
     ("cadcheck.py", [S + "cadcheck.py"], CORE),
     ("the cad wrapper", [S + "cad"], CORE | {"4m-slice"}),
@@ -216,7 +217,7 @@ CASES = [   # the selector test always runs under --changed (review); it is adde
     ("v2a3 BOM .md (a test input, not a doc)", ["examples/mm-launcher-v2a3/BOM_AND_ASSEMBLY.md"], {"4f", "4g", "4n"} | BENCH),
     ("a3 example", ["examples/mm-launcher-a3/mm_launcher_a3.blend.gz"], {"4c", "4n", "blend_bracket.sh", "cable_router.sh"} | BENCH),
     ("a2 example", ["examples/mm-launcher-a2/checks.json"], {"4a", "4b", "4n"} | BENCH),
-    ("v2a7 STLs", ["examples/mm-launcher-v2a7/stl.tar.gz"], BENCH),
+    ("v2a7 STLs", ["examples/mm-launcher-v2a7/stl.tar.gz"], BENCH | PCO),
     ("demo-turret", ["examples/demo-turret/build.py"], {"1", "2"}),
     ("slide-gate", ["examples/slide-gate/checks.json"], {"slide-gate"}),
     ("a verify.d helper", ["tools/verify.d/fastener_joint_build.py"], {"fastener_joint.sh"}),
@@ -348,7 +349,7 @@ latest = os.path.realpath("/tmp/alex3d-verify/latest") if os.path.exists("/tmp/a
 r = subprocess.run(["sh", os.path.join(ROOT, "tools/verify_all.sh"), "--dry-run", "--files", S + "printcheck.py"],
                    capture_output=True, text=True)
 ran = re.findall(r"^run +(\S+)", r.stdout, re.M)
-say(r.returncode == 0 and set(ran) == {"1", "3", "3b", "3c", "blend_bracket.sh", SELF} | BENCH and "SELECT" not in r.stdout
+say(r.returncode == 0 and set(ran) == {"1", "3", "3b", "3c", "blend_bracket.sh", SELF} | BENCH | PCO and "SELECT" not in r.stdout
     and "UNITS" not in r.stdout,
     "verify_all.sh --dry-run --files printcheck.py prints the plan and stops: %s" % " ".join(ran))
 r = subprocess.run(["sh", os.path.join(ROOT, "tools/verify_all.sh"), "--dry-run"], capture_output=True, text=True)

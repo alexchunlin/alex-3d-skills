@@ -262,8 +262,8 @@ Renders:
 **Since the fix (with the user's two bands: under 30° from horizontal fails, 30-45° warns):** printcheck's face pass
 fails the ramp rows from 5 to 25 deg (17.0 to 3.9 mm past the 30° line), warns on 30-40, and passes 45 and 50. n4 on
 tube1's rim fails twice (6.0 and 7.6 mm) and warns once; n3 on tube0's rim fails once (3.4 mm). brc on the cradle rim
-keeps 0 fails. Their bore ceilings are sloped bridges (11-14 mm), not fails. `best_orientation` still picks rims, and
-n3 and n4 still need support in every orientation. The table below is the state before.
+keeps 0 fails. Their bore ceilings are sloped bridges (11-14 mm), not fails. `best_orientation` still picks rims: n3 on tube2's rim
+has 0 fails (two warns), n4 needs support in every orientation. The table below is the state before.
 
 **What printcheck does.** It rasterizes each 0.2 mm layer and compares it with the layer below only. New pixels within
 the 45 deg allowance (0.2 mm plus half a pixel) are supported. An unsupported region narrower than `min_feature_mm`
