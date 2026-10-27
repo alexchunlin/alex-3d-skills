@@ -1,0 +1,20 @@
+{
+ "_about": "What score.py measures (measure_blend.py). Purchased parts are found by their mesh (kit_parts.py, vertex for vertex) and compared with the frame the brief asks for; screws are matched to the holes they should pass. Tolerances: 0.2 mm and 1 deg.",
+ "tol_mm": 0.2, "tol_deg": 1.0,
+ "frames": {
+  "BUY_servo": {"origin": [-35, 0, 44], "x": [1, 0, 0], "z": [0, 0, 1], "why": "case bottom on the deck top (z 4), spline axis at (-35, 0), case toward -X"},
+  "BUY_pcb": {"origin": [35, 0, 12], "x": [1, 0, 0], "z": [0, 0, 1], "why": "centred at (35, 0), underside at z 12, header toward +X"}
+ },
+ "axial": {
+  "BUY_horn": {"of": "BUY_servo", "origin": [0, 0, 3.9], "z": [0, 0, 1], "why": "hub underside on the spline top, coaxial (turn about the axis is free)"}
+ },
+ "joint": {"name": "PIV_arm", "through": [-35, 0], "axis": "Z", "range": [-90, 90], "carries": ["BUY_horn", "PRT_arm"],
+           "why": "the arm turns with the horn about the spline axis, -90..90"},
+ "screws": {
+  "arm": {"part": "BUY_horn", "holes": [[7, 0], [0, 7], [-7, 0], [0, -7]], "axis": [0, 0, 1], "size": "M2", "joint": "PIV_arm",
+          "why": "4 M2 through the horn's 0/90/180/270 holes"},
+  "pcb": {"part": "BUY_pcb", "holes": [[-21, -16], [21, -16], [-21, 16], [21, 16]], "axis": [0, 0, 1], "size": "M2.5",
+          "why": "4 M2.5 through the board's holes"},
+  "lid": {"host": "PRT_deck", "through": "PRT_lid", "count": 4, "size": "M3", "why": "4 M3 hold the lid to the deck"}
+ }
+}

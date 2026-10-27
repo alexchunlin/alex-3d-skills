@@ -5,13 +5,13 @@ mm-launcher design/review loop, and the evidence behind every rule is in `docs/F
 
 | Path | What |
 |---|---|
-| `skills/print-cad-blender/` | Skill for designers: conventions, workflow, `cadlib` (geometry, print features, assembly, export, renders), `cadcheck` (assembly-wide checks with joint sweeps, fastener access, drop tests), `cadq` (one-shot measurements), the `cad` wrapper, and a project template |
+| `skills/print-cad-blender/` | Skill for designers: conventions, workflow, `cadlib` (geometry, print features, assembly, placement by mate connectors, export, renders), `cadcheck` (assembly-wide checks with joint sweeps, fastener access, drop tests), `cadq` (one-shot measurements), the `cad` wrapper, and a project template |
 | `skills/cad-design-review/` | Skill for reviewers: check-first protocol, scoring anchors, evidence checklist |
 | `templates/cad-loop.workflow.js` | Design/review loop for the Workflow tool: plan, then one build agent per subsystem, then finish, then review. Resumable. |
 | `components/` | Purchased-part data with sources (`components.json`) and Blender placeholders |
 | `tools/transcript/cc_transcript.py` | Digest Claude Code agent transcripts: time split, long generations, tokens, cache misses, Blender runs, images |
 | `tools/verify_all.sh` | Re-proves everything (about 28 minutes, writes only under `/tmp/alex3d-verify`). `--changed [BASE]` runs only the sections and `tools/verify.d` scripts the change since `merge-base(BASE, HEAD)` affects (BASE defaults to `next`; `--dry-run` prints the plan; a selected unit that runs no check fails the run); promoting `next` to `main` runs it all |
-| `examples/` | `demo-turret` and `slide-gate` (clean and planted-bug builds); `mm-launcher-{a1,a2,a3,v2a1,v2a2,v2a3}` (check config and archived blend per attempt, plus the reviewer's missing rows as overlays) |
+| `examples/` | `demo-turret` (also placed through mates: `build_mates.py`) and `slide-gate` (clean and planted-bug builds); `mm-launcher-{a1,a2,a3,v2a1,v2a2,v2a3}` (check config and archived blend per attempt, plus the reviewer's missing rows as overlays) |
 
 ## Requirements
 
@@ -49,6 +49,7 @@ $S/cad q                                   # every cad q command
 (cd my/blender && $S/cad py -c "import params as P; print(P.HOOD_HI)")   # project Python with bpy + cadlib
 $S/cad rows my/blender/cadcheck.json "hood.*flywheel"   # one line per report row; manifest.json and checks.json work too (no Blender)
 $S/cad bom my/BOM_AND_ASSEMBLY.md my/blender/manifest.json   # BOM fastener table vs the model
+$S/cad mates my/blender/manifest.json servo              # one line per interface (cadlib.mates): what mates with what, how, screws, fit
 $S/cad printcheck my/stl --manifest my/blender/manifest.json --render /tmp/pc   # layer support check on the exported STLs
 $S/cad slice --detect                                    # slicers found and whether they are usable (runs nothing)
 $S/cad slice my/stl                                      # sandboxed, crash-guarded slice: time, filament, where support goes

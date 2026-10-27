@@ -1,0 +1,15 @@
+{
+ "fits": [
+  {"a": "BUY_servo", "b": "BUY_horn", "contact": true, "why": "horn hub seated on the spline top (no journal on this pair)"}
+ ],
+ "allow": [],
+ "assembly_order": [
+  {"step": "deck", "objects": ["PRT_deck"]},
+  {"step": "servo into its rim", "objects": ["BUY_servo"]},
+  {"step": "board", "objects": ["BUY_pcb", "FST_pcb_*"]},
+  {"step": "lid", "objects": ["PRT_lid", "FST_lid_*"]},
+  {"step": "arm onto horn (bench)", "bench": "arm", "objects": ["BUY_horn", "PRT_arm", "FST_arm_*"]},
+  {"step": "horn onto the spline (the arm passes over the lid, so it goes on last)", "merge": "arm", "objects": []}
+ ],
+ "drop_tests": [], "slide_out": [], "distances": [], "masses_g": {}
+}

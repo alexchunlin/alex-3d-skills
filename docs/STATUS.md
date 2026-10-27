@@ -9,6 +9,16 @@
 - Archived blends: `examples/mm-launcher-{a1,a2,a3,v2a1,...,v2a7}/`, each the blend its reviewer saw, with its checks.json.
   The v2 ones carry overlays of the rows each reviewer showed were missing; v2a3 to v2a7 also have manifest.json and BOM.
 
+## Mate connectors (2026-10-27, `feat/mate-connectors`; `docs/features/mate-connectors.md`)
+- `cadlib.mates`: connectors (named frames with hole patterns) on parts, mates between them (rigid, fastened,
+  revolute, prismatic), and `assemble`, which places every part from the ground, makes the PIV joints through
+  `asm.joint`, runs `fastener_joint` per hole and refuses a pattern mismatch with both specs. `cad mates` prints the
+  mate table. The project template places parts only through it; `components.json` carries connectors for the servo,
+  horn, MotorGo, Plink and motor.
+- Prior art measured: a board's hole pitch typed 1 mm long passes `fastener_joint` and cadcheck (0 fails, 0 warns).
+- Demo turret rebuilt through mates: the same 0 fails / 8 warns and 50 rows (48 verbatim, 2 at another pose of a tie).
+- Untested with agents: `tools/bench/mates_task/` is the A/B kit (brief, two prompts, scorer); the coordinator runs it.
+
 ## Push-assist loop (2026-10-26/27; FINDINGS "Push-assist loop", log in `docs/evidence-push-assist/loop-log.txt`)
 - A second project (`~/code-stuff/space-bar-push-assist`) ran 8 designer + reviewer attempts on tools `49aa21f`,
   which has the same tree as `next` today. **No pass:** the best was 8/8/9 (A6, A8), and A7 fell to 4/4/9 on a cell

@@ -1,0 +1,9 @@
+{
+ "_about": "Acceptance rows for the mates_task brief, run by score.py as an overlay on the designer's checks.json.",
+ "distances": [
+  {"a": "PRT_arm", "b": "PRT_lid", "min": 2.0, "poses": [{"PIV_arm": -90}, {"PIV_arm": -60}, {"PIV_arm": -30}, {"PIV_arm": 0}, {"PIV_arm": 30}, {"PIV_arm": 60}, {"PIV_arm": 90}],
+   "why": "brief: the lid clears the arm through its swing by 2 mm"},
+  {"a": "BUY_pcb", "b": "PRT_lid", "min": 1.0, "why": "brief: the lid is 1 mm from every component"},
+  {"a": "BUY_servo", "b": "PRT_deck", "max": 0.05, "why": "brief: the case bottom stands on the deck top"}
+ ]
+}

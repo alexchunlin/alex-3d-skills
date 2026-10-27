@@ -1,0 +1,44 @@
+{
+ "_about": "Purchased parts for the mates_task brief. Dimensions in mm. Placeholders: kit_parts.py builds each in the local frame given by its \"frame\" line; use them unmodified (don't cut or join them): the scorer finds each one by its mesh. connectors: named frames in that local frame for cadlib.mates (mates.from_component): origin on the mating face, z out of the part, a hole pattern in minimal form ([\"rect\", px, py], [\"circle\", pcd, n, a0_deg]) seen from outside the face, and the hole size.",
+
+ "servo": {
+  "what": "Hiwonder bus servo, HTS-35H class",
+  "frame": "origin on the spline axis at the case top; spline up +Z; case below z = 0; length along X with the case centre at x = -10",
+  "case": [40.0, 20.0, 40.0],
+  "spline": {"d": 6.0, "protrudes": 3.9, "offset_from_case_centre": 10.0},
+  "mass_g": 66,
+  "src": "components/components.json hiwonder_bus_servo (drawing)",
+  "connectors": {
+   "spline": {"origin": [0, 0, 3.9], "z": [0, 0, 1], "note": "spline top: the horn hub seats here and turns about z"},
+   "bottom": {"origin": [-10.0, 0, -40.0], "z": [0, 0, -1], "note": "case bottom centre"}}
+ },
+
+ "horn": {
+  "what": "Round 8-hole servo horn",
+  "frame": "origin on the axis at the hub underside (on the spline top); disc above; hole 0 on +X",
+  "hub": {"d": 9.0, "h": 1.4},
+  "disc": {"d": 20.0, "t": 2.5},
+  "holes": {"n": 8, "d": 2.2, "bolt_circle_d": 14.0, "a0_deg": 0, "for": "M2"},
+  "mass_g": 4,
+  "src": "components/components.json servo_horn_disc",
+  "connectors": {
+   "hub": {"origin": [0, 0, 0], "z": [0, 0, -1], "note": "hub underside, on the spline top"},
+   "face": {"origin": [0, 0, 3.9], "z": [0, 0, 1], "pattern": ["circle", 14.0, 8, 0], "hole": "M2", "note": "disc top, all 8 holes"},
+   "face_4": {"origin": [0, 0, 3.9], "z": [0, 0, 1], "pattern": ["circle", 14.0, 4, 0], "hole": "M2", "note": "disc top, every other hole (0, 90, 180, 270 deg)"},
+   "under": {"origin": [0, 0, 1.4], "z": [0, 0, -1], "pattern": ["circle", 14.0, 4, 0], "hole": "M2", "note": "disc underside, every other hole"}}
+ },
+
+ "pcb": {
+  "what": "Controller board, 50 x 40 x 1.6, 4 x M2.5 holes",
+  "frame": "origin at the board underside centre; components up +Z; header block toward +X",
+  "board": [50.0, 40.0, 1.6],
+  "holes": {"d": 2.7, "rect": [42.0, 32.0], "for": "M2.5"},
+  "components": {"block": [30.0, 30.0, 10.0], "header": {"x": [17.0, 25.0], "y": [-10.0, 10.0], "h": 8.0}},
+  "tallest_above_board": 10.0,
+  "mass_g": 18,
+  "src": "kit (stand-in board)",
+  "connectors": {
+   "mount": {"origin": [0, 0, 0], "z": [0, 0, -1], "pattern": ["rect", 42.0, 32.0], "hole": "M2.5", "note": "board underside, on the standoffs"},
+   "top": {"origin": [0, 0, 1.6], "z": [0, 0, 1], "pattern": ["rect", 42.0, 32.0], "hole": "M2.5", "note": "board top: the screw heads bear here"}}
+ }
+}
