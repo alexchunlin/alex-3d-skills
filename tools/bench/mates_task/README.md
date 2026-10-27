@@ -13,7 +13,7 @@ The coordinator runs the agents; nothing here calls an LLM.
 | `interfaces.json`, `measure_blend.py` | what "on its interface" means and how it is measured, from the blend alone (no connectors or mate table read) |
 | `score.py` | the scorer |
 | `reference/blender/` | a mates solution: 0 cadcheck fails, 0 warns, 7 of 7 interfaces, 131 lines (47 of them template) |
-| `selftest.sh` | builds the reference and a copy with the board planted 0.5 mm off; the scorer must pass one and flag only the board in the other (verify_all runs it) |
+| `selftest.sh` | builds the reference, a copy with the board planted 0.5 mm off, and a copy with the lid screws driven from under the deck; the scorer must pass the first and third and flag only the board in the second (verify_all runs it) |
 
 ## Run one arm
 
@@ -37,7 +37,7 @@ to place parts through mates; for a clean baseline run that arm against a skill 
   (each found by a rigid fit of its placeholder mesh, vertex for vertex: a cut or joined placeholder counts as off), the
   horn coaxial and seated on the spline, `PIV_arm` on the spline axis with -90..90 carrying the horn and arm, the 4 arm
   screws coaxial with the horn's 0/90/180/270 holes and on `PIV_arm`, the 4 board screws coaxial with the board's holes,
-  and 4 M3 screws through the lid into the deck.
+  and 4 M3 screws that join the lid and the deck, from either side (the shank has lid and deck material around it).
 - **Lines of build code**: non-blank, non-comment lines of every `.py` under `<project>/blender/` (template lines
   included; the reference's template share is 47).
 

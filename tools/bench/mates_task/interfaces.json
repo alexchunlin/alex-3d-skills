@@ -15,6 +15,6 @@
           "why": "4 M2 through the horn's 0/90/180/270 holes"},
   "pcb": {"part": "BUY_pcb", "holes": [[-21, -16], [21, -16], [-21, 16], [21, 16]], "axis": [0, 0, 1], "size": "M2.5",
           "why": "4 M2.5 through the board's holes"},
-  "lid": {"host": "PRT_deck", "through": "PRT_lid", "count": 4, "size": "M3", "why": "4 M3 hold the lid to the deck"}
+  "lid": {"joins": ["PRT_deck", "PRT_lid"], "count": 4, "size": "M3", "why": "4 M3 join the lid and the deck, from either side"}
  }
 }

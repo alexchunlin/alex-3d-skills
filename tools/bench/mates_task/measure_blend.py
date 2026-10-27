@@ -127,6 +127,31 @@ else:
     row(jf["name"], "joint", e_mm <= TOL_MM and e_deg <= TOL_DEG and rng and all(carried.values()), e_mm, e_deg, jf["why"],
         range=[lo, hi], carries=carried)
 
+def _tree(ob):
+    from mathutils.bvhtree import BVHTree
+    W = ob.matrix_world
+    return BVHTree.FromPolygons([W @ v.co for v in ob.data.vertices], [tuple(p.vertices) for p in ob.data.polygons])
+
+
+def _inside(tree, p):
+    loc, nrm, idx, dist = tree.find_nearest(p)
+    return loc is not None and (p - loc).dot(nrm) < 0
+
+
+def _ring_inside(tree, head, d, L, sd):
+    u = d.orthogonal().normalized()
+    v = d.cross(u)
+    r = sd / 2 + 0.6
+    k = 0.3
+    while k < L:
+        for a in range(8):
+            q = head + d * k + (u * math.cos(a * math.pi / 4) + v * math.sin(a * math.pi / 4)) * r
+            if _inside(tree, q):
+                return True
+        k += 0.5
+    return False
+
+
 FST = []
 for ob in bpy.data.objects:
     if ob.name.startswith("FST_") and "fst_head" in ob.keys() and ob.get("fst_kind", "screw") == "screw":
@@ -170,15 +195,21 @@ for key, f in I["screws"].items():
         row("screws:" + key, "screws", not miss and worst_mm <= TOL_MM and worst_deg <= TOL_DEG, worst_mm, worst_deg,
             f["why"], missing=miss)
     else:
-        lid = bpy.data.objects.get(f["through"])
-        if lid is None:
-            row("screws:" + key, "screws", False, why=f["why"], error="no %s" % f["through"])
+        # screws that join the listed parts, whichever way they go in: each part has material on a ring just outside
+        # the shank somewhere along it (the shank's own hole is cut, so the axis itself is in air)
+        obs = [bpy.data.objects.get(n) for n in f["joins"]]
+        if None in obs:
+            row("screws:" + key, "screws", False, why=f["why"], error="missing %s" % [n for n, o in zip(f["joins"], obs) if o is None])
             continue
-        bb = [lid.matrix_world @ Vector(c) for c in lid.bound_box]
-        lo = [min(v[i] for v in bb) - 1 for i in range(3)]
-        hi = [max(v[i] for v in bb) + 1 for i in range(3)]
-        n = [s["name"] for s in FST if s["name"] not in used and s["host"] == f["host"] and abs(s["d"] - SIZE_D[f["size"]]) < 1e-6
-             and all(lo[i] <= s["head"][i] <= hi[i] for i in range(3))]
+        trees = [_tree(o) for o in obs]
+        n = []
+        for s in FST:
+            if s["name"] in used or abs(s["d"] - SIZE_D[f["size"]]) > 1e-6:
+                continue
+            L = float(s["ob"].get("fst_len", 0))
+            if all(_ring_inside(t, s["head"], s["dir"], L, s["d"]) for t in trees):
+                n.append(s["name"])
+        used.update(n)
         row("screws:" + key, "screws", len(n) == f["count"], why=f["why"], count=len(n), names=n)
 
 json.dump({"rows": rows, "tol_mm": TOL_MM, "tol_deg": TOL_DEG}, open(OUT, "w"), indent=1)

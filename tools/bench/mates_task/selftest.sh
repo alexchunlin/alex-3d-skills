@@ -1,18 +1,20 @@
 #!/bin/sh
 # mates_task kit self-test: build the reference solution (mates template), score it, then a copy with the board planted
-# 0.5 mm off its brief position, and check the scorer tells them apart. Prints KIT PASS|FAIL lines.
+# 0.5 mm off its brief position, and check the scorer tells them apart; and a copy with the lid screws driven from
+# under the deck (heads in deck counterbores, nuts on the lid ears), which must score the same as the reference.
+# Prints KIT PASS|FAIL lines.
 #   sh tools/bench/mates_task/selftest.sh /tmp/mates-kit
 set -u
 KIT="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$KIT/../../.." && pwd)"
 CAD="$ROOT/skills/print-cad-blender/scripts/cad"
 OUT="${1:-/tmp/mates-kit}"
-rm -rf "$OUT"; mkdir -p "$OUT/ref" "$OUT/bug"
-cp -R "$KIT/reference/blender" "$OUT/ref/"; cp -R "$KIT/reference/blender" "$OUT/bug/"
+rm -rf "$OUT"; mkdir -p "$OUT/ref" "$OUT/bug" "$OUT/rev"
+for d in ref bug rev; do cp -R "$KIT/reference/blender" "$OUT/$d/"; done
 MATES_KIT="$KIT" $CAD build "$OUT/ref/blender/build_assembly.py" > "$OUT/ref/build.log" 2>&1
 MATES_KIT="$KIT" MATES_REF_PCB_DX=0.5 $CAD build "$OUT/bug/blender/build_assembly.py" > "$OUT/bug/build.log" 2>&1
-python3 -I "$KIT/score.py" "$OUT/ref" --out "$OUT/ref/score.json" > "$OUT/ref/score.txt" 2>&1
-python3 -I "$KIT/score.py" "$OUT/bug" --out "$OUT/bug/score.json" > "$OUT/bug/score.txt" 2>&1
+MATES_KIT="$KIT" MATES_REF_LID_FROM_BELOW=1 $CAD build "$OUT/rev/blender/build_assembly.py" > "$OUT/rev/build.log" 2>&1
+for d in ref bug rev; do python3 -I "$KIT/score.py" "$OUT/$d" --out "$OUT/$d/score.json" > "$OUT/$d/score.txt" 2>&1; done
 python3 -I - "$OUT" <<'PY'
 import json, sys
 d = sys.argv[1]
@@ -30,4 +32,13 @@ bo = {x["name"]: x for x in b["interfaces"] if not x["ok"]}
 pcb = bo.get("BUY_pcb", {})
 print(("KIT PASS" if list(bo) == ["BUY_pcb"] and abs((pcb.get("err_mm") or 0) - 0.5) < 1e-3 else "KIT FAIL") +
       " planted board offset: the scorer flags only BUY_pcb, %s mm off (others %s)" % (pcb.get("err_mm"), sorted(set(bo) - {"BUY_pcb"})))
+try:
+    v = json.load(open("%s/rev/score.json" % d))
+except Exception as e:
+    print("KIT FAIL lid screws from below: no score (%s; %s/rev/build.log)" % (e, d)); sys.exit()
+lid = [x for x in v["interfaces"] if x["name"] == "screws:lid"][0]
+vo = [x["name"] for x in v["interfaces"] if not x["ok"]]
+print(("KIT PASS" if not vo and lid.get("count") == 4 and v["cadcheck"]["fails"] == 0 else "KIT FAIL") +
+      " lid screws from under the deck (nuts on the ears): screws:lid counts %s, %d interfaces off %s, cadcheck %d fails %s" % (
+          lid.get("count"), len(vo), vo, v["cadcheck"]["fails"], v["cadcheck"]["fail_list"][:2]))
 PY

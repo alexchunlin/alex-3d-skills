@@ -42,6 +42,6 @@ $CAD mates "$V/mates/demo/manifest.json" "M3 nut" | grep -q "^side .*FST_side" &
 if [ -f "$ROOT/tools/bench/mates_task/selftest.sh" ]; then
   sh "$ROOT/tools/bench/mates_task/selftest.sh" "$V/mates/kit" > "$V/mates/kit.log" 2>&1
   grep "^KIT \(PASS\|FAIL\)" "$V/mates/kit.log" | while read -r _ st msg; do echo "$st mates_task $msg"; done > "$V/mates/kit.txt"
-  [ "$(grep -c . "$V/mates/kit.txt")" -ge 4 ] || echo "FAIL mates_task selftest: $(grep -c . "$V/mates/kit.txt") lines ($V/mates/kit.log)" >> "$V/mates/kit.txt"
+  [ "$(grep -c . "$V/mates/kit.txt")" -ge 5 ] || echo "FAIL mates_task selftest: $(grep -c . "$V/mates/kit.txt") lines ($V/mates/kit.log)" >> "$V/mates/kit.txt"
   while read -r st msg; do [ "$st" = PASS ] && ok "$msg" || bad "$msg"; done < "$V/mates/kit.txt"
 fi

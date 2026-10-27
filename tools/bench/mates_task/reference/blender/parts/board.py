@@ -1,4 +1,5 @@
 """Board on the deck standoffs, and the lid over it."""
+import os
 from cadlib import geom as G, mates as M, asm as A
 import kit_parts as K
 
@@ -26,5 +27,8 @@ def build(P):
     M.connector(shell, "ears", (0, 0, 0), (0, 0, -1), pattern=M.rect(*P.LID_SCREWS), hole="M3")
     M.part(shell, "PRT_lid", 'PRT', "pla_b", stl="lid", print_rot=A.R_FLIP, orient="top on the bed",
            supports="yes: under the 4 screw ears", infill=20)
-    M.mate("PRT_deck:lid", "PRT_lid:ears", "fastened", name="lid", step="lid",
-           fastener=dict(style="selftap", head="cap"))
+    if os.environ.get("MATES_REF_LID_FROM_BELOW"):     # selftest: the same joint driven from under the deck
+        f = dict(style="nut", trap=False, head="cap", sink=3.2, head_on="a")
+    else:
+        f = dict(style="selftap", head="cap")
+    M.mate("PRT_deck:lid", "PRT_lid:ears", "fastened", name="lid", step="lid", fastener=f)
