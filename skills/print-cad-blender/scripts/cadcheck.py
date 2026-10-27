@@ -554,26 +554,36 @@ def own_volume(o):
     return v
 
 
+_LOCAL_PTS = {}
+
+
 def sample_pts(o, cap=4000):
+    """Vertices then triangle centres (thinned to cap), in world at the current pose. The local points are
+    kept per mesh: reading t.center for every triangle at every pose was most of min_dist's time."""
     me = o.data
+    key = (me.as_pointer(), len(me.vertices), cap)
+    if key not in _LOCAL_PTS:
+        loc = [v.co.copy() for v in me.vertices]
+        me.calc_loop_triangles()
+        loc += [t.center.copy() for t in me.loop_triangles]
+        if len(loc) > cap:
+            st = len(loc) / cap
+            loc = [loc[int(i * st)] for i in range(cap)]
+        _LOCAL_PTS[key] = loc
     mw = o.matrix_world
-    pts = [mw @ v.co for v in me.vertices]
-    me.calc_loop_triangles()
-    pts += [mw @ t.center for t in me.loop_triangles]
-    if len(pts) > cap:
-        st = len(pts) / cap
-        pts = [pts[int(i * st)] for i in range(cap)]
-    return pts
+    return [mw @ p for p in _LOCAL_PTS[key]]
 
 
 def min_dist(a, b, ta, tb):
+    """Nearest sampled distance between a and b (each one's sample points against the other's BVH). Each query is
+    capped at the best so far, which gives the same result with less of the tree searched."""
     best = (1e9, None)
     for p in sample_pts(a):
-        r = tb.find_nearest(p)
+        r = tb.find_nearest(p, best[0])
         if r[0] is not None and r[3] < best[0]:
             best = (r[3], p)
     for p in sample_pts(b):
-        r = ta.find_nearest(p)
+        r = ta.find_nearest(p, best[0])
         if r[0] is not None and r[3] < best[0]:
             best = (r[3], p)
     return best
