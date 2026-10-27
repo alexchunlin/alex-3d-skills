@@ -642,6 +642,8 @@ def analyze(tris, cfg=None, supports="no", print_to_world=None, keep_pixels=Fals
     sev["layer"] = 4
     faces.sort(key=lambda g: (sev[g["status"]], -g.get("overhang_mm", g.get("span_mm", 0)), -g["area_mm2"]))
     nm = stl_edges(tris, C)
+    if print_to_world is not None:
+        nm["at_world"] = _to_world(nm["at"], print_to_world, zmin)
     findings = _findings(regions, faces, nm)
     by = lambda kind: [g for g in regions if g["kind"] == kind]
     fl = [g for g in faces if g["status"] in ("fail", "support", "warn")]
@@ -676,6 +678,11 @@ def _face_status(g, C, nosup):
     if g["overhang_mm"] > C["face_warn_mm"]:
         return "warn" if nosup else "support"
     return "ok"
+
+
+def _to_world(pts, print_to_world, zmin):
+    Rw, tw = print_to_world
+    return [[round(float(v), 1) for v in np.asarray(Rw) @ (np.array(p) + [0, 0, zmin]) + np.asarray(tw)] for p in pts]
 
 
 def stl_edges(tris, C):
@@ -724,8 +731,9 @@ def _findings(regions, faces=(), nm=None):
                         g["at_print"], ", world %s" % g["at_world"] if "at_world" in g else "")})
     if nm and nm["n"]:
         out.append({"status": "warn", "kind": "nonmanifold", "z_mm": None, "msg": "%d edges shared by more than 2 faces as exported (float32 STL: "
-                    "solids touching along a line; a slicer's mesh check counts them; overlap them by 0.1 mm or more) at print %s" % (
-                    nm["n"], "; ".join(str(a) for a in nm["at"][:3]))})
+                    "solids touching along a line; a slicer's mesh check counts them; overlap them by 0.1 mm or more) at print %s%s" % (
+                    nm["n"], "; ".join(str(a) for a in nm["at"][:3]), ", world %s" % "; ".join(str(a) for a in nm["at_world"][:3])
+                    if nm.get("at_world") else "")})
     return out
 
 
@@ -760,7 +768,8 @@ def analyze_cached(tris, cfg=None, supports="no", print_to_world=None):
         z0 = float(np.asarray(tris)[:, :, 2].min())
         for g in res["regions"] + res["faces"]:
             g["at_world"] = [round(float(v), 1) for v in np.asarray(Rw) @ (np.array(g["at_print"]) + [0, 0, z0]) + np.asarray(tw)]
-        res["findings"] = _findings(res["regions"], res["faces"], {"n": res["stl_nonmanifold_edges"], "at": res["stl_nonmanifold_at"]})
+        res["findings"] = _findings(res["regions"], res["faces"], {"n": res["stl_nonmanifold_edges"], "at": res["stl_nonmanifold_at"],
+                                                                   "at_world": _to_world(res["stl_nonmanifold_at"], print_to_world, z0)})
     return res
 
 
