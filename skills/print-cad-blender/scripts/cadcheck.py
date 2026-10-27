@@ -48,6 +48,7 @@ from mathutils import Vector, Matrix
 from mathutils.bvhtree import BVHTree
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cadlib import joints as JT   # noqa: E402  (joint specs and posing, shared with cadlib.route)
+import cadcfg as CC               # noqa: E402  (checks.json hygiene: unknown keys, accepted_warns; no Blender)
 
 ARGV = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 
@@ -109,17 +110,59 @@ DEFAULTS = {
     "cable_junctions_ok": [],   # globs of cables whose meeting ends are a real connector
     "cable_min_bend_od": 0.75,  # a corner whose centreline radius is under this x OD is a kink (V2A7-F2)
     "joint_drives": {},         # {"PIV_x": "BUY_servo_x" or null}: what holds a joint during assembly (default: by name)
-    # [{"match": "substring of the warn text", "why": "..."}]: a warn you looked at and accept. The summary counts
-    # untriaged warns separately. v2 A1 finished at 0 fails, 34 warns; 3 of R1's issues (A1-05, 07, 08) were warns
-    # in that list that nobody acted on (FINDINGS V2A1-F5)
+    # [{"check": "parts", "object": "PRT_x", "kind": "wall samples", "why": "..."}]: a warn you looked at and accept.
+    # The summary counts untriaged warns separately. v2 A1 finished at 0 fails, 34 warns; 3 of R1's issues (A1-05, 07,
+    # 08) were warns in that list that nobody acted on (FINDINGS V2A1-F5). The old {"match": substring} still works
     "accepted_warns": [],
+    "fits": [],
+    "assembly_order": [],
+    "printcheck": {},           # the parts layer check (printcheck.py DEFAULTS)
+    "interlayer_mpa": 15.0,     # flexures: bending stress a beam standing off the bed may carry across layers (R3, PLA)
+    "overhang_warn_mm2": 150,
+    "max_bridge_mm": 25,        # printcheck bridge_warn_mm unless "printcheck" sets it
 }
+# The fields of each row, for the unknown-key warn (cadcfg.py). Top-level keys are DEFAULTS', and so are the members
+# of a dict section (fasteners, exposure, collections; printcheck takes printcheck.py DEFAULTS) plus any listed here;
+# CONFIG_NAMED sections are keyed by object or joint name. Any row may carry "why", "name" and "past_limit_ok"; a key
+# starting with "_" is a note. "sec.sub" is a dict (or a list of dicts) inside a row. A typo'd key was ignored without
+# a word: "flexure" for "flexures" passed with nothing checked (push-assist PA-A4-T6). reference/checks-config.md
+# documents every key here (tools/verify.d/cadcfg.sh).
+CONFIG_ROWS = {
+    "allow": ["a", "b", "max_mm3"],
+    "fits": ["a", "b", "min_clearance", "contact", "contact_normal"],
+    "assembly_order": ["step", "objects", "bench", "merge", "pose", "pose_how", "powered", "insert_dirs", "insert_ok"],
+    "service": ["op", "fasteners", "pose", "remove"],
+    "drop_tests": ["emit", "dir", "poses", "sweep", "expect", "mode", "stall_deg", "stall_margin_deg", "capture_mm",
+                   "payload_mm", "max_mm", "ignore", "home_only_ok"],
+    "drop_tests.emit": ["frame", "center", "normal", "radius", "step"],
+    "drop_tests.expect": ["hit", "angle"],
+    "index_tests": ["joint", "sequence", "step", "probe", "blockers", "expect_windows", "pose"],
+    "index_tests.probe": ["frame", "center", "dir", "radius", "depth"],
+    "slide_out": ["object", "objects", "dir", "dist", "step", "min_clearance", "expect", "blocked_by", "at_mm", "ignore",
+                  "pose", "flex"],
+    "distances": ["a", "b", "min", "max", "ray", "payload_mm", "tape_mm", "compliant", "pose", "poses"],
+    "distances.ray": ["frame", "origin", "dir", "sweep"],
+    "payload_fit": ["against", "center", "frame", "up", "across", "place", "count", "gap", "size", "shape", "expect",
+                    "margin", "pose"],
+    "sightlines": ["frame", "pose", "poses", "origin", "origins", "dir", "first_hit", "max_mm", "through"],
+    "stacks": ["limit", "terms", "between", "poses"],
+    "stacks.terms": ["what", "tol"],
+    "flexures": ["part", "dir", "from", "to", "stress_mpa"],
+    "cable_chains": ["cables", "lead"],
+    "accepted_warns": ["check", "kind", "object", "match"],
+    "joints": ["axis", "lo", "hi", "home", "step", "continuous", "kind"],
+    "couplings": ["to", "ratio", "offset"],
+    "fasteners": ["min_engagement"],
+}
+CONFIG_NAMED = ["joints", "couplings", "carry", "printers", "masses_g", "cable_leads", "joint_drives"]
 
 T0 = time.time()
 CFG = json.loads(json.dumps(DEFAULTS))
+CFG_FILES = []   # (path, as read): each file's own keys are checked (cadcfg.unknown_keys)
 if _arg("--config"):
     with open(_arg("--config")) as f:
         user = json.load(f)
+    CFG_FILES.append((_arg("--config"), user))
     for k, v in user.items():
         if isinstance(v, dict) and isinstance(CFG.get(k), dict):
             CFG[k].update(v)
@@ -129,6 +172,7 @@ _replaced = set()
 for _ov in [ARGV[i + 1] for i, a in enumerate(ARGV[:-1]) if a == "--overlay"]:     # repeatable
     with open(_ov) as f:
         extra = json.load(f)
+    CFG_FILES.append((_ov, extra))
     for k, v in extra.items():
         if isinstance(v, list) and isinstance(CFG.get(k), list):
             if "--overlay-only" in ARGV and k not in _replaced:
@@ -182,8 +226,30 @@ def _eval_exprs(x, at):
 
 
 for _k in list(CFG):
-    if _k != "accepted_warns":
+    if _k == "accepted_warns":
+        continue
+    if isinstance(CFG[_k], list):
+        # a row with a failed expression is skipped, named in its config fail: a None in a row crashed the check that
+        # read it (check_stacks: float(None), push-assist PA-A5-T26) and took the whole report with it
+        _keep = []
+        for _i, _r in enumerate(CFG[_k]):
+            _n = len(EXPRS)
+            _v = _eval_exprs(_r, "%s[%d]" % (_k, _i))
+            _bad = [e for e in EXPRS[_n:] if "error" in e]
+            for e in _bad:
+                e["skipped"] = "%s row%s" % (_k, " '%s'" % CC.row_label(_r) if isinstance(_r, dict) and CC.row_label(_r) else "")
+            if not _bad:
+                _keep.append(_v)
+        CFG[_k] = _keep
+    else:
+        _n = len(EXPRS)
         CFG[_k] = _eval_exprs(CFG[_k], _k)
+        for e in EXPRS[_n:]:     # a setting goes back to its default, if it has one
+            _p = e["at"].split(".")
+            if "error" in e and len(_p) == 1 and _k in DEFAULTS:
+                CFG[_k] = e["default"] = json.loads(json.dumps(DEFAULTS[_k]))
+            elif "error" in e and len(_p) == 2 and isinstance(DEFAULTS.get(_k), dict) and _p[1] in DEFAULTS[_k]:
+                CFG[_k][_p[1]] = e["default"] = json.loads(json.dumps(DEFAULTS[_k][_p[1]]))
 QUICK = "--quick" in ARGV
 ONLY = set(_arg("--only", "").split(",")) - {""}
 OUT = _arg("--out") or os.path.join(os.path.dirname(bpy.data.filepath) or ".", "cadcheck.json")
@@ -3233,6 +3299,30 @@ def stale_model():
                   for x in srcs if os.path.getmtime(x) > t + 2.0)
 
 
+CHECKS = (("parts", check_parts), ("interference", check_interference), ("fasteners", check_fasteners),
+          ("service", check_service), ("drop", check_drop), ("index", check_index), ("slide", check_slide),
+          ("distances", check_distances), ("payload", check_payload), ("sightlines", check_sightlines),
+          ("assembly", check_assembly), ("insertion", check_insertion), ("stacks", check_stacks), ("flexures", check_flexures),
+          ("stability", check_stability), ("cables", check_cables))
+ROWS_OF = {"service": "service", "drop": "drop_tests", "index": "index_tests", "slide": "slide_out", "distances": "distances",
+           "payload": "payload_fit", "sightlines": "sightlines", "assembly": "assembly_order", "insertion": "assembly_order",
+           "stacks": "stacks", "flexures": "flexures"}
+
+
+def config_warns(acc, tri):
+    """Config hygiene, listed apart from the design warns: keys cadcheck never reads (each file on its own, with the
+    closest known key), --only names that are no check, malformed accepts and the old substring accepts."""
+    pc = CC.literal(os.path.join(os.path.dirname(os.path.abspath(__file__)), "printcheck.py"), "DEFAULTS")
+    out = []
+    for path, raw in CFG_FILES:
+        out += CC.unknown_msgs(os.path.basename(path), raw, dict(DEFAULTS, printcheck=pc), CONFIG_ROWS, CONFIG_NAMED)
+    names = [n for n, _ in CHECKS] + ["clearance"]
+    out += CC.only_problems(ONLY, names)
+    out += CC.accept_problems(acc, names + ["config"])
+    m = CC.legacy_msg(tri["legacy"], len(acc), WARNS, CC.templates(os.path.abspath(__file__)) if tri["legacy"] else None)
+    return out + ([m] if m else [])
+
+
 def main():
     set_pose({})
     HOME_MW.update({o.name: o.matrix_world.copy() for o in ALL})
@@ -3240,7 +3330,9 @@ def main():
         REPORT["params"] = {"source": PARAMS_SRC, "expressions": EXPRS}
         for e in EXPRS:
             if "error" in e:
-                finding("config", "fail", "%s: expression '=%s' failed (%s; params from %s)" % (e["at"], e["expr"], e["error"], PARAMS_SRC), **e)
+                finding("config", "fail", "%s: expression '=%s' failed (%s; params from %s)%s" % (
+                    e["at"], e["expr"], e["error"], PARAMS_SRC, "; %s skipped" % e["skipped"] if "skipped" in e else
+                    "; using the default %s" % json.dumps(e["default"]) if "default" in e else ""), **e)
     check_pose_values()
     old_srcs = stale_model()
     if old_srcs:
@@ -3251,26 +3343,35 @@ def main():
     log("objects: %d printed, %d purchased, %d fasteners, %d cables; joints %s" % (
         len(PRINTED), len(PURCHASED), len(FASTENERS), len(CABLES),
         {n: (s["axis"], s["lo"], s["hi"]) for n, s in JOINTS.items()}))
-    for name, fn in (("parts", check_parts), ("interference", check_interference), ("fasteners", check_fasteners),
-                     ("service", check_service), ("drop", check_drop), ("index", check_index), ("slide", check_slide),
-                     ("distances", check_distances), ("payload", check_payload), ("sightlines", check_sightlines),
-                     ("assembly", check_assembly), ("insertion", check_insertion), ("stacks", check_stacks), ("flexures", check_flexures), ("stability", check_stability), ("cables", check_cables)):
+    ran, empty = {"config", "build"}, []
+    for name, fn in CHECKS:
         if want(name) or (name == "interference" and want("clearance")):
             t = time.time()
             fn()
             REPORT["checks"].setdefault(name, {"findings": []})["runtime_s"] = round(time.time() - t, 1)
             log("%s done" % name)
+            ran |= {name, "clearance"} if name == "interference" else {name}
+            # a check named in --only with no rows checked nothing and said nothing (push-assist PA-A2-T11: 5 of 11)
+            sec = ROWS_OF.get(name)
+            if sec and not CFG.get(sec):
+                empty.append(name)
+                if not any(x.startswith(name + ":") for x in REPORT["not_checked"]):
+                    REPORT["not_checked"].append("%s: no %s rows in the config, nothing checked" % (name, sec))
     if not CABLES:
         REPORT["not_checked"].append("cables: Cables collection empty")
     REPORT["not_checked"].append("not geometric: teardown step count, alignment-jig datums (declare stacks), aesthetics, BOM correctness")
     acc = CFG.get("accepted_warns") or []
-    accepted = {w: next(a.get("why", "") for a in acc if a["match"] in w) for w in WARNS
-                if any(a["match"] in w for a in acc) and not w.startswith("build: ")}   # a stale model is never accepted
-    untriaged = [w for w in WARNS if w not in accepted]
-    # under --only most warns never get a chance to fire, so "matched nothing" would list nearly every accept
-    stale = [] if ONLY else [a["match"] for a in acc if not any(a["match"] in w for w in WARNS)]
+    # an accept names a check and the kind of warn; under --only one whose check did not run is "not evaluated", one
+    # whose check ran and matched nothing is stale (it never was under --only: PA-A4-T10a). The old substring accepts
+    # name no check, so under --only an unmatched one is not evaluated either
+    tri = CC.triage(acc, WARNS, ran if ONLY else None)
+    accepted, untriaged, stale = tri["accepted"], tri["untriaged"], tri["stale"]
+    cfg_warns = config_warns(acc, tri)
     REPORT["summary"] = {"pass": not FAILS, "fails": len(FAILS), "warns": len(WARNS), "untriaged_warns": len(untriaged),
                          "fail_list": FAILS, "warn_list": untriaged, "accepted_warns": accepted, "stale_accepts": stale,
+                         "accepts_not_evaluated": tri["not_evaluated"], "config_warns": cfg_warns,
+                         "accept_suggestions": [x for x in tri["legacy"] if x["use"]],
+                         "only_without_rows": empty if ONLY else [],
                          "coverage": REPORT["coverage"], "not_checked": REPORT["not_checked"], "poses_past_limits": PAST_LIMITS,
                          "unbounded_allows": UNBOUNDED_ALLOWS,
                          "runtime_s": round(time.time() - T0, 1)}
@@ -3287,6 +3388,17 @@ def main():
         print("  ... %d more untriaged warnings in the report" % (len(untriaged) - 25))
     if stale:
         print("  accepted_warns that matched nothing (fixed? remove them):", stale)
+    if tri["not_evaluated"]:
+        print("  accepted_warns not evaluated (their check did not run, or old substring form under --only): %d" % len(tri["not_evaluated"]))
+    if ONLY and empty:
+        print("  --only checks with no rows in the config (nothing checked):", ", ".join(empty))
+    if cfg_warns:
+        # config hygiene, apart from the design warns: not in warns / warn_list, so they never count as design noise
+        print("  config (%d):" % len(cfg_warns))
+        for x in cfg_warns[:25]:
+            print("    " + x)
+        for x in REPORT["summary"]["accept_suggestions"][:8]:
+            print("    accept %s -> %s" % (json.dumps(x["match"]), " ".join(json.dumps({k: v for k, v in u.items() if k != "why"}) for u in x["use"])))
     if PAST_LIMITS:
         # the parts are posed through their stops: a hard stop beyond a firmware limit is fine, a joint limit the model
         # has not caught up with is not (V2A4-T2). Mark intended rows "past_limit_ok": true to drop them from this list
