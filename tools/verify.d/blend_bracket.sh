@@ -1,4 +1,5 @@
 # blend-bracket: cadlib.blend grows the 6-way tube node and the servo bracket; geom.swept_envelope holds every pose.
+# watch: @core @layer examples/blend-node/** examples/blend-bracket/** tools/verify.d/blend_bracket_*.py examples/mm-launcher-a3/** components/**
 # Sourced by tools/verify_all.sh (uses $ROOT $CAD $V $BL, calls ok/bad). About 6 min cold on a loaded machine (1.5 warm), most of it
 # best_orientation running printcheck on 2-10 orientations per part (cached by triangles after the first run).
 # Evidence: docs/features/blend-bracket.md.
@@ -68,6 +69,8 @@ echo "$S" | grep -q '"outside": 0,' && echo "$S" | grep -q '"non_manifold_edges"
 S2=$(sweep --python "$ROOT/tools/verify.d/blend_bracket_sweep.py" -- "$SCR" union)
 echo "$S2" | grep -q '"outside": 0,' && bad "containment check has no teeth: union of 5 deg poses passed" \
   || ok "containment check fails the 5 deg pose union (negative control): $S2"
+# section 4c unpacks the A3 blend in a full run; a --changed run may skip 4c
+[ -f "$V/a3/mm_launcher.blend" ] || { mkdir -p "$V/a3"; gunzip -c "$ROOT/examples/mm-launcher-a3/mm_launcher_a3.blend.gz" > "$V/a3/mm_launcher.blend"; }
 if [ -f "$V/a3/mm_launcher.blend" ]; then
   S3=$(sweep "$V/a3/mm_launcher.blend" --python "$ROOT/tools/verify.d/blend_bracket_sweep.py" -- "$SCR" PRT_nacelle PIV_tilt -3 46)
   echo "$S3" | grep -q '"outside": 0,' && echo "$S3" | grep -q '"non_manifold_edges": 0' \

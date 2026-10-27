@@ -30,6 +30,19 @@ import numpy as np
 
 _VERSION = "3"   # bump when analyze() changes what it reports (cache key)
 
+
+def _source_key():
+    """sha1 of this file: part of the cache key, so an edit to the analysis can't pass on results cached before it."""
+    import hashlib
+    try:
+        with open(os.path.abspath(__file__), "rb") as f:
+            return hashlib.sha1(f.read()).hexdigest()
+    except (OSError, NameError):
+        return "nosource"
+
+
+_SOURCE = _source_key()
+
 DEFAULTS = {
     "layer_h": 0.2,           # mm
     "px": 0.1,                # raster pixel, mm; grown for big parts so a layer stays under max_cells
@@ -388,7 +401,7 @@ def analyze_cached(tris, cfg=None, supports="no", print_to_world=None):
     C = dict(DEFAULTS)
     C.update(cfg or {})
     T = np.ascontiguousarray(np.asarray(tris, np.float32))
-    key = hashlib.sha1(T.tobytes() + json.dumps(C, sort_keys=True).encode() + str(supports).encode() + _VERSION.encode()).hexdigest()
+    key = hashlib.sha1(T.tobytes() + json.dumps(C, sort_keys=True).encode() + str(supports).encode() + _VERSION.encode() + _SOURCE.encode()).hexdigest()
     d = os.path.join(os.environ.get("TMPDIR", "/tmp"), "cad-printcheck-cache")
     fp = os.path.join(d, key + ".json")
     res = None

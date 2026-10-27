@@ -1,4 +1,6 @@
 # design-principles.md: cited IDs exist exactly as cited, the doc is on-demand, and the template declares EB/CR (DP1).
+# watch: docs/FINDINGS.md skills/print-cad-blender/SKILL.md skills/print-cad-blender/reference/design-principles.md
+# watch: skills/cad-design-review/checklist.md skills/cad-design-review/rubric.md skills/print-cad-blender/templates/project/**
 DP="$ROOT/skills/print-cad-blender/reference/design-principles.md"
 CL="$ROOT/skills/cad-design-review/checklist.md"
 SK="$ROOT/skills/print-cad-blender/SKILL.md"

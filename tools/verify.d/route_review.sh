@@ -1,4 +1,5 @@
 # cadlib.route: the PR #3 review's adversarial scenes as small regressions (tools/verify.d/route_review_cases.py).
+# watch: @core tools/verify.d/route_review_cases.py
 # Sourced by tools/verify_all.sh (uses $ROOT $CAD $V $BL; calls ok/bad). About 10 s.
 RR="$V/route_review"; mkdir -p "$RR"
 nice -n 10 "$BL" -b --factory-startup --python "$ROOT/tools/verify.d/route_review_cases.py" -- \

@@ -1,4 +1,5 @@
 # cadlib.route (docs/features/cable-router.md): synthetic tray (block + wall slot + turntable bore), then one A3 re-route.
+# watch: @core examples/cable-router/** examples/mm-launcher-a3/** tools/verify.d/inter_volume_cases.py tools/verify.d/route_bend_cases.py
 # Sourced by tools/verify_all.sh (uses $ROOT $CAD $V; calls ok/bad). About 25 s.
 CR="$V/cr"; mkdir -p "$CR"
 $CAD build "$ROOT/examples/cable-router/build.py" --out "$CR" >/dev/null
