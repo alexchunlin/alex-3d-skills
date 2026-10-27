@@ -19,13 +19,13 @@ screws. For a box-shaped mount, `geom` and `features` are simpler.
 | `rod(a, b, r, edge)`, `capsule(a, b, r)`, `sphere(c, r)`, `rbox(M, size, r)`, `mesh_field(ob)` | extra members: plates, posts, fins, struts |
 | `grow(name, holds, fillet=5, extra=[], keepout=[], keepout_clear=0.5, clip=None, holes=[], voxel=0.5)` | returns `(ob, report)`. About 2 s, under 45k triangles. `holes` takes exact cutters such as `F.screw_hole(...)` lists. `clip` is a **world-axis box** intersected exactly (flat bed faces); for a tilted cut, pass a rotated `G.box` in `holes`. Over `max_cells` (40M cells, about 1.7 GB) it raises `GridTooLarge` before allocating, naming the smallest voxel that fits. |
 | `measure(ob, holds)` | fit clearance and wall per hold, by rays on the finished mesh. Unnamed holds are numbered `tube0`, `tube1`, `block0` in order; two holds with the same name raise. |
-| `best_orientation(ob, candidates=None)` | ranks print orientations by `printcheck` (fails, then warns, then bed contact), each with its verdict. Default candidates: each tube rim, each clip face, the 6 world axes (`orientation_candidates(ob)`; add your own). Candidates under 50 mm2 on the bed rank last. Use `r[0]["print_rot"]` and `r[0]["label"]` in `A.part`. 5-12 s per candidate. |
+| `best_orientation(ob, candidates=None)` | ranks print orientations by `printcheck` (fails, then warns, then flagged sloped-overhang area, then bed contact), each with its verdict. Default candidates: each tube rim, each clip face, the 6 world axes (`orientation_candidates(ob)`; add your own). Candidates under 50 mm2 on the bed rank last. Use `r[0]["print_rot"]` and `r[0]["label"]` in `A.part`. 5-12 s per candidate. |
 
 - **Grown sockets don't retain the tube.** The fit is a 0.4 mm diametral slip. Put a screw through the sleeve
   (`holes=F.screw_hole(...)`) or glue it.
 - **Orientation:** take `best_orientation`'s pick, then run `cad printcheck` on the exported STL; printcheck is the
-  authority for `supports`. It compares each layer only with the one below, so it misses a gradual overhang. Before you
-  claim `supports: no`, look at the pick's `overhang_mm2`: a slicer may still support that much downward surface.
+  authority for `supports`. Its face pass flags the sleeves' sloped undersides that the layer check alone passed (the
+  review's 4-way node on tube1's rim: three regions 8.9-10.0 mm past 45 deg); `cad printcheck --where` says where.
 
 ## swept_envelope: keep-outs for moving parts
 

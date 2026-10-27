@@ -27,7 +27,10 @@ adds `carry`, `fasteners.captive` and `flexures`.
   "moving_warn_clearance": 1.0,
   "vol_tol": 0.5,                 // mm3; below this an overlap counts as contact
   "printcheck": {                 // the parts layer check (scripts/printcheck.py DEFAULTS); rarely needs changing
-    "cantilever_mm": 3.0, "cantilever_warn_mm": 1.0, "island_mm2": 0.5, "bridge_warn_mm": 25, "min_feature_mm": 0.4},
+    "cantilever_mm": 3.0, "cantilever_warn_mm": 1.0, "island_mm2": 0.5, "bridge_warn_mm": 25, "min_feature_mm": 0.4,
+    // face pass: sloped regions measured past the overhang_deg cone from their anchored edges (overhang_deg comes from
+    // the top-level key); warn past face_warn_mm, fail past cantilever_mm when face_fail_mm2 or more (projected)
+    "face_warn_mm": 2.0, "face_fail_mm2": 20, "face_min_mm2": 2, "face_flat_deg": 1.0},
 
   "assembly_order": [             // tool access is tested against the parts present at each step
     {"step": "base", "objects": ["PRT_base_*", "FST_floor_*"]},
