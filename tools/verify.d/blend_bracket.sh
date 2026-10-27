@@ -1,5 +1,5 @@
 # blend-bracket: cadlib.blend grows the 6-way tube node and the servo bracket; geom.swept_envelope holds every pose.
-# watch: @core @layer examples/blend-node/** examples/blend-bracket/** tools/verify.d/blend_bracket_*.py examples/mm-launcher-a3/**
+# watch: @core @layer examples/blend-node/** examples/blend-bracket/** tools/verify.d/blend_bracket_*.py examples/mm-launcher-a3/** components/**
 # Sourced by tools/verify_all.sh (uses $ROOT $CAD $V $BL, calls ok/bad). About 6 min cold on a loaded machine (1.5 warm), most of it
 # best_orientation running printcheck on 2-10 orientations per part (cached by triangles after the first run).
 # Evidence: docs/features/blend-bracket.md.

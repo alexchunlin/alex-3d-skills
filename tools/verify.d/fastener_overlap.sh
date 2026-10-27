@@ -1,4 +1,5 @@
 # cadcheck head and nut overlap (sourced by tools/verify_all.sh; uses $ROOT $CAD $V, calls ok/bad). Writes under $V/fo.
+# watch: @core tools/verify.d/fastener_overlap_build.py tools/prior_art/cadcheck_head_overlap_repro.py
 # A screw head or a nut overlapping a solid on its own body was checked by nothing: interference skips same-body FST
 # pairs. The PR #2 review repro (a rib through an M4 head), push-assist PA-A2-T12 (a nut in the sliding piston) and a
 # nut with no pocket must fail; a counterbore, a nut trap (also turned 30 deg), a side-slot nut and a declared captive

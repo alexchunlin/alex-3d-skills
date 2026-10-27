@@ -4,23 +4,25 @@
   sh tools/verify_all.sh --dry-run                      # no --changed: everything runs, as with no flag
   sh tools/verify_all.sh --dry-run --files PATH ...     # the plan for a given list of changed paths (tests)
 
-verify_all.sh runs this with its own arguments and reads the last line, SELECT ALL | SELECT ID ... | SELECT (nothing).
+verify_all.sh runs this with its own arguments and reads two lines: SELECT ALL | SELECT ID ... and UNITS ID ... (every
+section and script, which a --changed run checks it actually ran).
 
 The map lives beside the code it describes:
   tools/verify_all.sh   `if want ID; then  #@ watch: PATTERNS  needs: IDS` opens a section and `fi  #@ end ID` closes it.
-                        Its plumbing block (`#@ plumbing` .. `#@ plumbing end`) holds `#@ group @NAME = PATTERNS` and
-                        `#@ none: PATTERNS` (paths no test exercises: docs).
+                        The plumbing blocks (`#@ plumbing` .. `#@ plumbing end`) hold the selection code and the
+                        `#@ group @NAME = PATTERNS` and `#@ none: PATTERNS` (paths no test reads: docs) lines.
   tools/verify.d/X.sh   `# watch: PATTERNS` (one or more lines) and an optional `# needs: IDS`. The script is always
-                        watched by itself. Its ID is its file name.
+                        watched by itself. Its ID is its file name. A script with no `# watch:` runs on every change.
 Patterns are repo-relative: * stays inside a directory, ** crosses them, a leading ! excludes.
 
 Changed paths are `git diff merge-base(BASE, HEAD)` (committed and uncommitted) plus untracked files. A path runs
-every section and script that watches it; `needs:` adds what those read from earlier sections. A path nothing watches
-runs nothing when `none:` matches it, and everything otherwise ("unmapped: PATH"). verify_all.sh and verify.d/*.sh are
-read line by line instead: a comment or blank line in verify_all.sh runs nothing, a `#@` or plumbing line runs the
-selector test (verify_select.sh), a line inside a section runs that section, and any other line (the preamble: ok/bad,
-CAD_LAYER_CHECK, ...) runs everything. In a verify.d script a code line runs the script, a comment line (its header)
-the selector test. Any change to either file also runs the selector test, which checks the map itself.
+every section and script that watches it. A path nothing watches runs nothing when `none:` matches it, and everything
+otherwise ("unmapped: PATH"). verify_all.sh and verify.d/*.sh are read line by line instead: a comment or blank line
+runs nothing, a `#@` line or section open/end line runs only the selector test (it checks the map), a code line inside
+a section runs that section, and any other code line (preamble, plumbing: want(), the verify.d loop) runs everything.
+In a verify.d script a code line runs the script, a comment line (its header) only the selector test.
+Then: units that `needs:` a selected unit run too (they read its output), and so does what every selected unit
+`needs:`. The selector test (verify_select.sh, about 2 s) runs on every --changed run.
 """
 import os, re, subprocess, sys
 
@@ -71,7 +73,7 @@ SEC_END = re.compile(r"^fi\s+#@ end (\S+)\s*$")
 
 def parse_verify_all(text):
     """{'units': [...], 'groups': {...}, 'none': [...], 'region': [None, kind per line 1..n]}.
-    region kinds: ('sec', ID), ('plumbing',), ('global',)."""
+    region kinds: ('sec', ID) body, ('open', ID) / ('end', ID) its guard lines, ('plumbing',), ('global',)."""
     lines = text.split("\n")
     groups, none, units, region = {}, [], [], [None]
     cur, plumb = None, False
@@ -86,14 +88,14 @@ def parse_verify_all(text):
             cur = {"id": m.group(1), "kind": "section", "watch": kv.get("watch", []), "needs": kv.get("needs", []),
                    "start": n, "body": []}
             units.append(cur)
-            region.append(("plumbing",))
+            region.append(("open", cur["id"]))
             continue
         if e:
             if not cur or e.group(1) != cur["id"]:
                 raise ValueError("%s:%d: end %s without its open" % (VA, n, e.group(1)))
             cur["end"] = n
+            region.append(("end", cur["id"]))
             cur = None
-            region.append(("plumbing",))
             continue
         if cur:
             cur["body"].append(l)
@@ -212,20 +214,20 @@ def plan(m, changes):
         if lines is not None and p == VA:
             for sign, at, text in lines:
                 t = text.strip()
-                if "#@" in t:
-                    add(SELFTEST, "%s line %d (map / plumbing)" % (p, at[0]))
+                if t.startswith("#@") or SEC_OPEN.match(text) or SEC_END.match(text):
+                    add(SELFTEST, "%s line %d (the map)" % (p, at[0]))
                 elif not t or t.startswith("#"):
                     continue
                 else:
-                    for n in at:
-                        r = reg[min(max(n, 1), len(reg) - 1)]
-                        if r[0] == "sec":
-                            add(r[1], "%s line %d (in section %s)" % (p, n, r[1]))
-                        elif r[0] == "plumbing":
-                            add(SELFTEST, "%s line %d (map / plumbing)" % (p, n))
+                    r = [reg[min(max(n, 1), len(reg) - 1)] for n in at]
+                    if sign == "-" and len(at) == 2:   # a pure deletion: the line sat between new lines at[0] and at[1]
+                        inside = r[0][0] in ("sec", "open") and r[1][0] in ("sec", "end") and r[0][1] == r[1][1]
+                        r = [("sec", r[0][1]) if inside else ("global",)]
+                    for n, x in zip(at, r):
+                        if x[0] in ("sec", "open", "end"):
+                            add(x[1], "%s line %d (in section %s)" % (p, n, x[1]))
                         else:
-                            allw.append("%s line %d is outside every section: %s" % (p, n, t[:60]))
-                    add(SELFTEST, "%s changed" % p)
+                            allw.append("%s line %d is %s code: %s" % (p, n, "plumbing" if x[0] == "plumbing" else "preamble", t[:60]))
             continue
         if lines is not None:
             name = p.split("/")[-1]
@@ -248,8 +250,21 @@ def plan(m, changes):
                 none.append(p)
             else:
                 allw.append("unmapped: %s" % p)
-    # what the selected units read from earlier sections
+    if changes:
+        for u in m["units"]:
+            if u["kind"] == "script" and not u.get("has_watch"):
+                add(u["id"], "no watch header (runs on every change)")
+        if SELFTEST in m["ids"]:
+            add(SELFTEST, "always runs under --changed")
+    # units that read a changed unit's output (reverse needs, transitively), then what every selected unit reads
     need = {u["id"]: u["needs"] for u in m["units"]}
+    todo = list(run)
+    while todo:
+        i = todo.pop()
+        for u, nd in need.items():
+            if i in nd and u not in run:
+                add(u, "reads %s's output" % i)
+                todo.append(u)
     todo = list(run)
     while todo:
         i = todo.pop()
@@ -266,8 +281,7 @@ def render(m, pl, head):
     if pl["all"]:
         out += ["  %s" % w for w in pl["all"]]
         out.append("run   everything (%d sections and scripts)" % len(ids))
-        out.append("SELECT ALL")
-        return out
+        return out + ["SELECT ALL", "UNITS " + " ".join(ids)]
     for i in ids:
         if i in pl["run"]:
             why = list(dict.fromkeys(pl["run"][i]))
@@ -275,15 +289,14 @@ def render(m, pl, head):
     skip = [i for i in ids if i not in pl["run"]]
     if pl["none"]:
         out.append("no tests for: %s" % " ".join(pl["none"]))
-    if not pl["run"]:
-        out.append("no tests affected")
-    elif skip:
+    if not [i for i in pl["run"] if i != SELFTEST]:
+        out.append("no tests affected by the change (the selector test always runs)")
+    if skip:
         out.append("skip  %s" % " ".join(skip))
-    out.append("SELECT " + " ".join(i for i in ids if i in pl["run"]))
-    return out
+    return out + ["SELECT " + " ".join(i for i in ids if i in pl["run"]), "UNITS " + " ".join(ids)]
 
 
-def main(argv):
+def main(argv, root=ROOT):
     changed, base, dry, files = False, "next", False, None
     i = 0
     while i < len(argv):
@@ -302,19 +315,27 @@ def main(argv):
                   "verify_select: unknown argument %r" % a)
             return 2
         i += 1
+    if changed and files is None:
+        mb, ch = changes_from_git(base, root=root)
+        if not ch:
+            same = mb == git("rev-parse", "HEAD", root=root).strip()
+            print("verify_all --changed %s: nothing changed since %s%s, so there is nothing to select. %s" % (
+                base, mb[:9], " (the merge-base is HEAD and the tree is clean)" if same else "",
+                "To check the last merge, diff from its first parent: sh tools/verify_all.sh --changed HEAD^1" if same
+                else "Pass another BASE, or run without --changed for everything."))
+            return 3
     try:
-        m = load()
+        m = load(root)
     except ValueError as e:
         print("verify_select: %s" % e)
         return 2
     if not changed:
         print("verify_all: no --changed, so every section and script runs:\n  %s" % " ".join(m["ids"]))
-        print("SELECT ALL")
+        print("SELECT ALL\nUNITS " + " ".join(m["ids"]))
         return 0
     if files is not None:
         ch, head = {p: None for p in files}, "verify_all --changed: %d given paths" % len(files)
     else:
-        mb, ch = changes_from_git(base)
         head = "verify_all --changed %s: %d changed paths since %s (merge-base of %s and HEAD; committed, uncommitted, untracked)" % (
             base, len(ch), mb[:9], base)
     print("\n".join(render(m, plan(m, ch), head)))

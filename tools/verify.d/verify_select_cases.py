@@ -2,14 +2,19 @@
 
     python3 -I tools/verify.d/verify_select_cases.py <repo root>
 
-1. The map itself: every section is guarded and watched, every verify.d script has a `# watch:` header, every pattern
-   matches a file, every $ROOT path, cad subcommand and layer-check run a unit makes is covered by its own watch, a
-   unit that reads another section's $V output either makes it or `needs:` it, and every tracked file maps somewhere.
+1. The map itself: every section is guarded and has a watch, no code outside sections and plumbing, every `want X`
+   names a section, every verify.d script has a `# watch:` header, every pattern matches a file, every $ROOT path,
+   Python os.path.join path, cad subcommand and layer check a unit runs is in its own watch, a unit that reads another
+   unit's $V output (shell, or bench's --from-verify reports via corpus.json) makes it or `needs:` it, and every
+   tracked file maps somewhere.
 2. Fake changed-file lists -> the exact plan (docs only, printcheck.py, a cadlib file, a new tools/ dir, ...).
 3. verify_all.sh and verify.d lines -> sections (comment, section body, plumbing, preamble), on the real files.
-4. git: merge-base diff + uncommitted + untracked, on a scratch repo; then the real verify_all.sh --dry-run.
+4. git: merge-base diff + uncommitted + untracked, and an empty diff, on scratch repos; the real verify_all.sh
+   --dry-run; a small copy of verify_all.sh that must fail when a selected unit runs no check or doesn't run.
+5. printcheck's result cache is keyed on its source.
+Every PR #12 review finding has a case here (marked "review").
 """
-import importlib.util, os, re, subprocess, sys, tempfile
+import contextlib, importlib.util, io, json, os, re, shutil, subprocess, sys, tempfile
 
 ROOT = os.path.abspath(sys.argv[1])
 spec = importlib.util.spec_from_file_location("verify_select", os.path.join(ROOT, "tools", "verify_select.py"))
@@ -35,10 +40,16 @@ S = "skills/print-cad-blender/scripts/"
 
 # ------------------------------------------------------------------ 1. the map
 code = lambda l: l.strip() and not l.strip().startswith("#")
-first, last = SECTIONS[0]["start"], SECTIONS[-1]["end"]
-loose = [n for n in range(first, last + 1) if REGION[n] == ("global",) and code(VA_LINES[n - 1])]
+first = SECTIONS[0]["start"]
+loose = [n for n in range(first, len(VA_LINES) + 1) if REGION[n] == ("global",) and code(VA_LINES[n - 1])]
 say(not loose and len(set(IDS)) == len(IDS),
-    "%d sections, all guarded by `if want ID`, unique IDs; unguarded code between sections: %s" % (len(SECTIONS), loose or "none"))
+    "%d sections, unique IDs; code after the first section is in a section or a plumbing block (review: an appended "
+    "section after 7 passed): %s" % (len(SECTIONS), loose or "none outside"))
+wants = [w for l in VA_LINES if code(l) for w in re.findall(r'(?:^if |&& )want ([^\s;&|]+)', l)]
+odd = [w for w in wants if w not in IDS and w != '"${f##*/}"']
+say(not odd and len(wants) == len(SECTIONS) + 1, "every `want X` names a section the parser found (review): %s" % (odd or "%d wants" % len(wants)))
+empty = [u["id"] for u in SECTIONS if not [p for p in u["watch"] if not p.startswith("!")]]
+say(not empty, "every section's watch: is non-empty (review): %s" % (empty or "all"))
 loop = [l for l in VA_LINES if "tools/verify.d/*.sh" in l and l.startswith("for f in")]
 say(len(loop) == 1 and 'want "${f##*/}"' in loop[0], "the verify.d loop sources each script only when want selects it")
 nohdr = [u["id"] for u in SCRIPTS if not u["has_watch"]]
@@ -78,7 +89,33 @@ def body_needs(u):
         want.append((S + "printcheck.py", "layer check"))
     if re.search(r'"\$BL"', body):
         want += [(f, "$BL") for f in FILES if f.startswith(S + "cadlib/")]
+    for py in sorted({f for f, _ in want if f.endswith(".py") and not f.startswith(S)}):
+        want += [(f, "%s reaches %s" % (py, d)) for d, fs in py_refs(py) for f in fs]
     return want
+
+
+def py_refs(py):
+    """Repo paths a Python file a unit runs reaches with os.path.join(ROOT or its own dir, "a", "b") (review: the
+    blend-bracket build imports components/placeholders.py and reads components.json, invisible from the shell)."""
+    try:
+        src = open(os.path.join(ROOT, py)).read()
+    except OSError:
+        return []
+    out = []
+    for args in re.findall(r'os\.path\.join\(([^()]*)\)', src):
+        if args.split(",")[0].strip() not in ("ROOT", "HERE"):   # paths from the repo root or the file's own dir
+            continue
+        parts = [a or b for a, b in re.findall(r'"([^"]*)"|\'([^\']*)\'', args)]
+        for base in ([os.path.dirname(py), ""] if parts else []):
+            c = os.path.normpath(os.path.join(base, *parts))
+            if c == S.rstrip("/"):   # cadlib's home: the library and cadcheck (features reads its DEFAULTS)
+                out.append((c, [f for f in FILES if f.startswith(S + "cadlib/") or f == S + "cadcheck.py"]))
+                break
+            hits = [f for f in FILES if not c.startswith("..") and c != "." and (f == c or f.startswith(c + "/"))]
+            if hits:
+                out.append((c, hits))
+                break
+    return out
 
 
 gaps = sorted({"%s: %s (%s)" % (u["id"], p, why) for u in M["units"] for p, why in body_needs(u) if not covered(u, p)})
@@ -110,6 +147,34 @@ for u in M["units"]:
             cross.append("%s reads $V/%s (made by %s): %s" % (u["id"], d, ",".join(prod), line))
 say(not cross, "a unit that reads another section's $V output makes it itself or needs: it: %s" % ("; ".join(sorted(set(cross))[:6]) or "all do"))
 
+
+def vtokens(u):
+    return [re.compile("[^/]+".join(re.escape(x) for x in re.split(r"\$\{?\w+\}?", t)) + r"\Z")
+            for l in u["body"] if not l.lstrip().startswith("#") for t in re.findall(r'\$V/([A-Za-z0-9_.${}/-]+)', l)]
+
+
+def corpus_reads(u):
+    """$V files a unit's tools read through `replay.py --from-verify "$V" --attempts X`: corpus.json's verify_out."""
+    corpus = json.load(open(os.path.join(ROOT, "tools/bench/corpus.json")))["attempts"]
+    out = []
+    for l in u["body"]:
+        m = re.search(r'--from-verify "\$V".*--attempts (\S+)', l)
+        for att in (m.group(1).split(",") if m else []):
+            out += [(r["verify_out"], att) for r in corpus.get(att, {}).get("runs", []) if r.get("verify_out")]
+    return out
+
+
+TOK = {u["id"]: vtokens(u) for u in M["units"]}
+creads, nread = [], 0
+for u in M["units"]:
+    for vo, att in corpus_reads(u):
+        nread += 1
+        prod = [i for i, ts in TOK.items() if i != u["id"] and any(t.match(vo) for t in ts)]
+        if not set(prod) & set(u["needs"]):
+            creads.append("%s reads $V/%s (%s) from %s" % (u["id"], vo, att, ",".join(prod) or "no unit"))
+say(nread and not creads, "bench's --from-verify reads (corpus.json verify_out, %d files) come from units it needs: (review: "
+    "4m's pc-v2/printcheck.json, 4n's v2a7/layer.json): %s" % (nread, "; ".join(creads) or "all"))
+
 unm = [f for f in FILES if not VS.line_mapped(f) and not any(covered(u, f) for u in M["units"]) and not M["none"].match(f)]
 say(not unm, "every file in the repo is watched or under none: (else it would run everything): %s" % (unm[:8] or "all"))
 
@@ -118,17 +183,21 @@ say(not unm, "every file in the repo is watched or under none: (else it would ru
 fmt = lambda s: "everything" if s == "ALL" else (" ".join(i for i in IDS if i in s) or "nothing")
 
 
-def sel(paths):
-    p = VS.plan(M, {x: None for x in paths})
+def sel(paths, m=None):
+    p = VS.plan(m or M, {x: None for x in paths})
     return "ALL" if p["all"] else set(p["run"])
+
+
+SELF = "verify_select.sh"
 
 
 ALLIDS = set(IDS)
 CORE = ALLIDS - {"6", "7", "4m-slice", "design_principles.sh", "verify_select.sh"}
-CASES = [
+BENCH = {"bench.sh", "4k", "4m", "4n"}   # bench reads 4k's, 4m's and 4n's reports
+CASES = [   # the selector test always runs under --changed (review); it is added to every set here
     ("docs only", ["docs/STATUS.md", "README.md", "skills/print-cad-blender/reference/api.md", "skills/cad-design-review/SKILL.md",
                    "tools/verify.d/README", "tools/bench/README.md", "docs/tasks/x.md"], set()),
-    ("printcheck.py", [S + "printcheck.py"], {"1", "3", "4m", "4n", "blend_bracket.sh", "bench.sh", "4k"}),
+    ("printcheck.py (3's output feeds 3b, 3c)", [S + "printcheck.py"], {"1", "3", "3b", "3c", "blend_bracket.sh"} | BENCH),
     ("a cadlib file", [S + "cadlib/geom.py"], CORE),
     ("cadcheck.py", [S + "cadcheck.py"], CORE),
     ("the cad wrapper", [S + "cad"], CORE | {"4m-slice"}),
@@ -139,27 +208,41 @@ CASES = [
     ("cadrows.py + cadbom.py", [S + "cadrows.py", S + "cadbom.py"], {"4f"}),
     ("template params.py", ["skills/print-cad-blender/templates/project/params.py"], {"3", "3b", "3c", "design_principles.sh"}),
     ("FINDINGS.md (design_principles reads it)", ["docs/FINDINGS.md"], {"design_principles.sh"}),
-    ("components/", ["components/placeholders.py"], {"5"}),
+    ("components/ (review: blend-bracket imports placeholders)", ["components/placeholders.py"], {"5", "blend_bracket.sh"}),
+    ("components.json (review)", ["components/components.json"], {"5", "blend_bracket.sh"}),
     ("the workflow template", ["templates/cad-loop.workflow.js"], {"6"}),
     ("tools/transcript", ["tools/transcript/cc_transcript.py"], {"7"}),
-    ("v2a3 example", ["examples/mm-launcher-v2a3/checks.json"], {"4f", "4g", "4n"}),
-    ("v2a3 BOM .md (a test input, not a doc)", ["examples/mm-launcher-v2a3/BOM_AND_ASSEMBLY.md"], {"4f", "4g", "4n"}),
-    ("a3 example", ["examples/mm-launcher-a3/mm_launcher_a3.blend.gz"], {"4c", "4n", "blend_bracket.sh", "cable_router.sh"}),
-    ("a2 example", ["examples/mm-launcher-a2/checks.json"], {"4a", "4b", "4n"}),
-    ("v2a7 STLs", ["examples/mm-launcher-v2a7/stl.tar.gz"], {"4k", "4m", "4n", "bench.sh"}),
+    ("v2a3 example (4n's output feeds bench)", ["examples/mm-launcher-v2a3/checks.json"], {"4f", "4g", "4n"} | BENCH),
+    ("v2a3 BOM .md (a test input, not a doc)", ["examples/mm-launcher-v2a3/BOM_AND_ASSEMBLY.md"], {"4f", "4g", "4n"} | BENCH),
+    ("a3 example", ["examples/mm-launcher-a3/mm_launcher_a3.blend.gz"], {"4c", "4n", "blend_bracket.sh", "cable_router.sh"} | BENCH),
+    ("a2 example", ["examples/mm-launcher-a2/checks.json"], {"4a", "4b", "4n"} | BENCH),
+    ("v2a7 STLs", ["examples/mm-launcher-v2a7/stl.tar.gz"], BENCH),
     ("demo-turret", ["examples/demo-turret/build.py"], {"1", "2"}),
     ("slide-gate", ["examples/slide-gate/checks.json"], {"slide-gate"}),
     ("a verify.d helper", ["tools/verify.d/fastener_joint_build.py"], {"fastener_joint.sh"}),
-    ("bench labels", ["tools/bench/labels.json"], {"bench.sh", "4k"}),
-    ("the selector", ["tools/verify_select.py"], {"verify_select.sh"}),
-    ("a new verify.d script", ["tools/verify.d/new_feature.sh"], {"verify_select.sh"}),
-    ("prior_art (no test runs it)", ["tools/prior_art/dfam_compare.py"], set()),
+    ("bench labels (review: planned bench + 4k only, and bench failed)", ["tools/bench/labels.json"], BENCH),
+    ("the selector", ["tools/verify_select.py"], set()),
+    ("a new verify.d script", ["tools/verify.d/new_feature.sh"], set()),
+    ("fastener_overlap's prior_art repro (review: no header, prior_art was none:)",
+     ["tools/prior_art/cadcheck_head_overlap_repro.py"], {"fastener_overlap.sh"}),
+    ("fastener_overlap's build helper", ["tools/verify.d/fastener_overlap_build.py"], {"fastener_overlap.sh"}),
+    ("a prior_art file no test reads", ["tools/prior_art/dfam_compare.py"], set()),
+    ("a new prior_art file (review: only listed files are none:)", ["tools/prior_art/new_compare.py"], "ALL"),
 ]
 for name, paths, want in CASES:
+    want = want if want == "ALL" else want | {SELF}
     got = sel(paths)
     say(got == want, "%s -> %s" % (name, fmt(got)) if got == want else "%s -> got %s, want %s" % (name, fmt(got), fmt(want)))
 p = VS.plan(M, {"tools/newtool/run.py": None})
 say(p["all"] == ["unmapped: tools/newtool/run.py"], "an unmapped path says why: %s" % p["all"])
+# a verify.d script with no # watch: header runs on every change (review: fastener_overlap.sh had none)
+M2 = dict(M, units=M["units"] + [dict(VS.parse_script("nohdr.sh", "ok x\n"), pats=VS.Patterns(["tools/verify.d/nohdr.sh"]))],
+          ids=M["ids"] + ["nohdr.sh"])
+p = VS.plan(M2, {"docs/STATUS.md": None})
+say("nohdr.sh" in p["run"] and "no watch header" in p["run"]["nohdr.sh"][0],
+    "a verify.d script with no # watch: header runs on a docs-only change, \"%s\" (review)" % p["run"].get("nohdr.sh", ["-"])[0])
+p = VS.plan(M, {})
+say(not p["run"], "no changed paths -> nothing selected (main() stops before this: see the empty-diff case)")
 
 
 # ------------------------------------------------------------------ 3. line-mapped files
@@ -173,19 +256,29 @@ def lsel(path, changes):
 
 
 n = line_of(VA_TEXT, lambda l: '$CAD bom "$V23/BOM_AND_ASSEMBLY.md"' in l)
-L = [("verify_all.sh: a 4f body line", [("+", [n], VA_LINES[n - 1] + " # edited")], {"4f", "verify_select.sh"}),
+body = lambda sec, pred: next(n for n in range(U[sec]["start"] + 1, U[sec]["end"]) if pred(VA_LINES[n - 1]))
+code_in = lambda sec: body(sec, lambda l: code(l))
+L = [("verify_all.sh: a 4f body line", [("+", [n], VA_LINES[n - 1] + " # edited")], {"4f"}),
      ("verify_all.sh: a 3b body line pulls in 3 (needs)", [("-", [line_of(VA_TEXT, lambda l: "--out writes model.blend" in l)], "x=1")],
-      {"3b", "3", "verify_select.sh"}),
+      {"3b", "3"}),
+     ("verify_all.sh: a section-3 body line runs 3b and 3c, which read its output (review)", [("+", [code_in("3")], "x=1")], {"3", "3b", "3c"}),
+     ("verify_all.sh: a 4k body line runs bench.sh, which reads its reports (review)", [("+", [code_in("4k")], "x=1")], BENCH),
      ("verify_all.sh: a comment line", [("+", [n - 1], "  # a new remark")], set()),
-     ("verify_all.sh: a #@ watch line", [("+", [U["4f"]["start"]], VA_LINES[U["4f"]["start"] - 1])], {"verify_select.sh"}),
-     ("verify_all.sh: plumbing (want)", [("+", [line_of(VA_TEXT, lambda l: l.startswith("want()"))], "want() { :; }")], {"verify_select.sh"}),
+     ("verify_all.sh: a #@ watch line", [("+", [U["4f"]["start"]], VA_LINES[U["4f"]["start"] - 1])], set()),
+     ("verify_all.sh: plumbing want() (review: `return 1` ran nothing and passed)",
+      [("+", [line_of(VA_TEXT, lambda l: l.startswith("want()"))], "want() { return 1; }")], "ALL"),
+     ("verify_all.sh: plumbing, the verify.d loop (review)",
+      [("+", [line_of(VA_TEXT, lambda l: l.startswith("for f in") and "verify.d" in l)], "for f in x; do :; done")], "ALL"),
+     ("verify_all.sh: plumbing, the SELECT parsing (review)",
+      [("-", [line_of(VA_TEXT, lambda l: "SELECTED=$(printf" in l)], "  SELECTED=ALL")], "ALL"),
      ("verify_all.sh: the preamble (CAD_LAYER_CHECK)", [("-", [line_of(VA_TEXT, lambda l: l.startswith("export CAD_LAYER_CHECK"))], "export CAD_LAYER_CHECK=1")], "ALL"),
-     ("verify_all.sh: a deleted line between 4e and 4f", [("-", [U["4e"]["end"], U["4e"]["end"] + 1], "echo x")], {"verify_select.sh"}),
-     ("verify_all.sh: a deleted line at the end of 4f's body", [("-", [U["4f"]["end"] - 1, U["4f"]["end"]], "echo x")], {"4f", "verify_select.sh"})]
+     ("verify_all.sh: a code line deleted between 4e and 4f (unguarded)", [("-", [U["4e"]["end"], U["4e"]["end"] + 1], "echo x")], "ALL"),
+     ("verify_all.sh: a deleted line at the end of 4f's body", [("-", [U["4f"]["end"] - 1, U["4f"]["end"]], "echo x")], {"4f"})]
 FJ = open(os.path.join(ROOT, "tools/verify.d/fastener_joint.sh")).read()
-L += [("fastener_joint.sh: a code line", [("+", [5], "mkdir -p \"$V/fj2\"")], {"fastener_joint.sh", "verify_select.sh"}),
-      ("fastener_joint.sh: its # watch: header", [("+", [2], "# watch: @core")], {"verify_select.sh"})]
+L += [("fastener_joint.sh: a code line", [("+", [5], "mkdir -p \"$V/fj2\"")], {"fastener_joint.sh"}),
+      ("fastener_joint.sh: its # watch: header", [("+", [2], "# watch: @core")], set())]
 for name, ch, want in L:
+    want = want if want == "ALL" else want | {SELF}
     path = "tools/verify.d/fastener_joint.sh" if name.startswith("fastener") else VS.VA
     got = lsel(path, ch)
     say(got == want, "%s -> %s" % (name, fmt(got)) if got == want else "%s -> got %s, want %s" % (name, fmt(got), fmt(want)))
@@ -215,11 +308,48 @@ with tempfile.TemporaryDirectory() as t:
         and ch["tools/verify_all.sh"] == [("-", [2], "b"), ("+", [2], "B")],
         "git: committed since the merge-base, uncommitted, untracked and deleted paths; verify_all.sh by line: %s" % sorted(ch))
 
+with tempfile.TemporaryDirectory() as t:   # review: --changed on next right after a merge selected nothing silently
+    g = lambda *a: subprocess.run(["git", "-C", t, *a], capture_output=True, text=True, check=True)
+    g("init", "-q", "-b", "next")
+    g("config", "user.email", "t@t"); g("config", "user.name", "t")
+    open(os.path.join(t, "a.txt"), "w").write("1\n")
+    g("add", "-A"); g("commit", "-qm", "base")
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        rc = VS.main(["--changed", "next"], root=t)
+    say(rc == 3 and "HEAD^1" in out.getvalue() and "merge-base is HEAD" in out.getvalue(),
+        "an empty diff (merge-base == HEAD, clean tree) says so and exits %s, suggesting --changed HEAD^1 (review)" % rc)
+
+# a small copy of verify_all.sh with two scripts: one runs a check, one runs none (review: want() `return 1` passed)
+with tempfile.TemporaryDirectory() as t:
+    os.makedirs(os.path.join(t, "tools/verify.d"))
+    shutil.copy(os.path.join(ROOT, "tools/verify_select.py"), os.path.join(t, "tools"))
+    open(os.path.join(t, "tools/verify.d/one.sh"), "w").write('# watch: x.txt\nok "one ran"\n')
+    open(os.path.join(t, "tools/verify.d/empty.sh"), "w").write('# watch: y.txt\n:\n')
+    env = dict(os.environ, VERIFY_TMP=os.path.join(t, "vt"))
+
+    def mini(paths, edit=None):
+        va = VA_TEXT if edit is None else VA_TEXT.replace(*edit)
+        open(os.path.join(t, "tools/verify_all.sh"), "w").write(va)
+        return subprocess.run(["sh", os.path.join(t, "tools/verify_all.sh"), "--files", *paths], capture_output=True, text=True, env=env)
+
+    r = mini(["x.txt"])
+    say(r.returncode == 0 and "PASS one ran" in r.stdout and "1 passed, 0 failed" in r.stdout,
+        "a --changed run of a small copy runs the one selected script and passes (exit %d)" % r.returncode)
+    r = mini(["y.txt"])
+    say(r.returncode == 1 and "FAIL verify_all: empty.sh was selected but ran no checks" in r.stdout,
+        "a selected unit that runs no check fails the run (exit %d) (review)" % r.returncode)
+    brk = ('  CUR=$1; CUR_N=$((pass+fail)); RAN="$RAN $1"; return 0', "  return 1")
+    r = mini(["x.txt"], brk)
+    say(brk[0] in VA_TEXT and r.returncode == 1 and "FAIL verify_all: one.sh was selected but did not run" in r.stdout,
+        "want() broken to `return 1`: the selected unit is reported as not run and the run fails (exit %d) (review)" % r.returncode)
+
 latest = os.path.realpath("/tmp/alex3d-verify/latest") if os.path.exists("/tmp/alex3d-verify/latest") else None
 r = subprocess.run(["sh", os.path.join(ROOT, "tools/verify_all.sh"), "--dry-run", "--files", S + "printcheck.py"],
                    capture_output=True, text=True)
 ran = re.findall(r"^run +(\S+)", r.stdout, re.M)
-say(r.returncode == 0 and set(ran) == {"1", "3", "4m", "4n", "blend_bracket.sh", "bench.sh", "4k"} and "SELECT" not in r.stdout,
+say(r.returncode == 0 and set(ran) == {"1", "3", "3b", "3c", "blend_bracket.sh", SELF} | BENCH and "SELECT" not in r.stdout
+    and "UNITS" not in r.stdout,
     "verify_all.sh --dry-run --files printcheck.py prints the plan and stops: %s" % " ".join(ran))
 r = subprocess.run(["sh", os.path.join(ROOT, "tools/verify_all.sh"), "--dry-run"], capture_output=True, text=True)
 say(r.returncode == 0 and all(i in r.stdout.split() for i in IDS) and "every section and script runs" in r.stdout,
@@ -228,3 +358,22 @@ r = subprocess.run(["sh", os.path.join(ROOT, "tools/verify_all.sh"), "--bogus"],
 say(r.returncode == 2 and "unknown argument" in r.stdout, "verify_all.sh rejects an unknown flag (exit %d)" % r.returncode)
 now = os.path.realpath("/tmp/alex3d-verify/latest") if os.path.exists("/tmp/alex3d-verify/latest") else None
 say(now == latest, "dry runs make no run directory (/tmp/alex3d-verify/latest unchanged)")
+
+# ------------------------------------------------------------------ 5. printcheck's cache key
+# review: the result cache under $TMPDIR was keyed on a hand-bumped _VERSION, so an edit to the analysis could pass on
+# results cached before it. Two copies differing by one comment must get different keys.
+PCSRC = open(os.path.join(ROOT, S + "printcheck.py")).read()
+with tempfile.TemporaryDirectory() as t:
+    keys = []
+    for k, extra in enumerate(("", "\n# an edit\n")):
+        f = os.path.join(t, "pc%d.py" % k)
+        open(f, "w").write(PCSRC + extra)
+        sp = importlib.util.spec_from_file_location("pc%d" % k, f)
+        mod = importlib.util.module_from_spec(sp)
+        try:
+            sp.loader.exec_module(mod)
+            keys.append(mod._SOURCE)
+        except Exception as e:   # numpy missing in this python3
+            keys.append("error %s" % e)
+say(len(set(keys)) == 2 and not any(k.startswith("error") for k in keys) and "_SOURCE.encode()" in PCSRC.split("def analyze_cached")[1][:900],
+    "printcheck's result cache key includes a hash of printcheck.py, so a code change misses the cache (review): %s" % [k[:9] for k in keys])

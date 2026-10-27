@@ -1,12 +1,13 @@
 #!/bin/sh
-# Re-prove every tool in this repo. Writes only under /tmp/alex3d-verify/run-<pid> (latest: /tmp/alex3d-verify/latest). About 25 minutes, run at nice 10.
+# Re-prove every tool in this repo. Writes only under /tmp/alex3d-verify/run-<pid> (latest: /tmp/alex3d-verify/latest). About 28 minutes, run at nice 10.
 # The attempt regressions use examples/mm-launcher-{a1,a2,a3,v2a1,...,v2a7}/*.blend.gz (the blends the reviewers saw).
 #   sh tools/verify_all.sh            # HW defaults to the mm-launcher project (read-only; copied first)
 #   sh tools/verify_all.sh --changed [BASE] [--dry-run]   # only what the change since merge-base(BASE, HEAD) affects
 # --changed: changed = git diff from merge-base(BASE, HEAD) (BASE defaults to next) plus uncommitted and untracked files.
 # Each section below opens with `if want ID; then  #@ watch: PATTERNS` and each tools/verify.d script has a `# watch:`
 # header; tools/verify_select.py maps the changed paths onto them and prints the plan first (--dry-run: only the plan).
-# A path nothing watches runs everything, unless `none:` below says no test reads it. Promoting next to main runs the
+# A path nothing watches runs everything, unless `none:` below says no test reads it. A unit selected under --changed
+# that runs no check (or doesn't run) is a FAIL; a section with nothing to check here says so with nochecks. Promoting next to main runs the
 # whole suite (no flag): main is what the v2 design agents run.
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -16,21 +17,38 @@ HW="${HW:-$HOME/code-stuff/mmlauncher/mm-launcher/mm-launch-hw}"
 #@ group @core = skills/print-cad-blender/scripts/cad skills/print-cad-blender/scripts/cadcheck.py skills/print-cad-blender/scripts/cadq.py skills/print-cad-blender/scripts/cadlib/**
 #@ group @layer = skills/print-cad-blender/scripts/printcheck.py
 # none: docs (but a watch wins: design_principles.sh reads FINDINGS.md, 4f a BOM .md), and tools no test here runs
-#@ none: docs/** **/*.md !skills/*/scripts/** skills/cad-design-review/** tools/verify.d/README .gitignore tools/prior_art/** tools/revision_watcher.py
-SELECTED=ALL
+#@ none: docs/** **/*.md !skills/*/scripts/** skills/cad-design-review/** tools/verify.d/README .gitignore tools/revision_watcher.py
+#@ none: tools/prior_art/blend_compare.py tools/prior_art/dfam_compare.py tools/prior_art/fastener_joint_*.py tools/prior_art/mech_*.py
+#@ none: tools/prior_art/nm_model_vertices.py tools/prior_art/overhang_regions.py tools/prior_art/print3d_toolbox_compare.py
+#@ none: tools/prior_art/ramp_stl.py tools/prior_art/stl_edges_compare.py tools/prior_art/sweep_compare.py tools/prior_art/tri_dist.py tools/prior_art/trimesh_compare.py
+SELECTED=ALL; EXPECT=""; CHANGED=""; RAN=""; CUR=""; CUR_N=0; CUR_OK=""
 if [ $# -gt 0 ]; then
-  P=$(python3 -I "$ROOT/tools/verify_select.py" "$@") || { printf '%s\n' "$P"; exit 2; }
-  printf '%s\n' "$P" | grep -v '^SELECT'
+  P=$(python3 -I "$ROOT/tools/verify_select.py" "$@") || { rc=$?; printf '%s\n' "$P"; exit $rc; }
+  printf '%s\n' "$P" | grep -v -e '^SELECT' -e '^UNITS'
   SELECTED=$(printf '%s\n' "$P" | sed -n 's/^SELECT *//p')
+  EXPECT=$(printf '%s\n' "$P" | sed -n 's/^UNITS *//p')
+  [ "$SELECTED" = ALL ] || EXPECT="$SELECTED"
   case " $* " in *" --dry-run "*) exit 0 ;; esac
-  [ -n "$SELECTED" ] || exit 0
+  [ -n "$SELECTED" ] || { echo "verify_all: the selector chose nothing (it always picks verify_select.sh)"; exit 2; }
+  CHANGED=1
 fi
-want() { [ "$SELECTED" = ALL ] && return 0; case " $SELECTED " in *" $1 "*) return 0 ;; esac; return 1; }
+# want ID: is this unit selected? Under --changed it also records the unit, and the unit before it must have run a check.
+unit_end() {
+  [ -n "$CUR" ] && [ -n "$CHANGED" ] && [ -z "$CUR_OK" ] && [ $((pass+fail)) = "$CUR_N" ] && bad "verify_all: $CUR was selected but ran no checks"
+  CUR=""; CUR_OK=""
+}
+want() {
+  unit_end
+  [ "$SELECTED" = ALL ] || case " $SELECTED " in *" $1 "*) ;; *) return 1 ;; esac
+  CUR=$1; CUR_N=$((pass+fail)); RAN="$RAN $1"; return 0
+}
+nochecks() { echo "NOTE $1"; CUR_OK=1; }   # a selected unit with nothing to check on this machine
 #@ plumbing end
 # one directory per run, so parallel runs (feature worktrees) can't wipe each other; /tmp/alex3d-verify/latest -> it
-V="/tmp/alex3d-verify/run-$$"
+VT="${VERIFY_TMP:-/tmp/alex3d-verify}"   # VERIFY_TMP: the selector test's own small runs
+V="$VT/run-$$"
 BL="${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}"
-rm -rf "$V"; mkdir -p "$V"; ln -sfn "$V" /tmp/alex3d-verify/latest
+rm -rf "$V"; mkdir -p "$V"; ln -sfn "$V" "$VT/latest"
 # which commit made these reports (tools/bench/replay.py --from-verify reads it; HEAD at scoring time may be another)
 printf '{"commit": "%s", "skills_tree": "%s", "dirty": %s, "branch": "%s", "when": "%s"}\n' "$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)" \
   "$(git -C "$ROOT" rev-parse HEAD:skills 2>/dev/null)" "$([ -n "$(git -C "$ROOT" status --porcelain -- skills 2>/dev/null)" ] && echo true || echo false)" \
@@ -509,6 +527,8 @@ if [ -f "$HW/blender/mm_launcher.blend" ]; then
   mkdir -p "$V/live"; cp "$HW/blender/mm_launcher.blend" "$V/live/"
   $CAD check "$V/live/mm_launcher.blend" "$ROOT/examples/mm-launcher-a2/checks.json" "$V/live/cadcheck.json" >/dev/null
   set -- $(summ "$V/live/cadcheck.json"); [ -n "${1:-}" ] && ok "live HW blend checked: $1 fails, $2 warns (see $V/live/cadcheck.json)" || bad "live HW blend check crashed"
+else
+  nochecks "4b: no live HW blend at $HW/blender/mm_launcher.blend"
 fi
 fi  #@ end 4b
 
@@ -529,14 +549,21 @@ fi  #@ end 6
 if want 7; then  #@ watch: tools/transcript/*.py
 # 7 transcript extractor on any available transcript
 T=$(ls "$HOME"/.claude/projects/-Users-alxchunlin-code-stuff-mmlauncher-mm-launcher/*/subagents/workflows/*/agent-*.jsonl 2>/dev/null | head -1)
-if [ -n "$T" ]; then python3 -I "$ROOT/tools/transcript/cc_transcript.py" summary "$T" | grep -q "^wall" && ok "transcript summary" || bad "transcript summary"; fi
+if [ -n "$T" ]; then python3 -I "$ROOT/tools/transcript/cc_transcript.py" summary "$T" | grep -q "^wall" && ok "transcript summary" || bad "transcript summary"
+else nochecks "7: no mm-launcher workflow transcript on this machine"; fi
 fi  #@ end 7
 
+#@ plumbing
 # 8 per-feature checks: each tools/verify.d/*.sh is sourced here and calls ok/bad (keeps feature branches from
-# colliding in this file). Each may use $ROOT, $CAD, $V, $BL and $HW.
+# colliding in this file). Each may use $ROOT, $CAD, $V, $BL and $HW. Under --changed, each by its # watch: header.
 mkdir -p "$ROOT/tools/verify.d"
-for f in "$ROOT"/tools/verify.d/*.sh; do [ -f "$f" ] && want "${f##*/}" && . "$f"; done  #@ each script by its # watch: header
-
-[ "$SELECTED" = ALL ] || echo "verify_all --changed: ran $SELECTED"  #@
+for f in "$ROOT"/tools/verify.d/*.sh; do [ -f "$f" ] && want "${f##*/}" && . "$f"; done
+unit_end
+# --changed: every unit the plan selected must have run (a broken want() or loop ran nothing and passed, PR #12 review)
+if [ -n "$CHANGED" ]; then
+  for u in $EXPECT; do case " $RAN " in *" $u "*) ;; *) bad "verify_all: $u was selected but did not run" ;; esac; done
+  echo "verify_all --changed: ran$RAN"
+fi
 echo "verify_all: $pass passed, $fail failed"
 [ $fail = 0 ]
+#@ plumbing end
