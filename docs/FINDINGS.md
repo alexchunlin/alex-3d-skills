@@ -35,6 +35,16 @@ Sources are abbreviated:
   v2 A7 agents: `P7` plan `ad3613ab937789401`, builders `B7-checks` `a91da03e25e2193ee`, `B7-cap` `ab7fc7097ebb0f9d8`,
   `B7-tail` `aabeff3011188d075`, `B7-finish` `ade4ba6e78782e6a9`, `F7` finish `ad3729c48968e6dc0`, `V2R7` review
   `aa6f4aea5dd48c1d4`
+- `PA` = `~/code-stuff/space-bar-push-assist/` (the push-assist project, a second design run through these skills;
+  read-only). `PALOG` = `docs/evidence-push-assist/loop-log.txt`, the recon log kept during its review loop.
+- `PASESS` = `~/.claude/projects/-Users-alxchunlin-code-stuff-space-bar-push-assist/beb7cf69-3aa8-486b-8098-1801e05fe0d3`.
+  `PASESS.jsonl` is the coordinator, which also designed A1 and A2 inline. Agents are in `PASESS/subagents/agent-<id>.jsonl`.
+  Push-assist agents: reviewers `PA-R1` `ad9fb7f4623b031a1`, `PA-R2` `a134c4732d01b3fa9`, `PA-R3` `afcccadc60d39dabd`,
+  `PA-R4` `ae1d40ece5cb4f293`, `PA-R5` `aebabdf9ab4fc8a5c`, `PA-R6` `abc841ef91bf6c685`, `PA-R7` `a5c527e47ff09f34d`,
+  `PA-R8` `aa2101a1a30a12ace`. Designers `PA-D3` `a90cb39836f00bda6`, `PA-D4` `aa0377354f9159b42`, `PA-D5`
+  `a2b121d6d12a95494` (with its firmware sub-agent `ad17a3df5862d2263`), `PA-D6` `a98d3a242fa8b026b`, `PA-D7`
+  `a9833809bb3b8e55b`, `PA-D8` `a9775a6b2357a2a14`. IDs: `PA-A7-T19` is PALOG's observation T19 of attempt 7.
+  `PA-R7 #1` is issue 1 in PA-R7's ranked list.
 
 **Baseline:** v1 (the no-tools loop) ran attempts 1-3 and was then stopped by the user (2026-10-24 evening, see
 `HARVEST_BRIEF.md` "Process change"). The v1 tool results below are counterfactual. Every
@@ -1925,3 +1935,234 @@ real PrusaSlicer, as is the G-code parsing of real Prusa/Orca/Bambu output).
     `stl/*.stl` and gives the same 7 fails; `cad q printcheck`; `tools/test_cad_slice.sh` (stand-in slicers, guard,
     sandbox, parsing); `cad slice --detect` reports Bambu Studio unusable from known.json and runs nothing.
   - 4n: the layer check on every archived attempt, fails asserted per part (v1 A1-A3, v2 A1-A7).
+
+## Push-assist loop (2026-10-26/27)
+
+A second project through the same skills. The push-assist unit (handles with load cells in a barrel, bolted to a
+chair's seat-back plate) ran a `/loop` in `PASESS` from 2026-10-26 22:02 to 2026-10-27 07:58 EDT. Each attempt had a
+designer, then an independent reviewer using `skills/cad-design-review`. The loop allowed up to 8 attempts and stopped
+early only at 9+ on Functionality, Manufacturability and Aesthetics.
+PALOG was kept while it ran, as observation only: nothing in `skills/` or `tools/` changed during the loop.
+
+Inputs:
+- PALOG (1,228 lines, 8 attempts, a run summary, ranked candidates).
+- `PA/cad/review/attempts.md`: the loop's own score table and change logs.
+- `PA/cad/review/aN/`: the reviews.
+- `cc_transcript.py workflow PASESS/subagents`, plus `usage` and `timeline` on `PASESS.jsonl` for the two inline
+  designs.
+
+### Which tools the loop used: `49aa21f`, the same tree as `next` today
+- `PA/.claude/skills/{print-cad-blender,cad-design-review}` are symlinks (created 2026-10-26 21:24) into this repo's
+  main checkout. Agents ran `~/code-stuff/alex-3d-skills/skills/print-cad-blender/scripts/cad` and read
+  `.../cad-design-review/SKILL.md` by that path (`cc_transcript.py grep`: PA-R1 at 0:00:02 and 0:00:59, PA-R8 at
+  0:00:13, PA-D8 at 0:07:52).
+- The coordinator's freshness check (`PASESS.jsonl` #121, 22:29) printed branch `next` at `49aa21f`, with only the
+  untracked log in `git status`. PA-D8 saw `49aa21f` at 06:32 (0:00:45).
+- The checkout's reflog has HEAD at `49aa21f` from 2026-10-26 16:51 to 2026-10-27 11:28, with no commit, checkout or
+  reset in between.
+- Not pinned: uncommitted edits to the checkout between those two checks. `git status` was seen only at 22:29.
+- `git diff 49aa21f 2e6717d` is empty: `next` today has the tree the loop ran on. **Every tool gap below is still in
+  `next`** unless its status says otherwise.
+
+That tree already had PRs #1-#5. SKILL.md told designers to place screws with `features.fastener_joint`, route with
+`cadlib.route` and grow connectors with `cadlib.blend`, and the designers read those lines (PA-D3 at 0:00:07,
+PA-D8 at 0:00:49). The project's build never called any of them. `PA/cad/blender/build_concept.py` is a hand-written bpy and SDF script from before the loop,
+and it imports only `cadlib.geom`. No tool call in the session's transcripts names any of the three.
+
+### Scores (`PA/cad/review/attempts.md`; issue counts from the reviewers' ranked lists in PALOG)
+
+| Attempt | Designer | F/M/A (sum) | Issues B/M/m | cad check (designer, at hand-off) | printcheck |
+|---|---|---|---|---|---|
+| 1 | coordinator, inline | 5/5/7 (17) | 2/5/4 | 0 fail, 65 warn | 10 parts, 0 fail, 12 warn |
+| 2 | coordinator, inline | 5/6/6 (17) | 1/5/7 | 0 fail, 35 warn | 10 parts, 0 fail, 0 warn; pistons need support |
+| 3 | PA-D3 | 7/8/7 (22) | 0/2/7 | 0 fail, 23 warn (all triaged) | 11 parts, 0 fail, 8 warn; no supports |
+| 4 | PA-D4 | 7/8/8 (23) | 0/4/4 | 0 fail, 39 warn (all triaged); moving-link rows 0/0 | 15 parts, 0 fail, 24 warn; no supports |
+| 5 | PA-D5 | 8/6/9 (23) | 1/1/6 | 0 fail, 47 warn (all accepted); moving-link/bench 0/0 | 17 parts, 0 fail, 16 warn; no supports |
+| 6 | PA-D6 | 8/8/9 (25) | 0/2/5 | 0 fail, 47 warn (all accepted); moving-link 0/0 | 17 parts, 0 fail, 16 warn; no supports |
+| 7 | PA-D7 | **4/4/9** (17) | 1/1/7 | 0 fail, 51 warn (all accepted); moving-link 0/0 | 18 parts, 0 fail, 20 warn; no supports |
+| 8 | PA-D8 | **8/8/9** (25) | 0/2/8 | 0 fail, 51 warn (all accepted); moving-link 0/0 | 18 parts, 0 fail, 20 warn; no supports |
+
+attempts.md gives no printcheck warn counts for A5-A8. The 16 and 20 come from the designers' hand-off notes in PALOG.
+
+**Outcome: 8 attempts, no pass.** The best score was 8/8/9, reached in A6 and again in A8. Aesthetics reached 9 at A5
+and held. F and M peaked at 8. attempts.md's outcome note: "Stopped after 8 attempts without reaching 9+ on all three.
+Best: a8 8/8/9 (a6 also 8/8/9). The a8 majors are documentation/settings and cable-order fixes, not geometry."
+PA-R8's anchors agree: under 1 h, no reprint (PA-END-T1).
+
+A7's fall to 4/4/9 came from a 0.2 mm slot error. The slot was the fix for the A6 cell that could not be fitted
+(PA-A7-T7, PA-A7-T14). cad check, printcheck and `cad bom` all passed both A6 and A7 (PA-A7-T17).
+
+### Cost (`cc_transcript.py workflow PASESS/subagents`; A1/A2 design from `usage` + `timeline` on `PASESS.jsonl`)
+
+| Agent | Wall | Model | Tools | Output tok (thinking) | Cache read | Peak ctx | Blender runs | Images |
+|---|---|---|---|---|---|---|---|---|
+| A1 design (inline) | 12.2 | 6.0 | 6.2 | 36k (16k) | 10.1M | 367k* | - | - |
+| PA-R1 (foreground) | 13.9 | 10.4 | 3.5 | 57k (32k) | 5.1M | 174k | 0 | 12 |
+| A2 design (inline) | 20.9 | 9.0 | 11.9 | 53k (30k) | 12.0M | 446k* | - | - |
+| PA-R2 | 17.0 | 15.1 | 1.9 | 88k (56k) | 4.9M | 194k | 0 | 9 |
+| PA-D3 | 89.6 | 54.4 | 35.2 | 319k (250k) | 23.5M | 516k | 10 | 4 |
+| PA-R3 | 15.8 | 13.4 | 2.4 | 76k (44k) | 6.4M | 206k | 1 | 7 |
+| PA-D4 | 68.7 | 47.8 | 21.0 | 283k (195k) | 39.2M | 526k | 13 | 16 |
+| PA-R4 | 13.0 | 11.5 | 1.5 | 67k (40k) | 4.7M | 198k | 0 | 12 |
+| PA-D5 | 85.6 | 58.1 | 27.5 | 345k (254k) | 37.3M | 577k | 8 | 9 |
+| PA-D5's firmware sub-agent | 1.9 | 1.9 | 0.0 | 13k (3k) | 0.2M | 33k | 0 | 0 |
+| PA-R5 | 15.1 | 14.6 | 0.6 | 80k (47k) | 6.3M | 223k | 0 | 14 |
+| PA-D6 | 31.4 | 16.7 | 14.7 | 97k (54k) | 12.1M | 255k | 4 | 3 |
+| PA-R6 | 12.9 | 9.9 | 2.9 | 58k (32k) | 4.2M | 185k | 4 | 13 |
+| PA-D7 | 88.8 | 63.5 | 25.3 | 378k (268k) | **59.9M** | **659k** | 17 | 16 |
+| PA-R7 | 20.1 | 15.5 | 4.6 | 88k (49k) | 10.0M | 232k | 0 | 8 |
+| PA-D8 | 58.7 | 33.6 | 25.4 | 196k (125k) | 34.0M | 468k | **22** | 15 |
+| PA-R8 | **28.5** | 18.0 | 10.5 | 105k (58k) | 10.7M | 282k | 7 | 15 |
+
+\* The coordinator's whole context, not a designer's.
+
+| Attempt | Design wall | Review wall | Total | Output tok (design + review) |
+|---|---|---|---|---|
+| 1 | 12.2 (inline) | 13.9 | 26.1 | 93k |
+| 2 | 20.9 (inline) | 17.0 | 37.9 | 141k |
+| 3 | 89.6 | 15.8 | 105.4 | 395k |
+| 4 | 68.7 | 13.0 | 81.7 | 350k |
+| 5 | 85.6 (firmware sub-agent's 1.9 ran inside it) | 15.1 | 100.7 | 425k (+13k sub-agent) |
+| 6 | 31.4 | 12.9 | 44.3 | 154k |
+| 7 | 88.8 | 20.1 | 108.9 | 466k |
+| 8 | 58.7 | 28.5 | 87.2 | 301k |
+| **Total** | **455.9 (7.6 h)** | **136.3 (2.3 h)** | **592.2** | **2.33M (1.55M thinking)** |
+
+- **The inline designs.** A1 and A2 ran in the coordinator, with no transcript of their own (PALOG: "designer work
+  happens inline in the main session"). Their rows sum the coordinator's API calls and tool runs over two windows.
+  A1 ran from the `/loop` prompt to the PA-R1 launch, 22:02:37-22:14:47. A2 ran from PA-R1's return to the PA-R2
+  launch, 22:28:41-22:49:33. In `timeline` terms, those are `78:55:22-79:07:32` and `79:21:26-79:42:18` after the
+  session start, 2026-10-23 15:07:15. Coordinator turns between later attempts are not counted.
+- The loop took 9.9 h of wall clock. Designers and reviewers ran one at a time, so agent wall time accounts for
+  almost all of it.
+- **PALOG's run summary is low.** It gives designers "~6.5 h ... D3-D8 45-90 min each". cc_transcript gives
+  D3-D8 422.8 min (7.0 h) at 31.4-89.6 min each, and 7.6 h with the inline A1/A2.
+- PALOG's reviewer walls were read when review.json landed. cc_transcript's totals cover each whole transcript and
+  run 0.3-1.2 min higher (PA-R1 13.6 vs 13.9, PA-R8 27.4 vs 28.5). The range is 12.9-28.5, not 12-27.
+- **Designer time is front-loaded thinking.** PA-D3's first edit came at 0:35:06, after three single generations of
+  385, 949 and 556 s (174k thinking, PA-A3-T6). PA-D4 had a 757 s generation (PA-A4-T5). PA-D5's 1,062 s generation
+  was the longest of the run, and its first build came at 0:35:03 (PA-A5-T9). PA-D7 had five generations of
+  165-622 s (PA-A7-T5).
+- Thinking time tracks how much of the mechanism changes. PA-D6 had a narrow issue list and took 31.4 min, with a
+  longest generation of 169 s (PALOG, PA-D6 snapshot).
+- Prompt-cache misses after those gaps re-wrote 167k (D3), 561k (D5), 589k (D7) and 638k tokens (D8), per PALOG.
+  The D5, D7 and D8 figures are from mid-run snapshots.
+- **Reviews got longer when they walked the assembly.** PA-R7 (20.1) and PA-R8 (28.5) ran slide rows along the
+  cell's path and probed the exported STL. PA-R8 also walked the README step by step. PA-R6 was the shortest review,
+  at 12.9.
+
+### What gated the score (PALOG run summary)
+1. **Each fix brought the next blocker.**
+   - A2: the teardrop bore for a flat fin print removed the wall the stop pin bore on (PA-A2-T9).
+   - A5: the printed bench cradle could not take the 50 kg cell's load (PA-A5-T23).
+   - A6: the setting plug's 2.1 mm lip took the whole pull-stop load (PA-A6-T16).
+   - A7: the 45 deg cell slot was 0.2 mm short (PA-A7-T14).
+
+   None of these new parts had rows for its own load or assembly case until a reviewer wrote them.
+2. **A bought part that could not be fitted stayed invisible to cad check for 2+ rounds** (PA-A7-T7, PA-A7-T19). Two
+   defaults hid it, both verified in `cadcheck.py` by PALOG and unchanged on `next`:
+   - an allow on a pair drops that part from `slide_out` sweeps (`cadcheck.py:1833`);
+   - `insertion` skips parts of the same step and tries only ±XYZ plus `insert_dirs` (`cadcheck.py:2450`).
+
+   PA-A8-T1 and PA-A8-T10 worked around both through config: the allow was narrowed, the cartridge moved to an
+   earlier step, and the 45 deg line went in `insert_dirs`.
+3. **Some fixes needed decisions outside the designer's authority:** the cell size, the outer outline and
+   soldering. The coordinator reframed them ("Alex decides", "external outline only") instead of asking (PA-A4-T21,
+   PA-A5-T24, PA-A6-T1, PA-A7-T1, PA-A8-T3). PA-R5 scored F against the cell the BOM recommended, not the one in the
+   model, and F rose 7 -> 8 partly from that framing (PA-A5-T24).
+4. **Every stress row assumed solid sections, and no part had a print spec** (PA-A8-T13). This surfaced only in
+   the last round. Eight rounds of stress rows used solid I and Z, and the 3MFs carry no slicer settings. PA-R8
+   found 133 MPa at the piston mouth at slicer defaults.
+
+### Tool candidates, ranked by evidence, with their status on `next` (`2e6717d`)
+
+**Planned** means a PR into `next` is planned, from the gaps listed in PR #7 ("Known gaps") and the feature docs.
+**Open** means nothing on `next` addresses it and no PR is planned.
+
+| # | Candidate (PALOG) | PA IDs | Status |
+|---|---|---|---|
+| 1 | `slide_out`: keep allowed pairs as obstacles, bounded by `max_mm3`, instead of dropping them | PA-A7-T19a, PA-A8-T6 | Open. `cadcheck.py:1833` drops any part allowed against the mover unless it is listed in `flex` |
+| 2 | `insertion`: test same-step parts in order; warn when a `BUY_` part shares a step with the `PRT_` it seats in; take off-axis approach directions from features, or warn | PA-A7-T19b/c, PA-A7-T17 | Open. The `cadcheck.py:2450` docstring still says "parts of the same step are placed in any order". Config workaround: PA-A8-T10 |
+| 3 | A first-class `calcs` block (`value` `=expr`, min/max, unit, why) instead of stacks used as calcs | PA-A6-T9, PA-A1-T10, PA-A3-T23 | Open. Agents put calcs in `stacks` rows with a single `=expr` term. The report calls those "worst case / RSS", and `abs()` hides the sign |
+| 4 | Per-part print settings (walls, infill, material) in the manifest, written to 3MF metadata, used for I_eff in calcs | PA-A8-T13 | Open. Prior art: `asm.part(infill=)` is stored per printed part, but only cadcheck's mass and time estimate reads it (`cadcheck.py:780`, with a fixed 0.84 mm shell). It has no walls or material, is not in the 3MF, and no calc uses it |
+| 5 | Report allows that measure 0 overlap at every pose as unused | PA-A8-T6 | Open |
+| 6 | A command that locates overhang and steep regions and roof spans per part in print orientation, plus a per-layer section view | PA-A2-T7, PA-A5-T27, PA-A8-T15 | **Partly planned:** the printcheck overhang-gap PR adds a face-normal overhang pass. Its regions get locations like the layer findings (`docs/features/blend-bracket.md` "The printcheck gap", PR #6, PR #7). The per-layer text view (`layer_ascii`, `roof_ascii`) is not planned |
+| 7 | cadcheck config hygiene: warn on unknown config keys; checks named in `--only` with no rows go to `not_checked`; report stale accepts under `--only`; `accepted_warns` match by check and kind, not substring | PA-A2-T11, PA-A4-T6, PA-A4-T10 | Open. `cadcheck.py:3111-3115` is unchanged: `a["match"] in w`, and `stale = [] if ONLY` |
+| 8 | `check_stacks`: a failed `=expr` (None) is a config FAIL, not a TypeError crash (verified) | PA-A5-T26 | Open. `cadcheck.py:2566` still runs `float(t["tol"])` |
+| 9 | `G.csg`: new cut faces get the target's material (verified in use, patched per project) | PA-A4-T14 | Open. `geom.csg` sets no material |
+| 10 | Moving sub-bodies of a printed part (a flexure link) without hand-splitting; the flexures check computes stress and buckling instead of taking a typed number | PA-A3-T21, PA-A3-T22, PA-A4-T15, PA-A4-T27 | Open. `geom.swept_envelope` (PR #4) makes keep-outs for a whole moving part. It does not split one printed part. `=param` stress (PA-A4-T16) is the workaround |
+| 11 | A material allowables table (PLA in-layer and across-layer, PETG), so row limits aren't chosen per agent | PA-A6-T10 | Open |
+| 12 | interference: nothing checks nuts (FST) against PRT parts on the same body | PA-A2-T12 | **Planned:** the fastener head/nut vs same-body parts check (`docs/features/fastener-joint.md` "cadcheck gap found in review"; PR #7 "screw heads and nuts against same-body parts are unchecked"). Covers PA-A2-T12 |
+| 13 | An STL reader for bought parts that handles ASCII and binary | PA-A3-T9, PA-A5-T13 | Open for plain Python, where both failures happened. Inside Blender, `geom.import_stl` (Blender's importer) already reads both formats |
+| 14 | Fastener access: report where a straight bit would clear, so placing a screw isn't trial and error (13.7 min for one M4, PA-A3-T10) | PA-A3-T10 | Open. `fastener_joint` (PR #2) sizes and places a screw at a given point. It does not search for an access position |
+
+**The planned PRs, mapped to PA findings:**
+- **printcheck overhang gap.** Covers #6 in part. It also bears on PA-A2-T2 and PA-A2-T13, which are unverified
+  (see below).
+- **cadcheck sweep step.** PR #6's "between-frame bound for sweep step sizing" and PR #7's "joint sweeps too coarsely
+  for long reach". It addresses no PA finding: the loop's sweep misses came from the obstacle set (#1) and from
+  same-step parts (#2), not from step size.
+- **fastener head/nut vs same-body parts.** Covers #12 (PA-A2-T12).
+
+**PRs #2-#4, already merged, mapped to PA findings.** The loop had all three and called none of them (see "Which
+tools").
+- **#2 `features.fastener_joint`.** PA-R1 #1's screws gripped nothing or sat 6 mm off the wall, and cad check only
+  warned (PA-A1-T8). Called on the finished parts, `fastener_joint` raises on those: thread under 2 d, more than
+  0.3 mm of air in the stack, material on the head seat. Engagement in shank diameters was in the loop's cadcheck
+  already. #2 does not address PA-A3-T10 (#14).
+- **#3 `cadlib.route`.** No tool candidate. It is relevant to two reviewer cable issues, PA-R1 #9 (the patch cable
+  kinks at R2.8 for OD 5) and PA-R3 #7 (a 149.97 mm path for a 150 mm cable), because the router reports bend radius,
+  length and slack. PA-R8 #2 (a Qwiic jumper ties the two tray halves together) is about assembly order, which the
+  router doesn't cover.
+- **#4 `cadlib.blend`, `geom.swept_envelope`.** No PA finding. Its review produced the printcheck-gap report behind
+  the planned overhang PR.
+
+### Skill and checklist candidates (`cad-design-review`, `print-cad-blender`)
+
+| Candidate (PALOG) | PA IDs | Status |
+|---|---|---|
+| Checklist: every bought part can reach its seat along a stated path (slide rows), with clearance > 0 | PA-A7-T15, PA-A8-T7 | Open. `checklist.md:25` asks only whether bench sub-assemblies can be lifted in. PA-R7 did the walk unprompted; PA-R8 did it because the prompt asked (PA-A8-T12). PA-A8-T7 is the part on clearance: the cell path passes `slide_out` at 0.0 mm |
+| Checklist: load-path parts have a print spec | PA-A8-T13 | Open |
+| SKILL step 2: audit `accepted_warns` the way `allow` and `fits` are audited; check `ignore` lists in adapted rows | PA-A3-T24, PA-A5-T17 | Open. Step 2 names `allow` and `fits` only. PA-R4 and PA-R5 audited the accepts unprompted (PA-A4-T27, PA-A5-T28). PA-R3 did not, and its 0.58 mm wall stayed under an accept (PA-A3-T28) |
+| SKILL: write review rows against params (`=param`), not literals, so they survive redesigns | PA-A7-T9, PA-A3-T15 | Open in the review SKILL. `=EXPR` rows have existed since `dea6536`. Old rows broke 3 times on redesigns (PA-A3-T15, PA-A4-T22, PA-A5-T18) |
+| SKILL step 0: notes go in as you go (the restart case) | PA-A1-T1 | **Already there** in `49aa21f`'s step 0, which cites A3-T4. PA-R1 still wrote `notes.md` in one Write at 0:12:18. Reviewers appended as they went from PA-R2 on, once the loop prompt named the file (PA-A2-T6, PA-A2-T15). The prompt changed the behaviour; the skill's wording did not |
+| Point SKILL step 2 at `reference/checks-config.md` for row schemas | PA-A1-T3 | Open. `print-cad-blender/SKILL.md:79` points there, but `cad-design-review` never mentions it |
+| Designer done-criteria: adopt the previous review rows, and walk the assembly guide as a strict self-reviewer. The self-walk found 5 real issues in A8 (PA-A8-T8), though not the L-key gap (PA-A8-T14) | PA-A2-T10, PA-A8-T8 | Row adoption: already in the v2 workflow template (`templates/cad-loop.workflow.js:161, 242`: the planner merges `review_rows.json`). This loop was a hand-written `/loop` prompt and added the line itself from A3 on (PA-A3-T1). Self-walk: in the loop prompt only (PA-A7-T3, PA-A8-T2). Open for both skills |
+
+### Loop-prompt candidates (for the next `/loop` prompt; not skill changes)
+
+| Candidate (PALOG) | PA IDs | Status |
+|---|---|---|
+| Pass the user's seeded defects to reviewer 1 as previous issues | PA-A1-T13 | Open. The `/loop` prompt is the user's, and no file in this repo holds it |
+| Ask the user when a fix needs a decision outside the brief, instead of reframing it | PA-A5-T24, PA-A7-T1 (also PA-A4-T21, PA-A6-T1, PA-A8-T3) | Open |
+| The score history in reviewer prompts didn't visibly anchor scores | PA-A4-T28 | Observation only; no change proposed |
+| Render-only geometry (drive recesses, materials) shouldn't count toward aesthetics | PA-A4-T12, PA-A8-T9 | Open. `rubric.md` says nothing about render-only detail |
+
+### Not verified (reviewer or designer claims only, as PALOG marks them)
+- **`slide_out` at-rest contact (PA-A3-T16).** The designer says "the slide test ignores the at-rest facet contact",
+  meaning a part touching at 0 gap doesn't block at step 0. Not tested. Related: the cell path in PA-A8-T7 passes at
+  0.0 mm.
+- **printcheck missing overhangs that `overhang_gt_45_mm2` sees (PA-A2-T2, PA-A2-T13, partly).**
+  - The case: on the piston, printcheck flagged the 2,211 mm² spigot underside but not 821 mm² over 45 deg on the
+    body. PA-R2's own script says that face is over a void and harmless.
+  - The general gap is reproduced separately: gradual 5-40 deg overhangs pass printcheck
+    (`docs/features/blend-bracket.md` "The printcheck gap"), and PR #7 calls it "confirmed by user prints".
+  - Whether the piston is an instance of that gap was not checked.
+- **Where the "printcheck misses overhangs" note came from.** It first appears in the coordinator's PA-R2 prompt
+  (`PASESS.jsonl` #149, 22:49:33) as "Known tool bug (from the user)". Every later designer and reviewer prompt
+  repeats it. No user line in `PASESS` has it (`cc_transcript.py grep`).
+- Also marked unverified in the attempt notes:
+  - PA-A7-T7's "possibly true since A5 or earlier". Only A6 and A7 are established.
+  - The Qwiic Scale footprint is "from a forum reading of SparkFun's Eagle files, not verified on a board"
+    (PA-A7-T8, PA-R7 #8). PA-R8 #10 also lists purchased parts as unverified.
+  - The firmware was only syntax-checked, never compiled for a board (PA-A5-T19, PA-A6-T6).
+
+### Verification of this harvest
+- PALOG is byte-identical to the untracked source (`sha256 0a5f90f3...`).
+- Scores and cad check / printcheck cells match `PA/cad/review/attempts.md`. Issue counts were taken from PALOG's
+  ranked lists.
+- Every cost number comes from `cc_transcript.py workflow PASESS/subagents`, or from `usage` / `timeline` on
+  `PASESS.jsonl` for the two inline windows. No transcript was read whole.
+- Every PA ID in this section exists in PALOG. Each status was checked against `2e6717d`: `cadcheck.py` line refs,
+  SKILL.md, checklist.md, rubric.md, the workflow template, the feature docs, and PR #6 and #7 bodies.
+- `tools/verify_all.sh` was not run: this change is docs only.
