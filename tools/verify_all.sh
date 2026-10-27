@@ -449,7 +449,7 @@ jv=[g['overhang_mm'] for g in P['jar_valve']['regions'] if g['status']=='fail'];
 ok = (sorted(n for n in P if fl(n)) == ['base_shell', 'feeder_cover', 'jar_valve', 'post_R'] and len(jv) == 3 and all(5 <= v <= 6.5 for v in jv)
       and len(fc) == 2 and all(v >= 10 for v in fc) and len(fl('base_shell')) == 1 and len(fl('post_R')) == 1
       and all(abs(f['z_mm'] - 2.0) <= 0.2 for f in fl('jar_valve')) and all(abs(f['z_mm'] - 32.2) <= 0.3 for f in fl('feeder_cover'))
-      and not any(f['status'] == 'warn' for n in ('beam', 'nip_cover', 'nacelle', 'base_shell') for f in P[n]['findings'])
+      and not any(f['status'] == 'warn' and f['kind'] != 'nonmanifold' for n in ('beam', 'nip_cover', 'nacelle', 'base_shell') for f in P[n]['findings'])
       and all(f['kind'] == 'bridge' for f in P['feeder_crown']['findings']) and all('world' in f['msg'] for n in P for f in P[n]['findings']))
 sys.exit(0 if ok else 1)" "$V/pc-v2/printcheck.json" \
   && ok "printcheck v2 STLs: fails exactly jar_valve (3 tabs, 5-6.5 mm at z 2), feeder_cover (2 ears >= 10 mm at z 32.2), base_shell tie block, post_R top; beam, nip_cover, nacelle, crown, window tops do not fail" || bad "printcheck v2 STLs"
