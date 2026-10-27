@@ -3,6 +3,7 @@
 # PASS (PA-A2-T11), substring accepts and no stale report under --only (PA-A4-T10), check_stacks died on a failed
 # =expr (PA-A5-T26). The schema/doc agreement and accept cases run in plain python (cadcfg_cases.py); the rest in
 # cadcheck on an empty scene (a few seconds each), and the suggestions are checked on verify's own v2 reports.
+# watch: @core tools/verify.d/cadcfg_cases.py skills/print-cad-blender/reference/checks-config.md examples/mm-launcher-v2a3/** examples/mm-launcher-v2a7/** examples/demo-turret/**
 CF="$V/cfg"; mkdir -p "$CF"
 python3 -I "$ROOT/tools/verify.d/cadcfg_cases.py" "$ROOT" \
   "$V/v2a3/cadcheck.json" "$ROOT/examples/mm-launcher-v2a3/checks.json" "$V/v2a7/cadcheck.json" "$ROOT/examples/mm-launcher-v2a7/checks.json" \
