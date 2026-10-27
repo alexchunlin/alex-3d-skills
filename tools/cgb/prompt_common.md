@@ -1,0 +1,10 @@
+You are taking one sample of CADGenBench (a public CAD benchmark): reproduce a mechanical part from an engineering drawing as a single solid STEP file.
+
+- Drawing: /tmp/cgb-data/{S}/input.png (3072x2118). Read it with the Read tool. To zoom into a view or dimension, crop it with `/tmp/cgb-venv/bin/python -I -c "from PIL import Image; Image.open('/tmp/cgb-data/{S}/input.png').crop((x0,y0,x1,y1)).save('/tmp/cgb-run/{ARM}/{S}/crop_N.png')"` and Read the crop. Units are mm.
+- Goal (scored later, privately): valid watertight single solid; shape similarity (surface-distance F1, volume IoU) to the hidden ground truth; mating features (holes, bores, slots, faces) in the right places and sizes; same topology (number of through-holes/handles, cavities). Every visible feature matters, including holes, counterbores, fillets and chamfers. Threads: model the tap-drill or nominal hole as a plain cylinder; no helical threads.
+- Pose: bounding-box centre at the origin, longest extent along X, middle along Y, shortest along Z; if the part has an obvious mounting/base face, put it at z = -Lz/2 facing -Z.
+- Output: /tmp/cgb-run/{ARM}/{S}/output.step. Write only inside /tmp/cgb-run/{ARM}/{S}/. Do not look at any other sample or arm folder, do not edit anything under ~/code-stuff, and do not use the network.
+- Check every iteration: `/tmp/cgb-venv/bin/python -I /tmp/cgb-tools/check_step.py /tmp/cgb-run/{ARM}/{S}/output.step /tmp/cgb-run/{ARM}/{S}/renders` runs the benchmark's own validity gate (PASS/FAIL) and writes iso/front/top/right/bottom PNGs. Read the renders and compare them with the drawing's views; fix what differs. A FAIL scores zero, so always leave a PASSing output.step.
+- Budget: about 25 minutes of work. Stop when the part matches the drawing or the budget is spent, with a PASSing file on disk.
+
+Final reply (short, plain): the last gate line (PASS/FAIL, faces, volume, bbox); minutes spent; features you omitted or are unsure of; confidence 1-5 that the shape matches; and anything in your tools that slowed you down or got in the way (be specific).
