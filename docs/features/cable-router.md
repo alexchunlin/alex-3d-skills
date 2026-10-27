@@ -189,7 +189,7 @@ Per-pose matrices come from the parent chain (`joints.world_at`, checked against
 costs no depsgraph update. The first version, with a depsgraph update per pose, took 126 s for the four cables.
 cadcheck on A3 before and after the shared posing: the same 2 fails and 70 warns, line for line.
 
-**cadcheck's own sweep misses `wedge` (open, not changed here).**
+**cadcheck's own sweep missed `wedge` (fixed on `feat/sweep-step-by-reach`: interference now checks between the samples with swept bounds and `geom.swept_envelope`, and refines only envelope hits; `tools/verify.d/sweep_guard.sh`).**
 - Scene: an arm on PIV_arm (Z, -90..90, no `step`), 8..70 mm from the axis, 2 mm wide, z 0.5..40. A static cable
   (r 1.5) runs radially at 7.5°, from r 45 to r 64, at z 13.
 - cadcheck samples max(2.5, 180/12) = 15°, plus 2.5° overtravel: 15 poses and 34 pair-pose tests. It reports
