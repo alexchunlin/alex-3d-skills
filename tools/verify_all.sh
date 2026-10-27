@@ -20,6 +20,7 @@ HW="${HW:-$HOME/code-stuff/mmlauncher/mm-launcher/mm-launch-hw}"
 #@ none: docs/** **/*.md !skills/*/scripts/** skills/cad-design-review/** tools/verify.d/README .gitignore tools/revision_watcher.py
 #@ none: tools/prior_art/blend_compare.py tools/prior_art/dfam_compare.py tools/prior_art/fastener_joint_*.py tools/prior_art/mech_*.py
 #@ none: tools/prior_art/nm_model_vertices.py tools/prior_art/overhang_regions.py tools/prior_art/print3d_toolbox_compare.py
+#@ none: tools/prior_art/mates_build123d_prior.py tools/prior_art/mates_pattern_prior.py
 #@ none: tools/prior_art/ramp_stl.py tools/prior_art/stl_edges_compare.py tools/prior_art/sweep_compare.py tools/prior_art/tri_dist.py tools/prior_art/trimesh_compare.py
 SELECTED=ALL; EXPECT=""; CHANGED=""; RAN=""; CUR=""; CUR_N=0; CUR_OK=""
 if [ $# -gt 0 ]; then

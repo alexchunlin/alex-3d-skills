@@ -8,7 +8,7 @@ The coordinator runs the agents; nothing here calls an LLM.
 | `brief.md` | the assembly (deck, servo, horn-driven arm on the spline, PCB on 4 standoffs, lid with 4 screws); about 20 min of design |
 | `prompt_absolute.md`, `prompt_mates.md` | the designer prompts; `diff` shows the template paragraph is the only difference. Fill `{SKILL}`, `{KIT}` (this folder) and `{PROJECT}` (an empty folder per run) |
 | `components.json`, `kit_parts.py` | purchased-part data (with connectors) and placeholders, each in its own local frame. Both arms get the same data |
-| `template_absolute/` | the project template as it was before mates (`5412b4f`), for the `absolute` arm. The `mates` arm copies `skills/print-cad-blender/templates/project/` |
+| `template_absolute/` | the project template as it was before mates (`5412b4f`), for the `absolute` arm. The `mates` arm copies `skills/print-cad-blender/templates/project-mates/` (it was `templates/project/` during the 2026-10-27 runs) |
 | `checks.json` | acceptance rows the scorer adds as a cadcheck overlay: arm-to-lid clearance over the swing, lid-to-board clearance, servo on the deck |
 | `interfaces.json`, `measure_blend.py` | what "on its interface" means and how it is measured, from the blend alone (no connectors or mate table read) |
 | `score.py` | the scorer; `--kit DIR` scores against another kit folder (`mates_task_v2`) |

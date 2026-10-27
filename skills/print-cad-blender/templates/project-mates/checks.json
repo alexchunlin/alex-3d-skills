@@ -1,0 +1,12 @@
+{
+ "fits": [],
+ "allow": [],
+ "assembly_order": [
+  {"step": "base", "objects": ["PRT_base", "FST_floor_*"]},
+  {"step": "stage", "objects": ["PRT_stage"]}
+ ],
+ "drop_tests": [],
+ "slide_out": [],
+ "distances": [],
+ "masses_g": {}
+}

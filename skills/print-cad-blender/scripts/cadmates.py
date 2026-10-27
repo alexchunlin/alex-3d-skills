@@ -30,7 +30,7 @@ def mate_line(m):
     elif m.get("origin") and m.get("b"):
         bits.append("at %s z %s" % (vec(m["origin"]), vec(m.get("z", (0, 0, 1)))))
     if m.get("gap"):
-        bits.append("gap %s" % g(m["gap"]))
+        bits.append("gap %s%s" % (g(m["gap"]), " (designed)" if m.get("designed_gap") else ""))
     if m.get("rot"):
         bits.append("rot %s" % g(m["rot"]))
     pat = m.get("pattern_a")
@@ -53,6 +53,8 @@ def mate_line(m):
     if m.get("step"):
         bits.append("step %s" % m["step"])
     line = "%-14s %s" % (m["name"], "  ".join(bits))
+    if m.get("warn"):
+        line += "  WARN " + m["warn"]
     if m.get("note"):
         line += "  | " + m["note"]
     return line

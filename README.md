@@ -32,7 +32,8 @@ Optionally, put the wrapper on PATH: `ln -s ~/code-stuff/alex-3d-skills/skills/p
 To use the loop, copy `templates/cad-loop.workflow.js` and set `CONFIG.hw` and `CONFIG.subsystems` (or pass them as
 Workflow `args`). To resume after a crash, pass `start_attempt` and `history`, or use `resumeFromRunId`.
 
-Project template: copy `skills/print-cad-blender/templates/project/` to `<project>/blender/`. The build finds cadlib through
+Project template: copy `skills/print-cad-blender/templates/project/` to `<project>/blender/` (`templates/project-mates/` is the
+optional version that places parts through `cadlib.mates`). The build finds cadlib through
 `CAD_SKILL` (default `~/code-stuff/alex-3d-skills/skills/print-cad-blender`).
 
 ## Quick use

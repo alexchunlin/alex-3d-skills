@@ -89,12 +89,12 @@ M.part(srv, "BUY_servo_pan", 'BUY', "buy", mass_g=66, src="Hiwonder HTS-35H enve
 M.fasten("PRT_base:floor", name="FST_floor", size="M3", head="pan", step="close base")
 M.fasten("PRT_base:side", name="FST_side", size="M3", style="nut", trap=False, step="close base")
 M.mate("PRT_base:deck", "PRT_pan:bottom", "revolute", name="PIV_pan", lo=-90, hi=90, sweep_step=15, gap=CLR,
-       fit="clearance")
+       designed_gap=True, fit="clearance")
 for i, side in enumerate("LR"):
     M.mate("PRT_pan:arm_" + side, "PRT_arm_%s:foot" % side, "fastened", name="arm_" + side, step="arms",
            fastener=dict(name="FST_arm_%d" % i, size="M3", head="pan", sink=SINK, head_on="a"))
 M.mate("PRT_arm_L:pivot", "PRT_barrel:end_L", "revolute", name="PIV_tilt", lo=TILT_LO, hi=TILT_HI, sweep_step=5,
-       gap=CLR, fit="clearance", note="printed axle in both arm bores")
+       gap=CLR, designed_gap=True, fit="clearance", note="printed axle in both arm bores; CLR running gap to the arm")
 M.mate("PRT_base:servo_seat", "BUY_servo_pan:bottom", "rigid", name="servo", fit="press")
 M.assemble("PRT_base")
 

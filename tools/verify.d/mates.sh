@@ -1,12 +1,14 @@
 # cadlib.mates (sourced by tools/verify_all.sh; uses $ROOT $CAD $V, calls ok/bad). Writes under $V/mates.
+# watch: @core @layer tools/verify.d/mates_cases.py tools/verify.d/mates_compare.py examples/demo-turret/** components/** skills/print-cad-blender/scripts/cadmates.py skills/print-cad-blender/scripts/cadrows.py skills/print-cad-blender/templates/project-mates/** tools/bench/mates_task/** tools/bench/mates_task_v2/**
 # 1. unit cases (tools/verify.d/mates_cases.py): frames, chains, flips, prismatic, patterns, loops, errors, print_rot
 # 2. the demo turret placed through mates (examples/demo-turret/build_mates.py) gives build.py's cadcheck rows
-# 3. its planted pattern mismatch fails the build with both specs; 4. `cad mates` on a manifest and a blend
+# 3. its planted pattern mismatch fails the build with both specs; 4. `cad mates` on a manifest and a blend;
+# 4b. the mates version of the project template (templates/project-mates) builds and checks with 0 fails
 # 5. the mates_task and mates_task_v2 scorers on their reference solutions and planted errors (tools/bench/)
 mkdir -p "$V/mates"
 $CAD build "$ROOT/tools/verify.d/mates_cases.py" --out "$V/mates/cases" > "$V/mates/cases.log" 2>&1
 grep "^MATES \(PASS\|FAIL\)" "$V/mates/cases.log" | while read -r _ st msg; do echo "$st mates $msg"; done > "$V/mates/cases.txt"
-[ "$(grep -c . "$V/mates/cases.txt")" -ge 27 ] || echo "FAIL mates cases: only $(grep -c . "$V/mates/cases.txt") of 27 case lines (log $V/mates/cases.log)" >> "$V/mates/cases.txt"
+[ "$(grep -c . "$V/mates/cases.txt")" -ge 28 ] || echo "FAIL mates cases: only $(grep -c . "$V/mates/cases.txt") of 28 case lines (log $V/mates/cases.log)" >> "$V/mates/cases.txt"
 while read -r st msg; do [ "$st" = PASS ] && ok "$msg" || bad "$msg"; done < "$V/mates/cases.txt"
 
 # 2. same design, two placements; the absolute build is section 1's demo-clean when it ran in this verify run
@@ -37,6 +39,13 @@ $CAD mates "$V/mates/demo/demo.blend" > "$V/mates/mates_blend.txt" 2>&1
   && cmp -s "$V/mates/mates_manifest.txt" "$V/mates/mates_blend.txt" \
   && ok "cad mates: 7 demo mates, one line each, the same from manifest.json and demo.blend" || bad "cad mates ($V/mates/mates_manifest.txt)"
 $CAD mates "$V/mates/demo/manifest.json" "M3 nut" | grep -q "^side .*FST_side" && ok "cad mates REGEX: the side bolt by 'M3 nut'" || bad "cad mates REGEX"
+
+# 4b. the optional mates template
+cp -R "$ROOT/skills/print-cad-blender/templates/project-mates" "$V/mates/tplm"; mkdir -p "$V/mates/tplmroot"; mv "$V/mates/tplm" "$V/mates/tplmroot/blender"
+$CAD build "$V/mates/tplmroot/blender/build_assembly.py" > "$V/mates/tplm.log" 2>&1
+CAD_LAYER_CHECK=1 $CAD check "$V/mates/tplmroot/blender/model.blend" "$V/mates/tplmroot/blender/checks.json" >/dev/null 2>&1
+n=$(python3 -I -c "import json,sys; print(json.load(open(sys.argv[1]))['summary']['fails'])" "$V/mates/tplmroot/blender/cadcheck.json" 2>/dev/null)
+[ "${n:-x}" = 0 ] && ! grep -q "MATES WARN" "$V/mates/tplm.log" && ok "mates template (templates/project-mates): builds, 0 fails, no gap warnings" || bad "mates template: ${n:-?} fails ($V/mates/tplm.log)"
 
 # 5. the evaluation kits' scorers (v1: placement given; v2: pan-tilt from interfaces)
 if [ -f "$ROOT/tools/bench/mates_task/selftest.sh" ]; then

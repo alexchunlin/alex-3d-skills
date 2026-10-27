@@ -3,7 +3,8 @@
 Branch `feat/mate-connectors`, 2026-10-27. Task: `docs/tasks/2026-10-27-mate-connectors.md`.
 Code: `skills/print-cad-blender/scripts/cadlib/mates.py`, `asm.py` (registries, manifest `mates` and per-part
 `connectors`), `scripts/cadmates.py` and `cad mates`, `cadrows.py` (mate lines in `cad rows manifest.json`).
-Template: `templates/project/` places its parts only through `mates.assemble`. Purchased-part connectors:
+Status after the A/B (2026-10-27): **optional**. The default template (`templates/project/`) places parts in world
+coordinates again; `templates/project-mates/` is the mates version. Purchased-part connectors:
 `components/components.json`. Tests: `tools/verify.d/mates.sh`. Eval kit: `tools/bench/mates_task/`.
 
 ## Why
@@ -12,7 +13,26 @@ pilot, agents got cross products, winding, mirrored views and a 180 deg view wro
 loops the reviewers' majors are mostly placement and access. The interface is data the designer already has (this
 bolt pattern goes on that one; this spline is that arm's pivot). Stored once, code places the parts and cuts the
 features, and the mate table is a grep-able record of every interface. Adoption is the risk (push-assist never called
-`fastener_joint`, `route` or `blend` although SKILL.md named them), so the template places parts *through* mates.
+`fastener_joint`, `route` or `blend` although SKILL.md named them), so the template first placed parts *through* mates.
+The A/B below found no accuracy gain, and the default went back to world placement.
+
+## Measured (A/B, 2026-10-27; coordinator's runs)
+On `tools/bench/mates_task_v2` (pan-tilt from constraints, 24 scored rows; absolute arm on the pre-mates skill):
+
+| Model | absolute | mates | note |
+|---|---|---|---|
+| Opus | 24, 24, 24 | 24, 24, 24 | mates cost about 40% more: $1.34-1.69 against $0.94-1.21 per run |
+| Sonnet | 24, 24 | 24, 24 | |
+| Haiku | 24, 23 | 21, 14 | absolute 23: the tilt servo turned 90 deg about its spline. Mates 21 and 14: both runs gave the horn-on-spline revolute mates `gap=0.2` / `0.3` with `fit="clearance"` or `"press"`, so each horn floated above its spline and the error ran down the chain to the camera. No absolute run made that error |
+
+On v1 (`mates_task`, positions given) every run of both arms scored 7/7 (details under the A/B section below).
+
+**Conclusion:** at this scale, placing parts through mates gave no accuracy gain on any model, cost more tokens on
+Opus, and gave the weakest model a new way to be wrong (`gap` read as a fit allowance). What mates add is checking:
+two hole patterns from datasheet numbers that must agree (`fastener_joint` and cadcheck pass a pitch typed 1 mm long;
+`assemble` refuses it), and a searchable interface table (`cad mates`). So mates are optional, and `gap` is guarded:
+a seated interface is `gap=0`, a fit's tolerance never goes in `gap`, and a rigid, fastened or revolute mate with a gap
+prints `MATES WARN` unless it passes `designed_gap=True` (unit case `gap_on_seated_mates`, modelled on the Haiku runs).
 
 ## What it does
 - **Connector**: `connector(ob, name, origin, z, x=None, pattern=None, hole=None)`, a named frame on a part in the
@@ -78,13 +98,16 @@ MateError: mate servo (rigid): the connectors' hole patterns don't match: a poin
 ```
 
 ## Proof (`tools/verify.d/mates.sh`, sourced by `verify_all.sh`)
-- 27 unit cases (`mates_cases.py`): face to face with gap; `rot` and a mate declared child-first give the same
+- 28 unit cases (`mates_cases.py`): face to face with gap; `rot` and a mate declared child-first give the same
   placement; the default-x rule and a side mount staying upright; a 4-part chain (base, pan revolute Z, yoke rigid, head
   revolute X) with `PIV_tilt` parented to `PIV_pan` and a connector followed through pan 90 + tilt 30 to 1e-3 mm; a
   parent connector pointing -Z (lo/hi/home negated, mate +30 = -30 about world Z); prismatic along -X; pitch, count and
   hole-size mismatches; a 3-hole circle typed the same on both faces failing with the mirror hint; a fastened
   `rect(42, 32)` M2.5 board end to end; loop, orphan, tilted axis, unknown connector, missing range, object transform;
-  `print_rot` converted for a plate mounted on a wall; servo and horn placed from `components.json` connectors.
+  `print_rot` converted for a plate mounted on a wall; servo and horn placed from `components.json` connectors; a
+  horn-on-spline revolute with `gap=0.2` / `0.3` floats and warns in the build log, the table and `cad mates`, while
+  `designed_gap=True` and `gap=0` are quiet.
+- the mates template (`templates/project-mates`) builds and checks with 0 fails and no gap warnings.
 - the demo comparison above (`mates_compare.py`), the bug build, `cad mates` from manifest and blend, and the eval
   kit's self-test.
 

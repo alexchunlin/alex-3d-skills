@@ -10,16 +10,13 @@
   The v2 ones carry overlays of the rows each reviewer showed were missing; v2a3 to v2a7 also have manifest.json and BOM.
 
 ## Mate connectors (2026-10-27, `feat/mate-connectors`; `docs/features/mate-connectors.md`)
-- `cadlib.mates`: connectors (named frames with hole patterns) on parts, mates between them (rigid, fastened,
-  revolute, prismatic), and `assemble`, which places every part from the ground, makes the PIV joints through
-  `asm.joint`, runs `fastener_joint` per hole and refuses a pattern mismatch with both specs. `cad mates` prints the
-  mate table. The project template places parts only through it; `components.json` carries connectors for the servo,
-  horn, MotorGo, Plink and motor.
-- Prior art measured: a board's hole pitch typed 1 mm long passes `fastener_joint` and cadcheck (0 fails, 0 warns).
-- Demo turret rebuilt through mates: the same 0 fails / 8 warns and 50 rows (48 verbatim, 2 at another pose of a tie).
-- A/B on `tools/bench/mates_task/` (3 runs per arm): all 0 fails, 7/7 after a scorer fix; mates no faster (4.2-6.0
-  vs 3.3-5.5 min) because the brief gives positions. `tools/bench/mates_task_v2/` (pan-tilt, constraints only, poses
-  and a clearance grid scored) is ready for the next A/B; its reference scores 0 fails, 24/24.
+- `cadlib.mates` (connectors with hole patterns, rigid / fastened / revolute / prismatic mates, `assemble`) and
+  `cad mates` are an **optional** tool; the default template places parts in world coordinates again
+  (`templates/project-mates/` is the mates version). `components.json` carries connectors for 5 purchased parts.
+- A/B on `tools/bench/mates_task_v2` (pan-tilt from constraints): Opus 24/24 both arms (mates +40% cost), Sonnet 24/24
+  both, Haiku absolute 24 and 23, mates 21 and 14 (horn mates given `gap` 0.2-0.3 as a fit allowance). No accuracy gain.
+  Value kept: the pattern-mismatch check (a pitch typed 1 mm long passes `fastener_joint` and cadcheck) and the
+  interface table. A seated mate with `gap` != 0 now warns unless `designed_gap=True`.
 
 ## Push-assist loop (2026-10-26/27; FINDINGS "Push-assist loop", log in `docs/evidence-push-assist/loop-log.txt`)
 - A second project (`~/code-stuff/space-bar-push-assist`) ran 8 designer + reviewer attempts on tools `49aa21f`,

@@ -69,7 +69,7 @@ def face_to_face():
     M.connector(deck, "top", (0, 0, 10), z=(0, 0, 1))
     M.connector(lid, "bottom", (0, 0, 0), z=(0, 0, -1))         # z out of the lid's underside
     prt(deck, "PRT_deck"); prt(lid, "PRT_lid")
-    M.mate("PRT_deck:top", "PRT_lid:bottom", gap=0.5)
+    M.mate("PRT_deck:top", "PRT_lid:bottom", gap=0.5, designed_gap=True)
     M.assemble("PRT_deck")
     lo, hi = bbox(bpy.data.objects["PRT_lid"])
     say(near(lo, [-20, -10, 10.5]) and near(hi, [20, 10, 14.5]),
@@ -130,9 +130,9 @@ def chain_pan_tilt():
     M.connector(head, "pivot", (0, 0, 0), z=(-1, 0, 0))
     for o, n in ((base, "PRT_base"), (pan, "PRT_pan"), (yoke, "PRT_yoke"), (head, "PRT_head")):
         prt(o, n)
-    M.mate("PRT_base:deck", "PRT_pan:bottom", "revolute", name="PIV_pan", lo=-90, hi=90, gap=0.5, sweep_step=15)
+    M.mate("PRT_base:deck", "PRT_pan:bottom", "revolute", name="PIV_pan", lo=-90, hi=90, gap=0.5, designed_gap=True, sweep_step=15)
     M.mate("PRT_pan:top", "PRT_yoke:foot", "rigid", fit="press")
-    M.mate("PRT_yoke:pivot", "PRT_head:pivot", "revolute", name="PIV_tilt", lo=-20, hi=45, gap=0.3)
+    M.mate("PRT_yoke:pivot", "PRT_head:pivot", "revolute", name="PIV_tilt", lo=-20, hi=45, gap=0.3, designed_gap=True)
     M.assemble("PRT_base")
     J = A.JOINTS
     ok = (J["PIV_pan"].parent is None and J["PIV_tilt"].parent == J["PIV_pan"] and J["PIV_tilt"]["joint_axis"] == "X"
@@ -177,6 +177,43 @@ def revolute_sign_flip():
     exp = (40 * math.cos(math.radians(-30)), 40 * math.sin(math.radians(-30)), 45)
     say(near(tip, exp, 1e-3), "mate +30 about -Z moves the tip to %s (expect %s)" % (_r(tip), _r(exp)))
     A.set_pose()
+
+
+@case
+def gap_on_seated_mates():
+    """The Haiku pan-tilt runs: horn-on-spline revolute mates given gap 0.2 / 0.3 "for the fit". assemble() places
+    them as asked (the horn floats), but warns, and the mate table and `cad mates` carry the warning; designed_gap=True
+    and gap 0 do not warn; a prismatic mate's gap (where its travel starts) does not either."""
+    import io, contextlib
+    sys.path.insert(0, os.path.join(HERE, "..", "..", "components"))
+    import placeholders as PH
+    sys.path.insert(0, os.path.join(HERE, "..", "..", "skills", "print-cad-blender", "scripts"))
+    import cadmates
+    out = {}
+    for label, kw in (("fit gap", dict(gap=0.2, fit="clearance")), ("press gap", dict(gap=0.3, fit="press")),
+                      ("designed", dict(gap=0.2, designed_gap=True)), ("seated", dict(fit="press"))):
+        A.new_scene()
+        deck = G.box("deck", -80, 40, -30, 30, 0, 4)
+        M.connector(deck, "servo", (-40, 0, 4), (0, 0, 1))
+        prt(deck, "PRT_deck")
+        srv = M.from_component(PH.servo("servo"), PH.C["hiwonder_bus_servo"])
+        horn = M.from_component(PH.horn("horn"), PH.C["servo_horn_disc"])
+        M.part(srv, "BUY_servo", 'BUY', "buy", mass_g=66, src="components.json")
+        M.part(horn, "BUY_horn", 'BUY', "buy_metal", mass_g=4, src="components.json")
+        M.mate("PRT_deck:servo", "BUY_servo:bottom", "rigid", name="servo")
+        M.mate("BUY_servo:spline", "BUY_horn:hub", "revolute", name="PIV_arm", lo=-90, hi=90, **kw)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            M.assemble("PRT_deck")
+        lo, hi = bbox(bpy.data.objects["BUY_horn"])
+        row = A.MATE_TABLE[1]
+        out[label] = (round(lo[2] - 47.9, 3), "MATES WARN mate PIV_arm: gap" in buf.getvalue(), "warn" in row,
+                      "WARN gap" in cadmates.mate_line(row))
+    ok = (out["fit gap"] == (0.2, True, True, True) and out["press gap"] == (0.3, True, True, True)
+          and out["designed"] == (0.2, False, False, False) and out["seated"] == (0.0, False, False, False))
+    say(ok, "gap on a seated revolute (the Haiku runs): horn %s mm off the spline and warned in the build log, the "
+            "table and cad mates; designed_gap=True: %s, quiet; gap 0: %s, quiet" % (
+                out["fit gap"][0], out["designed"][0], out["seated"][0]))
 
 
 @case

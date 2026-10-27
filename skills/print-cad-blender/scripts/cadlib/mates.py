@@ -10,12 +10,12 @@ the parts with asm.part. The mate table goes into the .blend (scene "cad_mates")
 
     from cadlib import geom as G, asm as A, mates as M
     deck = G.box("deck", -40, 40, -40, 40, 0, 4)
-    M.connector(deck, "pcb", (20, 0, 4), z=(0, 0, 1), pattern=M.rect(42, 32), hole="M2.5")
+    M.connector(deck, "pcb", (20, 0, 12), z=(0, 0, 1), pattern=M.rect(42, 32), hole="M2.5")   # standoff tops
     M.part(deck, "PRT_deck", 'PRT', "pla_a", stl="deck", print_rot=A.R_ID, orient="flat", supports="no", infill=20)
     M.from_component(board, C["pcb"])                       # connectors from components.json, once per purchased part
     M.part(board, "BUY_pcb", 'BUY', "pcb", mass_g=8, src="datasheet")
     M.mate("PRT_deck:pcb", "BUY_pcb:mount", "fastened", fit="clearance",
-           fastener=dict(size="M2.5", style="selftap", head="pan"), gap=8)
+           fastener=dict(size="M2.5", style="selftap", head="pan"))
     M.assemble("PRT_deck")
 
 Rules the solver enforces (each raises MateError with the fix):
@@ -23,6 +23,8 @@ Rules the solver enforces (each raises MateError with the fix):
 - two connectors that both carry a hole pattern must match in count, positions and hole size (both specs printed);
 - a revolute or prismatic axis must be a world axis (asm.joint and cadcheck sweep X, Y or Z);
 - parts are modelled with the object at identity (mesh coordinates are the part's own frame).
+And it warns (MATES WARN in the build log, `warn` in the mate table) on a rigid, fastened or revolute mate with a
+nonzero gap that isn't marked designed_gap=True: a seated interface is gap 0.
 """
 import json, math
 import bpy
@@ -31,6 +33,7 @@ from mathutils.bvhtree import BVHTree
 from . import geom, features, asm
 
 KINDS = ("rigid", "fastened", "revolute", "prismatic")
+GAP_WARN_KINDS = ("rigid", "fastened", "revolute")   # a prismatic mate's gap is where its travel starts
 FITS = (None, "press", "slip", "clearance", "snap")
 PATTERN_TOL = 0.01          # mm: two patterns from the same datasheet numbers agree to float noise
 AXIS_TOL = 1e-6
@@ -210,9 +213,15 @@ def part(ob, name, kind, color, **info):
 
 
 def mate(a, b, kind="rigid", name=None, gap=0.0, rot=0.0, fit=None, lo=None, hi=None, home=0.0, sweep_step=None,
-         continuous=False, fastener=None, step=None, note=None, **joint_kw):
+         continuous=False, fastener=None, step=None, note=None, designed_gap=False, **joint_kw):
     """Mate connector `a` ("PART:conn") with `b` face to face: b's origin on a's, b's z opposite a's, x together,
     then `gap` mm apart along a's z and turned `rot` degrees about it.
+
+    gap:  air between the two faces, for a designed space only (a running clearance under a turning disc, a
+          stand-off), with designed_gap=True. A seated interface (a hub on a spline, a part on its face, a screwed
+          joint) is gap 0; a fit's tolerance is never a gap, it is `fit` (and cadcheck's fits). A rigid, fastened or
+          revolute mate with a gap and no designed_gap warns: in two pan-tilt runs a designer gave each horn-on-spline
+          mate gap 0.2-0.3 "for the fit", the horns floated, and the error carried down the chain to the camera.
 
     kind: "rigid" (glued, pressed, snapped), "fastened" (screws, one per pattern point), "revolute" (turns about a's
           z: lo/hi/home in degrees, positive = right-handed about the parent side's z), "prismatic" (slides along a's
@@ -248,7 +257,7 @@ def mate(a, b, kind="rigid", name=None, gap=0.0, rot=0.0, fit=None, lo=None, hi=
     asm.MATES.append(dict(name=name, a=a, b=b, kind=kind, gap=float(gap), rot=float(rot), fit=fit, lo=lo, hi=hi,
                           home=float(home), sweep_step=sweep_step, continuous=bool(continuous),
                           fastener=dict(fastener) if fastener is not None else None, step=step, note=note,
-                          joint_kw=joint_kw))
+                          designed_gap=bool(designed_gap), joint_kw=joint_kw))
     return name
 
 
@@ -455,6 +464,12 @@ def assemble(ground, at=None):
     for m in mates:
         if m["b"] is not None:
             _check_patterns(m, place[m["a"].split(":")[0]], place[m["b"].split(":")[0]])
+        m.pop("_warn", None)
+        if m["b"] is not None and m["kind"] in GAP_WARN_KINDS and abs(m["gap"]) > 1e-9 and not m.get("designed_gap"):
+            m["_warn"] = ("gap %g mm on a %s mate: %s floats %g mm off %s. A seated interface is gap=0 (a fit's "
+                          "tolerance goes in fit=, not gap=); for a designed space pass designed_gap=True" % (
+                              m["gap"], m["kind"], m.get("_child"), m["gap"], m.get("_parent")))
+            print("MATES WARN mate %s: %s" % (m["name"], m["_warn"]))
     # fasteners, in declaration order (fastener_joint reuses lengths already in the build)
     cuts = {}
     for m in mates:
@@ -562,6 +577,10 @@ def _record(m):
             r["piv_sign"] = -1
     if m.get("_fst"):
         r["fastener"] = m["_fst"]
+    if m.get("designed_gap") and m["gap"]:
+        r["designed_gap"] = True
+    if m.get("_warn"):
+        r["warn"] = m["_warn"]
     return {k: v for k, v in r.items() if v is not None and v != "" and not (k in ("gap", "rot") and v == 0)}
 
 
