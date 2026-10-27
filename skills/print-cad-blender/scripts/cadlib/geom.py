@@ -109,11 +109,11 @@ def hull_circles(circs, n=72):
     return hull2d(pts)
 
 
-def teardrop(c, r, up=(0, 1)):
+def teardrop(c, r, up=(0, 1), n=32):
     """Hole profile printable without support when its axis is horizontal: 45 deg point toward `up`
-    (the print +Z direction expressed in the profile's (u, v) plane)."""
+    (the print +Z direction expressed in the profile's (u, v) plane). n: facets of the round part."""
     ang = math.atan2(up[1], up[0])
-    pts = [p for p in circle(c, r, 32, 0)
+    pts = [p for p in circle(c, r, n, 0)
            if (p[0] - c[0]) * math.cos(ang) + (p[1] - c[1]) * math.sin(ang) <= r * math.sin(math.radians(45)) + 1e-6]
     pts.append((c[0] + r * math.sqrt(2) * math.cos(ang), c[1] + r * math.sqrt(2) * math.sin(ang)))
     return hull2d(pts)
@@ -335,6 +335,136 @@ def join(name, obs):
     bm.free()
     ob = bpy.data.objects.new(name, me)
     scratch().objects.link(ob)
+    return ob
+
+
+def _world_tris(obs):
+    """World-space vertices (list of Vector) and triangles of the evaluated meshes of `obs`."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    V, T = [], []
+    for o in obs:
+        oe = o.evaluated_get(dg)
+        me = oe.to_mesh()
+        me.calc_loop_triangles()
+        base = len(V)
+        V += [o.matrix_world @ v.co for v in me.vertices]
+        T += [(base + t.vertices[0], base + t.vertices[1], base + t.vertices[2]) for t in me.loop_triangles]
+        oe.to_mesh_clear()
+    return V, T
+
+
+def _joint_range(j, lo, hi, axis=None):
+    """(pivot, world axis, kind, lo, hi) of a PIV_ empty, with lo/hi relative to the pose the scene is in now.
+    kind is "revolute" (deg) or "prismatic" (mm along +axis, asm.joint(prismatic=True)); a continuous joint with no
+    lo/hi given sweeps 0..360."""
+    from . import joints
+    s = joints.spec(j)                                     # the same spec cadcheck and cadlib.route pose from
+    ax = s["axis"] or (axis if isinstance(axis, str) else "X")
+    k = "XYZ".index(ax)
+    w = Vector(j.matrix_world.col[k][:3]).normalized()
+    kind = s["kind"]
+    if kind == "prismatic":
+        base = Vector(s["base_loc"])
+        now = (j.location - base).dot(j.rotation_euler.to_matrix() @ Vector([1.0 if i == k else 0.0 for i in range(3)]))
+    else:
+        now = math.degrees(j.rotation_euler[k])
+    if s["continuous"] and lo is None and hi is None:
+        lo, hi, now = 0.0, 360.0, 0.0
+    lo = s["lo"] if lo is None else lo
+    hi = s["hi"] if hi is None else hi
+    if lo is None or hi is None:
+        raise ValueError("swept_envelope: %s has no joint_lo/joint_hi and is not continuous: pass lo and hi" % j.name)
+    return j.matrix_world.translation.copy(), w, kind, lo - now, hi - now
+
+
+def swept_envelope(obs, pivot, axis=None, lo=None, hi=None, step=None, tol=0.25, voxel=0.5, method="sdf",
+                   adaptivity=0.0, name="KEEP_sweep", max_cells=None, prismatic=False):
+    """Closed mesh holding every pose of `obs` while they turn about (or slide along) an axis: a keep-out for cuts
+    and clearances.
+
+    pivot: a PIV_ joint empty (or its name): axis, pivot and kind come from it, and lo/hi are joint values (default:
+           its joint_lo/joint_hi; a continuous joint sweeps 0..360), measured from the pose the scene is in now.
+           A prismatic joint (asm.joint(prismatic=True)) is swept as a slide, lo/hi in mm.
+           Or a point, with `axis` a world vector, and lo/hi relative to the current pose (deg; mm with prismatic=True).
+    method "sdf" (default): one OpenVDB level set of all poses at once (the soup of posed triangles), meshed at
+           +pad, where pad = r_max * step / 2 + voxel (a slide: step / 2 + voxel). A point moves at most
+           r_max * step / 2 between poses and the distance field is 1-Lipschitz; the voxel term covers the level
+           set's sampling and meshing error (voxel / 4 left points up to 0.65 mm outside at voxel 1, tol 0.05, PR #4
+           review). step defaults to 2 * tol / r_max (a slide: 2 * tol), so the envelope is oversize by about
+           tol + voxel: 0.75 mm at the defaults. A coarser voxel makes it fatter, never leaky.
+    method "union": Manifold union of the posed copies at `step` (default 2 deg or mm). Exact at the poses, but an
+           in-between pose pokes out by up to about r_max * step^2 / 8 (measured in docs/features/blend-bracket.md).
+    max_cells: the "sdf" level set is sparse, but its peak memory still tracks the swept bounding box (A3 nacelle
+           9M cells: 1.2 GB; the 7-part pod 34M: 2.2 GB). Over max_cells (default blend.MAX_CELLS, 40M) it raises
+           blend.GridTooLarge before building anything, naming the smallest voxel that fits.
+    The result goes in the scratch collection; ob["envelope"] holds poses, step, pad, r_max and timings. Keep it out of
+    the Printed and Purchased collections: at 230k-925k triangles it would slow every cadcheck pass.
+    D3 spent 159 s deriving the pod's swept envelope by hand (FINDINGS A3-T2)."""
+    import time
+    t0 = time.time()
+    if isinstance(pivot, str) or hasattr(pivot, "matrix_world"):
+        j = bpy.data.objects[pivot] if isinstance(pivot, str) else pivot
+        c, w, kind, lo, hi = _joint_range(j, lo, hi, axis)
+    else:
+        c, w, kind = Vector(pivot), Vector(axis).normalized(), "prismatic" if prismatic else "revolute"
+        if lo is None or hi is None:
+            raise ValueError("swept_envelope: pass lo and hi with a point pivot")
+    slide = kind == "prismatic"
+    obs = [obs] if hasattr(obs, "data") else list(obs)
+    V, T = _world_tris(obs)
+    r_max = max(((v - c) - w * (v - c).dot(w)).length for v in V)
+    if step is None:
+        step = 2.0 if method == "union" else max(0.01, 2 * tol) if slide else max(0.05, math.degrees(2 * tol / max(r_max, 1e-6)))
+    n = max(2, int(math.ceil((hi - lo) / step - 1e-9)) + 1)
+    angs = [lo + (hi - lo) * i / (n - 1) for i in range(n)]
+    if slide:
+        move = (hi - lo) / (n - 1)            # mm a point moves between poses
+        rots = [Matrix.Translation(w * a) for a in angs]
+    else:
+        move = r_max * math.radians((hi - lo) / (n - 1))
+        rots = [Matrix.Translation(c) @ Matrix.Rotation(math.radians(a), 4, w) @ Matrix.Translation(-c) for a in angs]
+    info = {"poses": n, ("step_mm" if slide else "step_deg"): round((hi - lo) / (n - 1), 4), "lo": lo, "hi": hi, "kind": kind,
+            "r_max": round(r_max, 2), "method": method}
+    if method == "union":
+        copies = []
+        for i, M in enumerate(rots):
+            bm = bmesh.new()
+            vs = [bm.verts.new(M @ v) for v in V]
+            for t in T:
+                try:
+                    bm.faces.new((vs[t[0]], vs[t[1]], vs[t[2]]))
+                except ValueError:
+                    pass
+            copies.append(_obj("%s_%d" % (name, i), bm))
+        ob = csg(copies[0], add=copies[1:])
+        ob.name = name
+        info["pad"] = 0.0
+    else:
+        import numpy as np
+        import openvdb as vdb
+        from . import blend
+        pad = move / 2 + voxel
+        P0 = np.array([tuple(v) for v in V], dtype=np.float64)
+        # size guard on the swept bounding box, one pose at a time, before the triangle soup or the level set exist
+        blo, bhi = np.full(3, np.inf), np.full(3, -np.inf)
+        for M in rots:
+            Q = P0 @ np.array(M.to_3x3()).T + np.array(M.translation)
+            blo, bhi = np.minimum(blo, Q.min(0)), np.maximum(bhi, Q.max(0))
+        m = pad + 3 * voxel
+        info["cells_M"] = round(blend.check_cells(blo - m, bhi + m, voxel, max_cells, "swept_envelope(%s)" % name, blend.SWEEP_HINT) / 1e6, 1)
+        T0 = np.array(T, dtype=np.uint32)
+        P = np.concatenate([P0 @ np.array(M.to_3x3()).T + np.array(M.translation) for M in rots]).astype(np.float32)
+        Tr = np.concatenate([T0 + i * len(P0) for i in range(n)])
+        o = P.min(0) - pad - 3 * voxel
+        xf = vdb.createLinearTransform([[voxel, 0, 0, 0], [0, voxel, 0, 0], [0, 0, voxel, 0], [float(o[0]), float(o[1]), float(o[2]), 1]])
+        ls = vdb.FloatGrid.createLevelSetFromPolygons(P, triangles=Tr, transform=xf, halfWidth=max(3.0, pad / voxel + 3))
+        ob = blend.vdb_to_object(ls, name, iso=pad, adaptivity=adaptivity)
+        info["pad"] = round(pad, 3)
+        info["voxel"] = voxel
+    nm, vol = solid_stats(ob)
+    ob.data.calc_loop_triangles()
+    info.update(tris=len(ob.data.loop_triangles), non_manifold_edges=nm, volume_mm3=round(vol, 1), t_s=round(time.time() - t0, 2))
+    ob["envelope"] = info
     return ob
 
 

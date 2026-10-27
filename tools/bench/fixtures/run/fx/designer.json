@@ -1,0 +1,12 @@
+{"summary": {
+ "fail_list": [
+  "interference: PRT_a x FST_b collide on different bodies: 3.0 mm3 at home",
+  "slide: PRT_z slide-out blocked by ['PRT_y'] at 3 mm",
+  "slide: planted: gate stop wanted at 40..45: stopped by ['PRT_y'] at 52 mm"],
+ "warn_list": [
+  "interference: PRT_c to PRT_d only 0.2 mm across a joint at tilt=45",
+  "drop: feed test: the payload path touches ['PRT_hood'], which moves on PIV_lift (-1..0), but the test holds PIV_lift at home",
+  "stacks: stack one: worst case 0.5 mm > 0.3 (RSS 0.2)",
+  "parts: PRT_q: 12 wall samples < 1.6 mm (min 1.2)",
+  "parts: PRT_r: 300 mm2 of sloped overhang steeper than 45 deg, supports=no"],
+ "accepted_warns": {"fasteners: FST_e head stands 9.0 mm off the part: exposed shank under the head": "looked at it"}}}

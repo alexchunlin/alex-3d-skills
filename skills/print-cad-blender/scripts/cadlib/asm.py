@@ -11,7 +11,7 @@ Conventions (what cadcheck and the web viewer rely on):
 - write_manifest() dumps parts, joints, fasteners, cables, features and parameters as JSON, so a
   reviewer doesn't have to reverse-engineer the script (attempt 1: 7 calls reading code, A1-T8).
 """
-import bpy, json, math, os
+import bpy, bmesh, json, math, os
 from mathutils import Vector, Matrix
 from . import geom, features
 
@@ -194,12 +194,16 @@ R_PY_DOWN = Matrix.Rotation(-math.pi / 2, 3, 'X')    # world +Y face onto the be
 FASTENER_SPECS = {
     # spec: (shank d, head d, head h)
     "M3_cap": (3.0, 5.5, 3.0), "M3_pan": (3.0, 6.0, 2.4), "M3_csk": (3.0, 6.0, 1.7),
-    "M3_selftap_pan": (3.0, 6.0, 2.4), "M2_pan": (2.0, 3.8, 1.3),
-    # ISO 4762 / ISO 7045 M2.5 (MotorGo board screws; the v2 A1 finisher looked this table up and found none)
-    "M2.5_cap": (2.5, 4.5, 2.5), "M2.5_pan": (2.5, 5.0, 1.75),
+    "M3_selftap_pan": (3.0, 6.0, 2.4),
+    # M2 and M2.5 (MotorGo board screws; the v2 A1 finisher looked this table up and found none) come from
+    # features.SIZES below: ISO 7045 pan heads are M2 4.0 x 1.6 (was 3.8 x 1.3 here) and M2.5 5.0 x 2.1 (was 1.75)
     # ISO 4017 hex head, 5.5 AF x 2.0, as a round head across flats (v2 A3 modelled a hex stud as M3_cap, V2A3-F6)
     "M3_hex": (3.0, 5.5, 2.0),
 }
+# every size and head in features.SIZES (M2_cap ... M5_csk), for features.fastener_joint
+for _sz, _s in features.SIZES.items():
+    for _hd in ("cap", "pan", "csk"):
+        FASTENER_SPECS.setdefault("%s_%s" % (_sz, _hd), (_s["d"],) + tuple(_s[_hd]))
 
 
 def fastener(name, at, into, length, spec="M3_cap", joint=None, host=None, step=None):
@@ -227,25 +231,25 @@ def fastener(name, at, into, length, spec="M3_cap", joint=None, host=None, step=
     return ob
 
 
-def nut(name, at, into, joint=None, af=None, h=None, step=None):
-    """M3 hex nut whose bearing face is at `at`, body extending along `into` (same frame as features.nut_trap).
-    Tagged fst_kind="nut", so cadcheck pairs it with the bolt on its axis and fails a bolt that stops short of it
-    (attempt 2: the M3 x 16 pinch bolts ended 0.36 mm before their nuts, FINDINGS A2-F3)."""
-    af = af or features.RULES["m3_nut_af"]
-    h = h or features.RULES["m3_nut_h"]
+def nut(name, at, into, joint=None, af=None, h=None, step=None, size="M3", label=None):
+    """Hex nut (`size`, default M3) whose bearing face is at `at`, body extending along `into` (same frame as
+    features.nut_trap). Tagged fst_kind="nut", so cadcheck pairs it with the bolt on its axis and fails a bolt that
+    stops short of it (attempt 2: the M3 x 16 pinch bolts ended 0.36 mm before their nuts, FINDINGS A2-F3)."""
+    S = features.size_rules(size)
+    af = af or S["nut_af"]
+    h = h or S["nut_h"]
     w = Vector(into).normalized()
     r = af / 2 / math.cos(math.pi / 6)
     ob = geom.cyl(name, (0, 0), r, 0, h, 'Z', n=6)
     geom.xform(ob, features._frame(at, w))
-    ob = part(ob, name, 'FST', "screw", joint, part="M3 hex nut", step=step or "")
+    ob = part(ob, name, 'FST', "screw", joint, part=label or "%s hex nut" % size, step=step or "")
     ob["fst_kind"] = "nut"
     PARTS[name].update(face=list(at), into=list(w), nut_h=h)
     return ob
 
 
-def cable(name, pts, r, color="cable_blk", joint=None, lead_len=None, step=None):
-    """Tube along a polyline. Stores path_len (and lead_len if given) so cadcheck can compare them
-    (attempt 1: the bullet joints of 80 mm leads landed at a moving bend, A1-F12)."""
+def tube_mesh(name, pts, r):
+    """Mesh of a round tube of radius r along a polyline (world coordinates), capped at both ends."""
     cu = bpy.data.curves.new(name, 'CURVE')
     cu.dimensions = '3D'
     sp = cu.splines.new('POLY')
@@ -261,14 +265,28 @@ def cable(name, pts, r, color="cable_blk", joint=None, lead_len=None, step=None)
     me = bpy.data.meshes.new_from_object(tmp.evaluated_get(dg))
     bpy.data.objects.remove(tmp)
     bpy.data.curves.remove(cu)
-    ob = bpy.data.objects.new(name, me)
+    # the bevel's cap rings are separate copies of the end rings: weld them so the tube is a closed solid (an open
+    # tube as a boolean cutter returned its own volume as "overlap": CAB_12v_ctrl 1331.9 mm3 in A1-A3)
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-4)
+    bm.to_mesh(me)
+    bm.free()
+    return me
+
+
+def cable(name, pts, r, color="cable_blk", joint=None, lead_len=None, step=None):
+    """Tube along a polyline. Stores path_len (and lead_len if given) so cadcheck can compare them
+    (attempt 1: the bullet joints of 80 mm leads landed at a moving bend, A1-F12)."""
+    ob = bpy.data.objects.new(name, tube_mesh(name, pts, r))
     geom.scratch().objects.link(ob)
     L = sum((Vector(pts[i + 1]) - Vector(pts[i])).length for i in range(len(pts) - 1))
     ob = part(ob, name, 'CAB', color, joint, part="cable route", step=step or "")
     ob["path_len"] = float(L)
     # both ends at home, world mm: cadcheck finds cables that meet with no connector there (V2A3-F3)
     ob["cab_ends"] = [float(c) for c in list(pts[0]) + list(pts[-1])]
-    # the whole polyline and tube radius, for cadcheck's kink and shared-run tests (V2A7-F2)
+    # the whole polyline and tube radius, for cadcheck's kink and shared-run tests (V2A7-F2); cadlib.route and
+    # `cad q route` read the centre line back from them
     ob["cab_path"] = [float(c) for p in pts for c in p]
     ob["cab_r"] = float(r)
     if lead_len:
@@ -296,13 +314,19 @@ def manifest():
         lo = [round(min(v[i] for v in bb), 2) for i in range(3)]
         hi = [round(max(v[i] for v in bb), 2) for i in range(3)]
         parts[name] = {**{k: v for k, v in info.items() if k not in ("path",)}, "bbox_world_home": [lo, hi]}
-    return {"units": "mm", "params": PARAMS, "joints": js, "parts": parts, "features": features.LOG}
+    return {"units": "mm", "params": PARAMS, "joints": js, "parts": parts, "features": features.LOG,
+            "fastener_summary": features.fastener_summary(PARTS)}
 
 
 def write_manifest(path):
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    m = manifest()
     with open(path, "w") as f:
-        json.dump(manifest(), f, indent=1, default=str)
+        json.dump(m, f, indent=1, default=str)
+    fs = m["fastener_summary"]
+    if fs["screws"]:   # screw variety in the build log: fewer spec x length kinds is fewer bags to buy
+        print("FASTENERS %d screws, %d distinct spec x length: %s" % (
+            fs["screws"], fs["distinct"], ", ".join("%s (%d)" % kv for kv in fs["by_spec_length"].items())))
     return path
 
 

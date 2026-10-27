@@ -2,9 +2,10 @@
 
     Blender -b --python build.py -- [--out /tmp/alex3d-demo] [--bug] [--render]
 
+Screws go in with features.fastener_joint, which measures each stack and picks the stock length.
 --bug plants the attempt-1 foot-guns on purpose: a reversed screw, a screw head under the moving
 arm, and a tilt range that hits the base; and one from attempt 2: a through-bolt that stops short of its
-nut (A2-F3). cadcheck must flag all four.
+nut (A2-F3, forced past fastener_joint with length=2, strict=False). cadcheck must flag all four.
 """
 import bpy, math, os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -32,64 +33,61 @@ A.new_scene(params={k: v for k, v in globals().items() if k.isupper()})
 A.joint("PIV_pan", (0, 0, BASE_H), 'Z', -90, 90, step=15)
 A.joint("PIV_tilt", (0, 0, TILT_Z), 'X', TILT_LO, TILT_HI, parent="PIV_pan", step=5)
 
+UP = (0, 0, 1)
+FJ = {}              # cutters per part from F.fastener_joint, applied with one csg per part
+
 # ---- base: hollow box with a lid deck, 4 self-tap bosses for the floor
 h = BASE / 2
-base = G.prism("base", G.rrect(-h, h, -h, h, 6), 0, BASE_H, 'Z')
+base = G.prism("PRT_base", G.rrect(-h, h, -h, h, 6), 0, BASE_H, 'Z')
 cav = G.prism("cav", G.rrect(-h + WALL, h - WALL, -h + WALL, h - WALL, 4), -1, BASE_H - WALL, 'Z')
 G.bevel(base, 0.8)
-bosses, cuts = [], []
+bosses = []
 for sx in (-1, 1):
     for sy in (-1, 1):
-        p = (sx * (h - 7), sy * (h - 7), 0.0)
-        bosses += F.boss((p[0], p[1], 12.0), (0, 0, 1), 7.0, 12.0)
-        cuts += F.screw_hole(p, (0, 0, 1), 10, kind="selftap")
+        bosses += F.boss((sx * (h - 7), sy * (h - 7), 12.0), UP, 7.0, 12.0)
 base = G.csg(base, sub=[cav])
 base = G.csg(base, add=bosses)
-cuts.append(G.cyl("pass", (0, 0), 4.0, BASE_H - WALL - 1, BASE_H + 1, 'Z'))   # cable pass-through
-SIDE_AT, SIDE_IN = (h, 20.0, 15.0), (-1, 0, 0)    # side-wall bolt with a nut inside the cavity
-cuts += F.screw_hole(SIDE_AT, SIDE_IN, 10, kind="clearance")
+for i, (sx, sy) in enumerate(((-1, -1), (-1, 1), (1, -1), (1, 1))):
+    F.fastener_joint("FST_floor_%d" % i, "M3", (sx * (h - 7), sy * (h - 7), 0.0), UP, [base], head="pan", step="close base", cuts=FJ)
+# side-wall bolt, nut on the wall's inside face; the bug build forces 2 mm so the tip stops 0.4 mm short of the nut
+F.fastener_joint("FST_side", "M3", (h, 20.0, 15.0), (-1, 0, 0), [base], style="nut", trap=False, step="close base",
+                 length=2 if BUG else None, strict=not BUG, cuts=FJ)
+cuts = FJ["PRT_base"] + [G.cyl("pass", (0, 0), 4.0, BASE_H - WALL - 1, BASE_H + 1, 'Z')]   # + cable pass-through
 base = G.csg(base, sub=cuts)
 # deck on the bed puts the floor bosses' ends 18 mm up in mid-air (cad printcheck: 4 islands at z 18), so: supports
 A.part(base, "PRT_base", 'PRT', "pla_a", stl="base", print_rot=A.R_FLIP, orient="deck on the bed; tree supports under the 4 floor bosses",
        supports="yes", infill=15)
-for i, (sx, sy) in enumerate(((-1, -1), (-1, 1), (1, -1), (1, 1))):
-    A.fastener("FST_floor_%d" % i, (sx * (h - 7), sy * (h - 7), 0.0), (0, 0, 1), 10, "M3_pan", host="PRT_base", step="close base")
-
-# bolt: wall 2.4 + nut 2.4 needs >= 4.8; the bug build uses 2 mm so the tip stops 0.4 mm short of the nut
-A.fastener("FST_side", SIDE_AT, SIDE_IN, 2 if BUG else 8, "M3_cap", step="close base")
-A.nut("FST_side_nut", (h - WALL, 20.0, 15.0), SIDE_IN, step="close base")
 
 # ---- pan disc on the deck (sits CLR above it), yoke arms on it
-pan = G.cyl("pan", (0, 0), PAN_R, BASE_H + CLR, BASE_H + CLR + PAN_T, 'Z')
+pan = G.cyl("PRT_pan", (0, 0), PAN_R, BASE_H + CLR, BASE_H + CLR + PAN_T, 'Z')
 G.bevel(pan, 0.8)
 SINK = 2.8           # arm screw heads sit in counterbores under the pan disc
 z_bear = BASE_H + CLR + SINK
-pcuts = [G.cyl("pass", (0, 0), 4.0, BASE_H - 5, BASE_H + CLR + PAN_T + 1, 'Z')]   # cable pass-through
-for s in (-1, 1):
-    pcuts += F.screw_hole((s * (ARM_GAP / 2 + ARM_T / 2), 0.0, z_bear), (0, 0, 1), 10, kind="clearance", head="pan", sink=SINK)
-pan = G.csg(pan, sub=pcuts)
-A.part(pan, "PRT_pan", 'PRT', "pla_b", joint="PIV_pan", stl="pan", print_rot=A.R_ID, orient="flat", supports="no", infill=25)
 z0 = BASE_H + CLR + PAN_T
-arms = []
+arms = {}
 for s in (-1, 1):
     x0 = s * ARM_GAP / 2
     x1 = x0 + s * ARM_T
     prof = G.hull2d([(-14, z0), (14, z0), (-14, z0 + 3), (14, z0 + 3)] + G.circle((0, TILT_Z), 9.0))
-    arm = G.prism("arm", prof, min(x0, x1), max(x0, x1), 'X')
-    hole = F.bore("ah", (0, TILT_Z), 3.0, min(x0, x1) - 1, max(x0, x1) + 1, 'X')
-    pil = F.screw_hole((x0 + s * ARM_T / 2, 0.0, z_bear), (0, 0, 1), 10, kind="selftap")
-    arm = G.csg(arm, sub=[hole] + pil)
-    nm = "PRT_arm_%s" % ("L" if s < 0 else "R")
-    A.part(arm, nm, 'PRT', "pla_b", joint="PIV_pan", stl="arm", print_rot=A.R_PX_DOWN if s < 0 else A.R_NX_DOWN,
-           orient="outer face on the bed", supports="no", infill=25)
-# arm screws: head under the pan disc, up through the disc into the arm foot
+    arms[s] = G.prism("PRT_arm_%s" % ("L" if s < 0 else "R"), prof, min(x0, x1), max(x0, x1), 'X')
+# arm screws: head in a counterbore under the pan disc, up through the disc into the arm foot
 for i, s in enumerate((-1, 1)):
-    x = s * (ARM_GAP / 2 + ARM_T / 2)
-    at = (x, 0.0, z_bear)  # head in the counterbore under the pan disc
-    if BUG and i == 0:
-        A.fastener("FST_arm_%d" % i, (x, 0.0, z0 + 8), (0, 0, -1), 10, "M3_pan", joint="PIV_pan", step="arms")  # reversed: head up inside the arm
+    at = (s * (ARM_GAP / 2 + ARM_T / 2), 0.0, z_bear)
+    if BUG and i == 0:   # planted A1-F10: hand-placed holes, screw reversed (head up inside the arm)
+        FJ.setdefault("PRT_pan", []).extend(F.screw_hole(at, UP, 10, kind="clearance", head="pan", sink=SINK))
+        FJ.setdefault(arms[s].name, []).extend(F.screw_hole(at, UP, 10, kind="selftap"))
+        A.fastener("FST_arm_%d" % i, (at[0], 0.0, z0 + 8), (0, 0, -1), 10, "M3_pan", joint="PIV_pan", step="arms")
     else:
-        A.fastener("FST_arm_%d" % i, at, (0, 0, 1), 10, "M3_pan", joint="PIV_pan", host="PRT_arm", step="arms")
+        F.fastener_joint("FST_arm_%d" % i, "M3", at, UP, [pan, arms[s]], head="pan", sink=SINK, joint="PIV_pan", step="arms", cuts=FJ)
+pcuts = [G.cyl("pass", (0, 0), 4.0, BASE_H - 5, BASE_H + CLR + PAN_T + 1, 'Z')]   # cable pass-through
+pan = G.csg(pan, sub=pcuts + FJ["PRT_pan"])
+A.part(pan, "PRT_pan", 'PRT', "pla_b", joint="PIV_pan", stl="pan", print_rot=A.R_ID, orient="flat", supports="no", infill=25)
+for s, arm in arms.items():
+    x0, x1 = s * ARM_GAP / 2, s * (ARM_GAP / 2 + ARM_T)
+    hole = F.bore("ah", (0, TILT_Z), 3.0, min(x0, x1) - 1, max(x0, x1) + 1, 'X')
+    arm = G.csg(arm, sub=[hole] + FJ[arm.name])
+    A.part(arm, arm.name, 'PRT', "pla_b", joint="PIV_pan", stl="arm", print_rot=A.R_PX_DOWN if s < 0 else A.R_NX_DOWN,
+           orient="outer face on the bed", supports="no", infill=25)
 
 # ---- tilting barrel between the arms, on a printed axle
 L = ARM_GAP - 2 * CLR

@@ -37,7 +37,7 @@ IDs point into `<repo>/docs/FINDINGS.md`. "Caught" means cadcheck or cadq flags 
 | A3-F1 | Feed reaches the tape at tilt 45 and at the 46° hard stop, but over a 21° / 20° slide with a 20° stall limit | slide `flattest_slide_deg` and `stall_margin_deg`; poses at the hard stop | yes (warn): 21.3° at 45, 20.3° at 46 (R3: 21.0, 19.9) |
 | A3-F2 | Leaf spring printed standing up, so 21-44 MPa of bending stress crosses layer bonds | `flexures` with the beam direction and stress | yes: 85° off the bed, 20.9 > 15 MPa |
 | A3-F3 | "Battery slides out without tools", but the stem runs through two adapter nuts from 10 mm out; the designer's checks tested the rest pose only | `slide_out`, which now includes fasteners | yes: blocked by `FST_adapter_nut_1`/`_3` at 5 mm |
-| A3-F5 | Hinge axle threads 2.5 mm into PLA | engagement < `min_engagement` | yes (warn): 2.0 mm |
+| A3-F5 | Hinge axle threads 2.5 mm into PLA | engagement < 2 d (`min_engagement_d`); `fastener_joint` raises | yes (warn): 2.5 mm |
 | A3-F7 | 8 mm of bundle seen through a notch at the bonnet foot (unchanged since A2; R2 missed it) | cable exposure, viewer-direction rule | yes (warn): 8 mm (R3: about 8) |
 | A3-F8 | Battery-bay window shows the adapter nuts | nut visibility | partial: both nuts warned; window size not checked |
 | V2A1-F1 | Nip adjuster tested at its home setting only; stalls at the open end, hood hits the body past the closed end | drop coverage warn ("holds PIV_hood at home"), then drop rows at both ends | yes: warn, then 3 fails with both ends |

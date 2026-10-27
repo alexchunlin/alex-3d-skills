@@ -38,7 +38,9 @@ adds `carry`, `fasteners.captive` and `flexures`.
      "pose_how": "tilt servo slid out +X first (post cover off); pod on the 45 deg prop"},   // how a held joint gets there
     {"step": "battery on", "objects": ["BUY_battery"], "powered": true}],   // drives can be commanded from here on
   "joint_drives": {"PIV_tilt": "BUY_servo_tilt", "PIV_hood": null},   // what holds a joint (default: BUY_*servo*_<joint>)
-  "fasteners": {"driver_r": 3.0, "hand_r": 14.0, "max_reach": 60, "max_reach_ext": 150, "min_engagement": 4.0,
+  "fasteners": {"driver_r": 3.0, "hand_r": 14.0, "max_reach": 60, "max_reach_ext": 150,
+                "min_engagement_d": 2.0, "tapped_engagement_d": 1.5,   // thread >= 2 d in PLA, 1.5 d in a tapped BUY part
+                // "min_engagement": 4.0 (mm) replaces both, as in configs before 2026-10; features.fastener_joint reads it too
                 "lkey_short": 18, "lkey_insert": 2.5, "lkey_long": 56, "lkey_swing_deg": 60,   // 2.5 mm hex key
                 "max_standoff": 2.0, "max_protrusion": 3.0,
                 "captive": {"FST_nip_stud": "hex head in a hex pocket; the thumbwheel nut turns"}},   // never driven

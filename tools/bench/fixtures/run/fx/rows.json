@@ -1,0 +1,4 @@
+{"summary": {
+ "fail_list": ["slide: PRT_lid slide-out blocked by ['PRT_m'] at 4 mm"],
+ "warn_list": ["stacks: stack one: worst case 0.5 mm > 0.3 (RSS 0.2)"],
+ "accepted_warns": {}}}

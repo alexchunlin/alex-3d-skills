@@ -1,0 +1,1 @@
+# Per-feature verify scripts, sourced by tools/verify_all.sh. Each calls ok "..." or bad "...".

@@ -1,14 +1,19 @@
 #!/bin/sh
-# Re-prove every tool in this repo. Writes only under /tmp/alex3d-verify. About 25 minutes, run at nice 10.
+# Re-prove every tool in this repo. Writes only under /tmp/alex3d-verify/run-<pid> (latest: /tmp/alex3d-verify/latest). About 25 minutes, run at nice 10.
 # The attempt regressions use examples/mm-launcher-{a1,a2,a3,v2a1,...,v2a7}/*.blend.gz (the blends the reviewers saw).
 #   sh tools/verify_all.sh            # HW defaults to the mm-launcher project (read-only; copied first)
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CAD="$ROOT/skills/print-cad-blender/scripts/cad"
 HW="${HW:-$HOME/code-stuff/mmlauncher/mm-launcher/mm-launch-hw}"
-V=/tmp/alex3d-verify
+# one directory per run, so parallel runs (feature worktrees) can't wipe each other; /tmp/alex3d-verify/latest -> it
+V="/tmp/alex3d-verify/run-$$"
 BL="${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}"
-rm -rf "$V"; mkdir -p "$V"
+rm -rf "$V"; mkdir -p "$V"; ln -sfn "$V" /tmp/alex3d-verify/latest
+# which commit made these reports (tools/bench/replay.py --from-verify reads it; HEAD at scoring time may be another)
+printf '{"commit": "%s", "skills_tree": "%s", "dirty": %s, "branch": "%s", "when": "%s"}\n' "$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)" \
+  "$(git -C "$ROOT" rev-parse HEAD:skills 2>/dev/null)" "$([ -n "$(git -C "$ROOT" status --porcelain -- skills 2>/dev/null)" ] && echo true || echo false)" \
+  "$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null)" "$(date +%Y-%m-%dT%H:%M:%S)" > "$V/meta.json"
 # The attempt regressions below count other checks' rows exactly; the parts layer check (printcheck) has its own
 # section (4m, 4n) and runs with CAD_LAYER_CHECK=1 there and on the demo and template, which must print as declared.
 export CAD_LAYER_CHECK=0
@@ -88,7 +93,7 @@ if [ -f "$A3" ]; then
              "feed_spout_to_tape at tilt=45: 29/29 rays reach the target over a slide of only 21.3 deg" \
              "feed_spout_to_tape at tilt=46: 29/29 rays reach the target over a slide of only 20.3 deg" \
              "CAB_launcher_bundle_0: about 8 mm of cable is visible" "FST_adapter_nut_1 is visible from outside" \
-             "FST_hinge: only 2.0 mm of thread"; do
+             "FST_hinge: only 2.5 mm of thread"; do
     grep -qF "$pat" "$V/a3/cadcheck.json" && ok "A3 reproduces: $pat" || bad "A3 missing: $pat"
   done
   python3 -I -c "
@@ -417,12 +422,13 @@ $CAD check "$V/gate/gate.blend" "$G8/checks.json" "$V/gate/cadcheck.json" >/dev/
 python3 -I -c "
 import json,sys; d=json.load(open(sys.argv[1])); s=d['summary']; c=d['checks']
 sl={r['object']: r for r in c['slide']['rows']}
-ok = (s['fails'] == 0 and s['warns'] == 1 and 'collide only 2.5 deg (1 mm on slides) past the joint limit (gate=21)' in s['warn_list'][0]
+ok = (s['fails'] == 0 and s['warns'] == 2 and 'collide only 2.5 deg (1 mm on slides) past the joint limit (gate=21)' in s['warn_list'][0]
+      and 'FST_stop: only 5.0 mm of thread in PRT_housing (needs 6.0: 2 d' in s['warn_list'][1]
       and sl['gate opens over the detent']['flexed']['PRT_detent']['max_mm3'] == 3.2 and sl['gate stops at full open']['blocked_at_mm'] == 20.5
       and c['parts']['rows'][0]['max_bridge_span_mm'] == 5.0 and c['cables']['chains'][0]['route_mm'] < 80 and not c['service']['findings']
       and d['params']['source'] == 'scene' and any(g['joints'] == ['PIV_gate'] for g in c['interference']['groups']))
 sys.exit(0 if ok else 1)" "$V/gate/cadcheck.json" \
-  && ok "slide gate clean: prismatic sweep, detent flex 3.2 mm3, stop at 20.5, bridge 5.0 (bbox 31.8), chain, service" || bad "slide gate clean"
+  && ok "slide gate clean: prismatic sweep, detent flex 3.2 mm3, stop at 20.5, bridge 5.0 (bbox 31.8), chain, service; M3 x 10 stop screw under 2 d" || bad "slide gate clean"
 $CAD check "$V/gate-bug/gate.blend" "$G8/checks.json" "$V/gate-bug/cadcheck.json" --overlay "$G8/overlay_bug.json" >/dev/null
 for pat in "expression '=NOT_A_PARAM + 1' failed" "PRT_stop x PRT_gate collide on different bodies" "wanted ['PRT_stop'] at [19.5, 20.5] mm" \
            "detent bound too tight slide-out blocked by ['PRT_detent']" "runs 62 mm through CAB_a + CAB_b, but its lead is 50 mm" \
@@ -451,6 +457,11 @@ python3 -I "$ROOT/tools/test_workflow_template.py" >/dev/null && ok "workflow te
 # 7 transcript extractor on any available transcript
 T=$(ls "$HOME"/.claude/projects/-Users-alxchunlin-code-stuff-mmlauncher-mm-launcher/*/subagents/workflows/*/agent-*.jsonl 2>/dev/null | head -1)
 if [ -n "$T" ]; then python3 -I "$ROOT/tools/transcript/cc_transcript.py" summary "$T" | grep -q "^wall" && ok "transcript summary" || bad "transcript summary"; fi
+
+# 8 per-feature checks: each tools/verify.d/*.sh is sourced here and calls ok/bad (keeps feature branches from
+# colliding in this file). Each may use $ROOT, $CAD, $V, $BL and $HW.
+mkdir -p "$ROOT/tools/verify.d"
+for f in "$ROOT"/tools/verify.d/*.sh; do [ -f "$f" ] && . "$f"; done
 
 echo "verify_all: $pass passed, $fail failed"
 [ $fail = 0 ]
