@@ -576,23 +576,24 @@ def orientation_candidates(ob):
 
 
 def best_orientation(ob, candidates=None, supports="no", cfg=None, min_bed_mm2=50.0):
-    """Rank print orientations of a part with printcheck's layer analysis (scripts/printcheck.py, the function
-    `cad printcheck` and cadcheck's layer check run): fewest fails, then fewest warns, then the most bed contact.
+    """Rank print orientations of a part with printcheck (scripts/printcheck.py, the function `cad printcheck` and
+    cadcheck's layer check run: layers plus the sloped-overhang face pass): fewest fails, then fewest warns, then the
+    least flagged sloped-overhang area, then the most bed contact.
     Choosing by overhang area alone balanced two of the three review connectors on a point, and both failed printcheck
     with a mid-air island; standing on a sleeve rim passed (PR #4 review).
 
-    A candidate with less than min_bed_mm2 on the bed ranks after every one that stands (stands: False). printcheck
-    compares each layer with the one below only, so it passes a part balanced on a point: the 6-way node on its
-    (1, 1, 1) corner has 0.4 mm2 on the bed, 3,984 mm2 of faces steeper than 45 deg, and 0 printcheck fails.
+    A candidate with less than min_bed_mm2 on the bed ranks after every one that stands (stands: False): the 6-way node
+    on its (1, 1, 1) corner has 0.4 mm2 on the bed, and the layer check alone gave it 0 fails.
 
     candidates: {label: world down vector (the side that goes on the bed) or a 3x3 print rotation}. Default
                 orientation_candidates(ob): each tube rim and clip face recorded by grow(), then the 6 world axes.
                 Directions within 1 deg of one already checked are dropped.
     cfg:        printcheck config overrides (cadcheck passes checks.json "printcheck"; default overhang 45 deg).
     Returns a list, best first, of {label, down, print_rot (3 rows, for asm.part), stands, fails, warns,
-    needs_support, bed_mm2, overhang_mm2, findings (first 3), t_s}. overhang_mm2 (faces steeper than 45 deg from vertical, off the bed)
-    is shown, not ranked: printcheck compares each layer with the one below only, so it can pass a gradual overhang
-    that a slicer would support. About 5-12 s per candidate for a 40k-triangle part, cached by triangles."""
+    needs_support, bed_mm2, overhang_mm2, face_overhang_mm2, max_face_overhang_mm, findings (first 3), t_s}.
+    overhang_mm2 (all faces steeper than 45 deg from vertical, off the bed, summed) is shown, not ranked;
+    face_overhang_mm2 is the projected area of the face regions printcheck flags. About 5-12 s per candidate for a
+    40k-triangle part, cached by triangles."""
     PC = _printcheck()
     cands = list((orientation_candidates(ob) if candidates is None else candidates).items())
     me = ob.data
@@ -630,9 +631,10 @@ def best_orientation(ob, candidates=None, supports="no", cfg=None, min_bed_mm2=5
         out.append({"label": label, "down": [round(x, 4) for x in down], "print_rot": [[float(x) for x in row] for row in R],
                     "stands": bool(A[bed].sum() >= min_bed_mm2), "fails": sum(x["status"] == "fail" for x in f), "warns": sum(x["status"] == "warn" for x in f),
                     "needs_support": r["needs_support"], "bed_mm2": round(float(A[bed].sum()), 1),
-                    "overhang_mm2": round(float(A[over].sum()), 1), "findings": [x["msg"] for x in f[:3]],
+                    "overhang_mm2": round(float(A[over].sum()), 1), "face_overhang_mm2": r["face_overhang_mm2"],
+                    "max_face_overhang_mm": r["max_face_overhang_mm"], "findings": [x["msg"] for x in f[:3]],
                     "t_s": round(time.time() - t0, 1)})
-    out.sort(key=lambda o: (not o["stands"], o["fails"], o["warns"], -o["bed_mm2"]))
+    out.sort(key=lambda o: (not o["stands"], o["fails"], o["warns"], o["face_overhang_mm2"], -o["bed_mm2"]))
     return out
 
 

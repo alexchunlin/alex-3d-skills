@@ -13,6 +13,11 @@ Commands
   render OUT.png CAMX,CAMY,CAMZ TX,TY,TZ [--ortho S] [--lens L]
   printcheck PART                     layer support check of one printed part (its exported STL if on disk, else the
                                       model in print orientation): one line per bridge / cantilever / island region
+                                      and per flagged sloped-overhang face region
+  overhangs PART [--section Z,..|auto] [--cell C]
+                                      where the overhangs are: every layer-check region that is not ok and every
+                                      face region (area, angle, z range, print and world centre); --section prints
+                                      layers as text (CADQ| lines; auto = where each flagged region starts)
   route CAB_a[,CAB_b] [--via 'X,Y,Z[@DX,DY,DZ[:LEN]][>PIV_x];...'] [--clearance C] [--cell H] [--bend R]
         [--from X,Y,Z --to X,Y,Z] [--save OUT.blend] [--json OUT.json]
                                       re-route existing cables (cadlib.route) between their own endpoints and
@@ -315,17 +320,29 @@ try:
         o = obj(POS[1])
         res, src, note = C.layer_check(o, C.stl_dirs())
         emit(part=o.name, source=src, supports=o.get("supports"), needs_support=res["needs_support"], layers=res["layers"],
-             max_overhang_mm=res["max_overhang_mm"], max_bridge_mm=res["max_bridge_mm"], note=note,
-             findings=[f["status"] + ": " + f["msg"] for f in res["findings"]])
-        for g in res["regions"]:
-            if g["status"] != "ok" or "--all" in A:
+             max_overhang_mm=res["max_overhang_mm"], max_bridge_mm=res["max_bridge_mm"], max_face_overhang_mm=res["max_face_overhang_mm"],
+             stl_nonmanifold_edges=res["stl_nonmanifold_edges"], note=note, findings=[f["status"] + ": " + f["msg"] for f in res["findings"]])
+        for g in res["regions"] + [dict(g, kind="sloped " + g["kind"]) for g in res["faces"]]:
+            if g["status"] not in ("ok", "layer") or "--all" in A:
                 emit(**{k: v for k, v in g.items() if not k.startswith("_")})
+    elif cmd == "overhangs":
+        o = obj(POS[1])
+        tris, src, note, PC, pc, wm = C.layer_tris(o, C.stl_dirs())
+        res = PC.analyze(tris, pc, supports=o.get("supports") or "no", print_to_world=wm, keep_pixels=True)
+        emit(part=o.name, source=src, supports=o.get("supports"), needs_support=res["needs_support"], note=note,
+             findings=[f["status"] + ": " + f["msg"] for f in res["findings"]])
+        sec = FLAGS.get("section")
+        lines = PC.where_lines(o.name, res)
+        for z in PC._section_zs(res, sec if isinstance(sec, str) else None):
+            lines += PC.section_lines(tris, z, res, pc, cell=float(FLAGS["cell"]) if "cell" in FLAGS else None)
+        for line in lines:
+            print("CADQ| " + line)
     elif cmd == "route":
         route_cmd()
     else:
         usage_of(cmd)
 except (IndexError, ValueError) as e:
-    if cmd not in ("list", "dist", "sweep", "ray", "inside", "section", "render", "printcheck", "route"):
+    if cmd not in ("list", "dist", "sweep", "ray", "inside", "section", "render", "printcheck", "overhangs", "route"):
         raise
     print("cadq: %s: %s" % (cmd, e))
     usage_of(cmd)

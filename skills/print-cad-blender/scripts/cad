@@ -7,7 +7,8 @@
 #   cad rows   [cadcheck.json|manifest.json|checks.json] [REGEX] [--check a,b] [--findings]   one line per row; grep, don't json.load
 #   cad bom    BOM_AND_ASSEMBLY.md manifest.json      BOM fastener table vs the model: size, length, head, count, stock
 #   cad sheet  stl_dir out.png                       STL contact sheet in print orientation
-#   cad printcheck stl_dir|part.stl [--manifest m.json] [--out j] [--render DIR]   layer support check on the exported STLs
+#   cad printcheck stl_dir|part.stl [--manifest m.json] [--out j] [--render DIR] [--where] [--section Z,..|auto]
+#                                                    support check on the exported STLs (layers, sloped faces); --where lists regions
 #   cad slice  stl_dir|part.stl | --detect           real slicer, sandboxed and crash-guarded: support needed, time, filament
 # BLENDER overrides the Blender binary. Runs at nice 10 so a parallel CAD loop keeps its CPU.
 set -e
