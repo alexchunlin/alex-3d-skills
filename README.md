@@ -7,7 +7,7 @@ mm-launcher design/review loop, and the evidence behind every rule is in `docs/F
 |---|---|
 | `skills/print-cad-blender/` | Skill for designers: conventions, workflow, `cadlib` (geometry, print features, assembly, export, renders), `cadcheck` (assembly-wide checks with joint sweeps, fastener access, drop tests), `cadq` (one-shot measurements), the `cad` wrapper, and a project template |
 | `skills/cad-design-review/` | Skill for reviewers: check-first protocol, scoring anchors, evidence checklist |
-| `templates/cad-loop.workflow.js` | Design/review loop for the Workflow tool: plan, then one build agent per subsystem, then finish, then review. Resumable. |
+| `templates/cad-loop.workflow.js` | Design/review loop for the Workflow tool: plan, then one build agent per subsystem, then finish, then review. Resumable. Models per role in `CONFIG.models` (default: builders on `sonnet`, the rest on the session model). |
 | `components/` | Purchased-part data with sources (`components.json`) and Blender placeholders |
 | `tools/transcript/cc_transcript.py` | Digest Claude Code agent transcripts: time split, long generations, tokens, cache misses, Blender runs, images |
 | `tools/verify_all.sh` | Re-proves everything (about 28 minutes, writes only under `/tmp/alex3d-verify`). `--changed [BASE]` runs only the sections and `tools/verify.d` scripts the change since `merge-base(BASE, HEAD)` affects (BASE defaults to `next`; `--dry-run` prints the plan; a selected unit that runs no check fails the run); promoting `next` to `main` runs it all |
@@ -30,7 +30,9 @@ ln -s ~/code-stuff/alex-3d-skills/skills/cad-design-review ~/.claude/skills/cad-
 Optionally, put the wrapper on PATH: `ln -s ~/code-stuff/alex-3d-skills/skills/print-cad-blender/scripts/cad /usr/local/bin/cad`.
 
 To use the loop, copy `templates/cad-loop.workflow.js` and set `CONFIG.hw` and `CONFIG.subsystems` (or pass them as
-Workflow `args`). To resume after a crash, pass `start_attempt` and `history`, or use `resumeFromRunId`.
+Workflow `args`). `models: {plan, build, finish, review}` picks each role's model (`'sonnet'`, `'opus'`, `'haiku'`; `null` =
+the session's model); the default runs builders on Sonnet. To resume after a crash, pass `start_attempt` and `history`,
+or use `resumeFromRunId`.
 
 Project template: copy `skills/print-cad-blender/templates/project/` to `<project>/blender/`. The build finds cadlib through
 `CAD_SKILL` (default `~/code-stuff/alex-3d-skills/skills/print-cad-blender`).
