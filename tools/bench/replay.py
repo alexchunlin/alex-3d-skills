@@ -499,6 +499,8 @@ def score(name: str, spec: dict, labels: list, known: list, runs: dict, pf: list
             "pf_fail" + sfx: sum(1 for v in pfs if v == "fail"), "pf_fw" + sfx: sum(1 for v in pfs if v in CAUGHT_FW),
         })
         row.update(_rates(row, sfx, n, W, len(tc)))
+    # printed and seen to fail (print_evidence result fail): compare treats anything short of a fail as worse
+    row["pf_must_fail"] = [f["id"] for f in pf if any(e.get("result") == "fail" for e in f.get("print_evidence") or [])]
     rts = [rr["runtime_s"] for rr in runs.values() if rr.get("runtime_s") is not None]
     row["runtime_s"] = round(sum(rts), 1) if rts else None   # information only
     row["runtime_by_run"] = {k: v.get("runtime_s") for k, v in runs.items()}
@@ -631,7 +633,13 @@ def compare(results: Path, base: str, new: str, out=sys.stdout) -> int:
             if (y - x) * sign < 0:
                 worse.append("%s %s %s -> %s" % (a, k, x, y))
         print("| %s | %s |" % (a, " | ".join(cells)), file=out)
-    print("\nworse: " + ("; ".join(worse) if worse else "nothing (recall not down, false fails and noise not up)"), file=out)
+    for a in common:
+        for fid in B[a].get("pf_must_fail", []):
+            st = (B[a].get("pf", {}).get(fid) or {}).get("designer")
+            if st != "fail":
+                worse.append("%s %s: a real print failed there (print_evidence), the designer run now says %s" % (a, fid, st))
+    print("\nworse: " + ("; ".join(worse) if worse else "nothing (recall not down, false fails and noise not up, "
+                                                       "print-confirmed failures still fail)"), file=out)
     return 1 if worse else 0
 
 
