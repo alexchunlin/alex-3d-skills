@@ -15,6 +15,9 @@ import os
 import subprocess
 import sys
 
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS", "DRAWTOOLS_THREADS"):
+    os.environ.setdefault(_v, "4")  # before numpy / build123d load; subprocesses inherit it
+
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DT = os.path.join(ROOT, "tools", "drawing")
 sys.path.insert(0, DT)

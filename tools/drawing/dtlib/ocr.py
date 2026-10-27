@@ -18,12 +18,20 @@ VERSION = 2  # bump when read() changes; part of the OCR cache key
 _CJK = re.compile(r"[\u3000-\u9fff\uac00-\ud7af]")  # the PP-OCR model is Chinese+English; these sheets are English
 
 
+def threads():
+    return max(1, int(os.environ.get("DRAWTOOLS_THREADS", "4")))
+
+
 def engine():
     global _ENGINE
     if _ENGINE is None:
-        os.environ.setdefault("OMP_NUM_THREADS", "4")
+        n = threads()
+        cv2.setNumThreads(n)
         from rapidocr_onnxruntime import RapidOCR
-        _ENGINE = RapidOCR(max_side_len=4000, min_height=30, width_height_ratio=-1)
+        # ONNX Runtime uses every core by default; cap it (DRAWTOOLS_THREADS, default 4) so pilot agents running
+        # side by side don't oversubscribe the machine
+        _ENGINE = RapidOCR(max_side_len=4000, min_height=30, width_height_ratio=-1,
+                           intra_op_num_threads=n, inter_op_num_threads=1)
     return _ENGINE
 
 

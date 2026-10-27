@@ -7,7 +7,7 @@ DTPY="${DRAWTOOLS_PY:-/tmp/drawtools-venv/bin/python}"
 if [ ! -x "$DTPY" ]; then
   bad "drawing tools: $DTPY missing (sh tools/drawing/setup_venv.sh)"
 else
-  DRAWTOOLS_CACHE="$DTV/cache" nice -n 10 "$DTPY" -I "$ROOT/tools/verify.d/drawing_tools_cases.py" "$DTV" \
+  OMP_NUM_THREADS=4 DRAWTOOLS_THREADS=4 DRAWTOOLS_CACHE="$DTV/cache" nice -n 10 "$DTPY" -I "$ROOT/tools/verify.d/drawing_tools_cases.py" "$DTV" \
     > "$DTV/cases.jsonl" 2> "$DTV/cases.err"
   dt() {   # dt "message" 'python condition on c (dict: case name -> row)'
     python3 -I -c "

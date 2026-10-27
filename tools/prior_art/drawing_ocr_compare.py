@@ -16,6 +16,9 @@ get the Ø/° misread fixes of dtlib.textparse.norm. eDOCr2 needs Tesseract for 
 and for tables; Tesseract isn't installed, so the filter is stubbed to "yes" (its best case for dimensions).
 """
 import json, os, sys, time
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS", "TF_NUM_INTRAOP_THREADS"):
+    os.environ.setdefault(_v, "4")  # torch (EasyOCR) and TensorFlow (eDOCr2) read these at import
+os.environ.setdefault("TF_NUM_INTEROP_THREADS", "1")
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "drawing"))
 from dtlib import sheet  # numpy + PIL only
@@ -42,7 +45,8 @@ def run_drawtool(path):
 
 
 def run_easyocr(path):
-    import easyocr
+    import easyocr, torch
+    torch.set_num_threads(4)
     r = run_easyocr.r = getattr(run_easyocr, "r", None) or easyocr.Reader(["en"], gpu=False, verbose=False)
     return [{"t": t, "b": box4(q)} for q, t, s in r.readtext(path)]
 

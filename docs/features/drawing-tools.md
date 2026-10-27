@@ -34,7 +34,8 @@ One CLI, `tools/drawing/draw` (a sh wrapper running `drawtool.py` in `/tmp/drawt
 
 Code: `tools/drawing/dtlib/` holds `sheet` (load, faint-ink normalisation, the CADGenBench sheet template mask),
 `ocr`, `textparse`, `geom` (snap, circle fit, dimension lines, auto-scale), `holes`, `overlay`, `views` and `cache`.
-`tools/drawing/eval_dev.py` measures accuracy on the dev drawings and refuses the test set.
+`tools/drawing/eval_dev.py` measures accuracy on the dev drawings and refuses the test set. Thread pools (ONNX
+Runtime, OpenCV, BLAS/OpenMP) are capped at 4 per process (`DRAWTOOLS_THREADS`), because pilot agents run side by side.
 The prompt addendum for pilot agents is `tools/cgb/prompt_drawing_tools.md`.
 
 How the pieces work:
