@@ -215,7 +215,7 @@ CASES = [   # the selector test always runs under --changed (review); it is adde
     ("a .md inside skills/*/scripts", [S + "NOTES.md"], "ALL"),
     ("cadslice.py", [S + "cadslice.py"], {"4m-slice"}),
     ("slicers/known.json", ["skills/print-cad-blender/slicers/known.json"], {"4m-slice"}),
-    ("cadrows.py + cadbom.py", [S + "cadrows.py", S + "cadbom.py"], {"4f"}),
+    ("cadrows.py + cadbom.py", [S + "cadrows.py", S + "cadbom.py"], {"4f", "calcs_materials.sh"}),   # it asserts cad rows on calcs
     ("template params.py", ["skills/print-cad-blender/templates/project/params.py"], {"3", "3b", "3c", "design_principles.sh"}),
     ("FINDINGS.md (design_principles reads it)", ["docs/FINDINGS.md"], {"design_principles.sh"}),
     ("components/ (review: blend-bracket imports placeholders)", ["components/placeholders.py"], {"5", "blend_bracket.sh"}),
