@@ -19,7 +19,7 @@ Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X
 | `prism(name, poly, w0, w1, axis)`, `loft(name, p0, p1, w0, w1, axis)` | extrusions; loft rings need equal point counts |
 | `cyl(name, c, r, w0, w1, axis)`, `cone(name, c, r0, r1, w0, w1, axis)`, `box(name, x0, x1, y0, y1, z0, z1)` | |
 | `revolve(name, [(r, z), ...], center, n=96, a0=0, a1=None)` | about Z; partial when `a1` is given |
-| `csg(base, add=[], sub=[], inter=[])` | Manifold solver, applies the result and deletes the tools; raises `CSGError` if the result isn't a closed solid |
+| `csg(base, add=[], sub=[], inter=[])` | Manifold solver, applies the result and deletes the tools; new faces take the base's material; raises `CSGError` if the result isn't a closed solid |
 | `bevel(ob, w, seg=1, angle=40)` | edge break; apply before booleans that cut fine detail |
 | `xform(ob, M4)`, `frame(origin, u, v, w)` | bake a transform; build a placement matrix |
 | `join(name, obs)` | merge shells without booleans (purchased placeholders only) |
