@@ -1,10 +1,10 @@
 """cadcfg (checks.json hygiene) without Blender: python3 -I cadcfg_cases.py ROOT [REPORT ...]. Prints PASS/FAIL lines.
 
 The schema and the doc agree both ways; the push-assist cases (PA-A4-T6 typo'd keys, PA-A4-T10 substring accepts and
---only stale accepts) and their negative controls; and, on verify's own v2 designer reports when given, the suggested
-structured accepts cover exactly what the old substring accepts covered.
+--only stale accepts) and their negative controls; and, on the v2 designer reports given (a missing one is a FAIL), the
+suggested structured accepts cover exactly what the old substring accepts covered.
 """
-import json, os, re, sys
+import glob, json, os, re, sys
 
 ROOT = sys.argv[1]
 S = os.path.join(ROOT, "skills/print-cad-blender/scripts")
@@ -90,10 +90,12 @@ want("typo'd keys at top level, in rows, sub-rows, dict sections and joints warn
 m = C.unknown_msgs("checks.json", typo, DEF, R, N)
 want("the message names file, row and suggestion",
      "checks.json slide_out[0] (gate stop): unknown key 'blockd_by', ignored (did you mean 'blocked_by'?)" in m, m[:3])
-# negative control: every config in the repo (the 10 archived designs, overlays, review rows, examples, template)
-cfgs = sorted(os.path.join(dp, f) for dp, _, fs in os.walk(os.path.join(ROOT, "examples")) for f in fs
-              if f.endswith(".json") and not re.search(r"cadcheck|manifest", f)) + \
-    [os.path.join(S, "../templates/project/checks.json")]
+# negative control: every config in the repo (the 10 archived designs, overlays, review rows, examples, template). Only
+# the config names, as literal globs, so the selector's reach check matches them to cadcfg.sh's watch (not all of examples/)
+cfgs = sorted({p for g in (os.path.join(ROOT, "examples", "**", "checks*.json"), os.path.join(ROOT, "examples", "**", "overlay*.json"),
+                           os.path.join(ROOT, "examples", "**", "review_rows*.json"),
+                           os.path.join(ROOT, "skills", "print-cad-blender", "templates", "**", "checks*.json"))
+               for p in glob.glob(g, recursive=True)})
 noisy = {os.path.relpath(p, ROOT): unknown(json.load(open(p))) for p in cfgs}
 noisy = {k: v for k, v in noisy.items() if v}
 want("no unknown key in the repo's %d configs (archived designs, overlays, examples, template)" % len(cfgs), not noisy, noisy)
@@ -180,9 +182,10 @@ nt = {"drop_tests": [{"name": "d", "emit": {}, "expect": {"angle": {"center": "P
 got = {(k, c) for _, k, c in unknown(nt)}
 want("typo'd keys inside expect.angle ('rnage') and ray.sweep ('form') warn", got == {("rnage", "range"), ("form", "from")}, got)
 
-# 5 on verify's own designer reports: the suggestions accept exactly the warns the old accepts did
+# 5 on the v2a3/v2a7 designer reports (4f's and 4k's, or cadcfg.sh's own): the suggestions accept exactly the warns the old accepts did
 for rep, cfg in zip(sys.argv[2::2], sys.argv[3::2]):
-    if not (os.path.exists(rep) and os.path.exists(cfg)):
+    if not (os.path.exists(rep) and os.path.exists(cfg)):   # cadcfg.sh makes the report when no section did
+        want("%s: the designer report and its config exist" % os.path.basename(os.path.dirname(rep)), False, "%s, %s" % (rep, cfg))
         continue
     s = json.load(open(rep))["summary"]
     warns = list(s["warn_list"]) + list(s["accepted_warns"])

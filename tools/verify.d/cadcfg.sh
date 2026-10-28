@@ -1,12 +1,24 @@
-# checks.json hygiene (sourced by tools/verify_all.sh; uses $ROOT $V $BL, calls ok/bad). Writes under $V/cfg.
+# checks.json hygiene (sourced by tools/verify_all.sh; uses $ROOT $CAD $V $BL, calls ok/bad). Writes under $V/cfg.
 # Push-assist loop (docs/evidence-push-assist/loop-log.txt): typo'd keys ignored (PA-A4-T6), --only checks with no rows read as
 # PASS (PA-A2-T11), substring accepts and no stale report under --only (PA-A4-T10), check_stacks died on a failed
 # =expr (PA-A5-T26). The schema/doc agreement and accept cases run in plain python (cadcfg_cases.py); the rest in
-# cadcheck on an empty scene (a few seconds each), and the suggestions are checked on verify's own v2 reports.
-# watch: @core tools/verify.d/cadcfg_cases.py skills/print-cad-blender/reference/checks-config.md examples/mm-launcher-v2a3/** examples/mm-launcher-v2a7/** examples/demo-turret/**
-CF="$V/cfg"; mkdir -p "$CF"
+# cadcheck on an empty scene or a four-object one built here (a few seconds each), and the suggestions are checked on
+# the v2a3 and v2a7 designer reports. Self-contained, so --changed can pick it without sections 1, 4f or 4k.
+# watch: @core tools/verify.d/cadcfg_cases.py skills/print-cad-blender/reference/checks-config.md
+# watch: examples/**/checks*.json examples/**/overlay*.json examples/**/review_rows*.json skills/print-cad-blender/templates/**/checks*.json
+# watch: examples/mm-launcher-v2a3/mm_launcher_v2a3.blend.gz examples/mm-launcher-v2a3/manifest.json
+# watch: examples/mm-launcher-v2a7/mm_launcher_v2a7.blend.gz examples/mm-launcher-v2a7/manifest.json
+CF="$V/cfg"; mkdir -p "$CF/v2a3" "$CF/v2a7"
+# The designer reports: 4f and 4k write them with this same command and verify_all runs its sections before verify.d,
+# so a full run (or a --changed one that picked 4f and 4k) copies theirs. Otherwise (--changed on this script,
+# cadcfg_cases.py, the doc or another example's config) they run here side by side (2.5 and 3 min alone, 5 min together).
+{ cp "$V/v2a3/cadcheck.json" "$CF/v2a3/" 2>/dev/null || { gunzip -c "$ROOT/examples/mm-launcher-v2a3/mm_launcher_v2a3.blend.gz" > "$CF/v2a3/model.blend" && cp "$ROOT/examples/mm-launcher-v2a3/manifest.json" "$CF/v2a3/" && $CAD check "$CF/v2a3/model.blend" "$ROOT/examples/mm-launcher-v2a3/checks.json" "$CF/v2a3/cadcheck.json" > "$CF/v2a3/check.log" 2>&1; }; } &
+P3=$!
+{ cp "$V/v2a7/cadcheck.json" "$CF/v2a7/" 2>/dev/null || { gunzip -c "$ROOT/examples/mm-launcher-v2a7/mm_launcher_v2a7.blend.gz" > "$CF/v2a7/model.blend" && cp "$ROOT/examples/mm-launcher-v2a7/manifest.json" "$CF/v2a7/" && $CAD check "$CF/v2a7/model.blend" "$ROOT/examples/mm-launcher-v2a7/checks.json" "$CF/v2a7/cadcheck.json" > "$CF/v2a7/check.log" 2>&1; }; } &
+P7=$!
+wait $P3 $P7
 python3 -I "$ROOT/tools/verify.d/cadcfg_cases.py" "$ROOT" \
-  "$V/v2a3/cadcheck.json" "$ROOT/examples/mm-launcher-v2a3/checks.json" "$V/v2a7/cadcheck.json" "$ROOT/examples/mm-launcher-v2a7/checks.json" \
+  "$CF/v2a3/cadcheck.json" "$ROOT/examples/mm-launcher-v2a3/checks.json" "$CF/v2a7/cadcheck.json" "$ROOT/examples/mm-launcher-v2a7/checks.json" \
   > "$CF/cases.txt" 2>&1 || echo "FAIL cadcfg: cases crashed (see $CF/cases.txt)" >> "$CF/cases.txt"
 while read -r st msg; do case "$st" in PASS) ok "$msg" ;; FAIL) bad "$msg" ;; esac; done < "$CF/cases.txt"
 CCK="$ROOT/skills/print-cad-blender/scripts/cadcheck.py"
@@ -51,28 +63,39 @@ ok = (o['warns'] == 1 and o['untriaged_warns'] == 0 and len(o['accepted_warns'])
 sys.exit(0 if ok else 1)" "$CF/only_run.json" "$CF/full_run.json" 2>/dev/null \
   && ok "--only: rowless checks in not_checked and only_without_rows (flexures says its own); typo'd key and --only name are config warns, not design warns; stale vs not-evaluated accepts, under --only and in a full run" \
   || bad "--only gaps / config warns / accept triage (see $CF/only_run.json, $CF/full_run.json)"
-# the review's crash cases on the demo turret (section 1 builds it): a failed =expr in a coupling ratio and in
-# fasteners.min_engagement (TypeErrors, no report), a typo'd ray.sweep key (KeyError), and an --only naming no check
-DB="$V/demo-clean/demo.blend"
-if [ -f "$DB" ]; then
-  printf '{"couplings": {"PIV_tilt": {"to": "PIV_pan", "ratio": "=NOPE"}}}' > "$CF/x_coupling.json"
-  printf '{"fasteners": {"min_engagement": "=NOPE"}}' > "$CF/x_fmineng.json"
-  printf '{"distances": [{"a": "PRT_pan", "b": "PRT_base", "min": 0.1, "ray": {"origin": [0, 0, 0], "dir": [0, 0, 1], "sweep": {"center": [0, 0, 0], "axis": [1, 0, 0], "form": 0, "to": 10}}}]}' > "$CF/x_form.json"
-  for x in coupling fmineng; do
-    "$BL" -b --factory-startup "$DB" --python "$CCK" -- --config "$CF/x_$x.json" --only stacks,fasteners,stability --out "$CF/x_$x.out.json" > "$CF/x_$x.log" 2>&1
-  done
-  "$BL" -b --factory-startup "$DB" --python "$CCK" -- --config "$CF/x_form.json" --only distances --out "$CF/x_form.out.json" > "$CF/x_form.log" 2>&1
-  "$BL" -b --factory-startup "$DB" --python "$CCK" -- --config "$CF/x_form.json" --only flexure,distnces --out "$CF/x_none.out.json" > "$CF/x_none.log" 2>&1
-  python3 -I -c "
+# the review's crash cases (found on the demo turret): a failed =expr in a coupling ratio and in fasteners.min_engagement
+# (TypeErrors, no report), a typo'd ray.sweep key (KeyError), and an --only naming no check. They need two joints and
+# the two parts the distances row names, so a four-object scene built here stands in for section 1's demo.blend.
+cat > "$CF/mini.py" <<'EOF'
+import os, sys
+sys.path.insert(0, os.path.join(os.environ["CAD_SKILL"], "scripts"))
+from cadlib import geom as G, asm as A, export as E
+A.new_scene()
+A.joint("PIV_pan", (0, 0, 10), 'Z', -90, 90)
+A.joint("PIV_tilt", (0, 0, 30), 'X', 0, 40, parent="PIV_pan")
+A.part(G.box("b", -20, 20, -20, 20, 0, 10), "PRT_base", 'PRT', "pla_a", stl="base", print_rot=A.R_ID, orient="flat", supports="no")
+A.part(G.box("p", -10, 10, -10, 10, 11, 15), "PRT_pan", 'PRT', "pla_b", joint="PIV_pan", stl="pan", print_rot=A.R_ID, orient="flat", supports="no")
+E.save_blend(sys.argv[-1])
+EOF
+DB="$CF/mini.blend"
+$CAD build "$CF/mini.py" -- "$DB" > "$CF/mini.log" 2>&1
+printf '{"couplings": {"PIV_tilt": {"to": "PIV_pan", "ratio": "=NOPE"}}}' > "$CF/x_coupling.json"
+printf '{"fasteners": {"min_engagement": "=NOPE"}}' > "$CF/x_fmineng.json"
+printf '{"distances": [{"a": "PRT_pan", "b": "PRT_base", "min": 0.1, "ray": {"origin": [0, 0, 0], "dir": [0, 0, 1], "sweep": {"center": [0, 0, 0], "axis": [1, 0, 0], "form": 0, "to": 10}}}]}' > "$CF/x_form.json"
+for x in coupling fmineng; do
+  "$BL" -b --factory-startup "$DB" --python "$CCK" -- --config "$CF/x_$x.json" --only stacks,fasteners,stability --out "$CF/x_$x.out.json" > "$CF/x_$x.log" 2>&1
+done
+"$BL" -b --factory-startup "$DB" --python "$CCK" -- --config "$CF/x_form.json" --only distances --out "$CF/x_form.out.json" > "$CF/x_form.log" 2>&1
+"$BL" -b --factory-startup "$DB" --python "$CCK" -- --config "$CF/x_form.json" --only flexure,distnces --out "$CF/x_none.out.json" > "$CF/x_none.log" 2>&1
+python3 -I -c "
 import json, sys
 d = sys.argv[1]
 f = {x: ' | '.join(json.load(open('%s/x_%s.out.json' % (d, x)))['summary']['fail_list']) for x in ('coupling', 'fmineng', 'form', 'none')}
 cw = ' | '.join(json.load(open(d + '/x_form.out.json'))['summary']['config_warns'])
 ok = (\"couplings.PIV_tilt.ratio: expression '=NOPE' failed\" in f['coupling'] and \"couplings 'PIV_tilt' dropped\" in f['coupling']
-      and \"fasteners.min_engagement: expression '=NOPE' failed\" in f['fmineng'] and 'fasteners.min_engagement dropped' in f['fmineng']
-      and \"ray.sweep has no 'from'; row skipped\" in f['form'] and \"unknown key 'form', ignored (did you mean 'from'?)\" in cw
-      and 'names no check, so nothing ran' in f['none'])
+    and \"fasteners.min_engagement: expression '=NOPE' failed\" in f['fmineng'] and 'fasteners.min_engagement dropped' in f['fmineng']
+    and \"ray.sweep has no 'from'; row skipped\" in f['form'] and \"unknown key 'form', ignored (did you mean 'from'?)\" in cw
+    and 'names no check, so nothing ran' in f['none'])
 sys.exit(0 if ok else 1)" "$CF" 2>/dev/null && ! grep -l Traceback "$CF"/x_*.log >/dev/null \
-    && ok "failed =expr in a coupling ratio and in fasteners.min_engagement, a typo'd ray.sweep key, an --only of no check: config fails, reports written (were TypeError/KeyError crashes)" \
-    || bad "review crash cases (see $CF/x_*.log)"
-fi
+  && ok "failed =expr in a coupling ratio and in fasteners.min_engagement, a typo'd ray.sweep key, an --only of no check: config fails, reports written (were TypeError/KeyError crashes)" \
+  || bad "review crash cases (scene: $CF/mini.log; runs: $CF/x_*.log)"
