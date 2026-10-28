@@ -140,7 +140,7 @@ DEFAULTS = {
 CONFIG_ROWS = {
     "allow": ["a", "b", "max_mm3"],
     "fits": ["a", "b", "min_clearance", "contact", "contact_normal"],
-    "assembly_order": ["step", "objects", "bench", "merge", "pose", "pose_how", "powered", "insert_dirs", "insert_ok"],
+    "assembly_order": ["step", "objects", "order", "bench", "merge", "pose", "pose_how", "powered", "insert_dirs", "insert_ok"],
     "service": ["op", "fasteners", "pose", "remove"],
     "drop_tests": ["emit", "dir", "poses", "sweep", "expect", "mode", "stall_deg", "stall_margin_deg", "capture_mm",
                    "payload_mm", "max_mm", "ignore", "home_only_ok"],
@@ -1044,6 +1044,7 @@ REPORT = {"tool": "cadcheck", "blend": bpy.data.filepath, "generated": time.strf
 FAILS, WARNS = [], []
 PAST_LIMITS = []   # poses outside a joint's range (check_pose_values)
 UNBOUNDED_ALLOWS = {}   # allow rules with no max_mm3 that skip a pair across a joint: "a x b" -> why (check_interference)
+NOTES = []   # information lines printed with the summary, never warns (insertion: a listed order that doesn't fit)
 ALLOW_USE = {}   # allow rule index -> {"mm3": largest overlap measured on a pair it covers, "rows": slide rows} (check_slide)
 
 
@@ -3471,6 +3472,13 @@ def check_held_poses(steps):
 
 
 _AXES6 = [("+Z", (0, 0, 1)), ("-Z", (0, 0, -1)), ("+X", (1, 0, 0)), ("-X", (-1, 0, 0)), ("+Y", (0, 1, 0)), ("-Y", (0, -1, 0))]
+# tried when every stated direction is blocked (insertion): the 12 edge and 8 corner diagonals of a cube, then 30 and
+# 60 deg off each axis in the principal planes (a 30 deg slot, PR #19 review case C3)
+_DIAG20 = [tuple(Vector(v).normalized()) for v in [(a, b, 0) for a in (1, -1) for b in (1, -1)] + [(a, 0, b) for a in (1, -1) for b in (1, -1)]
+           + [(0, a, b) for a in (1, -1) for b in (1, -1)] + [(a, b, c) for a in (1, -1) for b in (1, -1) for c in (1, -1)]]
+_PLANE24 = [tuple(v) for k in range(3) for c, sn in ((0.5, 0.866), (0.866, 0.5)) for a in (1, -1) for b in (1, -1)
+            for v in [[a * c if j == (k + 1) % 3 else b * sn if j == (k + 2) % 3 else 0.0 for j in range(3)]]]
+_PROBES = _DIAG20 + _PLANE24
 
 
 def _entry_hit(tree, p, d, maxd=3000.0):
@@ -3529,23 +3537,29 @@ def _blocked(movers, obst, d, cache, first_only):
     B, ext = _lane([bbox_world(o) for o in movers], d)
     ahead = [n for n in obst if _box_ahead(bbox_world(O[n]), B, ext)]
     out = []
+
+    def got(kind, name, make):
+        # dict.setdefault(k, make()) built every BVH and sample list again on each call: 30 of 65 s on v2a7
+        if name not in cache[kind]:
+            cache[kind][name] = make()
+        return cache[kind][name]
     for n in ahead:
-        tn = cache["bvh"].setdefault(n, bvh_world(O[n]))
+        tn = got("bvh", n, lambda: bvh_world(O[n]))
         nb = bbox_world(O[n])
         for m in movers:
             Bm, em = _lane([bbox_world(m)], d)
             if not _box_ahead(nb, Bm, em):
                 continue
             best = None
-            for p in cache["pts"].setdefault(m.name, _edge_samples(m, 2.0, 600)):
+            for p in got("pts", m.name, lambda: _insert_samples(m, 600)):
                 h = _entry_hit(tn, p, d)
                 if h is not None and (best is None or h < best):
                     best = h
                     if quick:
                         break
             if best is None:
-                tm = cache["bvh"].setdefault(m.name, bvh_world(m))
-                for p in cache["pts"].setdefault(n, _edge_samples(O[n], 2.0, 3000)):
+                tm = got("bvh", m.name, lambda: bvh_world(m))
+                for p in got("pts", n, lambda: _insert_samples(O[n], 3000)):
                     if _ahead(Bm, em, (p,)):
                         h = _entry_hit(tm, p, -d)
                         if h is not None and (best is None or h < best):
@@ -3557,6 +3571,15 @@ def _blocked(movers, obst, d, cache, first_only):
                 if first_only:
                     return out
     return sorted(out, key=lambda x: x[2])
+
+
+def _insert_samples(o, cap):
+    """Edge samples plus the centroid of each face of 4 mm2 or more (capped at half as many): rays from edges alone
+    graze between two flat faces, so a stack of identical discs in a cup read free (PR #19 review case C5)."""
+    mw = o.matrix_world
+    o.data.calc_loop_triangles()
+    cs = [mw @ t.center for t in o.data.loop_triangles if t.area >= 4.0]
+    return _edge_samples(o, 2.0, cap) + cs[:: max(1, 2 * len(cs) // cap)]
 
 
 def insertion_allow_use(mv, pool, obst, dirs, cache):
@@ -3577,11 +3600,23 @@ def check_insertion():
     base floor (3) below, and nothing in the config said so; V2R6 found it with a hand slide row (FINDINGS V2A6-F1).
 
     Tested: each PRT/BUY object against the solids and fasteners of earlier steps that are in its assembly (bench or
-    main), and each merge step's group against the assembly it joins, along +-X, +-Y, +-Z and the step's
-    "insert_dirs" ([[x, y, z], ...]: the direction the part moves to come out), at the step's "pose" (default home).
-    A step with "insert_ok": "<reason>" is listed, not tested (bayonets, snap arms, parts tilted in). Cables bend, and
-    parts of the same step are placed in any order, so neither is an obstacle. Also warns on a bench part with no part
-    of its group within 2 mm (by bounding box): it is not in that sub-assembly (the A6 splice sat in bench 'feeder')."""
+    main) and those of its own step that go in before it, and each merge step's group against the assembly it joins,
+    along +-X, +-Y, +-Z and the step's "insert_dirs" ([[x, y, z], ...]: the direction the part moves to come out), at
+    the step's "pose" (default home). Parts of one step go in in an order that works, found by taking them out, last
+    listed first, while any can come out (removing a part never blocks another, so this finds an order when one exists);
+    a step with "order" ([globs]) goes in rank by rank, its fasteners included, with an order found within each rank
+    (parts on one glob, and parts no glob names). push-assist A6/A7 listed the cartridge, its load cell and the cell's
+    nuts in one bench step, and "parts of one step go in in any order, so neither is an obstacle" meant the cell was
+    never tested against the cartridge it could not be fitted into (PA-A7-T7, T19b). On the 10 archived designs 20 of
+    146 multi-part steps fit only in another order than listed (the listing taken as the order gave 57 warns), so the
+    listing is a preference; a step whose listing doesn't fit gets a note (summary.notes), not a warn. When every
+    stated direction is blocked, a single part tries the cube diagonals and 30/60 deg in the principal planes
+    (_PROBES), so the warn says whether the way in is off-axis and unstated (the A8 cell slides in at 45 deg along its
+    stud slots) or not straight at all. Allowed pairs: drop(). A step with "insert_ok": "<reason>" is listed, not
+    tested (bayonets, snap arms, parts tilted in, a fill poured in). Cables bend, so they are no obstacle; neither are a
+    merge step's own objects and the group it merges, to each other. Also warns on a bench part with no part of its
+    group within 2 mm (by bounding box): it is not in that sub-assembly (the A6 splice sat in bench 'feeder'). Bought
+    parts sharing a step with the printed part they seat in are listed (buy_seat_same_step)."""
     steps = CFG.get("assembly_order") or []
     if not steps:
         return
@@ -3606,8 +3641,15 @@ def check_insertion():
 
     def placed(grp, i):
         """Solids and fasteners in group grp (None = main) before step i. A group merged at step i itself is left out:
-        parts of one step go in in any order (A6 step 2d: the thrust ring goes on the hub before the turntable)."""
+        a merge step's own objects and the group go in in either order (A6 step 2d: the thrust ring on the hub, then
+        the turntable)."""
         return [n for n, j in step_of.items() if j < i and lands_in(steps[j].get("bench"), grp, i - 1)]
+
+    def rank(st, n):
+        """Where n goes in within its step: the index of the first glob of the step's "order" (else "objects") that
+        matches it; objects no "order" glob matches go in last."""
+        globs = st.get("order") or st["objects"]
+        return next((k for k, g in enumerate(globs) if fnmatch.fnmatch(n, g)), len(globs))
 
     fst_axes = []
     for f in FASTENERS:
@@ -3628,15 +3670,55 @@ def check_insertion():
                 break
         return out
 
-    rows, skipped, loose = [], [], []
+    def way_in(mv, obst, dirs):
+        """First free direction, or None. The first blocker found per (mover, direction) is remembered: while it is
+        still an obstacle the direction stays blocked, so the order search costs O(n), not O(n^2) (60 stacked discs
+        listed top first: 29 s before)."""
+        memo, ob = cache.setdefault("first", {}), set(obst)
+        key = tuple(sorted(o.name for o in mv))
+        for dn, d in dirs:
+            b = memo.get((key, d))
+            if b in ob:
+                continue
+            hit = _blocked(mv, obst, d, cache, True)
+            if not hit:
+                return dn
+            memo[key, d] = hit[0][0]
+        return None
+
+    def off_axis(mv, obst, dirs):
+        """A free probe direction that no stated direction covers, as "[x, y, z]" (the out-direction), or None."""
+        for d in _PROBES:
+            if all(abs(Vector(d).dot(Vector(e))) < 0.9995 for _, e in dirs) and not _blocked(mv, obst, d, cache, True):
+                return "[%s]" % ", ".join("%g" % round(c, 2) for c in d)
+        return None
+
+    def drop(n, names):
+        """Is n no obstacle to the movers `names`? The ray test measures no volume, so an allow either drops the pair
+        or doesn't. Dropped: an allow without max_mm3 (a spline in a horn, a battery on its rails), and a bounded one
+        whose pair overlaps more than vol_tol where it sits (a designed press fit: crush ribs, PR #19 review case C4).
+        Kept: a bounded allow on a pair that only touches: push-assist A7's cartridge x cell allow (max_mm3 3, 0.0 mm3
+        at rest) hid the cell that could not be fitted (PA-A7-T19a, A8-T6). This is PR #18's at-rest rule."""
+        memo = cache.setdefault("drop", {})
+        for m in names:
+            if (n, m) not in memo:
+                r = rule_for(n, m)
+                memo[n, m] = bool(r and r["kind"] == "allow" and (
+                    r.get("max_mm3") is None or (bb_gap(bbox_world(O[n]), bbox_world(O[m])) == 0
+                                                 and inter_volume(O[n], O[m])[0] > CFG["vol_tol"])))
+            if memo[n, m]:
+                return True
+        return False
+
+    rows, skipped, loose, orders, seats = [], [], [], [], []
     set_pose({})
     cache = {"bvh": {}, "pts": {}, "pose": pose_key({})}
     for i, st in enumerate(steps):
-        tests = []
         grp = st.get("bench")
-        for n, j in step_of.items():
-            if j == i and KIND[n] in ("PRT", "BUY"):
-                tests.append(([O[n]], n))
+        own = [n for n, j in step_of.items() if j == i]
+        rk = {n: rank(st, n) for n in own}
+        parts = sorted((n for n in own if KIND[n] in ("PRT", "BUY")), key=lambda n: (rk[n], n))
+        tests = [([O[n]], n) for n in parts]
         if st.get("merge"):
             g = st["merge"]
             mem = [n for n, j in step_of.items() if j < i and lands_in(steps[j].get("bench"), g, i)]
@@ -3647,6 +3729,12 @@ def check_insertion():
         if st.get("insert_ok"):
             skipped.append({"step": st["step"], "why": st["insert_ok"], "objects": [t[1] for t in tests]})
             continue
+        for g in st.get("order") or []:
+            if not any(fnmatch.fnmatch(n, g) for n in own):
+                finding("insertion", "warn", "step '%s': \"order\" glob %s matches none of the step's objects" % (st["step"][:50], g),
+                        step=st["step"], glob=g)
+        strict = bool(st.get("order"))
+        ties = [sorted(v) for v in {r: [n for n in parts if rk[n] == r] for r in set(rk[n] for n in parts)}.values() if len(v) > 1]
         if grp:
             # a bench part far from the rest of its sub-assembly is in the wrong group (A6: the splice in 'feeder')
             mates = [n for n, j in step_of.items() if KIND[n] in ("PRT", "BUY") and lands_in(steps[j].get("bench"), grp, merged_at.get(grp, len(steps)))]
@@ -3661,31 +3749,101 @@ def check_insertion():
         if pose_key(st.get("pose", {})) != cache.get("pose"):
             set_pose(st.get("pose", {}))
             cache = {"bvh": {}, "pts": {}, "pose": pose_key(st.get("pose", {}))}
-        for mv, label in tests:
-            dirs = axes_for(mv) + [("dir %s" % list(v), tuple(Vector(v).normalized())) for v in st.get("insert_dirs", [])]
-            names = {o.name for o in mv}
-            obst = [n for n in placed(grp, i) + unordered if n not in names and KIND[n] != "CAB"
-                    and not any(allowed(n, m) for m in names)]
-            free = None
-            for dn, d in dirs:
-                if not _blocked(mv, obst, d, cache, True):
-                    free = dn
+        # bought parts sharing a step with the printed part they seat in (surfaces within 0.2 mm), at the step's pose:
+        # the order between them is the one found below unless the step's "order" says it
+        bvh = lambda n: cache["bvh"][n] if n in cache["bvh"] else cache["bvh"].setdefault(n, bvh_world(O[n]))
+        for b in (n for n in parts if KIND[n] == "BUY"):
+            for p in (n for n in parts if KIND[n] == "PRT" and bb_gap(bbox_world(O[b]), bbox_world(O[n])) < 0.2):
+                if min_dist(O[b], O[p], bvh(b), bvh(p))[0] < 0.2:
+                    seats.append({"buy": b, "seat": p, "step": st["step"], "by": "order" if strict else "found"})
+        base = [n for n in placed(grp, i) + unordered if KIND[n] != "CAB"]
+        xdirs = [("dir %s" % list(v), tuple(Vector(v).normalized())) for v in st.get("insert_dirs", [])]
+
+        def find_order(group, pre):
+            """-> (an order the parts of `group` go in after `pre`, {part: its way in}, the parts no order gets in). Takes
+            parts out, last listed first, while one has a straight way out past the earlier steps' parts, `pre` and the
+            rest of the group; removing a part never blocks another, so this finds an order whenever one exists, and
+            the listed one when that works."""
+            rem, out, way = list(group), [], {}
+            while rem:
+                for n in reversed(rem):
+                    w = way_in([O[n]], [m for m in base + pre + rem if m != n and not drop(m, {n})], axes_for([O[n]]) + xdirs)
+                    if w is not None:
+                        rem.remove(n)
+                        out.append(n)
+                        way[n] = w
+                        break
+                else:
                     break
-            insertion_allow_use(mv, placed(grp, i) + unordered, obst, [d for dn, d in dirs if free in (None, dn)], cache)
-            rec = {"object": label, "step": st["step"], "free_dir": free, "obstacles": len(obst)}
+            return rem + out[::-1], way, set(rem)
+
+        # without "order" the whole step is one group and its fasteners are no obstacle (screws go in after the parts
+        # they join); with "order" each rank is a group, after every object (fasteners too) of the ranks before it, so
+        # parts on one glob and parts no glob names are still tested against each other (review case C6)
+        groups = [[n for n in parts if rk[n] == r] for r in sorted({rk[n] for n in parts})] if strict else [parts]
+        seq, way, stuck, before = [], {}, set(), {}
+        for g in groups:
+            pre = [m for m in own if rk[m] < rk[g[0]]] if strict else []
+            gs, gw, gk = find_order(g, pre)
+            for k, n in enumerate(gs):
+                before[n] = pre + ([m for m in gs[:k] if m in gk] if n in gk else gs[:k])
+            seq, stuck = seq + gs, stuck | gk
+            way.update(gw)
+        if len(parts) > 1:
+            differs = seq != parts and not stuck
+            orders.append({"step": st["step"], "by": "order" if strict else "found", "order": seq, "listed_differs": differs,
+                           "same_glob": ties if strict else [], "no_order": sorted(stuck)})
+            if differs:
+                NOTES.append("insertion: step '%s': the %s order doesn't fit; it fits as %s" % (
+                    st["step"][:50], "\"order\"" if strict else "listed", ", ".join(seq)))
+        for mv, label in tests:
+            dirs = axes_for(mv) + xdirs
+            names = {o.name for o in mv}
+            same = before.get(label, [])     # a merged group: none, the step's own objects go in either side of it
+            obst = [n for n in base + same if n not in names and not drop(n, names)]
+            free = way.get(label) or way_in(mv, obst, dirs)
+            insertion_allow_use(mv, base + same, obst, [d for dn, d in dirs if free in (None, dn)], cache)
+            rec = {"object": label, "step": st["step"], "free_dir": free, "obstacles": len(obst), "same_step_before": len(same)}
             if free is None:
-                rec["blocked"] = {dn: [{"by": b, "mover": m, "at_mm": a} for b, m, a in _blocked(mv, obst, d, cache, False)[:3]] for dn, d in dirs}
+                full = {dn: _blocked(mv, obst, d, cache, False) for dn, d in dirs}
+                rec["blocked"] = {dn: [{"by": b, "mover": m, "at_mm": a} for b, m, a in bl[:3]] for dn, bl in full.items()}
                 why = "; ".join("%s %s" % (dn, ", ".join("%s%s at %g" % (x["by"], "" if len(mv) == 1 else " (%s)" % x["mover"], x["at_mm"]) for x in bl[:2]))
                                 for dn, bl in rec["blocked"].items())
-                finding("insertion", "warn", "%s (step '%s') has no straight way in with the earlier steps' parts in place: %s. Reorder the "
-                        "steps, remove the blocker first (a service row), or give the step its \"insert_dirs\" / \"pose\" (\"insert_ok\" with a "
-                        "reason for a twist or snap)" % (label, st["step"][:50], why), **rec)
+                off = off_axis(mv, obst, dirs) if len(mv) == 1 else None   # a group's probe cost 14 s of v2a7's 43
+                tail = (" It is free along %s (off-axis, out-direction): if that is how it goes in, give the step \"insert_dirs\": [%s]." % (off, off)
+                        if off else " It is not free along +-X/Y/Z, the 20 cube diagonals or 30/60 deg in the principal planes either: another "
+                        "angle or a rotation needs \"insert_dirs\" or \"insert_ok\"." if len(mv) == 1 else "")
+                rec["free_off_axis"] = off
+                by_own = sorted({b for bl in full.values() for b, _m, _a in bl} & set(same))
+                if by_own and way_in(mv, [n for n in base if n not in names and not drop(n, names)], dirs) is not None:
+                    rec["same_step_blockers"] = by_own
+                    if strict and not any(rk[b] == rk[label] for b in by_own):     # only by earlier "order" ranks
+                        seq2, _w, stuck2 = find_order(parts, [])
+                        hint = (" The step's parts do go in in the order %s: change its \"order\"" % ", ".join(seq2) if not stuck2 else
+                                " No order of the step's parts works either: split the step or change the part (a slot, a split seat)")
+                        msg = "%s (step '%s') has no straight way in past %s, which the step's \"order\" puts before it: %s.%s%s" % (
+                            label, st["step"][:50], ", ".join(by_own), why, tail, hint)
+                    else:
+                        msg = ("%s (step '%s') has no straight way in past %s of the same step, in any order of %s: %s.%s "
+                               "Split the step, change the part (a slot, a split seat), or give the step its \"insert_dirs\" / \"pose\"" % (
+                                   label, st["step"][:50], ", ".join(by_own), "its \"order\" glob's parts" if strict else "the step's parts", why, tail))
+                else:
+                    msg = ("%s (step '%s') has no straight way in with the earlier steps' parts in place: %s.%s Reorder the "
+                           "steps, remove the blocker first (a service row), or give the step its \"insert_dirs\" / \"pose\" (\"insert_ok\" with a "
+                           "reason for a twist or snap)" % (label, st["step"][:50], why, tail))
+                finding("insertion", "warn", msg, **rec)
             rows.append(rec)
     set_pose({})
-    REPORT["checks"].setdefault("insertion", {"findings": []}).update(rows=rows, not_tested=skipped, loose_bench_parts=loose)
-    REPORT["coverage"].append("insertion: %d parts and merged groups, straight along +-X/Y/Z (and insert_dirs) against earlier steps; %d steps insert_ok" % (
-        len(rows), len(skipped)))
-    REPORT["not_checked"].append("insertion: paths that are not one straight line, parts of the same step against each other, cables")
+    REPORT["checks"].setdefault("insertion", {"findings": []}).update(rows=rows, not_tested=skipped, loose_bench_parts=loose, step_orders=orders,
+                                                                      buy_seat_same_step=seats)
+    REPORT["coverage"].append("insertion: %d parts and merged groups, straight along +-X/Y/Z (and insert_dirs) against earlier steps and the "
+                              "parts of their own step that go in before them (%d steps with several parts: %d in their \"order\", %d in an "
+                              "order found, %d of those not as listed; %d bought parts share a step with their seat); %d steps insert_ok" % (
+                                  len(rows), len(orders), sum(o["by"] == "order" for o in orders), sum(o["by"] == "found" for o in orders),
+                                  sum(o["listed_differs"] for o in orders), len(seats), len(skipped)))
+    REPORT["not_checked"].append("insertion: paths that are not one straight line, a step's own fasteners unless its \"order\" places them, "
+                                 "a merge step's own objects against the group it merges, features thinner than the 2 mm sample spacing "
+                                 "crossing between samples, cables")
 
 
 def check_stacks():
@@ -4341,7 +4499,7 @@ def main():
                          "accept_suggestions": [x for x in tri["legacy"] if x["use"]],
                          "only_without_rows": empty if ONLY else [],
                          "coverage": REPORT["coverage"], "not_checked": REPORT["not_checked"], "poses_past_limits": PAST_LIMITS,
-                         "unbounded_allows": UNBOUNDED_ALLOWS, "unused_allows": unused,
+                         "unbounded_allows": UNBOUNDED_ALLOWS, "unused_allows": unused, "notes": NOTES,
                          "runtime_s": round(time.time() - T0, 1)}
     os.makedirs(os.path.dirname(os.path.abspath(OUT)), exist_ok=True)
     with open(OUT, "w") as f:
@@ -4355,6 +4513,8 @@ def main():
         print("  warn", s)
     if len(untriaged) > 25:
         print("  ... %d more untriaged warnings in the report" % (len(untriaged) - 25))
+    for s in NOTES[:12]:
+        print("  note", s)
     if stale:
         print("  accepted_warns that matched nothing (fixed? remove them):", stale)
     if tri["not_evaluated"]:
