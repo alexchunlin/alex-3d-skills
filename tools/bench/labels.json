@@ -7,6 +7,8 @@
   "  designer config's row for it was written from the review, so it counts in rows scope only; source: FINDINGS line or HW/... review",
   "  file (HW = ~/code-stuff/mmlauncher/mm-launcher/mm-launch-hw); judgment: where this is a call.",
   "printability: tool findings no reviewer raised (the layer check's support misses, v1 and v2 alike), one entry per finding with the",
+  "  printcheck's face pass (sloped overhangs: 'a N mm sloped overhang past 45 deg') and its STL edge count ('edges shared by more",
+  "  than 2 faces') report here too; the layer check's flat misses keep their cantilever locators.",
   "  attempts it is on; scored once per finding (worst status over those attempts) in its own score, never in reviewer recall.",
   "  confirmed_by: 'print YYYY-MM-DD' when a real print confirmed it; print_evidence: [{date: YYYY-MM-DD, by: who printed and looked,",
   "  printed: what was printed (parts, settings, supports), result: fail | pass | partial, observed: what was seen, action: what it",
@@ -1906,6 +1908,117 @@
    ],
    "source": "docs/FINDINGS.md:1841",
    "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Severity set by the bench author: 'major' (a reprint or a support pass the BOM says is not needed; the brief forbids only heavy supports, so not a blocker); the same rule for v1 and v2"
+  },
+  {
+   "id": "PF1-launcher_body_boss",
+   "findings_id": "printcheck face pass (v1)",
+   "attempts": [
+    "a2"
+   ],
+   "severity": "major",
+   "metric": "manufacturability",
+   "summary": "launcher_body: two lugs on the slanted side wall start at z 6.5 and 18.5 with 9-27 deg undersides reaching 4.8 mm past the 45 deg cone (supports: no)",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_launcher_body"
+     ],
+     "kind": "mm sloped overhang past",
+     "region": "at z (?:6|18)\\.\\d "
+    }
+   ],
+   "source": "PR 'printcheck: sloped overhangs' (feat/printcheck-overhangs): checked on the layer section (`cad q overhangs --section auto`)",
+   "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Severity by the bench author, as for the layer check's misses. The layer check alone calls the first layer of each lug a 1.4 mm ledge (warn); the section shows a lug 3.5 mm wide growing 5 mm off the wall within 0.9 mm of height."
+  },
+  {
+   "id": "PF1-yoke_arm_R_fin",
+   "findings_id": "printcheck face pass (v1)",
+   "attempts": [
+    "a2",
+    "a3"
+   ],
+   "severity": "minor",
+   "metric": "manufacturability",
+   "summary": "yoke_arm_R: two small sloped undersides (12-15 mm2 projected) 2.5-2.9 mm past 45 deg at z 96 and 106, where the layer check warns a 2.2 mm ledge",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_yoke_arm_R"
+     ],
+     "kind": "mm sloped overhang past",
+     "region": "at z (?:96|105)\\.\\d "
+    }
+   ],
+   "source": "PR 'printcheck: sloped overhangs' (feat/printcheck-overhangs): checked on the layer section (`cad q overhangs --section auto`)",
+   "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Minor: a warn, under 20 mm2, at the same place as an existing layer-check ledge warn."
+  },
+  {
+   "id": "PF-base_shell_edges",
+   "findings_id": "PR #6 prior art (3D-Print Toolbox, review)",
+   "attempts": [
+    "v2a1",
+    "v2a2",
+    "v2a3",
+    "v2a4",
+    "v2a5",
+    "v2a6",
+    "v2a7"
+   ],
+   "severity": "minor",
+   "metric": "manufacturability",
+   "summary": "base_shell: 7 edges in 4 faces in the STL: r 5 mm cylinders touch the inner wall along a line; the model keeps the vertex pairs apart, so cadcheck's manifold test passes",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_base_shell"
+     ],
+     "kind": "edges shared by more than 2 faces"
+    },
+    {
+     "check": "printcheck",
+     "objects": [
+      "base_shell"
+     ],
+     "kind": "edges shared by more than 2 faces"
+    }
+   ],
+   "source": "tools/prior_art/README.md (PR #6), stl_edges_compare.py",
+   "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Minor: a slicer's mesh check counts and repairs these; the print is not changed."
+  },
+  {
+   "id": "PF-v2a1-joined_shells",
+   "findings_id": "printcheck STL edges",
+   "attempts": [
+    "v2a1"
+   ],
+   "severity": "minor",
+   "metric": "manufacturability",
+   "summary": "v2a1 jar_valve (296 line contacts and 51 back-to-back sheet edges, at the bed) and launcher_body (2 sheet edges): pieces whose vertices coincide exactly, edges in more than 2 faces once exported (gone by v2a7)",
+   "tool_catchable": true,
+   "locators": [
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_jar_valve"
+     ],
+     "kind": "edges (?:shared by|in) more than 2 faces"
+    },
+    {
+     "check": "parts",
+     "objects": [
+      "PRT_launcher_body"
+     ],
+     "kind": "edges (?:shared by|in) more than 2 faces"
+    }
+   ],
+   "source": "PR 'printcheck: sloped overhangs' (feat/printcheck-overhangs): edge count on the model's triangles as float32 (509 such edges already in float64 on jar_valve)",
+   "judgment": "no reviewer raised it: a printability finding, scored once per finding (worst status over its attempts) in its own score, not in reviewer recall. Minor: a mesh-check warning, not a print defect."
   }
  ],
  "known_true_positives": [

@@ -16,7 +16,8 @@ properties written by cadlib.asm.joint() or from the "joints" block of the confi
 
 Checks (each one writes evidence into the JSON report, with an explicit `coverage` list):
   parts         manifold, volume, print-orientation bed fit, overhang area, min wall, bed contact, and the layer support
-                check (printcheck.py: bridges, cantilevers, islands per 0.2 mm layer) on the exported STLs
+                check (printcheck.py: bridges, cantilevers, islands per 0.2 mm layer; sloped overhangs per face region)
+                on the exported STLs
   interference  every pair in ALL four collections, swept over the joints that separate the two bodies,
                 including overtravel past each limit; contacts between different bodies are failures
   clearance     min distance between parts on different bodies over the same sweep
@@ -777,10 +778,9 @@ def stl_dirs():
     return [x for x in (os.path.join(d, "stl"), os.path.join(os.path.dirname(d), "stl")) if os.path.isdir(x)]
 
 
-def layer_check(o, dirs):
-    """printcheck.analyze on the exported STL (what gets sliced), or on the model's print triangles when there is no STL
-    on disk. FINDINGS "v2 post-freeze": the face-based ceiling test passed jar_valve's cantilevered bayonet tabs and
-    feeder_cover's 10.5 mm screw ear, both marked supports: no."""
+def layer_tris(o, dirs):
+    """The triangles printcheck reads for a printed part: its exported STL when on disk (what gets sliced), else the
+    model's print triangles. Returns (tris, source, note, printcheck module, printcheck config, print_to_world)."""
     import numpy as np
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import printcheck as PC
@@ -800,7 +800,16 @@ def layer_check(o, dirs):
     pc = dict(CFG.get("printcheck") or {})
     pc.setdefault("overhang_deg", CFG["overhang_deg"])
     pc.setdefault("bridge_warn_mm", CFG.get("max_bridge_mm", 25))
-    res = PC.analyze_cached(tris, pc, supports=o.get("supports"), print_to_world=(Rn.T, -Rn.T @ off))
+    return tris, src, note, PC, pc, (Rn.T, -Rn.T @ off)
+
+
+def layer_check(o, dirs):
+    """printcheck.analyze on the exported STL (what gets sliced), or on the model's print triangles when there is no STL
+    on disk: the layer check, the face pass (sloped overhangs) and the STL's edges in more than two faces. FINDINGS
+    "v2 post-freeze": the face-based ceiling test passed jar_valve's cantilevered bayonet tabs and feeder_cover's
+    10.5 mm screw ear, both marked supports: no."""
+    tris, src, note, PC, pc, wm = layer_tris(o, dirs)
+    res = PC.analyze_cached(tris, pc, supports=o.get("supports"), print_to_world=wm)
     return res, src, note
 
 
@@ -892,7 +901,9 @@ def check_parts():
         if bed < 20:
             finding("parts", "warn", "%s: only %.0f mm2 flat on the bed in print orientation" % (o.name, bed), object=o.name)
         nosup = str(o.get("supports", "")).lower() in ("no", "none", "false", "")
-        if over > CFG.get("overhang_warn_mm2", 150) and nosup:
+        # the summed area: only when the layer check (with its per-region face pass) is off; summed, it warned on v2
+        # beam's corner facets (205 mm2), which print, and cannot say where (PR #6 review)
+        if over > CFG.get("overhang_warn_mm2", 150) and nosup and os.environ.get("CAD_LAYER_CHECK") == "0":
             finding("parts", "warn", "%s: %.0f mm2 of sloped overhang steeper than %g deg, supports=no" % (o.name, over, CFG["overhang_deg"]), object=o.name)
         # layer check (printcheck) on the exported STL; it replaces the ceiling-span warn, which called every flat
         # downward face a bridge without asking whether it was anchored on two sides (FINDINGS "v2 post-freeze")
@@ -910,7 +921,10 @@ def check_parts():
             lc, src, note = LAYER_DONE[stl]
             row["layer_check"] = {"source": src, "needs_support": lc["needs_support"], "max_overhang_mm": lc["max_overhang_mm"],
                                   "max_bridge_mm": lc["max_bridge_mm"], "n_islands": lc["n_islands"], "n_cantilevers": lc["n_cantilevers"],
-                                  "regions": [g for g in lc["regions"] if g["status"] != "ok"][:6], "px_mm": lc["px_mm"]}
+                                  "regions": [g for g in lc["regions"] if g["status"] != "ok"][:6], "px_mm": lc["px_mm"],
+                                  "max_face_overhang_mm": lc["max_face_overhang_mm"], "face_overhang_mm2": lc["face_overhang_mm2"],
+                                  "faces": [g for g in lc["faces"] if g["status"] in ("fail", "warn", "support")][:6],
+                                  "stl_nonmanifold_edges": lc["stl_nonmanifold_edges"]}
         if "print_rot" not in o.keys():
             finding("parts", "warn", "%s has no print_rot; checked as modelled" % o.name, object=o.name)
         if o.get("bevel_clamped"):
@@ -923,7 +937,7 @@ def check_parts():
         REPORT["not_checked"].append("parts: layer support check skipped (CAD_LAYER_CHECK=0)")
     srcs = sorted(set(v[1] for v in LAYER_DONE.values()))
     REPORT["coverage"].append("parts: %d printed objects (%d unique STLs): manifold, bed fit %s, overhang, wall probe, bed contact; "
-                              "layer support check (bridge / cantilever / island) on %s" % (
+                              "layer support check (bridge / cantilever / island), sloped-overhang face pass and edges in >2 faces on %s" % (
                                   len(PRINTED), len(seen), list(P), "the exported STLs" if srcs and all(x != "model" for x in srcs)
                                   else "the model's print triangles (no stl/ on disk)" if srcs == ["model"] else "STLs where exported, else the model"))
 

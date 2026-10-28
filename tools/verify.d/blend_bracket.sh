@@ -84,9 +84,10 @@ import json,sys; r=json.load(open(sys.argv[1])); g=r['grow']; s=r['holds']['serv
 o=r['orientation']; b=o['ranked'][0]
 sys.exit(0 if g['non_manifold_edges']==0 and s['fit_ok'] and s['missed']==0 and s['wall_min']>=3.0 and o['best']=='clip -z face down' and b['fails']==0 and b['warns']==0 else 1)" "$BB/bracket/report.json" \
   && ok "blend bracket: closed, servo fit within 0.05 mm, wall >= 3, best_orientation picks the clip face with 0 printcheck fails or warns" || bad "blend bracket: $(head -c 400 "$BB/bracket/report.json")"
-# best_orientation on the review's three connectors: the pick passes printcheck where the least-overhang direction did not
+# best_orientation on the review's three connectors: the pick stands with the fewest printcheck fails (brc and n3 0; n4 needs
+# support in every orientation once the face pass sees its sleeves' undersides)
 O=$(nice -n 10 "$BL" -b --factory-startup -t 4 --python "$ROOT/tools/verify.d/blend_bracket_orient.py" -- "$SCR" 2>&1 | grep '^ORIENT' | sed 's/^ORIENT //')
-echo "$O" | grep -q '^ORIENT_ALL {"ok": true}' && ok "best_orientation picks a printcheck pass on n3, n4, brc: $(echo "$O" | grep -o '"part": "[^"]*", "ok": [a-z]*, "pick": "[^"]*"' | tr '\n' ' ')" \
+echo "$O" | grep -q '^ORIENT_ALL {"ok": true}' && ok "best_orientation picks the fewest printcheck fails standing on a rim or face (brc, n3: 0; n4: its sleeves need support): $(echo "$O" | grep -o '"part": "[^"]*", "ok": [a-z]*, "pick": "[^"]*"' | tr '\n' ' ')" \
   || bad "best_orientation on the review connectors: $(echo "$O" | cut -c1-300)"
 # "supports: no" needs printcheck evidence (SKILL step 5): the layer check on the exported STL, 0 regions needing support
 CAD_LAYER_CHECK=1 $CAD check "$BB/bracket/bracket.blend" --only parts --out "$BB/bracket/cadcheck.json" >/dev/null

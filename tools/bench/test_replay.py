@@ -87,6 +87,16 @@ def checks(R) -> list[str]:
         f.write_text(json.dumps({**r1, "errors": {}}) + "\n" + json.dumps(r2) + "\n")
         o = io.StringIO()
         want("compare refuses a run with errors", R.compare(f, "aaaaaaa", "bbbbbbb", out=o) == 2 and "run errors" in o.getvalue())
+        want("score lists print-confirmed failures", row["pf_must_fail"] == ["PF-p"])
+        ok_row = {**r1, "errors": {}}
+        lost = {**ok_row, "commit": "bbbbbbb00", "pf": {"PF-p": {"designer": "warn"}}}
+        f.write_text(json.dumps(ok_row) + "\n" + json.dumps({**ok_row, "commit": "bbbbbbb00"}) + "\n")
+        o = io.StringIO()
+        want("compare passes an unchanged row", R.compare(f, "aaaaaaa", "bbbbbbb", out=o) == 0)
+        f.write_text(json.dumps(ok_row) + "\n" + json.dumps(lost) + "\n")
+        o = io.StringIO()
+        want("compare: a print-confirmed failure that no longer fails is worse", R.compare(f, "aaaaaaa", "bbbbbbb", out=o) == 1
+             and "PF-p: a real print failed there" in o.getvalue())
         try:
             R._verify_meta(Path(td), None)
             want("--from-verify without meta.json refuses", False)

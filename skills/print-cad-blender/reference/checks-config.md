@@ -27,7 +27,17 @@ adds `carry`, `fasteners.captive` and `flexures`.
   "moving_warn_clearance": 1.0,
   "vol_tol": 0.5,                 // mm3; below this an overlap counts as contact
   "printcheck": {                 // the parts layer check (scripts/printcheck.py DEFAULTS); rarely needs changing
-    "cantilever_mm": 3.0, "cantilever_warn_mm": 1.0, "island_mm2": 0.5, "bridge_warn_mm": 25, "min_feature_mm": 0.4},
+    "cantilever_mm": 3.0, "cantilever_warn_mm": 1.0, "island_mm2": 0.5, "bridge_warn_mm": 25, "min_feature_mm": 0.4,
+    // face pass: sloped regions measured past the overhang_deg cone from their anchored edges (overhang_deg comes from
+    // the top-level key); warn past face_warn_mm, fail past cantilever_mm when face_fail_mm2 or more (projected);
+    // two anchors more than face_bridge_dz_mm apart in height make a cantilever, not a sloped bridge
+    "face_warn_mm": 2.0, "face_fail_mm2": 5, "face_min_mm2": 2, "face_flat_deg": 1.0, "face_bridge_dz_mm": 2.0,
+    // two bands: slopes flatter than overhang_fail_deg (from vertical; 60 = 30 from horizontal, about Bambu/Orca's default
+    // support threshold) fail past cantilever_mm; between it and overhang_deg (45) they only warn
+    "overhang_fail_deg": 60,
+    // tangent bed contact: under contact_min_mm wide (two extrusion lines) over contact_len_mm or more, below an
+    // underside of radius contact_r_mm or more (a cylinder lying on the bed); fix: cut a flat about 0.3 x r
+    "contact_min_mm": 0.9, "contact_len_mm": 3.0, "contact_r_mm": 3.5},
 
   "assembly_order": [             // tool access is tested against the parts present at each step
     {"step": "base", "objects": ["PRT_base_*", "FST_floor_*"]},
@@ -115,6 +125,8 @@ adds `carry`, `fasteners.captive` and `flexures`.
                       "why": "1 mm flange ring, prints as a bridge over infill"},
                      {"check": "clearance", "object": ["PRT_hood", "FST_nipstop"], "kind": "just past the limit", "any": true, "why": "..."}],
   "printers": {"P1S": [256, 256, 256], "H2D": [325, 320, 325]}, "prefer_printer": "P1S",
+  // overhang_deg: support angle from vertical, for printcheck's layer allowance and face pass warn line (a slicer
+  // "threshold angle" of 30 from horizontal is 60 here)
   "min_wall": 1.6, "overhang_deg": 45, "overhang_warn_mm2": 150, "max_bridge_mm": 25,
   "pla_density": 1.24e-3, "flow_mm3_s": 12,   // mass and print-time estimates (g/mm3, mm3/s)
   "collections": {"printed": "Printed", "purchased": "Purchased", "fasteners": "Fasteners", "cables": "Cables"}

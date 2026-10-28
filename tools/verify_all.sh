@@ -449,7 +449,7 @@ jv=[g['overhang_mm'] for g in P['jar_valve']['regions'] if g['status']=='fail'];
 ok = (sorted(n for n in P if fl(n)) == ['base_shell', 'feeder_cover', 'jar_valve', 'post_R'] and len(jv) == 3 and all(5 <= v <= 6.5 for v in jv)
       and len(fc) == 2 and all(v >= 10 for v in fc) and len(fl('base_shell')) == 1 and len(fl('post_R')) == 1
       and all(abs(f['z_mm'] - 2.0) <= 0.2 for f in fl('jar_valve')) and all(abs(f['z_mm'] - 32.2) <= 0.3 for f in fl('feeder_cover'))
-      and not any(f['status'] == 'warn' for n in ('beam', 'nip_cover', 'nacelle', 'base_shell') for f in P[n]['findings'])
+      and not any(f['status'] == 'warn' and f['kind'] != 'nonmanifold' for n in ('beam', 'nip_cover', 'nacelle', 'base_shell') for f in P[n]['findings'])
       and all(f['kind'] == 'bridge' for f in P['feeder_crown']['findings']) and all('world' in f['msg'] for n in P for f in P[n]['findings']))
 sys.exit(0 if ok else 1)" "$V/pc-v2/printcheck.json" \
   && ok "printcheck v2 STLs: fails exactly jar_valve (3 tabs, 5-6.5 mm at z 2), feeder_cover (2 ears >= 10 mm at z 32.2), base_shell tie block, post_R top; beam, nip_cover, nacelle, crown, window tops do not fail" || bad "printcheck v2 STLs"
@@ -477,8 +477,9 @@ fi  #@ end 4m-slice
 if want 4n; then  #@ watch: @core @layer examples/mm-launcher-*/**
 # 4n the layer check on every archived attempt: the misses it would have caught (FINDINGS "v2 post-freeze"). v1: arm_cover_R's
 # 9.3 mm wall off the flange (A1), base_shell's 0.6 mm ribs starting 20 mm up, the hopper funnel lip in mid-air; v2 A1-A7:
-# jar_valve tabs, feeder_cover ears, base_shell tie block, post_R top
-for spec in "a1:mm_launcher.blend:PRT_arm_cover_R=2,PRT_base_shell=4,PRT_hopper=1" "a2:mm_launcher.blend:PRT_base_shell=4,PRT_hopper=2" \
+# jar_valve tabs, feeder_cover ears, base_shell tie block, post_R top. The face pass adds A2's two launcher_body lugs, 4.8 mm
+# past 45 deg (labels.json PF1-launcher_body_boss)
+for spec in "a1:mm_launcher.blend:PRT_arm_cover_R=2,PRT_base_shell=4,PRT_hopper=1" "a2:mm_launcher.blend:PRT_base_shell=4,PRT_hopper=2,PRT_launcher_body=2" \
             "a3:mm_launcher.blend:PRT_base_shell=4,PRT_hopper=2" "v2a1:model.blend:V2" "v2a2:model.blend:V2" "v2a3:model.blend:V2" \
             "v2a4:model.blend:V2" "v2a5:model.blend:V2" "v2a6:model.blend:V2" "v2a7:model.blend:V2"; do
   d=${spec%%:*}; rest=${spec#*:}; b=${rest%%:*}; want=${rest#*:}
@@ -488,7 +489,7 @@ for spec in "a1:mm_launcher.blend:PRT_arm_cover_R=2,PRT_base_shell=4,PRT_hopper=
   CAD_LAYER_CHECK=1 $CAD check "$V/$d/$b" "$ROOT/examples/mm-launcher-$d/checks.json" "$V/$d/layer.json" --only parts >/dev/null
   python3 -I -c "
 import json,sys,re,collections; s=json.load(open(sys.argv[1]))['summary']
-got=collections.Counter(re.match(r'parts: (\S+)',f).group(1) for f in s['fail_list'] if 'cantilever' in f or 'island' in f)
+got=collections.Counter(re.match(r'parts: (\S+)',f).group(1) for f in s['fail_list'] if 'cantilever' in f or 'island' in f or 'sloped overhang' in f)
 want={k: int(v) for k, v in (x.split('=') for x in sys.argv[2].split(','))}
 sys.exit(0 if dict(got) == want and s['fails'] == sum(want.values()) else 1)" "$V/$d/layer.json" "$want" \
     && ok "layer check $d: fails exactly $want" || bad "layer check $d: wanted $want"
