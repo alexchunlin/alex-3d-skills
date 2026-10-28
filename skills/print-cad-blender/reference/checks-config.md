@@ -374,8 +374,13 @@ checks in `--only`, 5 with no rows, and read PASS (PA-A2-T11). An `--only` name 
   3. **Refinement**, for envelope hits only. The pair's cells are halved where a lower bound on the clearance (dense
      surface samples, less their covering radius) can't beat the reach bound (`cadlib.joints.move_rate`). This
      continues until the cell is clear, a collision is found (reported as "between the sampled poses", with its
-     pose and volume), the move is under `sweep_tol`, or `max_guard_poses` are spent. A pair left unproven **warns**,
-     naming the cell's pose range.
+     pose and volume), the move is under `sweep_tol`, or `max_guard_poses` are spent. Before halving, a pair whose
+     relative motion is a turn about one line (one joint, or several on one axis such as a feeder and a jar, or a
+     hood on a coaxial lift; a part spinning on its own continuous joint first becomes its solid of revolution) gets
+     the turning test, which cuts the large triangles in four where their boxes still meet. A pair left unproven
+     **warns** ("... not proven clear between the sampled poses at <cell>"), naming the cell's pose range. That warn
+     is a limit of the check, not a fact about the design: `summary.unproven_pairs` lists the pairs, and the bench
+     counts them as `unproven_warns`, apart from noise.
      A declared `fits` pair the envelope meets is refined for collision only. Cells where the turning test (each
      triangle's height, radius and angle about the axis) proves a one-axis pair clear are skipped (a journal). The
      rest are swept with every point moving under `sweep_tol`, and only an overlap of `vol_tol` or more fails.
