@@ -47,6 +47,8 @@ adds `carry`, `fasteners.captive` and `flexures`.
     {"step": "base", "objects": ["PRT_base_*", "FST_floor_*"]},
     {"step": "flywheel (bench)", "bench": "fw", "objects": ["PRT_flywheel", "FST_fw_*"]},
     {"step": "launcher (bench)", "bench": "launcher", "objects": ["PRT_launcher_*", "FST_motor_*"]},
+    {"step": "cell into the cartridge (bench)", "bench": "cart", "objects": ["PRT_cartridge", "BUY_cell", "FST_cell_nut_*"],
+     "order": ["PRT_cartridge", "FST_cell_nut_*", "BUY_cell"]},   // within a step (default: any order that fits)
     {"step": "flywheel onto launcher", "bench": "launcher", "merge": "fw", "objects": ["FST_hub_*"]},  // bench into bench
     {"step": "launcher into yoke", "merge": "launcher", "objects": ["PRT_arm_cap_*"]},
     {"step": "jar on: drop in at +30, twist to 0", "merge": "jar", "objects": [], "pose": {"PIV_jar": 30}},   // insertion pose
@@ -194,13 +196,34 @@ checks in `--only`, 5 with no rows, and read PASS (PA-A2-T11). An `--only` name 
   along one straight line, to infinity, past the solids and fasteners of the earlier steps in its group; so must each
   merged bench group, past the group it joins. Directions: ±X, ±Y, ±Z, ± the axis of each screw that touches the part
   (a sleeve goes on along its stud), and the step's `insert_dirs` (the direction the part moves to come **out**). The
-  step's `pose` is set first (a bayonet at its drop-in angle). Parts of the same step and cables are not obstacles;
-  zero-clearance seats and edge breaks don't block (a hit counts only 0.3 mm into the other part). A step with
-  `insert_ok: "<reason>"` is listed, not tested. A part in a `bench` step that is more than 2 mm from every other
-  part of its group warns too: it is in the wrong sub-assembly. v2 A6 put the bus splice (in the pan hub) in the
-  feeder's bench step; the feeder merge then read "+Z PRT_groove_cap (BUY_bus_junction) at 3" (FINDINGS V2A6-F1).
-  On the v2 A1-A5 configs it gives 3 warns, all config facts: the jar step's +30 drop-in and the pod's nose-up angle
-  need a `pose`, and the nip stud is listed one step before the backplate it drops into.
+  step's `pose` is set first (a bayonet at its drop-in angle). Cables are not obstacles; zero-clearance seats and
+  edge breaks don't block (a hit counts only 0.3 mm into the other part). A step with `insert_ok: "<reason>"` is listed, not tested. A part in a `bench` step that is more than 2 mm
+  from every other part of its group warns too: it is in the wrong sub-assembly. v2 A6 put the bus splice (in the pan
+  hub) in the feeder's bench step; the feeder merge then read "+Z PRT_groove_cap (BUY_bus_junction) at 3" (FINDINGS
+  V2A6-F1). On the v2 A1-A5 configs it gives 3 warns, all config facts: the jar step's +30 drop-in and the pod's
+  nose-up angle need a `pose`, and the nip stud is listed one step before the backplate it drops into.
+- **Order within a step** (insertion). The parts of one step are tested against each other too. Without `order`,
+  they must go in in some order that works: cadcheck takes them out, last listed first, while any can come out (so it
+  finds an order whenever one exists, and the listed one when that works) and reports it in `step_orders` (`order`,
+  `listed_differs`). The step's own fasteners are no obstacle then (screws go in after the parts they join). With
+  `order: [globs]` the step goes in in exactly that order, fasteners included; objects on one `order` glob aren't
+  tested against each other, objects no `order` glob matches go in last, and a glob matching none of the step's
+  objects warns. A part with no way in past its own step's parts warns "in any order of the step's parts" (or, with
+  `order`, "which the step's order puts before it", with the order that works). push-assist A6/A7 listed the
+  cartridge, its load cell and the cell's nuts in one bench step; under the old "any order, not obstacles" rule the
+  cell was never tested against the cartridge it could not be fitted into (PA-A7-T7, T19). A bounded `allow`
+  (`max_mm3`, facet overlap at a seat) doesn't drop the pair here, an unbounded one (a spline in a horn) does: A7's
+  cartridge x cell allow measured 0.0 mm³ and hid the cell (PA-A8-T6). `buy_seat_same_step` lists each `BUY_` part
+  that shares a step with the `PRT_` part it seats in (surfaces within 0.2 mm); give such a step an `order` when the
+  build order matters beyond what fits (PA-R7 #7: the stops went in first in the README, and the cell only fits
+  before them). On one `order` glob the pair warns. On the 10 archived designs 20 of 146 multi-part steps fit only in
+  another order than listed (taking the listing as the order gave 57 warns), 128 bought parts share a step with their
+  seat (as warns, the noise would have swamped the check), and two new warns are true facts: v1's MotorGo board in a
+  pocket of the base shell, shell 0.36 mm above and 5.4 below it (a1-a3), and v2's M&M mass carrier inside its
+  closed jar (poured, not inserted).
+- **Off-axis ways in** (insertion). When every stated direction is blocked, the 20 cube diagonals are tried, and the
+  warn says "free along [x, y, z] (off-axis)" with the `insert_dirs` to add, or "No cube diagonal is free either".
+  Push-assist A8's cell goes in at 45° along its stud slots, which only an `insert_dirs` entry tested.
 - **Held poses** (part of `assembly`). A step that needs a joint away from home after the joint's drive is in: the
   step's `pose`, or a screw at that step that the fastener check reaches only at a joint limit. The drive is
   `joint_drives[joint]`, or by name a `BUY_` servo/motor/stepper/actuator ending in the joint's name (PIV_tilt ->
