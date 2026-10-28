@@ -20,7 +20,7 @@ adds `carry`, `fasteners.captive` and `flexures`.
   "max_guard_poses": 256,         // refinement poses per envelope hit; past it the pair warns as unproven
   "envelope_max_poses": 600,      // a part on 2+ joints (tilt on pan): its envelope coarsens to this many poses
 
-  "allow": [                      // designed overlap: the pair is skipped entirely
+  "allow": [                      // designed overlap: interference skips the pair; a slide_out row keeps it, bounded
     {"a": "BUY_servo_*", "b": "BUY_horn_*", "why": "spline inside horn hub"},
     {"a": "PRT_gate_detent", "b": "PRT_jar_gate", "max_mm3": 1.0, "why": "detent rides the blade"}],  // bounded: deeper fails
   "fits": [                       // designed running fit across a joint
@@ -277,6 +277,16 @@ checks in `--only`, 5 with no rows, and read PASS (PA-A2-T11). An `--only` name 
   largest seen is in `interference.allowed_max`). An allow without it skips the pair at every pose, so a deeper clash in a
   sweep never shows; cadcheck lists allows that skip a pair across a joint with no bound (`summary.unbounded_allows`).
   v2 A5 allowed the gate detent against the blade "0.43 mm³ < vol_tol", which also hid the whole gate sweep (V2R5 A5-06).
+- **Allows in a slide.** A `slide_out` row keeps an allowed pair as an obstacle: overlap up to the rule's `max_mm3`
+  (with none, the pair's overlap at rest plus `vol_tol`) rides and is recorded in the row's `allowed`; deeper stops the
+  slide, and the fail names the allow (`over_allow`). Its clearance is not measured. The row used to drop the pair, so
+  push-assist A7's load cell slid through the cartridge its 3 mm³ seat allow covered, and the 0.2 mm short slot passed
+  two rounds (PA-A7-T19a). A part in the row's `flex` keeps the flex bound instead.
+- **Unused allows.** An allow that measures 0 mm³ on every pair it covers, wherever the checks evaluate the pair (home
+  on one body, the interference pose grid across a joint, where a touch or a gap under `moving_min_clearance` counts as
+  use, and the slide rows that move it), or that covers no pair, is a config warn and is listed in
+  `summary.unused_allows` (needs the interference check). Possibly stale: remove it. The A7 seat allow measured 0.0 mm³
+  and protected nothing (PA-A8-T6).
 - **Measured stack limit.** A `stacks` row with `"between": [A, B]` takes its limit from the geometry: the nearest gap
   from A to B (name, glob, list, or `"*"` for every solid and fastener not touching A), over `poses`. The row reports
   `measured_mm`, `nearest` and `touching`. Use it for every stack that guards a clearance: a typed limit stays put when

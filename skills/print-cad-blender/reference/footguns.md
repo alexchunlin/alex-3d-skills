@@ -55,6 +55,7 @@ IDs point into `<repo>/docs/FINDINGS.md`. "Caught" means cadcheck or cadq flags 
 | V2A4-F1, V2A5-F2 | Passage gap checked at a few stations (BDC in A4; psi 50..80 in A5, real minimum at psi 90) | `distances` ray `sweep` | yes: A4 3 fails at psi 80; A5 one row gives V2R5's 8.099 at psi 90 |
 | V2A5-F1 | Detent tab 0.322 from the jar band (row `min` 0.3; the band stack typed "designed clearance 3.0") | `stacks` with `between` | yes: the designer's own terms, RSS 1.31 > 0.322, names the detent |
 | V2A5-F6 | Open `allow` on a riding detent hides any deeper clash in the gate sweep | `allow` `max_mm3`; `summary.unbounded_allows` | yes: listed; bounded at 0.1 it fails at 0.43 mm³ |
+| PA-A7-T19 | A zero-gap seat `allow` (cartridge x load cell) took the cartridge out of the cell's slide row, so a slot 0.2 mm short passed | `slide_out` keeps allowed pairs as obstacles, bounded by `max_mm3`; an allow at 0 mm³ everywhere is a config warn | yes on a rebuilt a7: blocked at 24 mm |
 
 **Rule from v2 A1:** 0 fails is not done. Read every warn on your objects: fix it, or list it under `accepted_warns`
 (check, kind, object) with a reason. Three of the first v2 reviewer's twelve issues were warns in the designer's own hand-off.
