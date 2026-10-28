@@ -499,7 +499,7 @@ def score(name: str, spec: dict, labels: list, known: list, runs: dict, pf: list
             "false_fail_list" + sfx: false[:40],
             "warns_untriaged" + sfx: len(warns), "warns_accepted" + sfx: sum(1 for s, _ in its.values() if s == "accepted"),
             "noise_warns" + sfx: len(warns) - len(hit) - len(unproven), "hit_warns" + sfx: len(hit),
-            "unproven_warns" + sfx: len(unproven),
+            "unproven_warns" + sfx: len(unproven), "unproven_warn_list" + sfx: unproven[:60],
             "noise_warn_list" + sfx: [w for w in warns if w not in hit and w not in unproven][:60],
             "pf_findings": len(pf),
             "pf_fail" + sfx: sum(1 for v in pfs if v == "fail"), "pf_fw" + sfx: sum(1 for v in pfs if v in CAUGHT_FW),
@@ -575,23 +575,23 @@ def table(results: Path, commit: str | None, out=sys.stdout) -> None:
         print("labels %s; fail / fail+warn of reviewer labels (sev-w: severity-weighted, blocker 3 major 2 minor 1); "
               "PF: printability findings failed, once per finding" % sha, file=out)
         print("| commit | attempt | runs | errors | labels (catchable) | fail | f+w | partial | sev-w fail | sev-w f+w | +rows fail | +rows f+w "
-              "| false fails (rows) | noise warns | hit share | PF fail |", file=out)
-        print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|", file=out)
+              "| false fails (rows) | noise warns | unproven | hit share | PF fail |", file=out)
+        print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|", file=out)
         for r in R:
             if "recall_fail_w" not in r:
                 continue
             hs = r.get("hit_share")
-            print("| %s%s | %s | %s | %s | %d (%d) | %d | %d | %d | %.0f%% | %.0f%% | %d | %d | %d (%d) | %d | %s | %s |" % (
+            print("| %s%s | %s | %s | %s | %d (%d) | %d | %d | %d | %.0f%% | %.0f%% | %d | %d | %d (%d) | %d | %s | %s | %s |" % (
                 r["commit"][:7], "*" if r.get("dirty") else "", r["attempt"], ",".join(r.get("runs_subset") or []) or "all",
                 (r["errors"] if isinstance(r["errors"], int) else len(r["errors"])) or "-", r["labels"], r["labels_tool_catchable"],
                 r["caught_fail"], r["caught_fw"], r.get("caught_partial", 0), 100 * r["recall_fail_w"], 100 * r["recall_fw_w"],
                 r["caught_fail_rows"], r["caught_fw_rows"], r["false_fails"], r["false_fails_rows"], r["noise_warns"],
-                "-" if hs is None else "%.0f%%" % (100 * hs), _pct(r.get("pf_fail", 0), r.get("pf_findings", 0))), file=out)
+                r.get("unproven_warns", "-"), "-" if hs is None else "%.0f%%" % (100 * hs), _pct(r.get("pf_fail", 0), r.get("pf_findings", 0))), file=out)
         print("", file=out)
 
 
 GATE = (("recall_fail", 1), ("recall_fw", 1), ("recall_fail_w", 1), ("recall_fw_w", 1), ("recall_fw_rows", 1),
-        ("pf_fail", 1), ("false_fails", -1), ("false_fails_rows", -1), ("noise_warns", -1))
+        ("pf_fail", 1), ("false_fails", -1), ("false_fails_rows", -1), ("noise_warns", -1), ("unproven_warns", -1))
 
 
 def compare(results: Path, base: str, new: str, out=sys.stdout) -> int:
@@ -867,16 +867,16 @@ def main(argv=None) -> int:
     if not a.quiet:
         for r in out_rows:
             print("%-6s labels %2d  fail %2d  f+w %2d  partial %d  sev-w %3.0f%%/%3.0f%% | +rows fail %2d f+w %2d | false fails %d (rows %d)  "
-                  "noise warns %3d  hit share %s  PF fail %d/%d%s" % (
+                  "noise warns %3d  unproven %d  hit share %s  PF fail %d/%d%s" % (
                       r["attempt"], r["labels"], r["caught_fail"], r["caught_fw"], r.get("caught_partial", 0), 100 * r["recall_fail_w"],
                       100 * r["recall_fw_w"], r["caught_fail_rows"], r["caught_fw_rows"], r["false_fails"], r["false_fails_rows"],
-                      r["noise_warns"], "-" if r["hit_share"] is None else "%.2f" % r["hit_share"], r.get("pf_fail", 0), r.get("pf_findings", 0),
+                      r["noise_warns"], r.get("unproven_warns", 0), "-" if r["hit_share"] is None else "%.2f" % r["hit_share"], r.get("pf_fail", 0), r.get("pf_findings", 0),
                       ("  errors: %s" % r["errors"]) if r["errors"] else ""))
     for s in sums:
         print("BENCH %s recall_fail %.3f recall_fw %.3f (sev-w %.3f / %.3f) recall_fw_rows %.3f false_fails %d noise_warns %d "
-              "hit_share %s PF fail %d/%d errors %d" % (
+              "unproven_warns %d hit_share %s PF fail %d/%d errors %d" % (
                   s["attempt"], s["recall_fail"], s["recall_fw"], s["recall_fail_w"], s["recall_fw_w"], s["recall_fw_rows"], s["false_fails"],
-                  s["noise_warns"], "-" if s["hit_share"] is None else "%.3f" % s["hit_share"], s["pf_fail"], s["pf_findings"], s["errors"]))
+                  s["noise_warns"], s.get("unproven_warns", 0), "-" if s["hit_share"] is None else "%.3f" % s["hit_share"], s["pf_fail"], s["pf_findings"], s["errors"]))
     print("-> %s" % ("(not appended)" if a.no_append else a.results))
     return 0
 

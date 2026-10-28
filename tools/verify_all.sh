@@ -323,7 +323,7 @@ unp=[x for x in s['warn_list'] if ' not proven clear between the sampled poses '
 ok = s['fails'] == 0 and s['untriaged_warns'] - len(unp) == 9 and facts and shape == 5 and not s['stale_accepts'] and len(unp) == len(s['unproven_pairs']) == 1 and 'PRT_launcher_body x PRT_nip_stop_sleeve' in unp[0] \
   and any('gate_detent' in k and 'jar_gate' in k for k in s['unbounded_allows']) and max(fl) > 0.2
 sys.exit(0 if ok else 1)" "$V/v2a5/cadcheck.json" \
-    && ok "V2A5 designer config: 0 F / 0 stale, untriaged = the 3 insertion step facts + the M&M fill in its jar's step + 5 cable shapes; detent allow listed as unbounded; slide flex records the sub-vol_tol ride; 1 interference pair unproven (launcher body x nip stop sleeve, 0.44 mm deep in overtravel) between samples (counted apart)" || bad "V2A5 designer config: unexpected result"
+    && ok "V2A5 designer config: 0 F / 0 stale, untriaged = the 3 insertion step facts + the M&M fill in its jar's step + 5 cable shapes; detent allow listed as unbounded; slide flex records the sub-vol_tol ride; 1 interference pair unproven (launcher body x nip stop sleeve, 0.44 mm apart in overtravel) between samples (counted apart)" || bad "V2A5 designer config: unexpected result"
   # A5-02: the designer's 5 rows (psi 50..80) and V2R5's 9 hand rows as one swept row per setting: 8.099 at psi 90
   $CAD check "$V/v2a5/model.blend" "$V25/checks.json" "$V/v2a5/sweep.json" --overlay "$V25/overlay_v2a5.json" --overlay-only --only distances >/dev/null
   python3 -I -c "
@@ -362,7 +362,7 @@ ok = (s['fails'] == 0 and len(s['accepted_warns']) == 35 and not s['stale_accept
   and sum(x.startswith('insertion: ') for x in w) == 6 and 'BUY_mm_fill (step' in f and sum(' kinks: ' in x or ' lie in one tube for ' in x for x in w) == 6
   and 'CAB_bus_feeder and CAB_bus_tilt lie in one tube for 16 mm' in f and len(w) == 18)
 print(len(w)); sys.exit(0 if ok else 1)" "$V/v2a6/cadcheck.json" \
-    && ok "V2A6 designer config: 0 F; insertion flags A6-01 twice, cable drift A6-02 twice, 4 missed swept stations (A6-03), 6 cable shapes; 1 interference pair unproven (launcher body x nip stop sleeve, 0.44 mm deep in overtravel) between samples (counted apart)" || bad "V2A6 designer config: unexpected result"
+    && ok "V2A6 designer config: 0 F; insertion flags A6-01 twice, cable drift A6-02 twice, 4 missed swept stations (A6-03), 6 cable shapes; 1 interference pair unproven (launcher body x nip stop sleeve, 0.44 mm apart in overtravel) between samples (counted apart)" || bad "V2A6 designer config: unexpected result"
   # with the three config facts the check asks for (step poses for the pod and jar, the nip stud in the backplate's
   # step), only the two A6-01 warns and the M&M fill in its jar are left
   $CAD check "$V/v2a6/model.blend" "$V26/checks.json" "$V/v2a6/ins.json" --only insertion --overlay "$V26/overlay_v2a6_steps.json" --overlay-only >/dev/null
@@ -400,7 +400,7 @@ ok = (s['fails'] == 0 and len(s['accepted_warns']) == 37 and not s['stale_accept
   and 'CAB_bus_tilt (OD 2.8) kinks' in f and 'CAB_bus_feeder and CAB_bus_tilt lie in one tube for 16 mm' in f and 'at pan=90 that point is 5.7 mm' in f
   and sum(x.startswith('insertion: ') for x in w) == 5 and 'BUY_mm_fill (step' in f and sum(' kinks: ' in x or ' lie in one tube for ' in x for x in w) == 6)
 print(len(w)); sys.exit(0 if ok else 1)" "$V/v2a7/cadcheck.json" \
-    && ok "V2A7 designer config: 0 F; held pose flags A7-01, kinks + shared tube flag A7-02, drift 5.7 (A6-02 rest); 1 interference pair unproven (launcher body x nip stop sleeve, 0.44 mm deep in overtravel) between samples (counted apart)" || bad "V2A7 designer config: unexpected result"
+    && ok "V2A7 designer config: 0 F; held pose flags A7-01, kinks + shared tube flag A7-02, drift 5.7 (A6-02 rest); 1 interference pair unproven (launcher body x nip stop sleeve, 0.44 mm apart in overtravel) between samples (counted apart)" || bad "V2A7 designer config: unexpected result"
   # with the step facts declared (A6's three, and 11a's own 'pod at tilt 45' as a pose): insertion leaves only the splice,
   # which is made in place above the bore; the held-pose warn names both needs at 11a
   $CAD check "$V/v2a7/model.blend" "$V27/checks.json" "$V/v2a7/ins.json" --only insertion --overlay "$V27/overlay_v2a7_steps.json" --overlay-only >/dev/null
