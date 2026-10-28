@@ -4199,9 +4199,54 @@ ROWS_OF = {"service": "service", "drop": "drop_tests", "index": "index_tests", "
            "stacks": "stacks"}
 
 
-def config_warns(acc, tri):
+def unused_allows():
+    """{"a x b": what was measured} for each allow rule with no overlap on any pair it covers, wherever the checks
+    evaluate the pair: home for a pair on one body, the interference pose grid across a joint (where a touch, or a gap
+    under moving_min_clearance, also counts as use: the allow hides that fail), and the slide rows that move it.
+    Possibly stale. Push-assist A3 to A7 allowed PRT_cartridge_* x BUY_load_cell_* (3 mm3) for zero-gap seats: it
+    measured 0.0 mm3 and protected nothing, and it hid the cartridge from the load cell's slide row (PA-A8-T6)."""
+    def inside_of(t, bb, o):     # wholly inside: a nut in a solid has no triangle overlap (A2)
+        return o.type == 'MESH' and len(o.data.vertices) > 0 and inside(t, o.matrix_world @ o.data.vertices[0].co, bb)
+    pairs = {}
+    for a, b in itertools.combinations(ALL, 2):
+        r = rule_for(a.name, b.name)
+        if r and r["kind"] == "allow":
+            pairs.setdefault(r["index"], []).append((a, b))
+    out = {}
+    for i, r in enumerate(CFG.get("allow") or []):
+        u = ALLOW_USE.get(i, {})
+        vol, hides, poses = u.get("mm3", 0.0), False, set()
+        for a, b in pairs.get(i, []):
+            drv = relevant_joints(a, b)
+            gap = CFG["moving_min_clearance"] if drv else 0.01
+            for pose, _ in pose_grid(drv, QUICK):
+                if vol >= 0.01 or hides:
+                    break
+                set_pose(pose)
+                poses.add(pose_key(pose))
+                ba, bb = bbox_world(a), bbox_world(b)
+                if bb_gap(ba, bb) > gap:
+                    continue
+                ta, tb = bvh_world(a), bvh_world(b)
+                if ta.overlap(tb) or inside_of(tb, bb, a) or inside_of(ta, ba, b):
+                    vol = max(vol, inter_volume(a, b)[0])
+                    hides = bool(drv)        # across a joint a touch is a contact fail without the allow
+                elif drv:
+                    hides = min_dist(a, b, ta, tb)[0] < gap
+        set_pose({})
+        if vol < 0.01 and not hides:
+            n = len(pairs.get(i, []))
+            out["%s x %s" % (r.get("a", "*"), r.get("b", "*"))] = (
+                "0 mm3 on its %d pair%s at %s%s" % (n, "" if n == 1 else "s", "home" if poses == {"home"} else "%d poses" % len(poses),
+                                                    " and in %d slide row%s" % (u["rows"], "" if u["rows"] == 1 else "s") if u.get("rows") else "")
+                if n else "covers no pair of objects (none match, or an earlier allow covers them)")
+    return out
+
+
+def config_warns(acc, tri, unused=None):
     """Config hygiene, listed apart from the design warns: keys cadcheck never reads (each file on its own, with the
-    closest known key), --only names that are no check, malformed accepts and the old substring accepts."""
+    closest known key), --only names that are no check, malformed accepts, the old substring accepts and allows that
+    measured no overlap (unused_allows)."""
     pc = CC.literal(os.path.join(os.path.dirname(os.path.abspath(__file__)), "printcheck.py"), "DEFAULTS")
     out = []
     for path, raw in CFG_FILES:
@@ -4210,6 +4255,7 @@ def config_warns(acc, tri):
     out += CC.only_problems(ONLY, names)
     out += CC.accept_problems(acc, names + ["config"]) + tri["unpinned"]
     m = CC.legacy_msg(tri["legacy"], len(acc), WARNS, CC.templates(os.path.abspath(__file__)) if tri["legacy"] else None)
+    out += ["allow %s: %s; possibly stale, remove it (an allow hides the next clash on its pairs)" % kv for kv in sorted((unused or {}).items())]
     return out + ([m] if m else [])
 
 
@@ -4259,14 +4305,16 @@ def main():
     # name no check, so under --only an unmatched one is not evaluated either
     tri = CC.triage(acc, WARNS, ran if ONLY else None)
     accepted, untriaged, stale = tri["accepted"], tri["untriaged"], tri["stale"]
-    cfg_warns = config_warns(acc, tri)
+    # measured where the interference check evaluates allowed pairs, so only when it ran
+    unused = unused_allows() if "interference" in ran else None
+    cfg_warns = config_warns(acc, tri, unused)
     REPORT["summary"] = {"pass": not FAILS, "fails": len(FAILS), "warns": len(WARNS), "untriaged_warns": len(untriaged),
                          "fail_list": FAILS, "warn_list": untriaged, "accepted_warns": accepted, "stale_accepts": stale,
                          "accepts_not_evaluated": tri["not_evaluated"], "config_warns": cfg_warns,
                          "accept_suggestions": [x for x in tri["legacy"] if x["use"]],
                          "only_without_rows": empty if ONLY else [],
                          "coverage": REPORT["coverage"], "not_checked": REPORT["not_checked"], "poses_past_limits": PAST_LIMITS,
-                         "unbounded_allows": UNBOUNDED_ALLOWS,
+                         "unbounded_allows": UNBOUNDED_ALLOWS, "unused_allows": unused,
                          "runtime_s": round(time.time() - T0, 1)}
     os.makedirs(os.path.dirname(os.path.abspath(OUT)), exist_ok=True)
     with open(OUT, "w") as f:
