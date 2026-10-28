@@ -117,6 +117,9 @@ adds `carry`, `fasteners.captive` and `flexures`.
   "flexures": [{"part": "PRT_nip_cover", "name": "leaf spring", "dir": [0, -0.48, 0.88],   // beam length, world at home
                 "stress_mpa": 20.9},
                {"part": "PRT_gate_detent", "from": [0, 10, 5], "to": [0, 22, 5]}],      // or the beam's ends
+  "calcs": [{"name": "spigot_M", "value": "=1.2 * FS_N * LEVER", "unit": "N mm"},     // a name like a variable: later calcs use it
+            {"name": "spigot_mpa", "value": "=spigot_M / z_eff(SPIG_W, SPIG_D, part='PRT_piston_R')",   // printed section
+             "min": 0, "max": "=mat('PRT_piston_R', 'across_mpa')", "unit": "MPa", "why": "spigot root, standing: across layers"}],
   "interlayer_mpa": 15,
   "exposure": {"max_cable_mm": 5, "cables_ok": ["CAB_usb*"], "min_escape": 8, "view_frac": 0.1, "view_z": -0.2,
                "nuts_ok": ["FST_wheel_nut_*"]},
@@ -165,6 +168,21 @@ so you grep the report instead of writing a `json.load` snippet. Report layout, 
 `checks.<check>.findings[]` (status, msg), `checks.<check>.rows[]` for most checks, `checks.drop.tests[].rows[]` and
 `checks.payload.rows[]`, `checks.interference.{collisions,contacts,min_clearance}[]`; the manifest keeps fasteners
 under `parts` with `kind: "FST"` (there is no `fasteners` key).
+
+## Calcs: a computed number against limits
+
+A hand calc (a bending stress, a load share, a tilt) is a `calcs` row, not a one-term `stacks` row: a stack reports
+"worst case / RSS" and takes `abs()` of the value (push-assist PA-A6-T9, which put 22 rows of stress and tilt in
+`stacks`). Each row's `value`, `min` and `max` are `=expr`s over the params, the calcs above it (by `name`, when the
+name is an identifier) and these helpers: `mat(material or PRT_name, key)` (allowables, e.g. `"in_mpa"`,
+`"across_mpa"`, `"snap_strain"`), `i_eff(b, h, part=...)`, `z_eff(b, h, part=...)` and `section(b, h, part=...)` (the
+printed section from the part's `walls`, `infill`, ...). The table, the section model and its limits are in
+[materials.md](materials.md). Take limits from `mat()`, not a typed number (PA-A6-T10: 20 / 10 / 15 MPa by the designer
+against the reviewer's 25). A value outside `min`/`max` fails (`calcs`); a failed expression is a `config` fail naming
+the row, and the row is skipped (so is a calc that names it). A calc that reads a part whose `material`, `walls` or
+`infill` were never declared warns once per part: it assumed the slicer's 2 walls and 15 %, and the 3MF carries
+nothing (PA-A8-T13). A one-term `stacks` row whose `tol` is an `=expr` is a config warn pointing here.
+`cad rows cadcheck.json --check calcs` prints each row with its value and result.
 
 ## Running subsets and your own rows
 
@@ -271,7 +289,7 @@ checks in `--only`, 5 with no rows, and read PASS (PA-A2-T11). An `--only` name 
 - **Index tests.** The probe bundle is cast through `blockers` at every `step` of the `sequence`; a maximal run of open poses is one window. A window spanning the cycle start counts once. Open at the park position is reported.
 - **Exposure.** A cable sample is exposed when `min_escape` of 26 rays leave the assembly without hitting a solid, or when `view_frac` of the 240 directions toward a viewer above or level (`z > view_z`) do. The second rule finds a cable seen through a notch: the A3 bonnet-foot notch scores 6/26 but 8.3 mm at 10%, and R3 said "about 8 mm". Exposed samples within 6 mm form one spot, warned when its extent passes `max_cable_mm`. A nut is warned when 2 or more of its outer samples are exposed, unless it is listed in `nuts_ok`.
 - **Carry and captive.** `carry` re-parents the named objects onto a joint before any sweep, keeping their home pose. Use it for parts modelled at one setting that ride on another body in use (a thumbwheel on a stud). A `captive` fastener (screw or nut) skips the head-buried, stand-off, access and head or nut overlap tests; engagement and nut pairing still apply. Each entry needs a reason a reviewer can check.
-- **Flexures.** The beam direction is mapped through the part's `print_rot` (the STL export matrix). More than 45° off the bed with `stress_mpa` unknown or above `interlayer_mpa` (default 15, R3's limit for PLA across layers) fails; 20-45° warns.
+- **Flexures.** The beam direction is mapped through the part's `print_rot` (the STL export matrix). More than 45° off the bed with `stress_mpa` unknown or above `interlayer_mpa` (default 15, R3's limit for PLA across layers, = `mat("PLA", "across_mpa")` in [materials.md](materials.md)) fails; 20-45° warns.
 - **Payload fit.** Rigid probes stand on the `center` floor point: `flat` (thickness along `up`), `edge_on`, `pair_edge_on`
   (`count` side by side along `across`) or `stack_flat`. `shape` is `lens` (two spherical caps, the sharpest rim, so the
   conservative choice for "blocked"), `ellipsoid`, `sphere` or `cylinder`. The probe is overlapped (Manifold) with the
