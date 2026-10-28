@@ -45,6 +45,6 @@ Checks re-run: <cadcheck summary line> (coverage: ...; not checked: ...)
 ## Previous issues   (one row each: issue, FIXED/PARTIAL/NOT FIXED, new number)
 ## Measurements      (table: item, value, source command or check row)
 ## Issues            (ranked; severity, problem, evidence, fix with dimensions)
-## Check-config audit (allow/fits entries disputed, missing drop tests, missing assembly steps)
+## Check-config audit (allow/fits/accepted_warns entries disputed, missing drop tests, missing assembly steps)
 ## What is good
 ```

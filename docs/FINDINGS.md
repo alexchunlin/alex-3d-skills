@@ -1969,6 +1969,21 @@ That tree already had PRs #1-#5. SKILL.md told designers to place screws with `f
 PA-D8 at 0:00:49). The project's build never called any of them. `PA/cad/blender/build_concept.py` is a hand-written bpy and SDF script from before the loop,
 and it imports only `cadlib.geom`. No tool call in the session's transcripts names any of the three.
 
+**PA-A0-T1: the build bypassed the tools before attempt 1** (added after the loop from `cc_transcript.py grep` on the
+transcripts; not in PALOG).
+- The coordinator read SKILL.md at 78:13:41 (session-elapsed, `PASESS.jsonl`). At 78:13:53 it judged "fully migrating
+  the existing build script to cadlib's conventions is a large undertaking". At 78:17:09 it called it "a bigger
+  migration to propose separately rather than do now", and saved that to project memory at 78:17:13.
+- At 78:58 it wrote `to_cadcheck.py`, a converter to cadcheck conventions. Every designer prompt then called that
+  pipeline "already working".
+- The designers read the tool lines (above), but edited the build's own `screw()` and `cable()` helpers. No designer's
+  thinking names any of the three tools. PA-D3 drew the patch cable by hand as a spline (0:32:13; `poly_cable` at
+  0:37:34).
+- `cad q route` on a /tmp copy of A8's `check.blend`:
+  - `CAB_Patch_cable` is drawn at 150.0 mm for a 150 mm cable; the routed path is 84.5 mm, with 0 violations.
+  - `CAB_Load_cell_lead_R` stops at "buried" at its cell end. With `--from 152.9,50.8,-6.9 --to 127.3,50.8,-49.6` it
+    routes 50.8 mm, against the hand path's 85.5 mm, which overlaps solids by 24.7 mm³.
+
 ### Scores (`PA/cad/review/attempts.md`; issue counts from the reviewers' ranked lists in PALOG)
 
 | Attempt | Designer | F/M/A (sum) | Issues B/M/m | cad check (designer, at hand-off) | printcheck |
@@ -2163,6 +2178,6 @@ tools").
   ranked lists.
 - Every cost number comes from `cc_transcript.py workflow PASESS/subagents`, or from `usage` / `timeline` on
   `PASESS.jsonl` for the two inline windows. No transcript was read whole.
-- Every PA ID in this section exists in PALOG. Each status was checked against `2e6717d`: `cadcheck.py` line refs,
+- Every PA ID in this section exists in PALOG, except PA-A0-T1, which was added after the loop from the transcripts. Each status was checked against `2e6717d`: `cadcheck.py` line refs,
   SKILL.md, checklist.md, rubric.md, the workflow template, the feature docs, and PR #6 and #7 bodies.
 - `tools/verify_all.sh` was not run: this change is docs only.
