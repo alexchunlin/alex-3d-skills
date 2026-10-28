@@ -6,7 +6,8 @@ Conventions (what cadcheck and the web viewer rely on):
   properties, so checks sweep the real range (attempt 1 checked only 0/22.5/45 deg: FINDINGS A1-F5).
 - Mesh data is baked in world coordinates at the home pose; parenting keeps the world placement.
 - Every printed part carries stl, print_rot (3x3), orient, supports, infill. The STL export and the
-  bed-fit/overhang checks both use print_rot, so they cannot disagree.
+  bed-fit/overhang checks both use print_rot, so they cannot disagree. Its print settings (material, walls, infill,
+  layer_h, shells, line_w; cadmat) go to the manifest, the 3MF and the STL header, and cadcheck calcs read them.
 - Fasteners carry fst_head / fst_dir / fst_len (local), so checks know which end is the head.
 - write_manifest() dumps parts, joints, fasteners, cables, features and parameters as JSON, so a
   reviewer doesn't have to reverse-engineer the script (attempt 1: 7 calls reading code, A1-T8).
@@ -14,6 +15,12 @@ Conventions (what cadcheck and the web viewer rely on):
 import bpy, bmesh, json, math, os
 from mathutils import Vector, Matrix
 from . import geom, features
+try:
+    import cadmat   # scripts/cadmat.py: materials and print settings, plain python (scripts/ is usually on sys.path)
+except ImportError:
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import cadmat
 
 COLL_NAMES = {'PRT': 'Printed', 'BUY': 'Purchased', 'FST': 'Fasteners', 'CAB': 'Cables'}
 PARTS, JOINTS, MATS, COLLS = {}, {}, {}, {}
@@ -147,13 +154,20 @@ def part(ob, name, kind, color, joint=None, **info):
 
     Printed parts need stl=, print_rot= (3x3 Matrix taking world-at-home into print orientation,
     Z up from the bed), orient= (one line a human can follow), supports= ("no" / "yes: where"),
-    infill= (percent). Purchased parts should give mass_g= for the tip check and src= (datasheet,
-    STEP file or measurement) so dimensions stay traceable.
+    infill= (percent). Print settings, all optional (cadmat.PRINT_DEFAULTS, the slicer's, for the rest):
+    material= ("PLA", "PETG": cadmat.MATERIALS), walls= (perimeters), infill=, layer_h=, shells= (top and bottom solid
+    layers), line_w=. The manifest's "print" has them with the defaults filled in, the export writes the declared ones
+    into the 3MF and STL header, and cadcheck calcs take their section and allowables from them (push-assist PA-A8-T13:
+    8 rounds of stress rows on solid sections, and 3MFs with no settings, so the parts would print at 2 walls, 15 %).
+    Purchased parts should give mass_g= for the tip check and src= (datasheet, STEP file or measurement) so dimensions
+    stay traceable.
     """
     assert name.startswith(kind + "_"), "%s must start with %s_" % (name, kind)
     if kind == 'PRT':
         missing = [k for k in ("stl", "print_rot", "orient", "supports") if k not in info]
         assert not missing, "%s is missing %s" % (name, missing)
+        bad = cadmat.print_problems(info)
+        assert not bad, "%s: %s" % (name, "; ".join(bad))
         nm, vol = geom.solid_stats(ob)
         if nm or vol <= 0:
             raise geom.CSGError("%s is not a closed solid (non-manifold edges %d, volume %.1f)" % (name, nm, vol))
@@ -314,6 +328,8 @@ def manifest():
         lo = [round(min(v[i] for v in bb), 2) for i in range(3)]
         hi = [round(max(v[i] for v in bb), 2) for i in range(3)]
         parts[name] = {**{k: v for k, v in info.items() if k not in ("path",)}, "bbox_world_home": [lo, hi]}
+        if info.get("kind") == "PRT":
+            parts[name]["print"] = cadmat.print_settings(info)
     return {"units": "mm", "params": PARAMS, "joints": js, "parts": parts, "features": features.LOG,
             "fastener_summary": features.fastener_summary(PARTS)}
 

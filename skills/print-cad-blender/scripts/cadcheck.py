@@ -39,6 +39,8 @@ Checks (each one writes evidence into the JSON report, with an explicit `coverag
   insertion     each part and each merged bench group out along a straight line past the earlier steps' parts
   stacks        tolerance stacks from config ("stacks"): worst case and RSS against a limit
   flexures      declared springs and snap arms: beam direction vs the part's print orientation (layer bonds)
+  calcs         calculations from config ("calcs"): an =expr over the params, material allowables and printed sections
+                (cadmat), against min/max
   stability     centre of mass and static tip angle over a coarse pose grid
   cables        path length vs. lead length, chains, junctions, ends that come apart across a joint, kinked corners,
                 two routes in one tube, exposed cable
@@ -51,6 +53,7 @@ from mathutils.bvhtree import BVHTree
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cadlib import joints as JT   # noqa: E402  (joint specs and posing, shared with cadlib.route)
 import cadcfg as CC               # noqa: E402  (checks.json hygiene: unknown keys, accepted_warns; no Blender)
+import cadmat as CM               # noqa: E402  (materials, print settings, printed sections, calcs; no Blender)
 
 ARGV = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 
@@ -101,6 +104,7 @@ DEFAULTS = {
     "service": [],
     "index_tests": [],
     "stacks": [],
+    "calcs": [],                # [{"name", "value": "=expr", "min", "max", "unit", "why"}]: a computed number against limits
     # exposed = >= min_escape of 26 rays leave the assembly (R2's bare bus run scored 10-12), or >= view_frac of 240
     # directions toward a viewer above or level (z > view_z) do. A3's bonnet-foot notch scores 6/26 and was missed;
     # at 10% of the viewer directions it is 8.3 mm long (R3: "about 8 mm"), FINDINGS A3-F7
@@ -160,6 +164,7 @@ CONFIG_ROWS = {
     "stacks": ["limit", "terms", "between", "poses"],
     "stacks.terms": ["what", "tol"],
     "flexures": ["part", "dir", "from", "to", "stress_mpa"],
+    "calcs": ["value", "min", "max", "unit"],
     "cable_chains": ["cables", "lead"],
     "accepted_warns": ["check", "kind", "object", "match", "any"],
     "joints": ["axis", "lo", "hi", "home", "step", "continuous", "kind"],
@@ -225,8 +230,7 @@ def _eval_exprs(x, at):
         return [_eval_exprs(v, "%s[%d]" % (at, i)) for i, v in enumerate(x)]
     if isinstance(x, str) and x.startswith("="):
         try:
-            v = eval(x[1:], {"__builtins__": {}, "min": min, "max": max, "abs": abs, "round": round, "sqrt": math.sqrt,
-                             "math": math}, dict(PARAMS))
+            v = eval(x[1:], CM.BASE_ENV, dict(PARAMS))
             if isinstance(v, tuple):
                 v = list(v)
             EXPRS.append({"at": at, "expr": x[1:], "value": v})
@@ -239,7 +243,7 @@ def _eval_exprs(x, at):
 
 ROW_INDEX = {}   # section -> each kept row's index in the config, for labels after a skipped row
 for _k in list(CFG):
-    if _k == "accepted_warns":
+    if _k in ("accepted_warns", "calcs"):     # calcs are evaluated in order by check_calcs (they name each other)
         continue
     if isinstance(CFG[_k], list):
         # a row with a failed expression is skipped, named in its config fail: a None in a row crashed the check that
@@ -1276,7 +1280,7 @@ def check_parts():
         sd = sorted(dims[:2])
         fits = {k: sd[0] <= sorted(v[:2])[0] and sd[1] <= sorted(v[:2])[1] and dims[2] <= v[2] for k, v in P.items()}
         infill = float(o.get("infill", 20))
-        shell = min(abs(vol), area * 0.84)
+        shell = min(abs(vol), area * float(o.get("walls", 2)) * float(o.get("line_w", 0.42)))   # 2 x 0.42 = the old 0.84
         used = shell + max(0.0, abs(vol) - shell) * infill / 100.0
         g, h = used * CFG["pla_density"], used / CFG["flow_mm3_s"] / 3600 + 0.1
         stl = o.get("stl")
@@ -3955,6 +3959,47 @@ def check_flexures():
     REPORT["coverage"].append("flexures: %d declared springs or snap arms against print orientation" % len(rows))
 
 
+def check_calcs():
+    """Calculations as rows (push-assist: hand calcs with no row, PA-A1-T10 / A3-T23, then calcs folded into stacks rows
+    that reported a stress as "worst case / RSS" and took abs() of it, PA-A6-T9). Each {"name", "value": "=expr", "min",
+    "max", "unit", "why"} is evaluated in order over the params, earlier calcs (by name), mat() allowables and the
+    printed section of a part (i_eff, z_eff, section: cadmat), and fails outside min/max. A part whose walls, infill or
+    material a calc read from the defaults warns: the 3MF carries no setting for it (PA-A8-T13)."""
+    if not CFG.get("calcs"):
+        return
+    try:
+        _check_calcs()
+    except Exception as e:     # a calc bug is a finding, not a run with no report
+        finding("calcs", "fail", "the calcs check crashed (%s: %s); rows after the crash are unchecked" % (type(e).__name__, e))
+
+
+def _check_calcs():
+    parts = {o.name: {k: o[k] for k in CM.PRINT_KEYS if k in o.keys()} for o in PRINTED}
+    rows, defaulted = [], {}
+    for r in CM.run_calcs(CFG["calcs"], PARAMS, parts):
+        i = r["index"]
+        if "error" in r:
+            finding("config", "fail", "calcs[%d] '%s': expression '%s' failed (%s; params from %s); row skipped" % (
+                i, r["name"], r["expr"], r["error"], PARAMS_SRC), at="calcs[%d]" % i, expr=r["expr"], error=r["error"])
+            continue
+        rows.append(r)
+        u = " %s" % r["unit"] if r.get("unit") else ""
+        if r["result"] == "fail":
+            lo = r["min"] is not None and r["value"] < r["min"]
+            finding("calcs", "fail", "%s: %.4g%s %s %s %.4g" % (r["name"], r["value"], u, "<" if lo else ">", "min" if lo else "max",
+                                                              r["min"] if lo else r["max"]), **r)
+        for p, d in r["parts"].items():
+            if d:
+                defaulted.setdefault(p, (d, r["name"]))
+    for p, (d, n) in sorted(defaulted.items()):
+        finding("calcs", "warn", "%s: calc '%s' uses its section or material, but %s %s not declared, so it assumes the slicer "
+                "default (%s); give asm.part(%s) so the manifest and 3MF carry it" % (
+                    p, n, "/".join(d), "is" if len(d) == 1 else "are", ", ".join("%s %s" % (k, CM.PRINT_DEFAULTS[k]) for k in d),
+                    ", ".join("%s=" % k for k in d)), part=p, defaulted=d)
+    REPORT["checks"].setdefault("calcs", {"findings": []})["rows"] = rows
+    REPORT["coverage"].append("calcs: %d calculations, %d with a min or max" % (len(rows), sum(1 for r in rows if r["result"] != "info")))
+
+
 def centroid_vol(o):
     bm = world_bm(o)
     bmesh.ops.triangulate(bm, faces=bm.faces)
@@ -4376,11 +4421,11 @@ CHECKS = (("parts", check_parts), ("interference", check_interference), ("fasten
           ("service", check_service), ("drop", check_drop), ("index", check_index), ("slide", check_slide),
           ("distances", check_distances), ("payload", check_payload), ("sightlines", check_sightlines),
           ("assembly", check_assembly), ("insertion", check_insertion), ("stacks", check_stacks), ("flexures", check_flexures),
-          ("stability", check_stability), ("cables", check_cables))
+          ("calcs", check_calcs), ("stability", check_stability), ("cables", check_cables))
 # flexures is not here: it also checks compliant distances rows and slide flexes, and says so in not_checked itself
 ROWS_OF = {"service": "service", "drop": "drop_tests", "index": "index_tests", "slide": "slide_out", "distances": "distances",
            "payload": "payload_fit", "sightlines": "sightlines", "assembly": "assembly_order", "insertion": "assembly_order",
-           "stacks": "stacks"}
+           "stacks": "stacks", "calcs": "calcs"}
 
 
 def unused_allows():
@@ -4429,12 +4474,16 @@ def unused_allows():
 
 def config_warns(acc, tri, unused=None):
     """Config hygiene, listed apart from the design warns: keys cadcheck never reads (each file on its own, with the
-    closest known key), --only names that are no check, malformed accepts, the old substring accepts and allows that
-    measured no overlap (unused_allows)."""
+    closest known key), stacks rows that are calcs (PA-A6-T9), --only names that are no check, malformed accepts, the
+    old substring accepts and allows that measured no overlap (unused_allows)."""
     pc = CC.literal(os.path.join(os.path.dirname(os.path.abspath(__file__)), "printcheck.py"), "DEFAULTS")
     out = []
     for path, raw in CFG_FILES:
         out += CC.unknown_msgs(os.path.basename(path), raw, dict(DEFAULTS, printcheck=pc), CONFIG_ROWS, CONFIG_NAMED)
+        out += ["%s stacks[%d]%s: one term from an =expr and no \"between\" is a calculation, reported as a tolerance stack "
+                "(worst case, RSS, abs() of the value); write it as a \"calcs\" row" % (
+                    os.path.basename(path), i, " (%.60s)" % raw["stacks"][i]["name"] if raw["stacks"][i].get("name") else "")
+                for i in CM.stack_calcs(raw.get("stacks") if isinstance(raw.get("stacks"), list) else [])]
     names = [n for n, _ in CHECKS] + ["clearance"]
     out += CC.only_problems(ONLY, names)
     out += CC.accept_problems(acc, names + ["config"]) + tri["unpinned"]
