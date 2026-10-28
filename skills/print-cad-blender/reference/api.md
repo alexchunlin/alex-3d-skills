@@ -23,7 +23,7 @@ Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X
 | `bevel(ob, w, seg=1, angle=40)` | edge break; apply before booleans that cut fine detail |
 | `xform(ob, M4)`, `frame(origin, u, v, w)` | bake a transform; build a placement matrix |
 | `join(name, obs)` | merge shells without booleans (purchased placeholders only) |
-| `import_stl(path, name)` | e.g. `reference/mg_axis.stl` as a placeholder |
+| `import_stl(path, name)` | e.g. `reference/mg_axis.stl` as a placeholder. Plain Python (no Blender): `printcheck.read_stl(path)`, ASCII or binary |
 | `swept_envelope(...)`, `cadlib.blend` | keep-outs for moving parts; organic connectors grown around tubes and parts: `reference/blend.md` (`Tube` clearance is radial) |
 
 ## features: print features

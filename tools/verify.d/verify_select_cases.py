@@ -200,13 +200,14 @@ SELF = "verify_select.sh"
 
 
 ALLIDS = set(IDS)
-CORE = ALLIDS - {"6", "7", "4m-slice", "design_principles.sh", "verify_select.sh"}
+CORE = ALLIDS - {"6", "7", "4m-slice", "design_principles.sh", "verify_select.sh", "stl_read.sh"}
 BENCH = {"bench.sh", "4k", "4m", "4n"}   # bench reads 4k's, 4m's and 4n's reports
 PCO = {"printcheck_overhangs.sh"}        # watches printcheck.py and the v2a7 STLs, reads 4m's model
+STL = {"stl_read.sh"}                    # watches printcheck.py (read_stl), the prior_art readers and the v2a7 STLs
 CASES = [   # the selector test always runs under --changed (review); it is added to every set here
     ("docs only", ["docs/STATUS.md", "README.md", "skills/print-cad-blender/reference/api.md", "skills/cad-design-review/SKILL.md",
                    "tools/verify.d/README", "tools/bench/README.md", "docs/tasks/x.md"], set()),
-    ("printcheck.py (3's output feeds 3b, 3c)", [S + "printcheck.py"], {"1", "3", "3b", "3c", "blend_bracket.sh"} | BENCH | PCO),
+    ("printcheck.py (3's output feeds 3b, 3c)", [S + "printcheck.py"], {"1", "3", "3b", "3c", "blend_bracket.sh"} | BENCH | PCO | STL),
     ("a cadlib file", [S + "cadlib/geom.py"], CORE),
     ("cadcheck.py", [S + "cadcheck.py"], CORE),
     ("the cad wrapper", [S + "cad"], CORE | {"4m-slice"}),
@@ -231,7 +232,7 @@ CASES = [   # the selector test always runs under --changed (review); it is adde
      {"4f", "4g", "4n", "cadcfg.sh"} | BENCH),
     ("the template's checks.json", ["skills/print-cad-blender/templates/project/checks.json"],
      {"3", "3b", "3c", "design_principles.sh", "cadcfg.sh"}),
-    ("v2a7 STLs", ["examples/mm-launcher-v2a7/stl.tar.gz"], BENCH | PCO),
+    ("v2a7 STLs", ["examples/mm-launcher-v2a7/stl.tar.gz"], BENCH | PCO | STL),
     ("demo-turret", ["examples/demo-turret/build.py"], {"1", "2"}),
     ("slide-gate config (cadcfg too)", ["examples/slide-gate/checks.json"], {"slide-gate", "cadcfg.sh"}),
     ("slide-gate build", ["examples/slide-gate/build.py"], {"slide-gate"}),
@@ -243,6 +244,7 @@ CASES = [   # the selector test always runs under --changed (review); it is adde
      ["tools/prior_art/cadcheck_head_overlap_repro.py"], {"fastener_overlap.sh"}),
     ("fastener_overlap's build helper", ["tools/verify.d/fastener_overlap_build.py"], {"fastener_overlap.sh"}),
     ("a prior_art file no test reads", ["tools/prior_art/dfam_compare.py"], set()),
+    ("a prior_art STL reader (none: in verify_all, but stl_read.sh watches it)", ["tools/prior_art/tri_dist.py"], STL),
     ("a new prior_art file (review: only listed files are none:)", ["tools/prior_art/new_compare.py"], "ALL"),
 ]
 for name, paths, want in CASES:
@@ -364,7 +366,7 @@ latest = os.path.realpath("/tmp/alex3d-verify/latest") if os.path.exists("/tmp/a
 r = subprocess.run(["sh", os.path.join(ROOT, "tools/verify_all.sh"), "--dry-run", "--files", S + "printcheck.py"],
                    capture_output=True, text=True)
 ran = re.findall(r"^run +(\S+)", r.stdout, re.M)
-say(r.returncode == 0 and set(ran) == {"1", "3", "3b", "3c", "blend_bracket.sh", SELF} | BENCH | PCO and "SELECT" not in r.stdout
+say(r.returncode == 0 and set(ran) == {"1", "3", "3b", "3c", "blend_bracket.sh", SELF} | BENCH | PCO | STL and "SELECT" not in r.stdout
     and "UNITS" not in r.stdout,
     "verify_all.sh --dry-run --files printcheck.py prints the plan and stops: %s" % " ".join(ran))
 r = subprocess.run(["sh", os.path.join(ROOT, "tools/verify_all.sh"), "--dry-run"], capture_output=True, text=True)

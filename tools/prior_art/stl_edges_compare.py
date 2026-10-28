@@ -13,20 +13,15 @@ A binary STL is a triangle soup in float32, so a topology count first has to wel
   and at least 0.01 mm long. It ignores open edges left by slivers, which a slicer closes up.
 `collapsed_faces` counts the dropped faces; `-v` lists each flagged edge's ends and length.
 """
-import os, struct, sys
+import os, sys
 import json
 import numpy as np
 import trimesh
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "skills", "print-cad-blender", "scripts"))
+from printcheck import read_stl as read  # noqa: E402  (ASCII or binary)
 
 verbose = "-v" in sys.argv
 paths = [a for a in sys.argv[1:] if a != "-v"]
-
-
-def read(path):
-    d = open(path, "rb").read()
-    n = struct.unpack("<I", d[80:84])[0]
-    r = np.frombuffer(d, dtype=np.dtype([("n", "<f4", 3), ("v", "<f4", (3, 3)), ("a", "<u2")]), count=n, offset=84)
-    return r["v"].astype(np.float64)
 
 
 def edges(T, grid=None):
