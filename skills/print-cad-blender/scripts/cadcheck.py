@@ -714,24 +714,39 @@ def envelope_of(o, mo, cache, guard):
     key = (o.name, tuple(m[0] for m in mo))
     if key in cache:
         return cache[key]
-    from cadlib import geom as G, blend as BL
-    out, voxel = None, CFG["envelope_voxel"]
+    from cadlib import geom as G, blend as BL, route as RT
+    out, voxel, src, ring = None, CFG["envelope_voxel"], o, None
+    if len(mo) > 1 and mo[0][1] == "revolute" and JOINTS[mo[0][0]].get("continuous"):
+        # a wheel spinning inside a chain: its spin is a solid of revolution (the router's annulus about the spin axis,
+        # route._envelope), so only the other joints are swept. Sampling the full turn in the chain coarsened it to a
+        # 27 mm pad (PR #14 review: PRT_flywheel over flywheel + tilt + pan)
+        co, F = RT._envelope(o, mo[0][0], joint_chain(o), JOINTS, COUPLE)
+        me = bpy.data.meshes.new("CADCHECK_ring")
+        me.from_pydata([tuple(v) for v in co.tolist()], [], [tuple(f) for f in F.tolist()])
+        ring = src = bpy.data.objects.new("CADCHECK_ring_" + o.name, me)
+        tmpcoll().objects.link(ring)
+        bpy.context.view_layer.update()
+        mo = mo[1:]
     for _ in range(4):
         try:
             if len(mo) == 1:
                 _, kind, piv, u, lo, hi = mo[0]
-                ob = G.swept_envelope([o], piv, axis=u, lo=lo, hi=hi, tol=CFG["sweep_tol"], voxel=voxel,
+                ob = G.swept_envelope([src], piv, axis=u, lo=lo, hi=hi, tol=CFG["sweep_tol"], voxel=voxel,
                                       prismatic=kind == "prismatic", name="CADCHECK_env_" + o.name)
             else:
-                ob = G.swept_envelope_chain([o], [m[1:] for m in mo], tol=CFG["sweep_tol"], voxel=voxel,
+                ob = G.swept_envelope_chain([src], [m[1:] for m in mo], tol=CFG["sweep_tol"], voxel=voxel,
                                             max_poses=CFG["envelope_max_poses"], name="CADCHECK_env_" + o.name)
             out = (ob, bvh_world(ob), bbox_world(ob))
             log("envelope %s over %s: %s" % (o.name, [m[0] for m in mo], {k: ob["envelope"][k] for k in ("poses", "pad", "tris", "t_s") if k in ob["envelope"]}))
             guard["envelopes"] += 1
             guard["envelope_tris"] += ob["envelope"]["tris"]
+            guard["pads"].append((o.name, ob["envelope"]["pad"]))
             break
         except BL.GridTooLarge:
             voxel *= 2
+    if ring is not None:
+        bpy.data.objects.remove(ring)
+        bpy.data.meshes.remove(me)
     if out is None:
         guard["envelope_failed"].append(o.name)
     cache[key] = out
@@ -757,10 +772,35 @@ def envelope_meets(a, ma, b, mb, cache, guard):
         return False
     if ta.overlap(tb):
         return True
-    # no surfaces cross: one inside the other is still a meeting
-    pa = oa.matrix_world @ oa.data.vertices[0].co if len(oa.data.vertices) else None
-    pb = ob.matrix_world @ ob.data.vertices[0].co if len(ob.data.vertices) else None
-    return bool((pa is not None and inside(tb, pa, bb)) or (pb is not None and inside(ta, pb, ba)))
+    # no surfaces cross: a shell of one wholly inside the other is still a meeting. One vertex per connected shell: a
+    # joined placeholder's small pin can sit inside the envelope while its far block doesn't (PR #14 review, multishell_a)
+    return any(inside(tb, oa.matrix_world @ v, bb) for v in shell_pts(oa)) or any(inside(ta, ob.matrix_world @ v, ba) for v in shell_pts(ob))
+
+
+_SHELLS = {}
+
+
+def shell_pts(o):
+    """One vertex (local) per connected shell of o's mesh, kept per mesh."""
+    me = o.data
+    key = (me.as_pointer(), len(me.vertices), len(me.edges))
+    if key not in _SHELLS:
+        par = list(range(len(me.vertices)))
+
+        def find(i):
+            while par[i] != i:
+                par[i] = par[par[i]]
+                i = par[i]
+            return i
+        for e in me.edges:
+            ra, rb = find(e.vertices[0]), find(e.vertices[1])
+            if ra != rb:
+                par[ra] = rb
+        roots = {}
+        for i in range(len(par)):
+            roots.setdefault(find(i), i)
+        _SHELLS[key] = [me.vertices[i].co.copy() for i in roots.values()]
+    return _SHELLS[key]
 
 
 MANIFOLD_OK = {}
@@ -855,6 +895,64 @@ def sample_pts(o, cap=4000, M=None):
         _LOCAL_PTS[key] = loc
     mw = o.matrix_world if M is None else M
     return [mw @ p for p in _LOCAL_PTS[key]]
+
+
+_DENSE = {}
+
+
+def dense_pts(o, cap=20000):
+    """(local points, r): points on o's surface such that every surface point is within r of one of them. Each
+    triangle is cut into n x n similar pieces (n from its longest edge) and their corners kept, so r = the longest
+    piece edge / sqrt(3) (no point of a triangle is farther than that from its nearest corner). The spacing grows
+    until the count fits cap. Kept per mesh. sample_pts (vertices and triangle centres) has no such bound: a 95 mm
+    blade face read 12.6 mm where the gap was 4.2 (PR #14 review, scene blade_box)."""
+    import numpy as np
+    me = o.data
+    key = (me.as_pointer(), len(me.vertices), cap)
+    if key in _DENSE:
+        return _DENSE[key]
+    me.calc_loop_triangles()
+    co = np.empty(len(me.vertices) * 3)
+    me.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    t = np.empty(len(me.loop_triangles) * 3, dtype=np.int64)
+    me.loop_triangles.foreach_get("vertices", t)
+    T = co[t.reshape(-1, 3)]
+    L = np.max(np.linalg.norm(T - np.roll(T, 1, axis=1), axis=2), axis=1)
+    area = 0.5 * np.linalg.norm(np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]), axis=1).sum()
+    sp = max(0.1, math.sqrt(2 * area / cap))
+    while True:
+        n = np.maximum(1, np.ceil(L / sp)).astype(int)
+        if ((n + 1) * (n + 2) // 2).sum() <= cap * 1.5 or sp > 1e3:
+            break
+        sp *= 1.25
+    pts = [co]
+    for k in np.unique(n):
+        if k == 1:
+            continue
+        Tk = T[n == k]
+        ij = np.array([(i, j) for i in range(k + 1) for j in range(k + 1 - i)], float) / k
+        pts.append((Tk[:, None, 0] + ij[None, :, :1] * (Tk[:, None, 1] - Tk[:, None, 0]) + ij[None, :, 1:] * (Tk[:, None, 2] - Tk[:, None, 0])).reshape(-1, 3))
+    P = np.concatenate(pts)
+    r = float((L / n).max()) / math.sqrt(3) if len(L) else 0.0
+    _DENSE[key] = (P, r)
+    return _DENSE[key]
+
+
+def dist_lb(a, b, ta, tb, Ma, Mb):
+    """A lower bound on the distance between a and b (BVHs ta, tb, world matrices Ma, Mb): the nearest of a's dense
+    points to b's surface (exact, BVH) less a's covering radius, from the side with the smaller radius. If every point
+    of a is within r of a sample, the true gap D satisfies min over samples of dist(sample, b) <= D + r."""
+    import numpy as np
+    (Pa, ra), (Pb, rb) = dense_pts(a), dense_pts(b)
+    (P, r, M, t) = (Pa, ra, Ma, tb) if ra <= rb else (Pb, rb, Mb, ta)
+    W = P @ np.array(M.to_3x3()).T + np.array(M.translation)
+    best = 1e9
+    for q in W.tolist():
+        h = t.find_nearest(q, best)
+        if h[0] is not None and h[3] < best:
+            best = h[3]
+    return best - r
 
 
 def min_dist(a, b, ta, tb, Ma=None, Mb=None):
@@ -1346,7 +1444,8 @@ def check_interference():
                                                  "min": fit.get("min_clearance", CFG["moving_min_clearance"]) if fit else CFG["moving_min_clearance"]}
                 if between:
                     worst[("min_clearance", key)]["between_samples"] = True
-            return d, False
+            # the refinement needs a lower bound (dist_lb); a sampled pose's min_dist only says where to look again
+            return (max(1e-6, dist_lb(a, b, ta, tb, ga[2], gb[2])), False) if between else (d, "nb")   # 0 means overlap
         return None
 
     def tree(o, geo):
@@ -1355,7 +1454,71 @@ def check_interference():
             g[0] = bvh_world(o, g[2])
         return g[0]
 
-    guard = {"candidates": 0, "broad_culled": 0, "narrow_culled": 0, "fits_flagged": [], "envelopes": 0, "envelope_tris": 0,
+    def refine_fit(a, b, cls, rule, ma, mb, drv, per, cyc, moving):
+        """A declared fit the envelope meets: "turning" when one turns about one axis against the other and their
+        triangles never share (h, r, angle) over the range (a journal), else a sweep with every point moving under
+        sweep_tol between poses: "collision" (recorded) at the first overlap of vol_tol or more, "clear", or
+        "unproven" past 4 x max_guard_poses poses. -> (result, pose range)"""
+        lims = [(JOINTS[j]["lo"], JOINTS[j]["hi"]) for j in drv]
+        rngs = [((p[0][0], p[0][0] + 360.0) if c else (p[0][0], p[-1][0])) for p, c in zip(per, cyc)]
+        span = ", ".join("%s=%g..%g" % (j.replace("PIV_", ""), lo, hi) for j, (lo, hi) in zip(drv, rngs))
+        rel = ma + mb
+        terms = JT.move_terms(_corners(bbox_world(a)), joint_chain(a), joint_chain(b), JOINTS, COUPLE, info)
+        rates_ = [JT.move_rate(terms.get(j, []), _corners(bbox_world(b))) for j in drv]
+        cells = None
+        if len(rel) == 1 and rel[0][1] == "revolute" and len(drv) == 1:
+            # per lattice cell: the turning test proves the cells away from anything but the journal
+            j, _, piv, u, _, _ = rel[0]
+            sign, home = (1 if ma else -1), JT.values(JOINTS, COUPLE, {})[j]
+            set_pose({})
+            clear = turning(a, b, piv, u)
+            vals = [v for v, _ in per[0]] + ([per[0][0][0] + 360.0] if cyc[0] else [])
+            cells = []
+            for lo, hi in zip(vals, vals[1:]):
+                x = sorted(math.radians(sign * (JT.values(JOINTS, COUPLE, {drv[0]: v})[j] - home)) for v in (lo, hi))
+                if not clear(*x):
+                    cells.append((lo, hi))
+            if not cells:
+                return "turning", span
+        axes_list = []
+        for cell in (cells or [None]):
+            axes = []
+            for i, (j, (lo, hi), c) in enumerate(zip(drv, rngs, cyc)):
+                if cell is not None:
+                    lo, hi = cell
+                n = max(1, int(math.ceil(rates_[i] * (hi - lo) / CFG["sweep_tol"])))
+                axes.append([lo + (hi - lo) * k / n for k in range(n + 1)])
+            axes_list.append(axes)
+        if sum(math.prod(len(x) for x in axes) for axes in axes_list) > 4 * CFG["max_guard_poses"]:
+            return "unproven", span
+        home = {o.name: (bvh_world(o), o.matrix_world.copy()) for o in (a, b) if o.name not in moving}
+        for combo in (c for axes in axes_list for c in itertools.product(*axes)):
+            pose = dict(zip(drv, (round(v, 4) for v in combo)))
+            jv, mats, M = JT.values(JOINTS, COUPLE, pose), {}, {}
+            for o in (a, b):
+                M[o.name] = home[o.name][1] if o.name in home else JT.world_at(o.name, JOINTS, jv, mats, O)
+            if bb_gap(bbox_world(a, M[a.name]), bbox_world(b, M[b.name])) > 0:
+                continue
+            ta = home[a.name][0] if a.name in home else bvh_world(a, M[a.name])
+            tb = home[b.name][0] if b.name in home else bvh_world(b, M[b.name])
+            ov = ta.overlap(tb)
+            if not ov:
+                continue
+            set_pose(pose)
+            vol, region, solver = inter_volume(a, b)
+            if vol >= CFG["vol_tol"]:
+                over = any(not c and (v < lo - 1e-9 or v > hi + 1e-9) for v, c, (lo, hi) in zip(pose.values(), cyc, lims))
+                key = (a.name, b.name)
+                prev = worst.get(("collisions", key))
+                rec = {"a": a.name, "b": b.name, "pose": pose_key(pose), "overtravel": over, "tri_overlaps": len(ov),
+                       "volume_mm3": round(vol, 2), "region": region, "solver": solver, "between_samples": True,
+                       "n_poses": (prev or {}).get("n_poses", 0) + 1, "in_range_poses": (prev or {}).get("in_range_poses", 0) + (0 if over else 1)}
+                if prev is None or rec["volume_mm3"] > prev["volume_mm3"]:
+                    worst[("collisions", key)] = rec
+                return "collision", span
+        return "clear", span
+
+    guard = {"candidates": 0, "broad_culled": 0, "narrow_culled": 0, "fits_flagged": [], "envelopes": 0, "envelope_tris": 0, "pads": [],
              "envelope_failed": [], "pairs": 0, "turning": 0, "spin": 0, "poses": 0, "pair_poses": 0, "bisected": 0, "at_tol": 0,
              "unproven": {}, "broad_s": 0.0, "narrow_s": 0.0, "refine_s": 0.0}
     env_cache = {}
@@ -1424,16 +1587,25 @@ def check_interference():
         # 2 narrow phase: geom.swept_envelope of each moving side (one per part and motion chain, cached), tested once
         # against the other side: no overlap means no collision anywhere in the range, sampled or not
         t2 = time.time()
-        hits = []
+        hits, fit_hits = [], []
         for a, b, cls, rule in watch:
             r = envelope_meets(a, mot[(a.name, b.name, 0)], b, mot[(a.name, b.name, 1)], env_cache, guard)
             if r is False:
                 cull["narrow"] = cull.get("narrow", 0) + 1
             elif rule:
-                guard["fits_flagged"].append("%s x %s" % (a.name, b.name))     # inside the pad, excluded as before
+                fit_hits.append((a, b, cls, rule))
             else:
                 hits.append((a, b, cls, rule))
         guard["narrow_s"] += time.time() - t2
+        # a declared fit inside the envelope pad: refined for collision only (overlap >= vol_tol), so a running fit
+        # isn't flagged but a lug on the same part in the arm's path is (PR #14 review, fit_hide)
+        t3 = time.time()
+        for a, b, cls, rule in fit_hits:
+            out, span = refine_fit(a, b, cls, rule, mot[(a.name, b.name, 0)], mot[(a.name, b.name, 1)], drv, per, cyc, moving)
+            guard["fits_flagged"].append("%s x %s: %s" % (a.name, b.name, out))
+            if out == "unproven":
+                guard["unproven"].setdefault((a.name, b.name), span)
+        guard["refine_s"] += time.time() - t3
         guard["broad_culled"] += cull.get("broad", 0)
         guard["narrow_culled"] += cull.get("narrow", 0)
         guard["candidates"] += len(cand)
@@ -1493,7 +1665,8 @@ def check_interference():
                 gs = [g for g, _ in gl]
                 moves = [r * (hi - lo) for r, (lo, hi) in zip(rates[k], cell)]
                 bound = sum(moves)
-                if (sum(gs) / 2 if len(cell) == 1 else min(gs)) > bound:
+                bounded = all(ls != "nb" for _, ls in gl)     # a sampled pose's min_dist is no lower bound
+                if bounded and (sum(gs) / 2 if len(cell) == 1 else min(gs)) > bound:
                     continue
                 if k in spin:       # the wheel's spin box at each corner, against the other moves only
                     ci, corners0, axes0, up, inv, other, r2 = spin[k]
@@ -1511,7 +1684,7 @@ def check_interference():
                         guard["spin"] += 1
                         continue
                 if spent[k] >= CFG["max_guard_poses"]:
-                    guard["unproven"][k] = guard["unproven"].get(k, 0) + 1
+                    guard["unproven"].setdefault(k, ", ".join("%s=%g..%g" % (j.replace("PIV_", ""), lo, hi) for j, (lo, hi) in zip(drv, cell)))
                     continue
                 loose = [c for c, (_, ls) in zip(corners, gl) if ls]
                 if loose:           # world box gaps only: take the oriented boxes' gap there, then look again
@@ -1586,25 +1759,26 @@ def check_interference():
             me = e[0].data
             bpy.data.objects.remove(e[0])
             bpy.data.meshes.remove(me)
-    res["between_samples"] = dict(guard, unproven=["%s x %s" % k for k in sorted(guard["unproven"])],
+    res["between_samples"] = dict(guard, unproven=["%s x %s (%s)" % (k + (v,)) for k, v in sorted(guard["unproven"].items())],
                                   **{k: round(guard[k], 1) for k in ("broad_s", "narrow_s", "refine_s")})
+    for (a, b), cell in sorted(guard["unproven"].items()):
+        finding("interference", "warn", "%s x %s not proven clear between the sampled poses at %s: the swept envelope meets it "
+                "and refinement spent max_guard_poses %d; give the joint a finer step" % (a, b, cell, CFG["max_guard_poses"]),
+                a=a, b=b, between_cell=cell)
     REPORT["checks"].setdefault("interference", {"findings": []}).update(res)
     swept = sorted({j for g in res["groups"] for j in g["joints"]})
     REPORT["coverage"].append("interference/clearance: %d objects in %s, %d pair-pose tests, joints swept %s with %.1f deg overtravel" % (
         len(ALL), list(COLL.values()), tested[0], swept, CFG["overtravel_deg"]))
+    pads = [p for _, p in guard["pads"]]
     REPORT["coverage"].append("interference between samples: %d pairs across a joint; %d apart by their swept bounds, %d clear of "
-                              "the swept envelopes (%d envelopes, pad sweep_tol %g + voxel %g mm), %d refined between the samples "
-                              "(%d cells halved, %d extra pair-pose tests); %d declared fits inside the envelope pad not refined" % (
+                              "the swept envelopes (%d envelopes, oversize by %s mm), %d refined between the samples (%d cells "
+                              "halved, %d extra pair-pose tests); %d declared fits inside the envelopes refined for collision only" % (
                                   guard["candidates"], guard["broad_culled"], guard["narrow_culled"], guard["envelopes"],
-                                  CFG["sweep_tol"], CFG["envelope_voxel"], guard["pairs"], guard["bisected"], guard["pair_poses"],
-                                  len(guard["fits_flagged"])))
+                                  ("%g-%g" % (min(pads), max(pads))) if pads else "-", guard["pairs"], guard["bisected"],
+                                  guard["pair_poses"], len(guard["fits_flagged"])))
     if guard["envelope_failed"]:
         REPORT["not_checked"].append("interference between samples: no swept envelope (grid too large) for %s; their pairs are "
                                      "refined by bisection only" % sorted(set(guard["envelope_failed"]))[:6])
-    if guard["unproven"]:
-        REPORT["not_checked"].append("interference between samples: %d pairs not proven clear between every two sampled poses after "
-                                     "max_guard_poses %d (give the joint a finer step): %s" % (
-                                         len(guard["unproven"]), CFG["max_guard_poses"], res["between_samples"]["unproven"][:6]))
     unswept = [n for n, s in JOINTS.items() if n not in COUPLE and (s["axis"] is None or (not s.get("continuous") and (s["lo"] is None or s["hi"] is None)))]
     if unswept:
         REPORT["not_checked"].append("joints with no range (home pose only): %s" % unswept)
