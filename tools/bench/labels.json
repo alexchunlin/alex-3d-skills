@@ -1999,7 +1999,7 @@
    ],
    "severity": "minor",
    "metric": "manufacturability",
-   "summary": "v2a1 jar_valve (347 edges, at the bed) and launcher_body (2): pieces whose vertices coincide exactly, edges in more than 2 faces once exported (gone by v2a7)",
+   "summary": "v2a1 jar_valve (296 line contacts and 51 back-to-back sheet edges, at the bed) and launcher_body (2 sheet edges): pieces whose vertices coincide exactly, edges in more than 2 faces once exported (gone by v2a7)",
    "tool_catchable": true,
    "locators": [
     {
@@ -2007,14 +2007,14 @@
      "objects": [
       "PRT_jar_valve"
      ],
-     "kind": "edges shared by more than 2 faces"
+     "kind": "edges (?:shared by|in) more than 2 faces"
     },
     {
      "check": "parts",
      "objects": [
       "PRT_launcher_body"
      ],
-     "kind": "edges shared by more than 2 faces"
+     "kind": "edges (?:shared by|in) more than 2 faces"
     }
    ],
    "source": "PR 'printcheck: sloped overhangs' (feat/printcheck-overhangs): edge count on the model's triangles as float32 (509 such edges already in float64 on jar_valve)",
