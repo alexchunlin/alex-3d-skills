@@ -17,7 +17,8 @@ Per attempt and scope ("designer": the designer's config plus the always-on tool
   partial                     only a partial locator matched (a coverage warn, a sub-point): not caught
   label_errors                uncaught labels whose check came from a run that crashed: an error, not a miss
   false_fails                 fails that match no locator of a label, printability finding or known true positive
-  noise_warns / hit_share     untriaged warns that match no locator / the share that do
+  noise_warns / hit_share     untriaged warns that match no locator / the share that do (neither counts cadcheck's
+                              "not proven clear between the sampled poses" warns: unproven_warns, its own count)
   runtime_s                   information only (machine load moves it); never a gate
 
 One JSON row per (commit, attempt), plus ALL-v1, ALL-v2 and ALL rows (v1 was never triaged: keep it apart from v2).
@@ -60,6 +61,7 @@ SEV_W = {"blocker": 3, "major": 2, "minor": 1}
 # every check a report line can start with: cadcheck's checks (and its stale-model "build" warn), printcheck, cad bom
 CHECKS = ("parts", "interference", "clearance", "fasteners", "service", "drop", "index", "slide", "distances", "payload",
           "sightlines", "assembly", "insertion", "stacks", "flexures", "stability", "cables", "build", "printcheck", "bom")
+UNPROVEN = "not proven clear between the sampled poses"   # cadcheck UNPROVEN_KIND: the interference coverage-limit warn
 GROUPS = (("ALL-v1", lambda a: not a.startswith("v2")), ("ALL-v2", lambda a: a.startswith("v2")), ("ALL", lambda a: True))
 
 
@@ -478,6 +480,9 @@ def score(name: str, spec: dict, labels: list, known: list, runs: dict, pf: list
         false = [tx for tx in fails if tx not in excused]
         warns = [tx for tx, (s, _) in its.items() if s == "warn"]
         hit = [tx for tx in warns if any(_match(loc, tx) for loc in every_loc) or any(_match(k, tx) for k in known)]
+        # cadcheck's own coverage limit (a pair it could not prove clear between samples), not a design warn: counted
+        # apart, never as noise or a hit
+        unproven = [tx for tx in warns if UNPROVEN in tx and tx not in hit]
         pfs = [row["pf"][f["id"]][scope] for f in pf]
         row.update({
             "caught_fail" + sfx: sum(1 for v in st.values() if v == "fail"),
@@ -493,8 +498,9 @@ def score(name: str, spec: dict, labels: list, known: list, runs: dict, pf: list
             "known_tp_fails" + sfx: sum(1 for v in excused.values() if all(x.startswith("known:") for x in v)),
             "false_fail_list" + sfx: false[:40],
             "warns_untriaged" + sfx: len(warns), "warns_accepted" + sfx: sum(1 for s, _ in its.values() if s == "accepted"),
-            "noise_warns" + sfx: len(warns) - len(hit), "hit_warns" + sfx: len(hit),
-            "noise_warn_list" + sfx: [w for w in warns if w not in hit][:60],
+            "noise_warns" + sfx: len(warns) - len(hit) - len(unproven), "hit_warns" + sfx: len(hit),
+            "unproven_warns" + sfx: len(unproven),
+            "noise_warn_list" + sfx: [w for w in warns if w not in hit and w not in unproven][:60],
             "pf_findings": len(pf),
             "pf_fail" + sfx: sum(1 for v in pfs if v == "fail"), "pf_fw" + sfx: sum(1 for v in pfs if v in CAUGHT_FW),
         })
@@ -508,7 +514,7 @@ def score(name: str, spec: dict, labels: list, known: list, runs: dict, pf: list
 
 
 def _rates(r: dict, sfx: str, n: int, W: int, ntc: int) -> dict:
-    w = r["warns_untriaged" + sfx]
+    w = r["warns_untriaged" + sfx] - r.get("unproven_warns" + sfx, 0)
     return {"recall_fail" + sfx: round(r["caught_fail" + sfx] / n, 3), "recall_fw" + sfx: round(r["caught_fw" + sfx] / n, 3),
             "recall_fail_w" + sfx: round(r["w_fail" + sfx] / W, 3), "recall_fw_w" + sfx: round(r["w_fw" + sfx] / W, 3),
             "recall_fw_catchable" + sfx: round(r["caught_fw_catchable" + sfx] / (ntc or 1), 3),
