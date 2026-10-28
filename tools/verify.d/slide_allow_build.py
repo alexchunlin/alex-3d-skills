@@ -13,7 +13,13 @@ One case per 100 mm along x, all on the static body. Writes sa.blend and checks.
          within the allow, and the allow is used
   nut    a nut on the stud, bored to the stud, allowed with no max_mm3. Pulled off along the stud: must pass; moved
          sideways with the nut left behind: must be blocked by the nut
-plus an allow that covers no pair (stale).
+plus an allow that covers no pair (stale), and the PR #18 review's cases (/tmp/rv18/scripts/adv_build.py):
+  d1-d3  a snap hook's bump slid -x over a catch ridge (the overlap peaks mid-slide). d1 allowed 0.5 mm3 and d3 with no
+         max_mm3, neither in the row's flex: must fail, saying to use flex; d2 (0.5 mm3) with the base in flex: passes
+  h      a snap lid in a cup under a lip, allowed against the cup: 0 mm3 at rest, but insertion needs the allow (without
+         it the lid has no straight way in), so it is not stale
+  i      an arm on a joint passing 0.70 mm from a wall (a clearance warn under moving_warn_clearance without the allow):
+         not stale
 """
 import json, math, os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -58,6 +64,20 @@ x = 300.0                                             # the nut case: a cell and
 cell("nut", x)
 r = 8.0 / 2 / math.cos(math.pi / 6)
 bought.append(G.csg(G.cyl("BUY_sa_nut_nut", (x, CZ), r, 0, 4, 'Y', n=6), sub=[G.cyl("bore", (x, CZ), STUD_R, -1, 5, 'Y', n=32)]))
+for tag, x in (("d1", 400.0), ("d2", 500.0), ("d3", 600.0)):
+    printed.append(G.csg(G.box("PRT_sa_%s_base" % tag, x - 20, x + 20, -5, 5, -10, 0),
+                         add=[G.prism("ridge", [(x - 2, -0.01), (x + 2, -0.01), (x, 1.5)], -5, 5, 'Y')]))
+    printed.append(G.csg(G.box("PRT_sa_%s_hook" % tag, x + 2.1, x + 13, -5, 5, 1.6, 5),
+                         add=[G.prism("bump", [(x + 2.1, 1.61), (x + 2.1, 0.2), (x + 6, 1.61)], -5, 5, 'Y')]))
+x = 700.0
+printed.append(G.csg(G.csg(G.box("PRT_sa_h_cup", x - 10, x + 10, -10, 10, -10, 0), sub=[G.box("pocket", x - 6, x + 6, -6, 6, -6, 1)]),
+                     add=[G.box("lip", x + 5.5, x + 6.5, -6, 6, -1.5, 0)]))
+printed.append(G.box("PRT_sa_h_lid", x - 5.9, x + 5.9, -5.9, 5.9, -6, -2))
+x = 800.0
+A.joint("PIV_sa_i", (x, 0, 0), 'Y', lo=-30, hi=30, step=2)
+arm = G.box("PRT_sa_i_arm", x, x + 20, -2, 2, -2, 2)
+printed.append(G.box("PRT_sa_i_wall", x + 20.8, x + 25, -5, 5, -10, 10))
+A.part(arm, arm.name, 'PRT', "pla_a", stl=arm.name[4:], joint="PIV_sa_i", **INFO)
 for o in printed:
     A.part(o, o.name, 'PRT', "pla_a", stl=o.name[4:], **INFO)
 for o in bought:
@@ -72,8 +92,17 @@ with open(os.path.join(OUT, "checks.json"), "w") as f:
                          {"a": "PRT_sa_fixed_cart", "b": "BUY_sa_fixed_cell", "max_mm3": 3, "why": "zero-gap seat"},
                          {"a": "PRT_sa_crush_cart", "b": "BUY_sa_crush_cell", "max_mm3": 3, "why": "crush pad, 1.6 mm3"},
                          {"a": "BUY_sa_nut_nut", "b": "BUY_sa_nut_cell", "why": "nut on its stud"},
-                         {"a": "BUY_sa_gone", "b": "PRT_*", "why": "a part since removed"}],
+                         {"a": "BUY_sa_gone", "b": "PRT_*", "why": "a part since removed"},
+                         {"a": "PRT_sa_d1_hook", "b": "PRT_sa_d1_base", "max_mm3": 0.5, "why": "snap preload"},
+                         {"a": "PRT_sa_d2_hook", "b": "PRT_sa_d2_base", "max_mm3": 0.5, "why": "snap preload"},
+                         {"a": "PRT_sa_d3_hook", "b": "PRT_sa_d3_base", "why": "snap"},
+                         {"a": "PRT_sa_h_lid", "b": "PRT_sa_h_cup", "why": "snap lid over the lip"},
+                         {"a": "PRT_sa_i_arm", "b": "PRT_sa_i_wall", "why": "arm passes close to the wall"}],
+               "assembly_order": [{"step": "cup", "objects": ["PRT_sa_h_cup"]}, {"step": "lid", "objects": ["PRT_sa_h_lid"]}],
                "slide_out": [row("short"), row("fixed"), row("crush"),
                              row("nut", name="nut: the cell pulled off its nut along the stud", dir=[0, 1, 0], dist=30),
-                             row("nut", name="nut: the cell out sideways with its nut left on", dist=10)]}, f, indent=1)
+                             row("nut", name="nut: the cell out sideways with its nut left on", dist=10)] +
+                            [{"name": "%s: snap hook off over the ridge" % t, "object": "PRT_sa_%s_hook" % t, "dir": [-1, 0, 0], "dist": 15, "step": 1,
+                              "min_clearance": 0.0, **({"flex": {"PRT_sa_d2_base": 60}} if t == "d2" else {})} for t in ("d1", "d2", "d3")]},
+              f, indent=1)
 print("SA_BUILT", len(printed) + len(bought), "parts")

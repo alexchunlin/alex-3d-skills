@@ -4,10 +4,18 @@
 # cartridge it was allowed 3 mm3 against (zero-gap seats) and the unfittable cell passed for two rounds (PA-A7-T19a).
 # Allowed pairs are now obstacles, bounded by max_mm3 (with none: their overlap at rest). The a7 slot must fail past
 # the allow; the a8 slot, a crush pad within its allow and a nut pulled off its stud must pass. An allow that measures
-# 0 mm3 everywhere, or covers no pair, is a config warn, never a design warn (PA-A8-T6). Cases: slide_allow_build.py.
+# 0 mm3 everywhere, or covers no pair, is a config warn, never a design warn (PA-A8-T6). PR #18 review: a snap riding a
+# row fails unless it is in the row's flex; an allow insertion needs (a snap lid under a lip) or one that hides a
+# clearance warn (an arm 0.70 mm from a wall) is not stale, and --only interference reports none. Cases: slide_allow_build.py.
+CAD="${CAD:-$ROOT/skills/print-cad-blender/scripts/cad}"   # set by verify_all; this default lets the script run on its own
 mkdir -p "$V/sa"
 $CAD build "$ROOT/tools/verify.d/slide_allow_build.py" -- --out "$V/sa" > "$V/sa/build.log" 2>&1
-$CAD check "$V/sa/sa.blend" "$V/sa/checks.json" "$V/sa/cadcheck.json" --only slide,interference > /dev/null 2>&1
+$CAD check "$V/sa/sa.blend" "$V/sa/checks.json" "$V/sa/cadcheck.json" --only slide,interference,insertion > /dev/null 2>&1
+$CAD check "$V/sa/sa.blend" "$V/sa/checks.json" "$V/sa/only_int.json" --only interference > /dev/null 2>&1
+# the controls: the lid and arm allows removed (an overlay's allow list replaces the base's under --overlay-only)
+python3 -I -c "import json,sys; a=json.load(open(sys.argv[1]))['allow']; json.dump({'allow': [x for x in a if x['a'] not in ('PRT_sa_h_lid', 'PRT_sa_i_arm')]}, open(sys.argv[2], 'w'))" \
+  "$V/sa/checks.json" "$V/sa/no_hi.json"
+$CAD check "$V/sa/sa.blend" "$V/sa/checks.json" "$V/sa/no_hi_out.json" --only interference,insertion --overlay "$V/sa/no_hi.json" --overlay-only > /dev/null 2>&1
 python3 -I - "$V/sa" <<'EOF' > "$V/sa/asserts.txt"
 import json, sys
 d = sys.argv[1]
@@ -35,13 +43,34 @@ say(cr.get("dist") == 40 and cr.get("blocked_by") is None and 1.5 <= ride <= 1.7
 ax, sw = row("nut: the cell pulled off its nut along the stud"), row("nut: the cell out sideways with its nut left on")
 say(ax.get("blocked_by") is None and sw.get("blocked_by") == ["BUY_sa_nut_nut"] and len([x for x in F if x.startswith("slide: nut:")]) == 1,
     "an allow with no max_mm3 (nut on its stud): off along the stud passes, sideways blocked by the nut at %s mm" % sw.get("blocked_at_mm"))
-say(len([x for x in F if x.startswith("slide:")]) == 2 and not [x for x in W if x.startswith("slide:")],
-    "exactly 2 slide fails and no slide warns: %s" % [x[:60] for x in F + W if x.startswith("slide:")])
+d1 = [x for x in F if x.startswith("slide: d1:")]
+d3 = [x for x in F if x.startswith("slide: d3:")]
+say(len(d1) == 1 and "past the 0.5 mm3 its allow covers" in d1[0] and "row's `flex`" in d1[0]
+    and len(d3) == 1 and "at rest plus vol_tol" in d3[0] and "row's `flex`" in d3[0] and "needs max_mm3" in d3[0]
+    and row("d2: snap hook off over the ridge").get("blocked_by") is None and row("d2: snap hook off over the ridge").get("flexed"),
+    "a snap riding the row fails without flex, bounded (d1) or not (d3), and says so; with flex it passes (d2): %s" % [x[:110] for x in d1 + d3])
+say(len([x for x in F if x.startswith("slide:")]) == 4 and not [x for x in W if x.startswith("slide:")],
+    "exactly 4 slide fails (short, nut sideways, d1, d3) and no slide warns: %s" % [x[:60] for x in F + W if x.startswith("slide:")])
 st = [x for x in C if "possibly stale" in x]
 want = ("allow PRT_sa_fixed_cart x BUY_sa_fixed_cell: 0 mm3 on its 1 pair at home and in 1 slide row",
-        "allow BUY_sa_gone x PRT_*: covers no pair")
-say(len(st) == 2 and all(any(x.startswith(w) for x in st) for w in want) and set(s["unused_allows"]) == {
-    "PRT_sa_fixed_cart x BUY_sa_fixed_cell", "BUY_sa_gone x PRT_*"}, "unused allows (0 mm3 everywhere; no pair) are config warns: %s" % st)
+        "allow BUY_sa_gone x PRT_*: covers no pair", "allow PRT_sa_d2_hook x PRT_sa_d2_base: 0 mm3 on its 1 pair at home;")
+say(len(st) == 3 and all(any(x.startswith(w) for x in st) for w in want) and all("check what it was for" in x for x in st)
+    and set(s["unused_allows"]) == {"PRT_sa_fixed_cart x BUY_sa_fixed_cell", "BUY_sa_gone x PRT_*", "PRT_sa_d2_hook x PRT_sa_d2_base"},
+    "unused allows (0 mm3 everywhere; no pair; d2's, which its row's flex replaces) are config warns: %s" % st)
 say(not any("possibly stale" in x or "covers no pair" in x for x in F + W), "and never design fails or warns")
+def load(f):
+    try:
+        return json.load(open("%s/%s" % (d, f)))["summary"]
+    except Exception as e:
+        return {"error": str(e)}
+n = load("no_hi_out.json")
+nh = [x for x in n.get("warn_list", []) if x.startswith("insertion: PRT_sa_h_lid") and "no straight way in" in x]
+ni = [x for x in n.get("fail_list", []) + n.get("warn_list", []) if x.startswith("clearance: PRT_sa_i_arm to PRT_sa_i_wall 0.7")]
+say(not any(k.startswith(("PRT_sa_h_lid", "PRT_sa_i_arm")) for k in s["unused_allows"]) and nh and ni,
+    "allows that insertion needs (snap lid under a lip) or that hide a clearance warn (arm at 0.70 mm) are not stale; without "
+    "them: %s / %s" % ([x[:70] for x in nh] or "NO INSERTION WARN", [x[:70] for x in ni] or "NO CLEARANCE WARN"))
+o = load("only_int.json")
+say(o.get("unused_allows", "missing") is None and not [x for x in o.get("config_warns", []) if "possibly stale" in x],
+    "--only interference (slide and insertion rows not run) reports no unused allows: %s" % o.get("unused_allows", o))
 EOF
 while read -r st msg; do [ "$st" = PASS ] && ok "$msg" || bad "$msg"; done < "$V/sa/asserts.txt"
