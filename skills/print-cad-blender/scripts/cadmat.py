@@ -22,7 +22,9 @@ _TABLE = {   # key: (value, source)
     "PLA": {
         "density": (1.24e-3, "g/mm3; Prusament PLA TDS and Bambu PLA Basic TDS: 1.24 g/cm3 (= cadcheck pla_density)"),
         "E_mpa": (2200, "Prusament PLA TDS: tensile modulus 2.2 GPa (ISO 527); Bambu PLA Basic's TDS gives about 2.75"),
-        "tensile_in_mpa": (57, "Prusament PLA TDS: tensile yield strength 57 MPa (ISO 527)"),
+        "tensile_in_mpa": (35, "Bambu PLA Basic TDS: tensile strength X-Y about 35 MPa, as recalled (check the TDS); the "
+                               "lower of the two vendors, so the allowable holds for either: Prusament PLA TDS gives a "
+                               "57 MPa tensile yield strength (ISO 527)"),
         "tensile_across_mpa": (30, "working figure, no TDS number: push-assist reviewers took PLA across layers as 20-30 "
                                    "MPa ('25 MPa = PLA tensile across layers'); 30 / SF 2 = 15, R3's interlayer_mpa"),
         "flex_in_mpa": (76, "Bambu PLA Basic TDS: bending strength 76 MPa (X-Y), the figure push-assist PA-R8 used"),
@@ -68,7 +70,7 @@ def print_problems(info):
     if "material" in g and g["material"] not in MATERIALS:
         out.append("material %r is not in cadmat.MATERIALS (%s)" % (g["material"], ", ".join(MATERIALS)))
     for k in ("walls", "shells"):
-        if k in g and (not isinstance(g[k], int) or isinstance(g[k], bool) or g[k] < 1):
+        if k in g and (isinstance(g[k], bool) or not isinstance(g[k], (int, float)) or g[k] != int(g[k]) or g[k] < 1):
             out.append("%s=%r: a whole number >= 1" % (k, g[k]))
     if "infill" in g and not (isinstance(g["infill"], (int, float)) and 0 <= g["infill"] <= 100):
         out.append("infill=%r: percent, 0-100" % (g["infill"],))
@@ -86,15 +88,16 @@ def print_settings(info):
     return out
 
 
-def section(b, h, walls=2, infill=15, line_w=0.42, shells=3, layer_h=0.2):
+def section(b, h, walls=2, infill=15, line_w=0.42, shells=3, layer_h=0.2, t=None):
     """Effective bending properties of a printed b x h rectangle (h along the load, mm): a solid shell of thickness
     t = min(walls x line_w, shells x layer_h) on all four sides, and the core filled at `infill` % counted at
     (infill / 100)^2 of solid stiffness (Gibson & Ashby, Cellular Solids, 2nd ed. 1997: a bending-dominated cellular
     solid's relative modulus ~ relative density squared). Returns I, I_solid, Z = I / (h / 2) (stress in the shell is
     M / Z: the core is the softer material of a transformed section), t, k (the core's stiffness fraction) and ratio
     = I / I_solid. Ignores holes, stress raisers, the anisotropy (use "in" or "across" allowables) and the wall-to-infill
-    bond. With infill 100, or a section no wider than two shells, it is the solid section."""
-    t = min(walls * line_w, shells * layer_h)
+    bond. With infill 100, or a section no wider than two shells, it is the solid section. t= sets the shell directly
+    (a section whose four faces are all walls, e.g. a beam standing up: t = walls x line_w)."""
+    t = min(walls * line_w, shells * layer_h) if t is None else t
     I_solid = b * h ** 3 / 12.0
     k = (min(max(infill, 0.0), 100.0) / 100.0) ** 2
     bi, hi = b - 2 * t, h - 2 * t
@@ -104,34 +107,41 @@ def section(b, h, walls=2, infill=15, line_w=0.42, shells=3, layer_h=0.2):
 
 # ------------------------------------------------------------------ calcs
 
+# what every "=expr" in checks.json sees besides the params (cadcheck's _eval_exprs uses it too)
+BASE_ENV = {"__builtins__": {}, "min": min, "max": max, "abs": abs, "round": round, "sqrt": math.sqrt, "math": math,
+            "pi": math.pi}
+SECTION_KEYS = ("walls", "infill", "line_w", "shells", "layer_h", "t")   # what section/i_eff/z_eff take by keyword
+
 def calc_env(params, parts, used):
     """The names a calc's "=expr" sees: the params, math, and the helpers below. `parts`: {PRT_name: its declared
     print settings}; `used` collects the parts a helper read, for the defaults note."""
-    def settings(part, over):
+    def settings(part, over, reads):
+        bad = sorted(set(over) - set(SECTION_KEYS))
+        if bad:
+            raise TypeError("unknown keyword %s (known: %s)" % (", ".join(bad), ", ".join(SECTION_KEYS)))
         if part is not None and part not in parts:
             raise NameError("part %r is not a printed part in the model" % part)
         s = print_settings(parts.get(part, {}))
-        if part is not None:
-            used.setdefault(part, [k for k in s["defaulted"] if k in SPEC_KEYS])
+        if part is not None:      # the spec keys this helper read from the defaults (not those given by keyword)
+            u = used.setdefault(part, [])
+            u += [k for k in s["defaulted"] if k in reads and over.get(k) is None and k not in u]
+            u.sort(key=SPEC_KEYS.index)
         s.update({k: v for k, v in over.items() if v is not None})
         return s
 
     def mat(name, key):
         """mat("PLA", "across_mpa"), or mat("PRT_leaf", "in_mpa") for that part's material."""
-        m = settings(name, {})["material"] if str(name).startswith("PRT_") else name
+        m = settings(name, {}, ("material",))["material"] if str(name).startswith("PRT_") else name
         if m not in MATERIALS:
             raise KeyError("material %r is not in cadmat.MATERIALS" % m)
         return MATERIALS[m][key]
 
     def sect(b, h, part=None, **over):
-        s = settings(part, over)
-        return section(b, h, s["walls"], s["infill"], s["line_w"], s["shells"], s["layer_h"])
+        s = settings(part, over, ("walls", "infill"))
+        return section(b, h, s["walls"], s["infill"], s["line_w"], s["shells"], s["layer_h"], s.get("t"))
 
-    env = {"__builtins__": {}, "min": min, "max": max, "abs": abs, "round": round, "sqrt": math.sqrt, "math": math,
-           "pi": math.pi, "mat": mat, "section": sect,
-           "i_eff": lambda b, h, part=None, **o: sect(b, h, part, **o)["I"],
-           "z_eff": lambda b, h, part=None, **o: sect(b, h, part, **o)["Z"]}
-    return env
+    return dict(BASE_ENV, mat=mat, section=sect, i_eff=lambda b, h, part=None, **o: sect(b, h, part, **o)["I"],
+                z_eff=lambda b, h, part=None, **o: sect(b, h, part, **o)["Z"])
 
 
 def _eval(x, env, names):
@@ -145,21 +155,32 @@ def run_calcs(rows, params, parts):
     may be expressions too. A calc whose name is an identifier is a name for the calcs after it. Returns one record
     per row: name, value, unit, min, max, result ("pass", "fail" or "info" with no bound), expr, parts (the
     printed parts its helpers read, each with the SPEC_KEYS it left at the defaults), index and why; or "error" for a
-    failed expression (the row is skipped and later calcs that name it fail too)."""
+    failed expression, a value that is None or not finite, or a name that clashes with a param, an earlier calc or a
+    helper (the row is skipped and later calcs that name it fail too)."""
     names, out = dict(params), []
+    helpers = set(calc_env({}, {}, {}))
     for i, r in enumerate(rows):
         r = r if isinstance(r, dict) else {"value": r}
         used = {}
         env = calc_env(params, parts, used)
         rec = {"name": r.get("name") or "calcs[%d]" % i, "unit": r.get("unit"), "expr": r.get("value")}
         try:
+            n = r.get("name")
+            if isinstance(n, str) and n in helpers | set(names):
+                # {"name": "LOAD", "value": "=LOAD * 0.1"} shadowed the param for every calc below it
+                raise NameError("name %r is already %s; rename the calc" % (
+                    n, "a helper" if n in helpers else "a param" if n in params else "an earlier calc"))
             if "value" not in r:
                 raise KeyError("no \"value\"")
             vals = {}
             for k in ("value", "min", "max"):
                 v = _eval(r.get(k), env, names)
+                if v is None and k == "value":
+                    raise ValueError("value is None")      # mat('PETG', 'flex_in_mpa'), "value": null
                 if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float))):
                     raise TypeError("%s is %r, not a number" % (k, v))
+                if v is not None and not math.isfinite(v):
+                    raise ValueError("%s is %r, not finite" % (k, v))   # NaN passed every bound
                 vals[k] = v
         except Exception as e:
             rec["error"] = "%s: %s" % (type(e).__name__, e)

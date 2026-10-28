@@ -230,8 +230,7 @@ def _eval_exprs(x, at):
         return [_eval_exprs(v, "%s[%d]" % (at, i)) for i, v in enumerate(x)]
     if isinstance(x, str) and x.startswith("="):
         try:
-            v = eval(x[1:], {"__builtins__": {}, "min": min, "max": max, "abs": abs, "round": round, "sqrt": math.sqrt,
-                             "math": math}, dict(PARAMS))
+            v = eval(x[1:], CM.BASE_ENV, dict(PARAMS))
             if isinstance(v, tuple):
                 v = list(v)
             EXPRS.append({"at": at, "expr": x[1:], "value": v})
@@ -3968,6 +3967,13 @@ def check_calcs():
     material a calc read from the defaults warns: the 3MF carries no setting for it (PA-A8-T13)."""
     if not CFG.get("calcs"):
         return
+    try:
+        _check_calcs()
+    except Exception as e:     # a calc bug is a finding, not a run with no report
+        finding("calcs", "fail", "the calcs check crashed (%s: %s); rows after the crash are unchecked" % (type(e).__name__, e))
+
+
+def _check_calcs():
     parts = {o.name: {k: o[k] for k in CM.PRINT_KEYS if k in o.keys()} for o in PRINTED}
     rows, defaulted = [], {}
     for r in CM.run_calcs(CFG["calcs"], PARAMS, parts):

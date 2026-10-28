@@ -14,10 +14,10 @@ beam that lies in the layer plane. "across" means stress that pulls layers apart
 
 | key | PLA | PETG | source |
 |---|---|---|---|
-| `in_mpa` | 28.5 | 23.5 | `tensile_in_mpa` / SF |
+| `in_mpa` | 17.5 | 23.5 | `tensile_in_mpa` / SF |
 | `across_mpa` | 15 | 15 | `tensile_across_mpa` / SF. PLA's 15 is cadcheck's `interlayer_mpa` default (R3's limit) |
 | `snap_strain` | 0.0165 | 0.0245 | `yield_strain` / 2. Our assumption: the Bayer snap-fit design guide keeps the permissible strain well under yield, and at about 60 % of the one-time value for frequent separation |
-| `tensile_in_mpa` | 57 | 47 | Prusament PLA / PETG TDS, tensile yield strength (ISO 527) |
+| `tensile_in_mpa` | 35 | 47 | PLA: Bambu PLA Basic TDS, X-Y tensile strength, about 35 MPa as recalled: **check it against the TDS**. It is the lower of the two vendors (Prusament PLA's TDS gives a 57 MPa yield strength), so the allowable holds for either. PETG: Prusament PETG TDS, tensile yield strength (ISO 527) |
 | `tensile_across_mpa` | 30 | 30 | **Working figure, no TDS number.** For PLA: push-assist reviewers took 20-30 MPa across layers ("25 MPa = PLA tensile across layers"), and 30 / 2 = R3's 15. PETG is set equal to PLA until a Z-direction TDS value is entered |
 | `flex_in_mpa` | 76 | - | Bambu PLA Basic TDS, bending strength (X-Y). This is also the figure push-assist PA-R8 used |
 | `E_mpa` | 2200 | 1500 | Prusament PLA / PETG TDS, tensile modulus (Bambu PLA Basic gives about 2750) |
@@ -62,6 +62,8 @@ modulus of a bending-dominated cellular solid goes as its relative density squar
 `I = I_solid - I_core x (1 - k)` and `Z = I / (h / 2)`. The outer fibre is in the shell, so the shell's stress is
 `M / Z`, as in a transformed section. `section()` returns `I`, `I_solid`, `Z`, `t`, `k` and `ratio`.
 `part="PRT_x"` takes the part's settings, and keyword arguments override them (`z_eff(10, 4, part="PRT_leaf", infill=100)`).
+The keywords are `walls`, `infill`, `line_w`, `shells`, `layer_h` and `t`; any other is an error. `t=` sets the shell
+directly. A calc that gives `walls` and `infill` by keyword is not warned about the part's undeclared ones.
 
 | section (mm) | 2 walls 15 % | 2 walls 20 % | 3 walls 40 % | 100 % |
 |---|---|---|---|---|
@@ -69,16 +71,22 @@ modulus of a bending-dominated cellular solid goes as its relative density squar
 | 10 x 10 | 0.41 | 0.42 | 0.50 | 1.00 |
 | 24 x 24 | 0.20 | 0.22 | 0.32 | 1.00 |
 
-The table gives `I / I_solid`. With the default 3 shell layers, `t` stops at 0.6 mm, so walls past 2 add nothing until
-you declare `shells`. This is deliberately conservative: top and bottom faces get only their shell layers.
+The table gives `I / I_solid`. **`walls` barely changes the result:** with the default 3 shell layers, `t` stops at
+0.6 mm, so walls past 2 add nothing until you declare `shells` or pass `t=`. This is deliberately conservative: top and
+bottom faces get only their shell layers. For a beam standing up, where all four faces of the section are walls, pass
+`t=walls x line_w`.
 
 The model's limits:
 - **Rectangles only.** For a round or other section, work out the same shell and core by hand, or split the section into rectangles.
 - **No holes or stress raisers.** Multiply by your own Kt.
 - **No anisotropy in the section.** Pick `in_mpa` or `across_mpa` for the orientation instead.
 - **The bond between walls and infill is taken as perfect.**
-- **Infill pattern is ignored.** Gyroid and grid sit near the squared law, and a stretch-dominated lattice would be
-  stiffer, so the squared law is the low side.
+- **Infill pattern is ignored.** The squared law is Gibson & Ashby's for bending-dominated cells; a stretch-dominated
+  lattice goes nearer linearly in density, so for stiffness the squared law is the low side. Which side gyroid or grid
+  infill falls on is not checked here.
+- **Low stiffness is conservative only for stress.** For a stress under a given load, a low I is safe. For a calc
+  driven by stiffness, such as an insertion force, a preload or a snap's push-in force at a given deflection, a low I
+  under-predicts the force, so it is unconservative: bound those with `infill=100` (or `t=` the whole section) too.
 
 For a part that carries load, declare `walls` and `infill` and use `z_eff`. Otherwise cadcheck warns that the calc
 assumed the slicer defaults.

@@ -100,13 +100,23 @@ def write_3mf(path, name, tris, st, qty=1):
         z.writestr("Metadata/model_settings.config", cfg)
 
 
+def ours(path):
+    """True for a 3MF this module wrote (its Application metadata): a hand-made plate in the folder is kept."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            return b'<metadata name="Application">alex-3d-skills cadlib</metadata>' in z.read("3D/3dmodel.model")[:2000]
+    except (OSError, KeyError, zipfile.BadZipFile):
+        return False
+
+
 def export_stls(stl_dir, clean=True, threemf=True):
-    """One STL (and with threemf, one 3MF carrying the part's print settings) per unique `stl` name."""
+    """One STL (and with threemf, one 3MF carrying the part's print settings) per unique `stl` name. Copies of one
+    `stl` that declare different settings print with the first copy's: the build log warns (give them their own stl)."""
     os.makedirs(stl_dir, exist_ok=True)
     asm.set_pose()
     if clean:
         for f in os.listdir(stl_dir):
-            if f.endswith((".stl", ".3mf")):
+            if f.endswith(".stl") or (f.endswith(".3mf") and ours(os.path.join(stl_dir, f))):
                 os.remove(os.path.join(stl_dir, f))
     done, first = {}, {}
     for ob in sorted(bpy.data.collections["Printed"].objects, key=lambda o: o.name):
@@ -114,6 +124,9 @@ def export_stls(stl_dir, clean=True, threemf=True):
         if stl:
             done[stl] = done.get(stl, 0) + 1
             first.setdefault(stl, ob)
+            if declared(ob) != declared(first[stl]):
+                print("EXPORT WARNING %s: %s declares %s but shares stl %r with %s (%s); the STL and 3MF carry %s's" % (
+                    stl, ob.name, declared(ob), stl, first[stl].name, declared(first[stl]), first[stl].name))
     for stl, ob in first.items():
         tris, st = print_tris(ob), declared(ob)
         write_stl(os.path.join(stl_dir, stl + ".stl"), tris, settings_header(st))

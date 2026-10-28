@@ -10,13 +10,21 @@ CADW="${CAD:-$ROOT/skills/print-cad-blender/scripts/cad}"
 python3 -I "$ROOT/tools/verify.d/calcs_materials_cases.py" "$ROOT" > "$CM/cases.txt" 2>&1 || echo "FAIL cadmat: cases crashed (see $CM/cases.txt)" >> "$CM/cases.txt"
 while read -r st msg; do case "$st" in PASS) ok "$msg" ;; FAIL) bad "$msg" ;; esac; done < "$CM/cases.txt"
 # the build: manifest, 3MF and STL header carry the declared settings; asm.part refuses a bad spec
+# review: a hand-made plate in the STL folder survives the export; a stale 3MF cadlib wrote does not
+mkdir -p "$CM/m/stl"
+python3 -I -c "
+import sys, zipfile
+for n, app in (('plate', 'Bambu Studio'), ('old', 'alex-3d-skills cadlib')):
+    with zipfile.ZipFile(sys.argv[1] + '/' + n + '.3mf', 'w') as z:
+        z.writestr('3D/3dmodel.model', '<model><metadata name=\"Application\">%s</metadata></model>' % app)" "$CM/m/stl"
 $CADW build "$ROOT/tools/verify.d/calcs_materials_build.py" -- --out "$CM/m" > "$CM/build.log" 2>&1
 cat > "$CM/checks.json" <<'EOF'
 {"calcs": [{"name": "F", "value": "=LOAD * 1.5", "unit": "N", "why": "1.5 x the rated load"},
            {"name": "leaf_mpa", "value": "=F * ARM / z_eff(B, H, part='PRT_leaf_0')", "max": "=mat('PRT_leaf_0', 'in_mpa')", "unit": "MPa"},
            {"name": "base_mpa", "value": "=F * ARM / z_eff(40, 10, part='PRT_base')", "max": "=mat('PRT_base', 'in_mpa')", "unit": "MPa"},
            {"name": "broken", "value": "=NOPE * 2"},
-           {"name": "typo", "value": 1, "maxx": 2}],
+           {"name": "typo", "value": 1, "maxx": 2},
+           {"name": "flex_petg", "value": "=mat('PETG', 'flex_in_mpa')"}],
  "stacks": [{"name": "stress as a stack", "limit": 15, "terms": [{"what": "sigma", "tol": "=LOAD / 10"}]},
             {"name": "real stack", "limit": 0.3, "terms": [{"what": "a", "tol": 0.1}, {"what": "b", "tol": 0.1}]}]}
 EOF
@@ -84,7 +92,15 @@ say(len(dw) == 1 and dw[0].startswith("calcs: PRT_base: calc 'base_mpa'") and "m
 say("unknown key 'maxx', ignored (did you mean 'max'?)" in cw, "an unknown key on a calcs row is a config warn")
 say("stacks[0] (stress as a stack): one term from an =expr" in cw and "stacks[1]" not in cw,
     "a one-term =expr stack is a config warn pointing at calcs; a real two-term stack is not")
-say(len(fl) == 2 and "Traceback" not in open(os.path.join(d, "check.log")).read(), "exactly the two fails, and no traceback (%s)" % fl)
+say(any(x.startswith("config: calcs[5] 'flex_petg': expression") and "value is None" in x for x in fl),
+    "a calc whose value is None (PETG has no flex_in_mpa) is a config fail, and the report is written (it crashed)")
+say(len(fl) == 3 and "Traceback" not in open(os.path.join(d, "check.log")).read(), "exactly the three fails, and no traceback (%s)" % fl)
+say(os.path.isfile(os.path.join(stl, "plate.3mf")) and not os.path.isfile(os.path.join(stl, "old.3mf")),
+    "the export keeps a hand-made plate.3mf in the STL folder and deletes a stale one cadlib wrote")
+mix = zipfile.ZipFile(os.path.join(stl, "mix.3mf")).read("Metadata/model_settings.config").decode() if os.path.isfile(os.path.join(stl, "mix.3mf")) else ""
+say(re.search(r"EXPORT WARNING mix: PRT_mix_1 declares .*'infill': 50.* shares stl 'mix' with PRT_mix_0", log) is not None
+    and 'key="sparse_infill_density" value="20%"' in mix and 'key="wall_loops" value="3"' in mix,
+    "copies of one stl with different infill warn in the build log; the 3MF carries the first copy's (walls=3.0 written as 3)")
 rl = open(os.path.join(d, "rows.txt")).read()
 say(re.search(r"^calcs\s+leaf_mpa\s.*value=[\d.]+  unit=MPa  max=23\.5  result=fail", rl, re.M) is not None, "cad rows prints the calc rows")
 PY

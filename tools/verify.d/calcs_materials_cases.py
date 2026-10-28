@@ -81,3 +81,25 @@ st = [{"name": "stress as a stack", "limit": 15, "terms": [{"what": "sigma", "to
       {"name": "one literal term", "limit": 0.3, "terms": [{"what": "a", "tol": 0.2}]},
       {"name": "measured", "between": ["A", "B"], "terms": [{"what": "a", "tol": "=T"}]}]
 want("a one-term =expr stack is flagged as a calc; two terms, a literal term and a measured stack are not", M.stack_calcs(st) == [0], M.stack_calcs(st))
+
+# review fixes (PR #20)
+rv = {x["name"]: x for x in M.run_calcs([
+    {"name": "flex_petg", "value": "=mat('PETG', 'flex_in_mpa')"}, {"name": "null", "value": None},
+    {"name": "nan", "value": "=math.nan", "max": 10}, {"name": "LOAD", "value": "=LOAD * 0.1"}, {"name": "mat", "value": 1},
+    {"name": "a", "value": 1}, {"name": "a", "value": 2}, {"name": "typo_kw", "value": "=i_eff(10, 4, infil=100)"},
+    {"name": "kw", "value": "=z_eff(40, 10, part='PRT_base', walls=2, infill=20)"},
+    {"name": "only_mat", "value": "=mat('PRT_base', 'in_mpa')"},
+    {"name": "t_override", "value": "=i_eff(10, 4, walls=4, t=1.68) - i_eff(10, 4, walls=4)"}],
+    {"LOAD": 50.0}, parts)}
+err = lambda n: rv[n].get("error", "")
+want("a value of None (mat('PETG','flex_in_mpa'), \"value\": null) is an error, not a crash at the bound compare",
+     "value is None" in err("flex_petg") and "value is None" in err("null"))
+want("a NaN value is an error (it passed every bound)", "not finite" in err("nan"))
+want("a calc name that is a param, a helper or an earlier calc is an error; the first 'a' runs",
+     "a param" in err("LOAD") and "a helper" in err("mat") and "an earlier calc" in rv["a"].get("error", "")
+     and sum(1 for x in M.run_calcs([{"name": "a", "value": 1}, {"name": "a", "value": 2}], {}, {}) if "error" in x) == 1)
+want("an unknown keyword to section/i_eff/z_eff is an error (infil=100)", "infil" in err("typo_kw"))
+want("keys given by keyword are not reported as defaulted; mat() reports only material",
+     rv["kw"]["parts"] == {"PRT_base": []} and rv["only_mat"]["parts"] == {"PRT_base": ["material"]})
+want("t= sets the shell (4 walls at the default 3 shells is capped at 0.6 mm; t=1.68 is stiffer)", rv["t_override"]["value"] > 0)
+want("walls=3.0 is accepted, 3.5 is not", not M.print_problems({"walls": 3.0}) and M.print_problems({"walls": 3.5}))

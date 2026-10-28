@@ -178,8 +178,9 @@ name is an identifier) and these helpers: `mat(material or PRT_name, key)` (allo
 `"across_mpa"`, `"snap_strain"`), `i_eff(b, h, part=...)`, `z_eff(b, h, part=...)` and `section(b, h, part=...)` (the
 printed section from the part's `walls`, `infill`, ...). The table, the section model and its limits are in
 [materials.md](materials.md). Take limits from `mat()`, not a typed number (PA-A6-T10: 20 / 10 / 15 MPa by the designer
-against the reviewer's 25). A value outside `min`/`max` fails (`calcs`); a failed expression is a `config` fail naming
-the row, and the row is skipped (so is a calc that names it). A calc that reads a part whose `material`, `walls` or
+against the reviewer's 25). A value outside `min`/`max` fails (`calcs`); a failed expression, a value that is None or
+not finite, or a name already used by a param, an earlier calc or a helper is a `config` fail naming the row, and the
+row is skipped (so is a calc that names it). A calc that reads a part whose `material`, `walls` or
 `infill` were never declared warns once per part: it assumed the slicer's 2 walls and 15 %, and the 3MF carries
 nothing (PA-A8-T13). A one-term `stacks` row whose `tol` is an `=expr` is a config warn pointing here.
 `cad rows cadcheck.json --check calcs` prints each row with its value and result.

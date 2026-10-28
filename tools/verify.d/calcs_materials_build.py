@@ -5,7 +5,7 @@ cadcheck's calcs read them.
 
 PRT_leaf_0/1 (one STL, qty 2) declare material PETG, 3 walls, 40 % infill, 0.16 mm layers; PRT_base declares none
 (the slicer defaults apply). Also asserts asm.part refuses a material not in cadmat.MATERIALS and a fractional wall
-count (prints CM_REFUSED for each).
+count (prints CM_REFUSED for each). PRT_mix_0/1 share stl "mix" with infill 20 and 50 (an EXPORT WARNING).
 """
 import os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -20,6 +20,10 @@ for i in range(2):
     A.part(G.box("l%d" % i, 0, 40, 20 * i, 20 * i + 10, 20, 24), "PRT_leaf_%d" % i, 'PRT', "pla_b", stl="leaf",
            material="PETG", walls=3, infill=40, layer_h=0.16, **flat)
 A.part(G.box("b", -50, -10, 0, 40, 0, 10), "PRT_base", 'PRT', "pla_a", stl="base", **flat)
+# review: two copies of one stl with different settings (the build log warns); walls=3.0 is accepted as 3
+for i, inf in enumerate((20, 50)):
+    A.part(G.box("m%d" % i, 60, 70, 20 * i, 20 * i + 10, 0, 5), "PRT_mix_%d" % i, 'PRT', "pla_a", stl="mix", walls=3.0,
+           infill=inf, **flat)
 for bad in (dict(material="ABS"), dict(walls=2.5)):
     try:
         A.part(G.box("x", 100, 110, 0, 10, 0, 10), "PRT_x", 'PRT', "pla_a", stl="x", **dict(flat, **bad))
