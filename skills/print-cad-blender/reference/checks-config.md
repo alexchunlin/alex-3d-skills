@@ -17,7 +17,7 @@ adds `carry`, `fasteners.captive` and `flexures`.
   "max_poses_per_group": 48,      // grids over several joints are thinned to this
   "sweep_tol": 0.25,              // mm: swept-envelope step error, and the finest move the refinement halves to
   "envelope_voxel": 1.0,          // swept envelope voxel (mm); the envelope is oversize by sweep_tol + voxel
-  "max_guard_poses": 64,          // refinement poses per envelope hit; past it the pair is listed in not_checked
+  "max_guard_poses": 64,          // refinement poses per envelope hit; past it the pair warns as unproven
   "envelope_max_poses": 3000,     // a part on 2+ joints (tilt on pan): its envelope coarsens to this many poses
 
   "allow": [                      // designed overlap: the pair is skipped entirely
@@ -298,14 +298,23 @@ checks in `--only`, 5 with no rows, and read PASS (PA-A2-T11). An `--only` name 
   1. **Broad phase.** Each part's box is swept over its joints' ranges with overtravel: a ring sector
      (radius x height x angle) about a revolute joint, or the box extruded along a slide. It is compared with the
      other part's bounds. These are comparisons only.
-  2. **Narrow phase.** `geom.swept_envelope` (`swept_envelope_chain` for a part on two or more joints, such as tilt
-     on pan) of the moving part, cached per part, is tested once against the other part. No overlap proves the pair
-     clear over the whole range. The envelope is oversize by up to `sweep_tol` + `envelope_voxel` (1.25 mm at the
-     defaults), so a declared `fits` pair inside it is counted (`fits_flagged`) and left alone, as before.
-  3. **Refinement**, for envelope hits only. The pair's cells are halved where the sampled clearance can't beat the
-     reach bound (`cadlib.joints.move_rate`), until the cell is clear, a collision is found (reported as "between
-     the sampled poses", with its pose and volume), the move is under `sweep_tol`, or `max_guard_poses` are spent
-     (then the pair is listed in `not_checked`).
+  2. **Narrow phase.** `geom.swept_envelope` of the moving part, cached per part, is tested once against the other
+     part. Every connected shell of each side counts, so a joined placeholder's small pin inside the envelope is a
+     meeting. No meeting proves the pair clear over the whole range. A part on two or more joints (tilt on pan) uses
+     `swept_envelope_chain`. A wheel's spin in a chain is first replaced by its solid of revolution (the router's
+     annulus), so only the other joints are swept. The envelope is oversize by `sweep_tol` + `envelope_voxel`
+     (1.25 mm at the defaults) about one joint. A chain adds `sweep_tol` per joint, more when `envelope_max_poses`
+     coarsens it. The coverage line gives the actual range of pads.
+  3. **Refinement**, for envelope hits only. The pair's cells are halved where a lower bound on the clearance (dense
+     surface samples, less their covering radius) can't beat the reach bound (`cadlib.joints.move_rate`). This
+     continues until the cell is clear, a collision is found (reported as "between the sampled poses", with its
+     pose and volume), the move is under `sweep_tol`, or `max_guard_poses` are spent. A pair left unproven **warns**,
+     naming the cell's pose range.
+     A declared `fits` pair the envelope meets is refined for collision only. Cells where the turning test (each
+     triangle's height, radius and angle about the axis) proves a one-axis pair clear are skipped (a journal). The
+     rest are swept with every point moving under `sweep_tol`, and only an overlap of `vol_tol` or more fails.
+     A lug in the arm's path on the same part as the shaft is still caught. The outcome per fit is in
+     `between_samples.fits_flagged`.
 
   An explicit `step` still sets the sampled grid. Counts and the time of each stage are in
   `interference.between_samples`.
