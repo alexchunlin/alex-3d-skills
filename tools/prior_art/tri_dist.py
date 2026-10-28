@@ -14,8 +14,10 @@ the pivot's local X through its origin. Prints:
 A1-F5 at tilt 45 (feeder_plate / launcher_cover, hopper / launcher_body): exact 0.2736 / 0.2121 mm, mech 0.274 /
 0.212, cadcheck 0.373 / 0.212.
 """
-import argparse, json, math, os, struct
+import argparse, json, math, os, sys
 import numpy as np
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "skills", "print-cad-blender", "scripts"))
+from printcheck import read_stl as read  # noqa: E402  (ASCII or binary)
 
 ap = argparse.ArgumentParser()
 ap.add_argument("parts_dir")
@@ -25,13 +27,6 @@ ap.add_argument("pivot")
 ap.add_argument("deg", type=float)
 ap.add_argument("--reach", type=float, default=1.0)
 args = ap.parse_args()
-
-
-def read(path):
-    d = open(path, "rb").read()
-    n = struct.unpack("<I", d[80:84])[0]
-    r = np.frombuffer(d, dtype=np.dtype([("n", "<f4", 3), ("v", "<f4", (3, 3)), ("a", "<u2")]), count=n, offset=84)
-    return r["v"].astype(np.float64)
 
 
 def rot(T, origin, axis, deg):

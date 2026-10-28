@@ -247,18 +247,34 @@ class CSGError(RuntimeError):
 
 def csg(base, add=(), sub=(), inter=(), check=True):
     """Union `add`, subtract `sub`, intersect `inter` with the Manifold solver; apply; delete the tools.
-    Raises CSGError if the result is empty or not a closed solid (check=False to skip)."""
+    Raises CSGError if the result is empty or not a closed solid (check=False to skip).
+    New faces take the base's material (its most used slot). The modifier's index mode gives a tool face the base slot
+    with the tool face's index, or the base slot holding the tool's material, and appends the tools' slots (empty ones
+    too), so a cut wall could land on an empty slot and render default grey (push-assist PA-A4-T14) or take another
+    slot's colour: each tool loses its materials (a mesh shared with a kept object is copied first) and every tool face
+    gets the base's index; the base keeps its slots."""
     tools = []
+    pm = base.data.polygons
+    idx = [0] * len(pm)
+    pm.foreach_get("material_index", idx)
+    keep = max(set(idx), key=idx.count) if idx else 0
+    nslot = len(base.data.materials)
     for op, lst in (('UNION', add), ('DIFFERENCE', sub), ('INTERSECT', inter)):
         for t in lst:
             if t is None:
                 continue
+            if t.data.users > 1:
+                t.data = t.data.copy()
+            t.data.materials.clear()
+            t.data.polygons.foreach_set("material_index", [keep] * len(t.data.polygons))
             m = base.modifiers.new("b", 'BOOLEAN')
             m.operation = op
             m.solver = 'MANIFOLD'
             m.object = t
             tools.append(t)
     apply_mods(base)
+    while len(base.data.materials) > nslot:
+        base.data.materials.pop()
     for t in tools:
         kill(t)
     if check:

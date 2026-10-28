@@ -82,6 +82,7 @@ DEFAULTS = {
                   # 2.5 mm hex key for M3 socket heads (ISO 2936 short leg ~20, long ~58): A2-F1
                   "lkey_short": 18.0, "lkey_insert": 2.5, "lkey_long": 56.0, "lkey_r": 1.25, "lkey_swing_deg": 60.0,
                   "max_standoff": 2.0, "max_protrusion": 3.0, "captive": {},
+                  "hint_tilt_deg": 10.0,   # a bit that can't reach: the smallest tilt up to this that clears (PA-A3-T10)
                   # ISO 4762 / 7045 / 10642 lengths commonly stocked (mm), by shank diameter
                   "stock_lengths": {"2": [3, 4, 5, 6, 8, 10, 12, 14, 16, 20],
                                     "2.5": [3, 4, 5, 6, 8, 10, 12, 14, 16, 20, 25],
@@ -789,7 +790,13 @@ def layer_tris(o, dirs):
     for d in dirs:
         fp = os.path.join(d, "%s.stl" % o.get("stl"))
         if os.path.isfile(fp):
-            st = PC.read_stl(fp)
+            try:
+                st = PC.read_stl(fp)
+                if not len(st):
+                    raise ValueError("%s: no triangles" % fp)
+            except (ValueError, OSError) as e:   # an empty or cut-short export (PR #17 review): say so, check the model
+                note = "UNREADABLE %s: re-export it; checked the model's triangles" % e
+                break
             lo_m, hi_m = tris.reshape(-1, 3).min(0), tris.reshape(-1, 3).max(0)
             lo_s, hi_s = st.reshape(-1, 3).min(0), st.reshape(-1, 3).max(0)
             if len(st) != len(tris) or np.abs(lo_m - lo_s).max() > 0.05 or np.abs(hi_m - hi_s).max() > 0.05:
@@ -913,7 +920,8 @@ def check_parts():
             LAYER_DONE[stl] = layer_check(o, dirs)
             lc, src, note = LAYER_DONE[stl]
             if note:
-                finding("parts", "warn", "%s: %s" % (o.name, note), object=o.name)
+                bad = note.startswith("UNREADABLE ")
+                finding("parts", "fail" if bad else "warn", "%s: %s" % (o.name, note[len("UNREADABLE "):] if bad else note), object=o.name)
             for f in lc["findings"]:
                 finding("parts", f["status"], "%s (%s): %s%s" % (o.name, src, f["msg"], ", supports: %s" % (o.get("supports") or "unset")
                         if f["status"] == "fail" else ""), object=o.name, stl=stl, kind=f["kind"], z=f["z_mm"])
@@ -1193,28 +1201,42 @@ def exposed(tree, p, maxd=3000.0):
     return sum(1 for d in view if tree.ray_cast(p, d, maxd)[0] is None) >= ex["view_frac"] * len(view)
 
 
-def access(head, out, tree, solids_trees, fc):
-    """Drive a screw from `head` along `out`: a straight bit (ray bundle at driver radius until open space of
-    hand_r is reached), else an L-key (short leg in the socket, long leg swung about the axis), FINDINGS A2-F1."""
+def straight_bit(head, out, tree, fc, reach=None):
+    """(blocked_at, depth) of a straight bit from `head` along `out`: the first hit of a ray bundle at driver radius
+    (1e9: none) and the distance along the axis to open space of hand_r (None: none within `reach`, default
+    max_reach_ext)."""
+    reach = fc["max_reach_ext"] if reach is None else reach
     u, v = perp_basis(out)
-    rays = [Vector((0, 0, 0))] + _ring(u, v, fc["driver_r"])
     start = head + out * 0.3
     hits = []
-    for off in rays:
-        h = tree.ray_cast(start + off, out, fc["max_reach_ext"] + 50)
+    for off in [Vector((0, 0, 0))] + _ring(u, v, fc["driver_r"]):
+        h = tree.ray_cast(start + off, out, reach + 50)
         hits.append(h[3] if h[0] is not None else 1e9)
-    blocked_at = min(hits)
     depth = None
     s = 0.0
-    while s <= fc["max_reach_ext"]:
-        p = start + out * s
-        r = tree.find_nearest(p)
+    while s <= reach:
+        r = tree.find_nearest(start + out * s)
         if r[0] is None or r[3] >= fc["hand_r"]:
             depth = s
             break
         s += 2.0
+    return min(hits), depth
+
+
+def access(head, out, tree, solids_trees, fc):
+    """Drive a screw from `head` along `out`: a straight bit (ray bundle at driver radius until open space of
+    hand_r is reached), else an L-key (short leg in the socket, long leg swung about the axis), FINDINGS A2-F1.
+    A screw a straight bit can't reach, or reaches only past max_reach, keeps what bit_hint() needs under "_hint";
+    the hint is worked out only for the record a finding reports (access_hint), and "_hint" is dropped before the
+    report is written."""
+    u, v = perp_basis(out)
+    start = head + out * 0.3
+    blocked_at, depth = straight_bit(head, out, tree, fc)
     if depth is not None and blocked_at > depth:
-        return {"reach_mm": round(depth, 1), "blocked": False, "tool": "straight"}
+        rec = {"reach_mm": round(depth, 1), "blocked": False, "tool": "straight"}
+        if depth > fc["max_reach"]:
+            rec["_hint"] = (head.copy(), out.copy(), tree, solids_trees, depth, 1e9)
+        return rec
     who = None
     if blocked_at < 1e8:
         p = start + out * blocked_at
@@ -1227,7 +1249,86 @@ def access(head, out, tree, solids_trees, fc):
     rec.update(lkey(head, out, u, v, tree, fc))
     if rec["lkey_ok"]:
         rec.update(blocked=False, tool="L-key", reach_mm=round(fc["lkey_short"] - fc["lkey_insert"], 1))
+    else:
+        rec["_hint"] = (head.copy(), out.copy(), tree, solids_trees, depth, blocked_at)
     return rec
+
+
+def access_hint(rec, fc, screw=None, row=None):
+    """" [bit: ...]" for a finding's access record, worked out now and kept as rec["bit_hint"]. With the fasteners row:
+    a head inside a part with no nut says fix that first; a nut on the bolt and the head closed in within 5 mm (or
+    buried) reads as a captive stud nobody declared (v2 nip stud: the thumbwheel nut turns)."""
+    if "bit_hint" not in rec and "_hint" in rec:
+        row = row or {}
+        nut, buried = (row.get("nut") or {}).get("name"), row.get("head_buried_in") or []
+        if buried and not nut:
+            rec["bit_hint"] = "the head is inside %s: fix that first" % " and ".join(buried)
+        elif nut and rec.get("blocked") and (buried or (rec.get("blocked_at_mm") or 1e9) <= 5.0):
+            rec["bit_hint"] = "the head is closed in %s mm out and %s is on the bolt: if the nut is what turns, declare %s " \
+                              "captive (fasteners.captive)" % (rec.get("blocked_at_mm"), nut, screw.name if screw else "it")
+        else:
+            rec["bit_hint"] = bit_hint(*rec["_hint"], fc=fc, screw=screw)
+    return " [bit: %s]" % rec["bit_hint"] if rec.get("bit_hint") else ""
+
+
+def drop_hints(accs):
+    for a in accs:
+        a.pop("_hint", None)
+
+
+def _toward(w):
+    """A direction in words: "-y" when within ~20 deg of a world axis, else rounded components."""
+    k = max(range(3), key=lambda i: abs(w[i]))
+    if abs(w[k]) > 0.94:
+        return ("+" if w[k] > 0 else "-") + "xyz"[k]
+    return "(%.2f, %.2f, %.2f)" % tuple(w)
+
+
+def bit_hint(head, out, tree, solids_trees, depth, blocked_at, fc, screw=None):
+    """Where a straight bit would clear (push-assist PA-A3-T10: one bolt moved four times, 13.7 min of full checks).
+    Along the axis, the parts the bit passes through before open space: one printed part on the screw's own body gets
+    the bit length through a hole in it, or fitting it after the screw; several, or one that moves relative to the
+    screw, get only the second (a2's flywheel bolts are behind flywheel, hood and launcher body); a purchased one is
+    named. Tilted: the smallest tilt about the head, in 2 deg steps up to hint_tilt_deg at 8 headings, that clears with
+    reach under max_reach (over 3 deg: a ball-end driver), and that reach. The same ray bundle and open-space test as
+    the straight bit."""
+    u, v = perp_basis(out)
+    parts = []
+    if blocked_at < 1e8:
+        start = head + out * 0.3
+        lim = depth if depth is not None else fc["max_reach_ext"]
+        parts = sorted({n for n, t in solids_trees.items()
+                        for off in [Vector((0, 0, 0))] + _ring(u, v, fc["driver_r"]) if t.ray_cast(start + off, out, lim)[0] is not None})
+    tilt = None
+    top = fc["hint_tilt_deg"]
+    a = 2.0
+    while a <= top + 1e-6 and tilt is None:
+        for k in range(8):
+            w = u * math.cos(k * math.pi / 4) + v * math.sin(k * math.pi / 4)
+            d = (out * math.cos(math.radians(a)) + w * math.sin(math.radians(a))).normalized()
+            b, dp = straight_bit(head, d, tree, fc, reach=fc["max_reach"])
+            if dp is not None and b > dp and (tilt is None or dp < tilt[2]):
+                tilt = (a, w, dp)
+        a += 2.0
+    out_s = []
+    sb = body(screw) if screw is not None else None
+    moving = [n for n in parts if n in bpy.data.objects and sb is not None and body(bpy.data.objects[n]) != sb]
+    bought = [n for n in parts if not n.startswith("PRT_")]
+    space = "open space %.0f mm out" % depth if depth is not None else "no open space within %.0f mm" % fc["max_reach_ext"]
+    if bought:      # no hole through a purchased part
+        out_s.append("along the axis %s in the way, not printed" % " and ".join(bought))
+    elif len(parts) == 1 and not moving and depth is not None:
+        out_s.append("along the axis a %.0f mm bit through a Ø%.0f hole in %s (%s), or fit %s after this screw "
+                     "(assembly_order)" % (depth + 10, 2 * fc["driver_r"], parts[0], space, parts[0]))
+    elif parts:
+        out_s.append("along the axis %s in the way (%s): fit %s after this screw (assembly_order)" % (
+            " and ".join(n + (" (moves)" if n in moving else "") for n in parts), space, "it" if len(parts) == 1 else "them"))
+    if tilt:
+        out_s.append(("tilted %g deg toward %s a straight bit clears" if tilt[0] <= 3 else
+                      "a ball-end driver tilted %g deg toward %s clears") % (tilt[0], _toward(tilt[1])) + ", reach %.0f mm" % tilt[2])
+    else:
+        out_s.append("no tilt up to %g deg clears with reach under %.0f mm" % (top, fc["max_reach"]))
+    return "; ".join(out_s)
 
 
 def lkey(head, out, u, v, tree, fc):
@@ -1410,6 +1511,7 @@ def check_fasteners():
             acc = access(head, -d, tree_cache[key], {n: t for n, (t, bb) in trees.items() if pres is None or n in pres}, fc)
             per[o.name].setdefault("access", {})[pk] = acc
     set_pose({})
+    scr = {o.name: o for o in screws}
     for n, r in per.items():
         acc = r["access"]
         ok = {pk: a for pk, a in acc.items() if not a["blocked"]}
@@ -1447,14 +1549,17 @@ def check_fasteners():
             finding("fasteners", "warn", "%s thread protrudes %.1f mm past the last part, visible from outside" % (n, r["protrusion_mm"]), object=n)
         if not ok:
             h = acc["home"]
-            finding("fasteners", "fail", "%s cannot be driven: straight bit blocked by %s at %s mm; %s (all %d poses tried)" % (
-                n, h.get("blocked_by"), h.get("blocked_at_mm"), "L-key " + h.get("lkey_why", ""), len(acc)), object=n)
+            finding("fasteners", "fail", "%s cannot be driven: straight bit blocked by %s at %s mm; %s (all %d poses tried)%s" % (
+                n, h.get("blocked_by"), h.get("blocked_at_mm"), "L-key " + h.get("lkey_why", ""), len(acc), access_hint(h, fc, scr[n], r)), object=n)
         elif "home" not in ok:
-            finding("fasteners", "warn", "%s reachable only at %s (blocked at home pose)" % (n, best[0]), object=n)
+            finding("fasteners", "warn", "%s reachable only at %s (blocked at home pose)%s" % (n, best[0], access_hint(acc["home"], fc, scr[n], r)), object=n)
         elif best[1]["reach_mm"] > fc["max_reach_ext"]:
-            finding("fasteners", "fail", "%s sits %.0f mm deep" % (n, best[1]["reach_mm"]), object=n)
+            finding("fasteners", "fail", "%s sits %.0f mm deep%s" % (n, best[1]["reach_mm"], access_hint(best[1], fc, scr[n], r)), object=n)
         elif best[1]["reach_mm"] > fc["max_reach"]:
-            finding("fasteners", "warn", "%s needs a %.0f mm+ bit/extension (head %.0f mm below open space)" % (n, best[1]["reach_mm"] + 10, best[1]["reach_mm"]), object=n)
+            finding("fasteners", "warn", "%s needs a %.0f mm+ bit/extension (head %.0f mm below open space)%s" % (
+                n, best[1]["reach_mm"] + 10, best[1]["reach_mm"], access_hint(best[1], fc, scr[n], r)), object=n)
+    for r in per.values():
+        drop_hints(list(r["access"].values()) + [r.get("access_best") or {}])
     nut_rows = check_nuts(nuts, nut_of, full_tree)
     check_fastener_overlaps(rows, nut_rows, geo, nut_of, home_trees)
     # lengths you can buy (v2 A3 specified an M3 x 9 self-tap; the reviewer docked it, V2A3-F5)
@@ -1782,12 +1887,13 @@ def check_service():
             rows.append({"op": op["op"], "object": n, "access": acc})
             if not ok:
                 a = acc[first]
-                finding("service", "fail", "'%s': %s cannot be reached (straight bit blocked by %s at %s mm; L-key %s) at %s" % (
-                    op["op"], n, a.get("blocked_by"), a.get("blocked_at_mm"), a.get("lkey_why"), ", ".join(acc)), object=n, op=op["op"])
+                finding("service", "fail", "'%s': %s cannot be reached (straight bit blocked by %s at %s mm; L-key %s) at %s%s" % (
+                    op["op"], n, a.get("blocked_by"), a.get("blocked_at_mm"), a.get("lkey_why"), ", ".join(acc), access_hint(a, fc, bpy.data.objects.get(n))), object=n, op=op["op"])
             elif first not in ok:
                 a = acc[first]
                 finding("service", "warn", "'%s': %s reachable only at %s (at %s blocked by %s %s mm out)" % (
                     op["op"], n, ", ".join(ok), first, a.get("blocked_by"), a.get("blocked_at_mm")), object=n, op=op["op"])
+            drop_hints(acc.values())
     REPORT["checks"].setdefault("service", {"findings": []})["rows"] = rows
     REPORT["coverage"].append("service: %d ops, %d screw accesses with the built assembly present" % (len(ops), len(rows)))
 

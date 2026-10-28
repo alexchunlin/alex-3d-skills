@@ -1,4 +1,4 @@
-"""Overhang faces by angle and by connected region, on binary STLs (numpy only; the follow-up's per-region judgement).
+"""Overhang faces by angle and by connected region, on STLs (numpy; printcheck.read_stl): the follow-up's per-region judgement.
 
     python3 -I overhang_regions.py [--lo 1] [--hi 44.9] [--printcheck pc.json] [--top 3] a.stl [b.stl ...] > out.json
 
@@ -15,8 +15,10 @@ Per part:
 
 Default band 1..44.9 deg: the sloped faces only, without flat ceilings (printcheck's bridges) or the 45 deg chamfers.
 """
-import argparse, json, os, struct
+import argparse, json, os, sys
 import numpy as np
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "skills", "print-cad-blender", "scripts"))
+from printcheck import read_stl as read  # noqa: E402  (ASCII or binary)
 
 ap = argparse.ArgumentParser()
 ap.add_argument("stl", nargs="+")
@@ -31,14 +33,6 @@ if args.printcheck:
     for p in json.load(open(args.printcheck))["parts"]:
         st = [x.get("status") for x in p.get("findings") or []]
         verdict[p["stl"]] = "fail" if "fail" in st else ("warn" if st else "ok")
-
-
-def read(path):
-    d = open(path, "rb").read()
-    n = struct.unpack("<I", d[80:84])[0]
-    assert 84 + 50 * n == len(d), "not a binary STL: " + path
-    r = np.frombuffer(d, dtype=np.dtype([("n", "<f4", 3), ("v", "<f4", (3, 3)), ("a", "<u2")]), count=n, offset=84)
-    return r["v"].astype(np.float64)
 
 
 def find(par, i):
