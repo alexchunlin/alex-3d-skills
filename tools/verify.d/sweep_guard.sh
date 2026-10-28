@@ -1,10 +1,11 @@
 # cadcheck interference between sampled poses: the PR #3 review's `wedge` and `pantilt` scenes, where a 2 mm arm at
 # 70 mm reach passed through a static cable between two 15 deg samples, two clear sweeps and a declared journal as negative controls, and the PR #14 review's scenes
-# (tools/verify.d/sweep_guard_build.py). Sourced by tools/verify_all.sh (uses $ROOT $CAD $V; calls ok/bad). About 90 s.
-# watch: @core tools/verify.d/sweep_guard_build.py
+# (tools/verify.d/sweep_guard_build.py). Sourced by tools/verify_all.sh (uses $ROOT $CAD $V; calls ok/bad). About 150 s.
+# watch: @core tools/verify.d/sweep_guard_build.py tools/verify.d/sweep_guard_turning.py
 SG="$V/sweep_guard"; mkdir -p "$SG"
 echo '{"fits": [{"a": "PRT_arm", "b": "PRT_base", "min_clearance": 0.1, "why": "hub running fit on the shaft"}]}' > "$SG/fit.json"
-for sc in wedge pantilt clear beside blade_box blade_cyl multishell_a multishell_b fit_hide fit_journal; do
+for sc in wedge pantilt clear beside blade_box blade_cyl multishell_a multishell_b fit_hide fit_journal \
+          ring_inside ring_cross ring_outside opp_axis opp_flip coupled2 coupledm2 tilt0p05 coax_clear; do
   $CAD build "$ROOT/tools/verify.d/sweep_guard_build.py" -- --scene $sc --out "$SG/$sc" > "$SG/$sc.log" 2>&1
   cfg=""; case $sc in fit_*) cfg="$SG/fit.json" ;; esac
   $CAD check "$SG/$sc/scene.blend" "$cfg" "$SG/$sc/cadcheck.json" --only interference > /dev/null 2>&1
@@ -16,7 +17,8 @@ sg() {   # sg "message" 'python condition on r (scene -> report)'
   python3 -I -c "
 import json, sys
 r = {}
-for k in ('wedge', 'pantilt', 'clear', 'beside', 'blade_box', 'blade_cyl', 'multishell_a', 'multishell_b', 'fit_hide', 'fit_journal', 'off'):
+for k in ('wedge', 'pantilt', 'clear', 'beside', 'blade_box', 'blade_cyl', 'multishell_a', 'multishell_b', 'fit_hide', 'fit_journal', 'off',
+          'ring_inside', 'ring_cross', 'ring_outside', 'opp_axis', 'opp_flip', 'coupled2', 'coupledm2', 'tilt0p05', 'coax_clear'):
     f = 'wedge/off.json' if k == 'off' else k + '/cadcheck.json'
     try:
         r[k] = json.load(open(sys.argv[1] + '/' + f))
@@ -53,3 +55,24 @@ sg "sweep guard: fit_hide, a declared running fit doesn't hide a lug on the same
    "'PRT_arm x PRT_base collide' in fl('fit_hide') and 'between the sampled poses' in fl('fit_hide')"
 sg "sweep guard: fit_journal, the declared journal alone stays clean, proven by the turning test" \
    "not fl('fit_journal') and not wl('fit_journal') and any(x.endswith(': turning') for x in r['fit_journal']['checks']['interference']['between_samples']['fits_flagged'])"
+# PR #21 review
+sg "sweep guard: ring_inside, a post wholly inside a spinning blade's solid of revolution still fails (the ring is not used)" \
+   "'PRT_blade x PRT_post collide' in fl('ring_inside') and 'between the sampled poses' in fl('ring_inside')"
+sg "sweep guard: ring_cross, a post across the ring's rim fails" "'PRT_blade x PRT_post collide' in fl('ring_cross')"
+sg "sweep guard: ring_outside, a post past the blade's reach stays clean" "not fl('ring_outside') and not wl('ring_outside')"
+sg "sweep guard: opp_axis, two coaxial joints with opposite axes (relative a + b): collision at a + b = 22.5 found" \
+   "'PRT_blade x PRT_post collide' in fl('opp_axis')"
+sg "sweep guard: opp_flip, the same under an unranged PIV_flip joint: not skipped, the collision is found" \
+   "'PRT_blade x PRT_post collide' in fl('opp_flip')"
+sg "sweep guard: coupled2 / coupledm2, a follower at ratio +2 / -2 on the same line: collision at driver 7.5 found" \
+   "'PRT_blade x PRT_post collide' in fl('coupled2') and 'PRT_blade x PRT_post collide' in fl('coupledm2')"
+sg "sweep guard: tilt0p05, an axis 0.05 deg off the line: the collision is still found" "'PRT_blade x PRT_post collide' in fl('tilt0p05')"
+sg "sweep guard: coax_clear, a hub + lug and a tooth on coaxial joints are proven clear by the turning test, nothing unproven" \
+   "not fl('coax_clear') and not wl('coax_clear') and r['coax_clear']['checks']['interference']['between_samples']['turning'] > 0"
+"$BL" -b --factory-startup --python "$ROOT/tools/verify.d/sweep_guard_turning.py" -- "$ROOT/skills/print-cad-blender/scripts" 2>/dev/null \
+  | grep '^TURN ' | cut -c6- > "$SG/turning.json"
+python3 -I -c "
+import json, sys; d = json.load(open(sys.argv[1]))
+sys.exit(0 if (not d['post9_depth0'] and d['post9_depth4'] and not d['post2.5_depth0'] and not d['post2.5_depth4']) else 1)" "$SG/turning.json" 2>/dev/null \
+  && ok "sweep guard: turning test, coarse boxes leave a 3.5 mm gap unproven, cut four times they prove it; a post in the path stays unproven" \
+  || bad "sweep guard: turning subdivision (see $SG/turning.json)"

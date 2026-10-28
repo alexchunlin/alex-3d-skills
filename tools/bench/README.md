@@ -55,6 +55,8 @@ writes; it refuses a directory without one unless you pass `--assume-commit`.
     (`false_fail_list`; `excused_fails` says which entry excused each fail).
   - `noise_warns`: untriaged warns matching no locator (`noise_warn_list`). `hit_share`: the share of untriaged warns that
     match one. v1 was never triaged, so the summaries keep `ALL-v1` and `ALL-v2` apart (`ALL` pools the recall).
+  - `unproven_warns`: cadcheck's "not proven clear between the sampled poses" warns (a pair the interference check
+    could not finish between its samples): a limit of the tool, counted apart and in neither of the two above.
   - `pf_fail` / `pf_fw`: printability findings caught.
   - `per_label`: each label's status per scope and the report line that credited it (`designer_line`, `rows_line`).
   - `runtime_s`: information only (other Blender jobs move it). No table or gate uses it.

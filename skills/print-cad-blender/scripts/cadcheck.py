@@ -380,7 +380,10 @@ def drivers(names):
 
 
 def relevant_joints(a, b):
-    return drivers(set(joint_chain(a)) ^ set(joint_chain(b)))
+    """The free (driver) joints between a and b. A joint with no range moves nothing: it used to stay in the group as a
+    one-sample driver, which left the between-samples guard no cells, so it skipped the pair (PR #21 review, opp_axis
+    with an unranged PIV_flip: a 30.2 mm3 collision went unseen)."""
+    return frozenset(d for d in drivers(set(joint_chain(a)) ^ set(joint_chain(b))) if JT.ranged(d, JOINTS, COUPLE))
 
 
 def set_pose(pose):
@@ -533,34 +536,39 @@ def spin_box(o, piv, u):
     return [piv + u * h + e1 * x + e2 * y for h in (min(hs), max(hs)) for x in (-R, R) for y in (-R, R)], [u, e1, e2]
 
 
-def turning(a, b, piv, u):
+def turning(a, b, piv, u, depth=4, cap=400000, pad=0.0):
     """For a and b where one turns about the axis (piv, u) against the other: a test clear(lo, hi) -> True when they
     can't meet while a turns from lo to hi radians against b (from home, right-handed about u), starting apart.
     Turning keeps each point's height h along the axis and radius r from it, and adds to its angle phi, so parts that
     start apart can only meet where a triangle of each shares (h, r, phi). Each triangle lies in a box: its vertex
     heights, radii from its closest approach to the axis out to its farthest vertex, and its vertices' angle range (all
     of it when it spans the axis); a's angles widen by the turn. No box of a meeting a box of b proves the turn clear:
-    a disc over a plate or a hub in a bore at any angle, a journal next to its arm over a small turn. This is cadsmith
-    mech's "turning about a common hinge line" test (PR #6), on the mesh triangles. Box pairs that share (h, r) are
-    found once; each turn tests their angles only."""
+    a disc over a plate or a hub in a bore at any angle, a journal next to its arm over a small turn. A large triangle
+    has a loose box, so the triangles of the box pairs that still meet are cut in four and only their children's pairs
+    tested again, up to `depth` times (v2's launcher body against the nip stop sleeve, 0.27 mm apart, needed it); past
+    `cap` pairs the turn is left unproven. This is cadsmith mech's "turning about a common hinge line" test (PR #6),
+    on the mesh triangles. Box pairs that share (h, r) are found once per call level."""
     import numpy as np
     u = np.array(u, float) / np.linalg.norm(u)
     e1 = np.cross(u, [1.0, 0, 0] if abs(u[0]) < 0.9 else [0, 1.0, 0])
     e1 /= np.linalg.norm(e1)
     e2 = np.cross(u, e1)
+    eps = 1e-4
 
-    def boxes(o):
+    def tris(o):
         me = o.data
         me.calc_loop_triangles()
         co = np.empty(len(me.vertices) * 3)
         me.vertices.foreach_get("co", co)
         M = np.array(o.matrix_world)
         co = co.reshape(-1, 3) @ M[:3, :3].T + M[:3, 3] - np.array(piv, float)
-        tri = np.empty(len(me.loop_triangles) * 3, dtype=np.int64)
-        me.loop_triangles.foreach_get("vertices", tri)
-        tri = tri.reshape(-1, 3)
-        h, P = (co @ u)[tri], np.stack([co @ e1, co @ e2], 1)[tri]       # (n, 3), (n, 3, 2)
-        rmin = np.full(len(tri), np.inf)
+        t = np.empty(len(me.loop_triangles) * 3, dtype=np.int64)
+        me.loop_triangles.foreach_get("vertices", t)
+        return co[t.reshape(-1, 3)]
+
+    def boxes(W):
+        h, P = W @ u, np.stack([W @ e1, W @ e2], 2)        # (n, 3), (n, 3, 2)
+        rmin = np.full(len(W), np.inf)
         for i, j in ((0, 1), (1, 2), (2, 0)):       # each edge's closest approach to the axis (the origin here)
             p0, e = P[:, i], P[:, j] - P[:, i]
             t = np.clip(-(p0 * e).sum(1) / np.maximum((e * e).sum(1), 1e-18), 0, 1)
@@ -572,33 +580,65 @@ def turning(a, b, piv, u):
         d = (ang - ang[:, :1] + np.pi) % (2 * np.pi) - np.pi
         f0, f1 = ang[:, 0] + d.min(1), ang[:, 0] + d.max(1)
         f0[spans], f1[spans] = -np.pi, 3 * np.pi       # the whole circle
-        return np.stack([h.min(1), h.max(1), rmin, np.linalg.norm(P, axis=2).max(1), f0, f1], 1)
-    A, B = boxes(a), boxes(b)
-    eps = 1e-4
-    if len(A) and len(B):
-        A = A[(A[:, 1] >= B[:, 0].min() - eps) & (A[:, 0] <= B[:, 1].max() + eps) & (A[:, 3] >= B[:, 2].min() - eps) & (A[:, 2] <= B[:, 3].max() + eps)]
-    if len(A) and len(B):
-        B = B[(B[:, 1] >= A[:, 0].min() - eps) & (B[:, 0] <= A[:, 1].max() + eps) & (B[:, 3] >= A[:, 2].min() - eps) & (B[:, 2] <= A[:, 3].max() + eps)]
-    pairs = []
-    n = 0
-    for i in range(0, len(A), max(1, 1000000 // max(1, len(B)))):
-        X = A[i:i + max(1, 1000000 // max(1, len(B)))]
-        ia, ib = np.nonzero((X[:, None, 1] >= B[None, :, 0] - eps) & (X[:, None, 0] <= B[None, :, 1] + eps)
-                            & (X[:, None, 3] >= B[None, :, 2] - eps) & (X[:, None, 2] <= B[None, :, 3] + eps))
-        pairs.append((X[ia, 4:], B[ib, 4:]))
-        n += len(ia)
-        if n > 2000000:
+        r1 = np.linalg.norm(P, axis=2).max(1)
+        if pad > 0:                                 # an axis a little off the line: every bound grows by pad
+            w = np.where(rmin > pad, np.arcsin(np.minimum(1.0, pad / np.maximum(rmin, 1e-9))), 2 * np.pi)
+            f0, f1 = f0 - w, f1 + w
+            f0[rmin <= pad], f1[rmin <= pad] = -np.pi, 3 * np.pi
+            return np.stack([h.min(1) - pad, h.max(1) + pad, np.maximum(0.0, rmin - pad), r1 + pad, f0, f1], 1)
+        return np.stack([h.min(1), h.max(1), rmin, r1, f0, f1], 1)
+
+    def split(W):                                   # each triangle into four, (n, 3, 3) -> (4n, 3, 3)
+        m01, m12, m20 = (W[:, 0] + W[:, 1]) / 2, (W[:, 1] + W[:, 2]) / 2, (W[:, 2] + W[:, 0]) / 2
+        return np.stack([np.stack(x, 1) for x in ((W[:, 0], m01, m20), (m01, W[:, 1], m12), (m20, m12, W[:, 2]), (m01, m12, m20))], 1).reshape(-1, 3, 3)
+
+    def meet_hr(A, B, ia, ib):
+        X, Y = A[ia], B[ib]
+        return (X[:, 1] >= Y[:, 0] - eps) & (X[:, 0] <= Y[:, 1] + eps) & (X[:, 3] >= Y[:, 2] - eps) & (X[:, 2] <= Y[:, 3] + eps)
+
+    def meet_phi(A, B, ia, ib, lo, hi):
+        a0, wa = A[ia, 4] + lo - eps, A[ia, 5] - A[ia, 4] + (hi - lo) + 2 * eps
+        wb = B[ib, 5] - B[ib, 4]
+        dd = (B[ib, 4] - a0) % (2 * np.pi)
+        return (dd <= wa) | (dd + wb >= 2 * np.pi) | (wa >= 2 * np.pi) | (wb >= 2 * np.pi)
+
+    WA, WB = tris(a), tris(b)
+    A, B = boxes(WA), boxes(WB)
+    if not len(A) or not len(B):
+        return lambda lo, hi: True
+    ka = np.nonzero((A[:, 1] >= B[:, 0].min() - eps) & (A[:, 0] <= B[:, 1].max() + eps) & (A[:, 3] >= B[:, 2].min() - eps) & (A[:, 2] <= B[:, 3].max() + eps))[0]
+    kb = np.nonzero((B[:, 1] >= A[:, 0].min() - eps) & (B[:, 0] <= A[:, 1].max() + eps) & (B[:, 3] >= A[:, 2].min() - eps) & (B[:, 2] <= A[:, 3].max() + eps))[0]
+    IA, IB = [], []
+    step = max(1, 1000000 // max(1, len(kb)))
+    for i in range(0, len(ka), step):
+        X = A[ka[i:i + step]]
+        ia, ib = np.nonzero((X[:, None, 1] >= B[None, kb, 0] - eps) & (X[:, None, 0] <= B[None, kb, 1] + eps)
+                            & (X[:, None, 3] >= B[None, kb, 2] - eps) & (X[:, None, 2] <= B[None, kb, 3] + eps))
+        IA.append(ka[i:i + step][ia])
+        IB.append(kb[ib])
+        if sum(len(x) for x in IA) > cap:
             return lambda lo, hi: False         # too many to test each turn: leave it to the bisection
-    FA = np.concatenate([p[0] for p in pairs]) if pairs else np.zeros((0, 2))
-    FB = np.concatenate([p[1] for p in pairs]) if pairs else np.zeros((0, 2))
+    IA = np.concatenate(IA) if IA else np.zeros(0, int)
+    IB = np.concatenate(IB) if IB else np.zeros(0, int)
 
     def clear(lo, hi):
-        if not len(FA):
-            return True
-        a0, wa = FA[:, 0] + lo - eps, FA[:, 1] - FA[:, 0] + (hi - lo) + 2 * eps
-        wb = FB[:, 1] - FB[:, 0]
-        dd = (FB[:, 0] - a0) % (2 * np.pi)
-        return not bool(((dd <= wa) | (dd + wb >= 2 * np.pi) | (wa >= 2 * np.pi) | (wb >= 2 * np.pi)).any())
+        Wa, Wb, Ba, Bb, ia, ib = WA, WB, A, B, IA, IB
+        for level in range(depth + 1):
+            hit = meet_phi(Ba, Bb, ia, ib, lo, hi)
+            ia, ib = ia[hit], ib[hit]
+            if not len(ia):
+                return True
+            if level == depth or len(ia) * 16 > cap:
+                return False
+            ua, ra = np.unique(ia, return_inverse=True)      # cut the triangles still in play, test their children
+            ub, rb = np.unique(ib, return_inverse=True)
+            Wa, Wb = split(Wa[ua]), split(Wb[ub])
+            Ba, Bb = boxes(Wa), boxes(Wb)
+            ia = (ra[:, None] * 4 + np.arange(4)[None, :]).repeat(4, 1).reshape(-1)
+            ib = np.tile(rb[:, None] * 4 + np.arange(4)[None, :], (1, 4)).reshape(-1)
+            keep = meet_hr(Ba, Bb, ia, ib)
+            ia, ib = ia[keep], ib[keep]
+        return False
     return clear
 
 
@@ -806,6 +846,90 @@ def shell_pts(o):
             roots.setdefault(find(i), i)
         _SHELLS[key] = [me.vertices[i].co.copy() for i in roots.values()]
     return _SHELLS[key]
+
+
+def ring_of(o, c, cache):
+    """o's solid of revolution about its continuous joint c (the router's annulus, route._envelope), as a temporary
+    object at home, kept per part."""
+    if (o.name, c) not in cache:
+        from cadlib import route as RT
+        co, F = RT._envelope(o, c, joint_chain(o), JOINTS, COUPLE)
+        me = bpy.data.meshes.new("CADCHECK_ring")
+        me.from_pydata([tuple(v) for v in co.tolist()], [], [tuple(f) for f in F.tolist()])
+        ring = bpy.data.objects.new("CADCHECK_ring_" + o.name, me)
+        tmpcoll().objects.link(ring)
+        cache[(o.name, c)] = ring
+    return cache[(o.name, c)]
+
+
+def coaxial(a, b, rel, drv, info, ring_cache):
+    """For a pair whose relative motion is turning about one axis line: {"a", "b", "piv", "u", "range": cell -> (lo,
+    hi) radians a turns against b, "clear": None}; else None. The joints between them (rel) may be several on one line
+    (v2's feeder and jar, hood and nip_lift: the relative angle is the signed sum of their angles, linear in the drivers,
+    so a cell's extremes are at its corners). A part spinning on a continuous joint of its own is replaced by its solid
+    of revolution about that joint first (a flywheel), which takes that joint out of rel."""
+    if not rel or any(JOINTS[j].get("kind") == "prismatic" for j in rel):
+        return None
+    side = {}
+    for o, other in ((a, b), (b, a)):
+        ch = [j for j in joint_chain(o) if JT.ranged(j, JOINTS, COUPLE)]
+        side[o.name] = o
+        if ch and ch[0] in rel and JOINTS[ch[0]].get("continuous") and len(rel) > 1:
+            ring = ring_of(o, ch[0], ring_cache)
+            # the turning test assumes the parts start apart, and only the real parts are measured at the samples: a
+            # part with a vertex inside the ring's band could lie wholly inside it and never cross a surface (PR #21
+            # review, ring_inside: a post in a spinning blade's path read clear). Then keep the real part.
+            if not _in_band(side.get(other.name, other), ring, info.setdefault(ch[0], JT.motion(ch[0], JOINTS))):
+                side[o.name] = ring
+                rel = [j for j in rel if j != ch[0]]
+    for j in rel:
+        if j not in info:
+            info[j] = JT.motion(j, JOINTS)
+    _, p0, u0 = info[rel[0]]
+    p0, u0 = Vector(p0), Vector(u0).normalized()
+    reach = max((side[o.name].matrix_world @ v.co - p0).length for o in (a, b) for v in side[o.name].data.vertices)
+    sgn, pad = {}, 0.0
+    home = JT.values(JOINTS, COUPLE, {})
+    for j in rel:
+        _, p, u = info[j]
+        u, d = Vector(u).normalized(), Vector(p) - p0
+        th, off = math.acos(min(1.0, abs(u.dot(u0)))), (d - u0 * d.dot(u0)).length
+        if th > 0.02 or off > 0.5:
+            return None
+        # a joint whose axis is a little off the line (or shifted from it) moves a point by up to its turn x (angle x
+        # reach + offset) more than the turn about the line: the boxes are padded by that (PR #21 review: 1e-6 on
+        # |u.u0| let 0.08 deg through unpadded)
+        dr, k = JT.driver_of(j, COUPLE)
+        sd = JOINTS[dr]
+        turn = 2 * math.pi if sd.get("continuous") else min(2 * math.pi, max(
+            abs(math.radians(JT.values(JOINTS, COUPLE, {dr: float(x)})[j] - home[j])) for x in (sd["lo"] - CFG["overtravel_deg"], sd["hi"] + CFG["overtravel_deg"])))
+        pad += turn * (th * reach + off)
+        sgn[j] = (1 if j in joint_chain(a) else -1) * (1 if u.dot(u0) > 0 else -1)
+
+    def rng(cell):
+        angs = []
+        for c in itertools.product(*cell):
+            v = JT.values(JOINTS, COUPLE, dict(zip(drv, c)))
+            angs.append(math.radians(sum(s * (v[j] - home[j]) for j, s in sgn.items())))
+        return min(angs), max(angs)
+    return {"a": side[a.name], "b": side[b.name], "piv": p0, "u": u0, "range": rng, "clear": None, "pad": pad + 1e-4}
+
+
+def _in_band(o, ring, mot):
+    """Does any vertex of o lie inside the ring's band (its height and radius ranges about the spin axis)?"""
+    _, piv, u = mot
+    piv, u = Vector(piv), Vector(u).normalized()
+
+    def hr(ob):
+        out = []
+        for v in ob.data.vertices:
+            q = ob.matrix_world @ v.co - piv
+            h = q.dot(u)
+            out.append((h, (q - u * h).length))
+        return out
+    R = hr(ring)
+    h0, h1, r0, r1 = min(h for h, _ in R), max(h for h, _ in R), min(r for _, r in R), max(r for _, r in R)
+    return any(h0 <= h <= h1 and r0 <= r <= r1 for h, r in hr(o))
 
 
 MANIFOLD_OK = {}
@@ -1047,6 +1171,8 @@ REPORT = {"tool": "cadcheck", "blend": bpy.data.filepath, "generated": time.strf
           "config": {k: v for k, v in CFG.items() if k not in ("drop_tests",)}, "checks": {}, "coverage": [], "not_checked": []}
 FAILS, WARNS = [], []
 PAST_LIMITS = []   # poses outside a joint's range (check_pose_values)
+UNPROVEN_KIND = "not proven clear between the sampled poses"     # the unproven-pair warn's text (verify_all, bench)
+UNPROVEN_PAIRS = []     # pairs the between-sample refinement could not finish (check_interference)
 UNBOUNDED_ALLOWS = {}   # allow rules with no max_mm3 that skip a pair across a joint: "a x b" -> why (check_interference)
 NOTES = []   # information lines printed with the summary, never warns (insertion: a listed order that doesn't fit)
 ALLOW_USE = {}   # allow rule index -> {"mm3": largest overlap measured on a pair it covers, "rows": slide rows} (check_slide)
@@ -1536,7 +1662,7 @@ def check_interference():
     guard = {"candidates": 0, "broad_culled": 0, "narrow_culled": 0, "fits_flagged": [], "envelopes": 0, "envelope_tris": 0, "pads": [],
              "envelope_failed": [], "pairs": 0, "turning": 0, "spin": 0, "poses": 0, "pair_poses": 0, "bisected": 0, "at_tol": 0,
              "unproven": {}, "broad_s": 0.0, "narrow_s": 0.0, "refine_s": 0.0}
-    env_cache = {}
+    env_cache, ring_cache = {}, {}
     for drv, pairs in sorted(groups.items(), key=lambda kv: len(kv[0])):
         drv, per = pose_axes(drv, QUICK)
         objs = {o.name: o for p in pairs for o in p[:2]}
@@ -1634,10 +1760,9 @@ def check_interference():
         for a, b, _, _ in watch:
             terms = JT.move_terms(_corners(bbox_world(a)), joint_chain(a), joint_chain(b), JOINTS, COUPLE, info)
             rel = [j for j in set(joint_chain(a)) ^ set(joint_chain(b)) if JT.ranged(j, JOINTS, COUPLE)]
-            if len(rel) == 1 and info[rel[0]][0] == "revolute":   # one turns about one fixed axis against the other
-                d, kk = JT.driver_of(rel[0], COUPLE)
-                axis[(a.name, b.name)] = [info[rel[0]][1:], kk * (1 if rel[0] in joint_chain(a) else -1),
-                                          float(JOINTS[d].get("home", 0.0) or 0.0), None]
+            ax = coaxial(a, b, rel, drv, info, ring_cache)
+            if ax:                                  # one turns about one fixed axis against the other
+                axis[(a.name, b.name)] = ax
             elif len(drv) > 1:
                 for o, other in ((a, b), (b, a)):   # a wheel spinning on its own joint, carried by the others
                     ch = [j for j in joint_chain(o) if JT.ranged(j, JOINTS, COUPLE)]
@@ -1710,12 +1835,16 @@ def check_interference():
                     continue
                 if k in axis:       # before halving: turning about one axis, the parts' triangles may never meet
                     ax = axis[k]
-                    if ax[3] is None:
+                    if ax["clear"] is None:
                         set_pose({})
-                        ax[3] = turning(byname[k][0], byname[k][1], *ax[0])
-                    lo_, hi_ = sorted(math.radians(ax[1] * (v - ax[2])) for v in cell[0])
-                    if ax[3](lo_, hi_):
+                        ax["clear"] = turning(ax["a"], ax["b"], ax["piv"], ax["u"], pad=ax["pad"])
+                    if ax["clear"](*ax["range"](cell)):
+                        # turning proves no collision, not the smallest clearance: measure the cell's middle too, for
+                        # the clearance rows the halving used to give (PR #21 review, cam_gap03: 0.33 mm went unsaid)
                         guard["turning"] += 1
+                        mid = tuple(round((lo + hi) / 2, 4) for lo, hi in cell)
+                        if norm(mid) not in gvals[k]:
+                            want.setdefault(mid, {}).setdefault(k, 0.0)
                         continue
                 if bound <= CFG["sweep_tol"]:
                     guard["at_tol"] += 1
@@ -1769,6 +1898,10 @@ def check_interference():
             finding("clearance", "warn", "%s to %s %.2f mm just past the limit (%s)" % (r["a"], r["b"], r["mm"], r["pose"]), **r)
         elif r["mm"] < CFG["moving_warn_clearance"] and not r["fit"]:
             finding("clearance", "warn", "%s to %s %.2f mm at %s" % (r["a"], r["b"], r["mm"], r["pose"]), **r)
+    for ring in ring_cache.values():
+        me = ring.data
+        bpy.data.objects.remove(ring)
+        bpy.data.meshes.remove(me)
     for k, e in env_cache.items():          # the envelopes live in the scratch collection: drop them
         if e is not None and k[0] != "home":
             me = e[0].data
@@ -1777,9 +1910,11 @@ def check_interference():
     res["between_samples"] = dict(guard, unproven=["%s x %s (%s)" % (k + (v,)) for k, v in sorted(guard["unproven"].items())],
                                   **{k: round(guard[k], 1) for k in ("broad_s", "narrow_s", "refine_s")})
     for (a, b), cell in sorted(guard["unproven"].items()):
-        finding("interference", "warn", "%s x %s not proven clear between the sampled poses at %s: the swept envelope meets it "
-                "and refinement spent max_guard_poses %d; give the joint a finer step" % (a, b, cell, CFG["max_guard_poses"]),
-                a=a, b=b, between_cell=cell)
+        # its own kind (summary.unproven_pairs): a coverage limit of the check, not a design fact, so the attempt
+        # regressions and the bench count it apart from design warns (daily check 2026-10-28)
+        finding("interference", "warn", "%s x %s %s at %s: the swept envelope meets it and refinement spent max_guard_poses %d; "
+                "give the joint a finer step" % (a, b, UNPROVEN_KIND, cell, CFG["max_guard_poses"]), a=a, b=b, between_cell=cell, kind="unproven")
+        UNPROVEN_PAIRS.append("%s x %s (%s)" % (a, b, cell))
     REPORT["checks"].setdefault("interference", {"findings": []}).update(res)
     swept = sorted({j for g in res["groups"] for j in g["joints"]})
     REPORT["coverage"].append("interference/clearance: %d objects in %s, %d pair-pose tests, joints swept %s with %.1f deg overtravel" % (
@@ -4548,7 +4683,7 @@ def main():
                          "accept_suggestions": [x for x in tri["legacy"] if x["use"]],
                          "only_without_rows": empty if ONLY else [],
                          "coverage": REPORT["coverage"], "not_checked": REPORT["not_checked"], "poses_past_limits": PAST_LIMITS,
-                         "unbounded_allows": UNBOUNDED_ALLOWS, "unused_allows": unused, "notes": NOTES,
+                         "unbounded_allows": UNBOUNDED_ALLOWS, "unused_allows": unused, "unproven_pairs": UNPROVEN_PAIRS, "notes": NOTES,
                          "runtime_s": round(time.time() - T0, 1)}
     os.makedirs(os.path.dirname(os.path.abspath(OUT)), exist_ok=True)
     with open(OUT, "w") as f:

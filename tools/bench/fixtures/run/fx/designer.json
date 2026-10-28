@@ -8,5 +8,6 @@
   "drop: feed test: the payload path touches ['PRT_hood'], which moves on PIV_lift (-1..0), but the test holds PIV_lift at home",
   "stacks: stack one: worst case 0.5 mm > 0.3 (RSS 0.2)",
   "parts: PRT_q: 12 wall samples < 1.6 mm (min 1.2)",
-  "parts: PRT_r: 300 mm2 of sloped overhang steeper than 45 deg, supports=no"],
+  "parts: PRT_r: 300 mm2 of sloped overhang steeper than 45 deg, supports=no",
+  "interference: PRT_e x PRT_f not proven clear between the sampled poses at arm=0..15: the swept envelope meets it and refinement spent max_guard_poses 256; give the joint a finer step"],
  "accepted_warns": {"fasteners: FST_e head stands 9.0 mm off the part: exposed shank under the head": "looked at it"}}}
