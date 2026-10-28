@@ -233,12 +233,12 @@ if [ -f "$V23/mm_launcher_v2a3.blend.gz" ]; then
   python3 -I -c "
 import json,sys; d=json.load(open(sys.argv[1])); s=d['summary']; shape=lambda x: ' kinks: ' in x or ' lie in one tube for ' in x
 w=[x for x in s['warn_list'] if not x.startswith('insertion: ') and not shape(x)]
-ins=[x for x in s['warn_list'] if x.startswith('insertion: ')]; facts = len(ins) == 3 and all(any(k in x for x in ins) for k in ('PRT_hood (step', \"group 'pod'\", \"group 'jar'\"))
+ins=[x for x in s['warn_list'] if x.startswith('insertion: ')]; facts = len(ins) == 4 and all(any(k in x for x in ins) for k in ('PRT_hood (step', \"group 'pod'\", \"group 'jar'\", 'BUY_mm_fill (step'))
 br={r['object']: r['max_bridge_span_mm'] for r in d['checks']['parts']['rows']}
 ok = (s['fails'] == 0 and facts and sum(map(shape, s['warn_list'])) == 5 and len(w) == 1 and 'M3 x 9 (FST_detent_0)' in w[0] and not any('much wider than the nearest' in x for x in list(s['accepted_warns']) + w)
       and br['PRT_flywheel'] < 5 and br['PRT_feeder_crown'] < 25 and br['PRT_nacelle'] < 25 and len(s['stale_accepts']) == 3)
 sys.exit(0 if ok else 1)" "$V/v2a3/cadcheck.json" \
-    && ok "V2A3 designer config: 0 fails, 1 untriaged warn (M3 x 9) plus the 3 insertion step facts and 5 cable shapes, no ray-slip or bbox-bridge false warns" || bad "V2A3 designer config: unexpected result"
+    && ok "V2A3 designer config: 0 fails, 1 untriaged warn (M3 x 9) plus the 3 insertion step facts, the M&M fill in its jar's step and 5 cable shapes, no ray-slip or bbox-bridge false warns" || bad "V2A3 designer config: unexpected result"
   # V2R3's issues as rows: the max-candy gap from params (=MM_T[1] + TAPE_T), the encoder chain, the zero-margin pocket
   $CAD check "$V/v2a3/model.blend" "$V23/checks.json" "$V/v2a3/overlay.json" --overlay "$V23/overlay_v2a3.json" --overlay-only \
        --only drop,slide,distances,payload,cables >/dev/null
@@ -269,11 +269,11 @@ if [ -f "$V24/mm_launcher_v2a4.blend.gz" ]; then
   $CAD check "$V/v2a4/model.blend" "$V24/checks.json" "$V/v2a4/cadcheck.json" >/dev/null
   python3 -I -c "
 import json,sys; s=json.load(open(sys.argv[1]))['summary']
-ins=[x for x in s['warn_list'] if x.startswith('insertion: ')]; facts = len(ins) == 3 and all(any(k in x for x in ins) for k in ('PRT_hood (step', \"group 'pod'\", \"group 'jar'\"))
+ins=[x for x in s['warn_list'] if x.startswith('insertion: ')]; facts = len(ins) == 4 and all(any(k in x for x in ins) for k in ('PRT_hood (step', \"group 'pod'\", \"group 'jar'\", 'BUY_mm_fill (step'))
 shape=sum(' kinks: ' in x or ' lie in one tube for ' in x for x in s['warn_list'])
-ok = s['fails'] == 0 and s['untriaged_warns'] == 8 and facts and shape == 5 and len(s['stale_accepts']) == 6 and len(s['poses_past_limits']) == 8
+ok = s['fails'] == 0 and s['untriaged_warns'] == 9 and facts and shape == 5 and len(s['stale_accepts']) == 6 and len(s['poses_past_limits']) == 8
 sys.exit(0 if ok else 1)" "$V/v2a4/cadcheck.json" \
-    && ok "V2A4 designer config: 0 fails, untriaged = the 3 insertion step facts + 5 cable shapes, 6 stale false-warn accepts, 8 past-limit poses listed" || bad "V2A4 designer config: unexpected result"
+    && ok "V2A4 designer config: 0 fails, untriaged = the 3 insertion step facts + the M&M fill in its jar's step + 5 cable shapes, 6 stale false-warn accepts, 8 past-limit poses listed" || bad "V2A4 designer config: unexpected result"
   # A2-01 as one swept row over the entry arc: V2R4's three rows and probe gave 7.50 / 7.67 / 7.95 at psi 80
   $CAD check "$V/v2a4/model.blend" "$V24/checks.json" "$V/v2a4/sweep.json" --overlay "$V24/overlay_v2a4.json" --overlay-only --only distances >/dev/null
   python3 -I -c "
@@ -311,12 +311,12 @@ if [ -f "$V25/mm_launcher_v2a5.blend.gz" ]; then
   python3 -I -c "
 import json,sys; d=json.load(open(sys.argv[1])); s=d['summary']
 fl=[r.get('flexed',{}).get('PRT_gate_detent',{}).get('max_mm3',0) for r in d['checks']['slide']['rows']]
-ins=[x for x in s['warn_list'] if x.startswith('insertion: ')]; facts = len(ins) == 3 and all(any(k in x for x in ins) for k in ('PRT_hood (step', \"group 'pod'\", \"group 'jar'\"))
+ins=[x for x in s['warn_list'] if x.startswith('insertion: ')]; facts = len(ins) == 4 and all(any(k in x for x in ins) for k in ('PRT_hood (step', \"group 'pod'\", \"group 'jar'\", 'BUY_mm_fill (step'))
 shape=sum(' kinks: ' in x or ' lie in one tube for ' in x for x in s['warn_list'])
-ok = s['fails'] == 0 and s['untriaged_warns'] == 8 and facts and shape == 5 and not s['stale_accepts'] \
+ok = s['fails'] == 0 and s['untriaged_warns'] == 9 and facts and shape == 5 and not s['stale_accepts'] \
   and any('gate_detent' in k and 'jar_gate' in k for k in s['unbounded_allows']) and max(fl) > 0.2
 sys.exit(0 if ok else 1)" "$V/v2a5/cadcheck.json" \
-    && ok "V2A5 designer config: 0 F / 0 stale, untriaged = the 3 insertion step facts + 5 cable shapes; detent allow listed as unbounded; slide flex records the sub-vol_tol ride" || bad "V2A5 designer config: unexpected result"
+    && ok "V2A5 designer config: 0 F / 0 stale, untriaged = the 3 insertion step facts + the M&M fill in its jar's step + 5 cable shapes; detent allow listed as unbounded; slide flex records the sub-vol_tol ride" || bad "V2A5 designer config: unexpected result"
   # A5-02: the designer's 5 rows (psi 50..80) and V2R5's 9 hand rows as one swept row per setting: 8.099 at psi 90
   $CAD check "$V/v2a5/model.blend" "$V25/checks.json" "$V/v2a5/sweep.json" --overlay "$V25/overlay_v2a5.json" --overlay-only --only distances >/dev/null
   python3 -I -c "
@@ -344,6 +344,7 @@ if [ -f "$V26/mm_launcher_v2a6.blend.gz" ]; then
   # designer config: 0 fails, and every new untriaged warn is one of V2R6's issues or a config fact: A6-01 twice
   # (insertion: the splice in the feeder's bench step, and the feeder merge blocked +Z by the groove cap), A6-02 twice
   # (cable ends 8.8 / 5.7 apart across pan), A6-03 (swept rows that missed psi 0), plus the jar/pod/stud step facts
+  # and BUY_mm_fill, the M&M mass carrier, with no straight way into the jar of its own step
   $CAD check "$V/v2a6/model.blend" "$V26/checks.json" "$V/v2a6/cadcheck.json" >/dev/null
   python3 -I -c "
 import json,sys; s=json.load(open(sys.argv[1]))['summary']; w=s['warn_list']; f=' | '.join(w)
@@ -351,19 +352,19 @@ ok = (s['fails'] == 0 and len(s['accepted_warns']) == 35 and not s['stale_accept
   and \"BUY_bus_junction is in bench step '10d\" in f and \"group 'feeder' (16 objects)\" in f and '+Z PRT_groove_cap (BUY_bus_junction) at 3' in f
   and 'CAB_bus_pan ends 1.2 mm from BUY_bus_junction' in f and 'at pan=-90 that point is 8.8 mm' in f and 'CAB_launcher_base ends 0.0 mm from CAB_launcher_bundle' in f
   and sum('the swept ray missed a part' in x for x in w) == 4
-  and sum(x.startswith('insertion: ') for x in w) == 5 and sum(' kinks: ' in x or ' lie in one tube for ' in x for x in w) == 6
-  and 'CAB_bus_feeder and CAB_bus_tilt lie in one tube for 16 mm' in f and len(w) == 17)
+  and sum(x.startswith('insertion: ') for x in w) == 6 and 'BUY_mm_fill (step' in f and sum(' kinks: ' in x or ' lie in one tube for ' in x for x in w) == 6
+  and 'CAB_bus_feeder and CAB_bus_tilt lie in one tube for 16 mm' in f and len(w) == 18)
 print(len(w)); sys.exit(0 if ok else 1)" "$V/v2a6/cadcheck.json" \
     && ok "V2A6 designer config: 0 F; insertion flags A6-01 twice, cable drift A6-02 twice, 4 missed swept stations (A6-03), 6 cable shapes" || bad "V2A6 designer config: unexpected result"
   # with the three config facts the check asks for (step poses for the pod and jar, the nip stud in the backplate's
-  # step), only the two A6-01 warns are left
+  # step), only the two A6-01 warns and the M&M fill in its jar are left
   $CAD check "$V/v2a6/model.blend" "$V26/checks.json" "$V/v2a6/ins.json" --only insertion --overlay "$V26/overlay_v2a6_steps.json" --overlay-only >/dev/null
   python3 -I -c "
 import json,sys; d=json.load(open(sys.argv[1])); w=d['summary']['warn_list']; r={x['object']: x for x in d['checks']['insertion']['rows']}
-ok = len(w) == 2 and all('bus_junction' in x or \"group 'feeder'\" in x for x in w) and r[\"group 'jar' (11 objects)\"]['free_dir'] == '+Z' \
+ok = len(w) == 3 and all('bus_junction' in x or \"group 'feeder'\" in x or 'BUY_mm_fill (step' in x for x in w) and r[\"group 'jar' (11 objects)\"]['free_dir'] == '+Z' \
   and r['PRT_hood']['free_dir'] == '+X' and r['PRT_nip_stop_sleeve']['free_dir'] == 'along FST_nip_stud'
 sys.exit(0 if ok else 1)" "$V/v2a6/ins.json" \
-    && ok "V2A6 insertion with the step facts declared: only A6-01 left; jar out +Z at +30, sleeve along its stud" || bad "V2A6 insertion with step facts"
+    && ok "V2A6 insertion with the step facts declared: only A6-01 and the M&M fill left; jar out +Z at +30, sleeve along its stud" || bad "V2A6 insertion with step facts"
   # V2R6's own rows reproduce its A6-01 evidence: the splice blocked +Z by the groove cap
   $CAD check "$V/v2a6/model.blend" "$V26/checks.json" "$V/v2a6/rows.json" --only slide,service --overlay "$V26/review_rows_v2a6.json" --overlay-only >/dev/null
   grep -qF "R6 A6-01 bus junction placed/removed from above" "$V/v2a6/rows.json" && python3 -I -c "
@@ -382,14 +383,15 @@ if [ -f "$V27/mm_launcher_v2a7.blend.gz" ]; then
   mkdir -p "$V/v2a7"; gunzip -c "$V27/mm_launcher_v2a7.blend.gz" > "$V/v2a7/model.blend"; cp "$V27/manifest.json" "$V/v2a7/"
   # designer config: 0 F; the untriaged warns are V2R7's A7-01 (tilt 45 at 11a on the unpowered tilt servo), A7-02
   # (both bus leads kink onto the splice and share one tube), the A6-02 remainder (5.7 drift), 4 insertion step facts
-  # and 3 other cable-shape questions (bundle corner, feeder bus inside the bundle, encoder with phase 2)
+  # and 3 other cable-shape questions (bundle corner, feeder bus inside the bundle, encoder with phase 2), and the M&M
+  # fill with no straight way into the jar of its own step
   $CAD check "$V/v2a7/model.blend" "$V27/checks.json" "$V/v2a7/cadcheck.json" >/dev/null
   python3 -I -c "
 import json,sys; s=json.load(open(sys.argv[1]))['summary']; w=s['warn_list']; f=' | '.join(w)
-ok = (s['fails'] == 0 and len(s['accepted_warns']) == 37 and not s['stale_accepts'] and len(w) == 12
+ok = (s['fails'] == 0 and len(s['accepted_warns']) == 37 and not s['stale_accepts'] and len(w) == 13
   and \"needs PIV_tilt at 45 (FST_gcap_5 is reachable only at tilt=45), but BUY_servo_tilt\" in f and 'CAB_bus_feeder (OD 2.8) kinks: 90 deg at [5.7, 4.0, 100.5]' in f
   and 'CAB_bus_tilt (OD 2.8) kinks' in f and 'CAB_bus_feeder and CAB_bus_tilt lie in one tube for 16 mm' in f and 'at pan=90 that point is 5.7 mm' in f
-  and sum(x.startswith('insertion: ') for x in w) == 4 and sum(' kinks: ' in x or ' lie in one tube for ' in x for x in w) == 6)
+  and sum(x.startswith('insertion: ') for x in w) == 5 and 'BUY_mm_fill (step' in f and sum(' kinks: ' in x or ' lie in one tube for ' in x for x in w) == 6)
 print(len(w)); sys.exit(0 if ok else 1)" "$V/v2a7/cadcheck.json" \
     && ok "V2A7 designer config: 0 F; held pose flags A7-01, kinks + shared tube flag A7-02, drift 5.7 (A6-02 rest)" || bad "V2A7 designer config: unexpected result"
   # with the step facts declared (A6's three, and 11a's own 'pod at tilt 45' as a pose): insertion leaves only the splice,
@@ -398,10 +400,10 @@ print(len(w)); sys.exit(0 if ok else 1)" "$V/v2a7/cadcheck.json" \
   $CAD check "$V/v2a7/model.blend" "$V27/checks.json" "$V/v2a7/held.json" --only fasteners,assembly --overlay "$V27/overlay_v2a7_steps.json" --overlay-only >/dev/null
   python3 -I -c "
 import json,sys; w=json.load(open(sys.argv[1]))['summary']['warn_list']; h=json.load(open(sys.argv[2]))['assembly']['held_poses']
-ok = len(w) == 1 and w[0].startswith('insertion: BUY_bus_junction') and '+Z PRT_nip_cover at 67.59' in w[0] \
+ok = len(w) == 2 and w[0].startswith('insertion: BUY_bus_junction') and '+Z PRT_nip_cover at 67.59' in w[0] and w[1].startswith('insertion: BUY_mm_fill') \
   and len(h) == 1 and h[0]['why'] == \"the step's pose; FST_gcap_5 is reachable only at tilt=45\" and h[0]['drive_step'].startswith('8 ')
 sys.exit(0 if ok else 1)" "$V/v2a7/ins.json" "$V/v2a7/held.json" \
-    && ok "V2A7 with step facts: insertion leaves the in-place splice; one held-pose row (step pose + FST_gcap_5)" || bad "V2A7 step facts"
+    && ok "V2A7 with step facts: insertion leaves the in-place splice and the M&M fill; one held-pose row (step pose + FST_gcap_5)" || bad "V2A7 step facts"
   # "powered" on the battery step does not help 11a; "pose_how" on 11a silences it
   python3 -I -c "
 import json,sys; o=json.load(open(sys.argv[1])); st=o['assembly_order']
