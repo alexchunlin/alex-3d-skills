@@ -17,8 +17,8 @@ adds `carry`, `fasteners.captive` and `flexures`.
   "max_poses_per_group": 48,      // grids over several joints are thinned to this
   "sweep_tol": 0.25,              // mm: swept-envelope step error, and the finest move the refinement halves to
   "envelope_voxel": 1.0,          // swept envelope voxel (mm); the envelope is oversize by sweep_tol + voxel
-  "max_guard_poses": 64,          // refinement poses per envelope hit; past it the pair warns as unproven
-  "envelope_max_poses": 3000,     // a part on 2+ joints (tilt on pan): its envelope coarsens to this many poses
+  "max_guard_poses": 256,         // refinement poses per envelope hit; past it the pair warns as unproven
+  "envelope_max_poses": 600,      // a part on 2+ joints (tilt on pan): its envelope coarsens to this many poses
 
   "allow": [                      // designed overlap: the pair is skipped entirely
     {"a": "BUY_servo_*", "b": "BUY_horn_*", "why": "spline inside horn hub"},

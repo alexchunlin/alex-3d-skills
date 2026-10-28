@@ -76,9 +76,9 @@ DEFAULTS = {
     # part's geom.swept_envelope (oversize by sweep_tol + envelope_voxel), and refines only envelope hits (halving
     # cells until a collision is found, no point can move more than sweep_tol unseen, or max_guard_poses are spent)
     "sweep_tol": 0.25,
-    "max_guard_poses": 64,      # refinement poses per envelope hit; one settled by bounding boxes alone counts 1/16
+    "max_guard_poses": 256,     # refinement poses per envelope hit; one settled by bounding boxes alone counts 1/16
     "envelope_voxel": 1.0,      # geom.swept_envelope's voxel (pad = sweep_tol + voxel); doubled when the grid is too large
-    "envelope_max_poses": 3000, # a chain envelope (pan x tilt) coarsens its steps to stay under this many poses
+    "envelope_max_poses": 600,  # a chain envelope (pan x tilt) coarsens its steps to stay under this many poses
     "allow": [],
     "vol_tol": 0.5,
     "moving_min_clearance": 0.5,
