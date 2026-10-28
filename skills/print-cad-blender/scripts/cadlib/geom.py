@@ -393,6 +393,105 @@ def _joint_range(j, lo, hi, axis=None):
     return j.matrix_world.translation.copy(), w, kind, lo - now, hi - now
 
 
+def _sdf_of_poses(V, T, rots, pad, voxel, max_cells, name, adaptivity, info):
+    """swept_envelope's "sdf" build: one OpenVDB level set of the triangles (V, T) posed by every matrix in rots,
+    meshed at +pad. Checks the grid size first (blend.check_cells) and fills info's cells_M, pad and voxel."""
+    import numpy as np
+    import openvdb as vdb
+    from . import blend
+    P0 = np.array([tuple(v) for v in V], dtype=np.float64)
+    # size guard on the swept bounding box, one pose at a time, before the triangle soup or the level set exist
+    blo, bhi = np.full(3, np.inf), np.full(3, -np.inf)
+    for M in rots:
+        Q = P0 @ np.array(M.to_3x3()).T + np.array(M.translation)
+        blo, bhi = np.minimum(blo, Q.min(0)), np.maximum(bhi, Q.max(0))
+    m = pad + 3 * voxel
+    info["cells_M"] = round(blend.check_cells(blo - m, bhi + m, voxel, max_cells, "swept_envelope(%s)" % name, blend.SWEEP_HINT) / 1e6, 1)
+    T0 = np.array(T, dtype=np.uint32)
+    P = np.concatenate([P0 @ np.array(M.to_3x3()).T + np.array(M.translation) for M in rots]).astype(np.float32)
+    Tr = np.concatenate([T0 + i * len(P0) for i in range(len(rots))])
+    o = P.min(0) - pad - 3 * voxel
+    xf = vdb.createLinearTransform([[voxel, 0, 0, 0], [0, voxel, 0, 0], [0, 0, voxel, 0], [float(o[0]), float(o[1]), float(o[2]), 1]])
+    ls = vdb.FloatGrid.createLevelSetFromPolygons(P, triangles=Tr, transform=xf, halfWidth=max(3.0, pad / voxel + 3))
+    ob = blend.vdb_to_object(ls, name, iso=pad, adaptivity=adaptivity)
+    info["pad"] = round(pad, 3)
+    info["voxel"] = voxel
+    return ob
+
+
+def swept_envelope_chain(obs, motions, tol=0.25, voxel=0.5, adaptivity=0.0, name="KEEP_sweep", max_cells=None, max_poses=None):
+    """swept_envelope over several joints at once (a part on tilt riding pan): a closed mesh holding every pose of
+    `obs` for every combination of the motions. motions: [(kind, pivot, axis, lo, hi)], innermost first, all at the
+    current pose (kind "revolute" in deg about axis through pivot, "prismatic" in mm along axis), lo/hi relative to
+    the current pose. Pose = outer @ ... @ inner, the inner axes carried by the outer motions. Each motion gets
+    the step that moves its farthest point by 2 * tol (r_i bounds the distance from motion i's axis of anything the
+    inner motions can reach: the farthest vertex from the inner pivot plus that pivot's distance from axis i), so a
+    point is at most sum(r_i * step_i / 2) = n * tol from the nearest pose, and pad = n * tol + voxel (the same
+    1-Lipschitz argument as swept_envelope; one motion is exactly swept_envelope's "sdf" at the same tol).
+    max_poses: coarsen tol (x1.25 at a time) until the product of the poses fits; info["tol"] says what was used."""
+    if max_poses:
+        while _chain_poses(obs, motions, tol) > max_poses:
+            tol *= 1.25
+    return _swept_envelope_chain(obs, motions, tol, voxel, adaptivity, name, max_cells)
+
+
+def _chain_poses(obs, motions, tol):
+    obs = [obs] if hasattr(obs, "data") else list(obs)
+    V = [o.matrix_world @ v.co for o in obs for v in o.data.vertices]
+    ctr = sum(V, Vector()) / max(1, len(V))
+    reach, n = (max((v - ctr).length for v in V), ctr), 1
+    for i, (kind, c, w, lo, hi) in enumerate(motions):
+        c, w = Vector(c), Vector(w).normalized()
+        slide = kind == "prismatic"
+        r = 1.0 if slide else (max(((v - c) - w * (v - c).dot(w)).length for v in V) if i == 0 else
+                               reach[0] + ((reach[1] - c) - w * (reach[1] - c).dot(w)).length)
+        reach = (reach[0] + max(abs(lo), abs(hi)), reach[1]) if slide else (reach[0] + (reach[1] - c).length, c)
+        step = max(0.01, 2 * tol) if slide else max(0.05, math.degrees(2 * tol / max(r, 1e-6)))
+        n *= max(2, int(math.ceil((hi - lo) / step - 1e-9)) + 1)
+    return n
+
+
+def _swept_envelope_chain(obs, motions, tol, voxel, adaptivity, name, max_cells):
+    import time, itertools
+    t0 = time.time()
+    obs = [obs] if hasattr(obs, "data") else list(obs)
+    V, T = _world_tris(obs)
+    per, info, move = [], {"motions": []}, 0.0
+    ctr = sum(V, Vector()) / max(1, len(V))
+    reach = (max((v - ctr).length for v in V), ctr)    # every point the motions so far can reach is within R of c
+    for i, (kind, c, w, lo, hi) in enumerate(motions):
+        c, w = Vector(c), Vector(w).normalized()
+        slide = kind == "prismatic"
+        if slide:
+            r = 1.0
+        elif i == 0:            # innermost: the exact farthest vertex from the axis
+            r = max(((v - c) - w * (v - c).dot(w)).length for v in V)
+        else:
+            r = reach[0] + ((reach[1] - c) - w * (reach[1] - c).dot(w)).length
+        reach = (reach[0] + max(abs(lo), abs(hi)), reach[1]) if slide else (reach[0] + (reach[1] - c).length, c)
+        step = max(0.01, 2 * tol) if slide else max(0.05, math.degrees(2 * tol / max(r, 1e-6)))
+        n = max(2, int(math.ceil((hi - lo) / step - 1e-9)) + 1)
+        angs = [lo + (hi - lo) * i / (n - 1) for i in range(n)]
+        move += ((hi - lo) / (n - 1)) if slide else r * math.radians((hi - lo) / (n - 1))
+        per.append([Matrix.Translation(w * a) for a in angs] if slide else
+                   [Matrix.Translation(c) @ Matrix.Rotation(math.radians(a), 4, w) @ Matrix.Translation(-c) for a in angs])
+        info["motions"].append({"kind": kind, "lo": lo, "hi": hi, "poses": n, "r": round(r, 2)})
+    rots = []
+    for combo in itertools.product(*per):
+        M = Matrix.Identity(4)
+        for R in combo:          # innermost first: each outer motion is applied after (to the left of) the inner ones
+            M = R @ M
+        rots.append(M)
+    info["poses"] = len(rots)
+    info["tol"] = round(tol, 3)
+    ob = _sdf_of_poses(V, T, rots, move / 2 + voxel, voxel, max_cells, name, adaptivity, info)
+    nm, vol = solid_stats(ob)
+    ob.data.calc_loop_triangles()
+    info.update(tris=len(ob.data.loop_triangles), non_manifold_edges=nm, volume_mm3=round(vol, 1), t_s=round(time.time() - t0, 2))
+    ob["envelope"] = info
+    return ob
+
+
 def swept_envelope(obs, pivot, axis=None, lo=None, hi=None, step=None, tol=0.25, voxel=0.5, method="sdf",
                    adaptivity=0.0, name="KEEP_sweep", max_cells=None, prismatic=False):
     """Closed mesh holding every pose of `obs` while they turn about (or slide along) an axis: a keep-out for cuts
@@ -456,27 +555,8 @@ def swept_envelope(obs, pivot, axis=None, lo=None, hi=None, step=None, tol=0.25,
         ob.name = name
         info["pad"] = 0.0
     else:
-        import numpy as np
-        import openvdb as vdb
-        from . import blend
         pad = move / 2 + voxel
-        P0 = np.array([tuple(v) for v in V], dtype=np.float64)
-        # size guard on the swept bounding box, one pose at a time, before the triangle soup or the level set exist
-        blo, bhi = np.full(3, np.inf), np.full(3, -np.inf)
-        for M in rots:
-            Q = P0 @ np.array(M.to_3x3()).T + np.array(M.translation)
-            blo, bhi = np.minimum(blo, Q.min(0)), np.maximum(bhi, Q.max(0))
-        m = pad + 3 * voxel
-        info["cells_M"] = round(blend.check_cells(blo - m, bhi + m, voxel, max_cells, "swept_envelope(%s)" % name, blend.SWEEP_HINT) / 1e6, 1)
-        T0 = np.array(T, dtype=np.uint32)
-        P = np.concatenate([P0 @ np.array(M.to_3x3()).T + np.array(M.translation) for M in rots]).astype(np.float32)
-        Tr = np.concatenate([T0 + i * len(P0) for i in range(n)])
-        o = P.min(0) - pad - 3 * voxel
-        xf = vdb.createLinearTransform([[voxel, 0, 0, 0], [0, voxel, 0, 0], [0, 0, voxel, 0], [float(o[0]), float(o[1]), float(o[2]), 1]])
-        ls = vdb.FloatGrid.createLevelSetFromPolygons(P, triangles=Tr, transform=xf, halfWidth=max(3.0, pad / voxel + 3))
-        ob = blend.vdb_to_object(ls, name, iso=pad, adaptivity=adaptivity)
-        info["pad"] = round(pad, 3)
-        info["voxel"] = voxel
+        ob = _sdf_of_poses(V, T, rots, pad, voxel, max_cells, name, adaptivity, info)
     nm, vol = solid_stats(ob)
     ob.data.calc_loop_triangles()
     info.update(tris=len(ob.data.loop_triangles), non_manifold_edges=nm, volume_mm3=round(vol, 1), t_s=round(time.time() - t0, 2))

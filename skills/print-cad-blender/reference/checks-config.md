@@ -9,12 +9,16 @@ adds `carry`, `fasteners.captive` and `flexures`.
 ```jsonc
 {
   "joints": {"PIV_tilt": {"axis": "X", "lo": 0, "hi": 45, "step": 2.5, "home": 0}, "PIV_pan": {"axis": "Z", "continuous": true},
-             "PIV_gate": {"axis": "X", "kind": "prismatic", "lo": 0, "hi": 56}},   // only for blends without cadlib joint props
+             "PIV_gate": {"axis": "X", "kind": "prismatic", "lo": 0, "hi": 56}},   // axis/lo/hi/kind only for blends without cadlib joint props; step: see Between samples
   "couplings": {"PIV_pinion": {"to": "PIV_pan", "ratio": -1, "offset": 0}},
   "carry": {"PRT_nip_wheel": "PIV_hood"},   // modelled on one body at one setting, rides on this joint in use (A3)
   "overtravel_deg": 2.5,          // sweep this far past each limit; hits there are warns ("no margin")
   "overtravel_mm": 1.0,           // the same past the ends of a prismatic joint
   "max_poses_per_group": 48,      // grids over several joints are thinned to this
+  "sweep_tol": 0.25,              // mm: swept-envelope step error, and the finest move the refinement halves to
+  "envelope_voxel": 1.0,          // swept envelope voxel (mm); the envelope is oversize by sweep_tol + voxel
+  "max_guard_poses": 256,         // refinement poses per envelope hit; past it the pair warns as unproven
+  "envelope_max_poses": 600,      // a part on 2+ joints (tilt on pan): its envelope coarsens to this many poses
 
   "allow": [                      // designed overlap: the pair is skipped entirely
     {"a": "BUY_servo_*", "b": "BUY_horn_*", "why": "spline inside horn hub"},
@@ -285,6 +289,35 @@ checks in `--only`, 5 with no rows, and read PASS (PA-A2-T11). An `--only` name 
 - **Prismatic joints.** `asm.joint(..., prismatic=True)` slides along +axis, with `lo`, `hi`, `home` and `step` in mm.
   Every sweep covers it like a rotary joint, with `overtravel_mm` (default 1.0) past each end. Model gates, drawers and
   plungers this way: the open state then joins interference, drops, sightlines and stability.
+- **Between samples.** Each joint is sampled every `step` (the joint's `step`, from `asm.joint(step=)` or a `joints`
+  row, which overrides the default of range / 12, at least 2.5° or 1 mm), and grids are thinned to
+  `max_poses_per_group`. The samples give the clearance numbers and the poses in the report. Between two of them a
+  part moves up to its reach x the step and could pass through a thin part unseen: the PR #3 review's `wedge`, a 2 mm
+  arm at 70 mm reach, passed through a cable between the 0 and 15° samples (3.4 mm sampled, 100.5 mm³ at 7.5°).
+  So each pair across a joint (no `allow` rule) also goes through three stages:
+  1. **Broad phase.** Each part's box is swept over its joints' ranges with overtravel: a ring sector
+     (radius x height x angle) about a revolute joint, or the box extruded along a slide. It is compared with the
+     other part's bounds. These are comparisons only.
+  2. **Narrow phase.** `geom.swept_envelope` of the moving part, cached per part, is tested once against the other
+     part. Every connected shell of each side counts, so a joined placeholder's small pin inside the envelope is a
+     meeting. No meeting proves the pair clear over the whole range. A part on two or more joints (tilt on pan) uses
+     `swept_envelope_chain`. A wheel's spin in a chain is first replaced by its solid of revolution (the router's
+     annulus), so only the other joints are swept. The envelope is oversize by `sweep_tol` + `envelope_voxel`
+     (1.25 mm at the defaults) about one joint. A chain adds `sweep_tol` per joint, more when `envelope_max_poses`
+     coarsens it. The coverage line gives the actual range of pads.
+  3. **Refinement**, for envelope hits only. The pair's cells are halved where a lower bound on the clearance (dense
+     surface samples, less their covering radius) can't beat the reach bound (`cadlib.joints.move_rate`). This
+     continues until the cell is clear, a collision is found (reported as "between the sampled poses", with its
+     pose and volume), the move is under `sweep_tol`, or `max_guard_poses` are spent. A pair left unproven **warns**,
+     naming the cell's pose range.
+     A declared `fits` pair the envelope meets is refined for collision only. Cells where the turning test (each
+     triangle's height, radius and angle about the axis) proves a one-axis pair clear are skipped (a journal). The
+     rest are swept with every point moving under `sweep_tol`, and only an overlap of `vol_tol` or more fails.
+     A lug in the arm's path on the same part as the shaft is still caught. The outcome per fit is in
+     `between_samples.fits_flagged`.
+
+  An explicit `step` still sets the sampled grid. Counts and the time of each stage are in
+  `interference.between_samples`.
 - **Bridges.** The span of a ceiling region is the diameter of the widest circle inside it, in print orientation, and
   `bridge_at` gives its centre (world). It used to be the short side of the region's bounding box, which read 26.4 for
   a 56.5° arc of width 6 (v2 A3, V2A3-T3).
