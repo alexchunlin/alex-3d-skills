@@ -1023,13 +1023,14 @@ def inside(t, p, bb=None):
 
 
 def rule_for(a, b):
-    """First matching rule in "allow" (designed overlap, skipped entirely) or "fits"
-    (designed running fit: its own min_clearance, optional contact=true for thrust/bearing faces)."""
+    """First matching rule in "allow" (designed overlap: skipped, or up to max_mm3; a slide row keeps the pair, bounded)
+    or "fits" (designed running fit: its own min_clearance, optional contact=true for thrust/bearing faces), with its
+    "kind" and its "index" in that list."""
     for key in ("allow", "fits"):
-        for rule in CFG.get(key, []):
+        for i, rule in enumerate(CFG.get(key, [])):
             pa, pb = rule.get("a", "*"), rule.get("b", "*")
             if (fnmatch.fnmatch(a, pa) and fnmatch.fnmatch(b, pb)) or (fnmatch.fnmatch(b, pa) and fnmatch.fnmatch(a, pb)):
-                return dict(rule, kind=key)
+                return dict(rule, kind=key, index=i)
     return None
 
 
@@ -1043,6 +1044,7 @@ REPORT = {"tool": "cadcheck", "blend": bpy.data.filepath, "generated": time.strf
 FAILS, WARNS = [], []
 PAST_LIMITS = []   # poses outside a joint's range (check_pose_values)
 UNBOUNDED_ALLOWS = {}   # allow rules with no max_mm3 that skip a pair across a joint: "a x b" -> why (check_interference)
+ALLOW_USE = {}   # allow rule index -> {"mm3": largest overlap measured on a pair it covers, "rows": slide rows} (check_slide)
 
 
 def present(check, label, names):
@@ -2895,30 +2897,41 @@ def check_slide():
         label = S.get("name") or (grp[0].name if len(grp) == 1 else "+".join(globs))
         d = Vector(S["dir"]).normalized()
         # fasteners too: A3's battery slid through two adapter nuts that a solids-only sweep never saw (FINDINGS A3-F3)
-        # a `flex` part stays in the sweep even when an allow rule covers the pair, so its riding overlap is measured
         fx = lambda n: any(fnmatch.fnmatch(n, g) for g in (S.get("flex") or {}))
-        others = {o.name: bvh_world(o) for o in SOLIDS + FASTENERS if o.name not in gnames | ign and (fx(o.name) or not any(allowed(o.name, g) for g in gnames))}
-        bm0 = bmesh.new()
+        others = {o.name: bvh_world(o) for o in SOLIDS + FASTENERS if o.name not in gnames | ign}
+        # an allowed pair stays an obstacle, bounded: dropping it let push-assist A7's load cell slide through the cartridge
+        # it was allowed 3 mm3 against, studs and all, and nothing failed (PA-A7-T19a). A `flex` part keeps its own bound
+        rules = {(m, n): r for n in others if not fx(n) for m in gnames for r in [rule_for(m, n)] if r and r["kind"] == "allow"}
+        bm0, span = bmesh.new(), []
         for o in grp:
             t = world_bm(o)
             me = bpy.data.meshes.new("_s")
             t.to_mesh(me)
             t.free()
+            span.append((len(bm0.verts), o.name))
             bm0.from_mesh(me)
             bpy.data.meshes.remove(me)
         free_until, blocker = None, None
         # already overlapping in place (BVH overlap misses a nut wholly inside the part, A2): interference and
         # fasteners report those; the slide reports what the motion adds
-        at_rest = [n for n in others if any(bb_gap(bbox_world(o), bbox_world(O[n])) == 0 for o in grp)
-                   and sum(inter_volume(o, O[n])[0] for o in grp) >= CFG["vol_tol"]]
+        rest = {(o.name, n): inter_volume(o, O[n])[0] for n in others for o in grp if bb_gap(bbox_world(o), bbox_world(O[n])) == 0}
+        # what an allowed pair may overlap along the path: the rule's max_mm3, or with none its overlap at rest plus vol_tol
+        bound = {k: float(r["max_mm3"]) if r.get("max_mm3") is not None else rest.get(k, 0.0) + CFG["vol_tol"] for k, r in rules.items()}
+        for k, r in rules.items():
+            u = ALLOW_USE.setdefault(r["index"], {"mm3": 0.0, "rows": 0})
+            u["mm3"] = max(u["mm3"], rest.get(k, 0.0))
+        at_rest = [n for n in others if sum(v for (m, n2), v in rest.items() if n2 == n and (m, n) not in rules) >= CFG["vol_tol"]
+                   or any(rest.get(k, 0.0) > bound[k] for k in bound if k[1] == n)]
         minclr = (1e9, None)
-        flex, flexed = S.get("flex") or {}, {}
+        flex, flexed, rode, over = S.get("flex") or {}, {}, {}, {}
         M0 = {o.name: o.matrix_world.copy() for o in grp}
+        step = max(1, len(bm0.verts) // 1500)
+        owner = [next(m for k, m in reversed(span) if i >= k) for i in range(0, len(bm0.verts), step)]
         for s in frange(0, S["dist"], S.get("step", 5)):
             bm = bm0.copy()
             bmesh.ops.translate(bm, verts=bm.verts, vec=d * s)
             t = BVHTree.FromBMesh(bm)
-            pts = [v.co.copy() for v in bm.verts][:: max(1, len(bm.verts) // 1500)]
+            pts = [v.co.copy() for v in bm.verts][::step]
             bm.free()
             hit = []
             for n, ot in others.items():
@@ -2928,10 +2941,11 @@ def check_slide():
                     for o in grp:
                         o.matrix_world = Matrix.Translation(d * s) @ M0[o.name]
                     bpy.context.view_layer.update()
-                    vol = sum(inter_volume(o, O[n])[0] for o in grp)
+                    vols = {o.name: inter_volume(o, O[n])[0] for o in grp}
                     for o in grp:
                         o.matrix_world = M0[o.name]
                     bpy.context.view_layer.update()
+                    vol = sum(vols.values())
                     lim = next((v for g, v in flex.items() if fnmatch.fnmatch(n, g)), None)
                     if lim is not None and 0 < vol <= lim:
                         # a declared spring riding the moving part (a detent bump over its track), not a stop
@@ -2939,25 +2953,48 @@ def check_slide():
                         # vol_tol too: A5's 0.43 mm3 ride left `flexed` empty, so the row proved nothing (V2A5-T3)
                         if vol > flexed.get(n, (0, 0))[0]:
                             flexed[n] = (round(vol, 2), s)
-                    elif vol >= CFG["vol_tol"]:
-                        hit.append(n)
+                    elif lim is not None:
+                        if vol >= CFG["vol_tol"]:
+                            hit.append(n)
+                    else:
+                        past = {m: v for m, v in vols.items() if (m, n) in bound and v > bound[(m, n)]}
+                        for m, v in vols.items():
+                            k = rules.get((m, n), {}).get("index")
+                            if k is not None and v > ALLOW_USE.setdefault(k, {"mm3": 0.0, "rows": 0})["mm3"]:
+                                ALLOW_USE[k]["mm3"] = v
+                            if (m, n) in bound and not past and v > rode.get(n, {}).get("max_mm3", 0):
+                                rode[n] = {"max_mm3": round(v, 2), "at_mm": s, "bound_mm3": round(bound[(m, n)], 2), "mover": m}
+                        if past or sum(v for m, v in vols.items() if (m, n) not in bound) >= CFG["vol_tol"]:
+                            hit.append(n)
+                            if past:
+                                m = max(past, key=past.get)
+                                over[n] = {"volume_mm3": round(past[m], 2), "bound_mm3": round(bound[(m, n)], 2), "mover": m}
             if hit:
                 free_until, blocker = s, hit
                 break
             for n, ot in others.items():
                 if n in at_rest:
                     continue
-                for p in pts:
+                for p, m in zip(pts, owner):
+                    if (m, n) in rules:     # an allowed pair may touch: its clearance is not measured
+                        continue
                     r = ot.find_nearest(p, 3.0)
                     if r[0] is not None and r[3] < minclr[0]:
                         minclr = (r[3], n)
         bm0.free()
+        for k in {r["index"] for r in rules.values()}:
+            ALLOW_USE.setdefault(k, {"mm3": 0.0, "rows": 0})["rows"] += 1
         rec = {"object": label, "members": sorted(gnames), "dir": list(d), "dist": S["dist"], "blocked_at_mm": free_until, "blocked_by": blocker,
                "min_clearance_mm": round(minclr[0], 2) if minclr[1] else None, "closest": minclr[1], "pose": pose_key(S.get("pose", {})),
                "overlapping_at_rest": at_rest}
+        if rules:
+            rec["allowed"] = rode       # allowed pairs that overlapped within their bound: the largest overlap and where
+        if over:
+            rec["over_allow"] = over    # blockers past their allow's bound
         if flex:
             rec["flexed"] = {n: {"max_mm3": v, "at_mm": a} for n, (v, a) in flexed.items()}
         REPORT["checks"].setdefault("slide", {"findings": []}).setdefault("rows", []).append(rec)
+        why = "".join(" (%s overlaps %.1f mm3, past the %g mm3 its allow covers)" % (n, o["volume_mm3"], o["bound_mm3"]) for n, o in over.items())
         if S.get("expect") == "blocked":
             # an end stop: the motion must be stopped, by the named part, within at_mm (v2 A2 gate open stop, V2A2-T4)
             rng = S.get("at_mm")
@@ -2965,9 +3002,9 @@ def check_slide():
             if not blocker:
                 finding("slide", "fail", "%s: expected a stop, but it slides the full %g mm" % (label, S["dist"]), **rec)
             elif not by_ok or (rng and not rng[0] - 1e-6 <= free_until <= rng[1] + 1e-6):
-                finding("slide", "fail", "%s: stopped by %s at %g mm, wanted %s at %s mm" % (label, blocker, free_until, S.get("blocked_by", "any part"), rng or "any"), **rec)
+                finding("slide", "fail", "%s: stopped by %s at %g mm, wanted %s at %s mm%s" % (label, blocker, free_until, S.get("blocked_by", "any part"), rng or "any", why), **rec)
         elif blocker:
-            finding("slide", "fail", "%s slide-out blocked by %s at %g mm" % (label, blocker, free_until), **rec)
+            finding("slide", "fail", "%s slide-out blocked by %s at %g mm%s" % (label, blocker, free_until, why), **rec)
         elif minclr[1] and minclr[0] < S.get("min_clearance", 1.5):
             finding("slide", "warn", "%s slides out but with only %.2f mm to %s" % (label, minclr[0], minclr[1]), **rec)
     set_pose({})
