@@ -380,7 +380,10 @@ def drivers(names):
 
 
 def relevant_joints(a, b):
-    return drivers(set(joint_chain(a)) ^ set(joint_chain(b)))
+    """The free (driver) joints between a and b. A joint with no range moves nothing: it used to stay in the group as a
+    one-sample driver, which left the between-samples guard no cells, so it skipped the pair (PR #21 review, opp_axis
+    with an unranged PIV_flip: a 30.2 mm3 collision went unseen)."""
+    return frozenset(d for d in drivers(set(joint_chain(a)) ^ set(joint_chain(b))) if JT.ranged(d, JOINTS, COUPLE))
 
 
 def set_pose(pose):
@@ -533,7 +536,7 @@ def spin_box(o, piv, u):
     return [piv + u * h + e1 * x + e2 * y for h in (min(hs), max(hs)) for x in (-R, R) for y in (-R, R)], [u, e1, e2]
 
 
-def turning(a, b, piv, u, depth=4, cap=400000):
+def turning(a, b, piv, u, depth=4, cap=400000, pad=0.0):
     """For a and b where one turns about the axis (piv, u) against the other: a test clear(lo, hi) -> True when they
     can't meet while a turns from lo to hi radians against b (from home, right-handed about u), starting apart.
     Turning keeps each point's height h along the axis and radius r from it, and adds to its angle phi, so parts that
@@ -577,7 +580,13 @@ def turning(a, b, piv, u, depth=4, cap=400000):
         d = (ang - ang[:, :1] + np.pi) % (2 * np.pi) - np.pi
         f0, f1 = ang[:, 0] + d.min(1), ang[:, 0] + d.max(1)
         f0[spans], f1[spans] = -np.pi, 3 * np.pi       # the whole circle
-        return np.stack([h.min(1), h.max(1), rmin, np.linalg.norm(P, axis=2).max(1), f0, f1], 1)
+        r1 = np.linalg.norm(P, axis=2).max(1)
+        if pad > 0:                                 # an axis a little off the line: every bound grows by pad
+            w = np.where(rmin > pad, np.arcsin(np.minimum(1.0, pad / np.maximum(rmin, 1e-9))), 2 * np.pi)
+            f0, f1 = f0 - w, f1 + w
+            f0[rmin <= pad], f1[rmin <= pad] = -np.pi, 3 * np.pi
+            return np.stack([h.min(1) - pad, h.max(1) + pad, np.maximum(0.0, rmin - pad), r1 + pad, f0, f1], 1)
+        return np.stack([h.min(1), h.max(1), rmin, r1, f0, f1], 1)
 
     def split(W):                                   # each triangle into four, (n, 3, 3) -> (4n, 3, 3)
         m01, m12, m20 = (W[:, 0] + W[:, 1]) / 2, (W[:, 1] + W[:, 2]) / 2, (W[:, 2] + W[:, 0]) / 2
@@ -862,25 +871,40 @@ def coaxial(a, b, rel, drv, info, ring_cache):
     if not rel or any(JOINTS[j].get("kind") == "prismatic" for j in rel):
         return None
     side = {}
-    for o in (a, b):
+    for o, other in ((a, b), (b, a)):
         ch = [j for j in joint_chain(o) if JT.ranged(j, JOINTS, COUPLE)]
         side[o.name] = o
         if ch and ch[0] in rel and JOINTS[ch[0]].get("continuous") and len(rel) > 1:
-            side[o.name] = ring_of(o, ch[0], ring_cache)
-            rel = [j for j in rel if j != ch[0]]
+            ring = ring_of(o, ch[0], ring_cache)
+            # the turning test assumes the parts start apart, and only the real parts are measured at the samples: a
+            # part with a vertex inside the ring's band could lie wholly inside it and never cross a surface (PR #21
+            # review, ring_inside: a post in a spinning blade's path read clear). Then keep the real part.
+            if not _in_band(side.get(other.name, other), ring, info.setdefault(ch[0], JT.motion(ch[0], JOINTS))):
+                side[o.name] = ring
+                rel = [j for j in rel if j != ch[0]]
     for j in rel:
         if j not in info:
             info[j] = JT.motion(j, JOINTS)
     _, p0, u0 = info[rel[0]]
-    u0 = Vector(u0).normalized()
-    sgn = {}
+    p0, u0 = Vector(p0), Vector(u0).normalized()
+    reach = max((side[o.name].matrix_world @ v.co - p0).length for o in (a, b) for v in side[o.name].data.vertices)
+    sgn, pad = {}, 0.0
+    home = JT.values(JOINTS, COUPLE, {})
     for j in rel:
         _, p, u = info[j]
-        u, d = Vector(u).normalized(), Vector(p) - Vector(p0)
-        if abs(abs(u.dot(u0)) - 1) > 1e-6 or (d - u0 * d.dot(u0)).length > 1e-3:
+        u, d = Vector(u).normalized(), Vector(p) - p0
+        th, off = math.acos(min(1.0, abs(u.dot(u0)))), (d - u0 * d.dot(u0)).length
+        if th > 0.02 or off > 0.5:
             return None
+        # a joint whose axis is a little off the line (or shifted from it) moves a point by up to its turn x (angle x
+        # reach + offset) more than the turn about the line: the boxes are padded by that (PR #21 review: 1e-6 on
+        # |u.u0| let 0.08 deg through unpadded)
+        dr, k = JT.driver_of(j, COUPLE)
+        sd = JOINTS[dr]
+        turn = 2 * math.pi if sd.get("continuous") else min(2 * math.pi, max(
+            abs(math.radians(JT.values(JOINTS, COUPLE, {dr: float(x)})[j] - home[j])) for x in (sd["lo"] - CFG["overtravel_deg"], sd["hi"] + CFG["overtravel_deg"])))
+        pad += turn * (th * reach + off)
         sgn[j] = (1 if j in joint_chain(a) else -1) * (1 if u.dot(u0) > 0 else -1)
-    home = JT.values(JOINTS, COUPLE, {})
 
     def rng(cell):
         angs = []
@@ -888,7 +912,24 @@ def coaxial(a, b, rel, drv, info, ring_cache):
             v = JT.values(JOINTS, COUPLE, dict(zip(drv, c)))
             angs.append(math.radians(sum(s * (v[j] - home[j]) for j, s in sgn.items())))
         return min(angs), max(angs)
-    return {"a": side[a.name], "b": side[b.name], "piv": p0, "u": u0, "range": rng, "clear": None}
+    return {"a": side[a.name], "b": side[b.name], "piv": p0, "u": u0, "range": rng, "clear": None, "pad": pad + 1e-4}
+
+
+def _in_band(o, ring, mot):
+    """Does any vertex of o lie inside the ring's band (its height and radius ranges about the spin axis)?"""
+    _, piv, u = mot
+    piv, u = Vector(piv), Vector(u).normalized()
+
+    def hr(ob):
+        out = []
+        for v in ob.data.vertices:
+            q = ob.matrix_world @ v.co - piv
+            h = q.dot(u)
+            out.append((h, (q - u * h).length))
+        return out
+    R = hr(ring)
+    h0, h1, r0, r1 = min(h for h, _ in R), max(h for h, _ in R), min(r for _, r in R), max(r for _, r in R)
+    return any(h0 <= h <= h1 and r0 <= r <= r1 for h, r in hr(o))
 
 
 MANIFOLD_OK = {}
@@ -1716,7 +1757,6 @@ def check_interference():
         t3 = time.time()
         set_pose({})
         rates, axis, spin = {}, {}, {}
-        set_pose({})
         for a, b, _, _ in watch:
             terms = JT.move_terms(_corners(bbox_world(a)), joint_chain(a), joint_chain(b), JOINTS, COUPLE, info)
             rel = [j for j in set(joint_chain(a)) ^ set(joint_chain(b)) if JT.ranged(j, JOINTS, COUPLE)]
@@ -1797,9 +1837,14 @@ def check_interference():
                     ax = axis[k]
                     if ax["clear"] is None:
                         set_pose({})
-                        ax["clear"] = turning(ax["a"], ax["b"], ax["piv"], ax["u"])
+                        ax["clear"] = turning(ax["a"], ax["b"], ax["piv"], ax["u"], pad=ax["pad"])
                     if ax["clear"](*ax["range"](cell)):
+                        # turning proves no collision, not the smallest clearance: measure the cell's middle too, for
+                        # the clearance rows the halving used to give (PR #21 review, cam_gap03: 0.33 mm went unsaid)
                         guard["turning"] += 1
+                        mid = tuple(round((lo + hi) / 2, 4) for lo, hi in cell)
+                        if norm(mid) not in gvals[k]:
+                            want.setdefault(mid, {}).setdefault(k, 0.0)
                         continue
                 if bound <= CFG["sweep_tol"]:
                     guard["at_tol"] += 1
