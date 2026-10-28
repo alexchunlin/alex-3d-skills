@@ -200,7 +200,7 @@ SELF = "verify_select.sh"
 
 
 ALLIDS = set(IDS)
-CORE = ALLIDS - {"6", "7", "4m-slice", "design_principles.sh", "verify_select.sh", "stl_read.sh"}
+CORE = ALLIDS - {"6", "7", "4m-slice", "design_principles.sh", "verify_select.sh"}
 BENCH = {"bench.sh", "4k", "4m", "4n"}   # bench reads 4k's, 4m's and 4n's reports
 PCO = {"printcheck_overhangs.sh"}        # watches printcheck.py and the v2a7 STLs, reads 4m's model
 STL = {"stl_read.sh"}                    # watches printcheck.py (read_stl), the prior_art readers and the v2a7 STLs
@@ -226,7 +226,8 @@ CASES = [   # the selector test always runs under --changed (review); it is adde
      {"4f", "4g", "4n", "cadcfg.sh"} | BENCH),
     ("v2a3 BOM .md (a test input, not a doc)", ["examples/mm-launcher-v2a3/BOM_AND_ASSEMBLY.md"], {"4f", "4g", "4n"} | BENCH),
     ("a3 example", ["examples/mm-launcher-a3/mm_launcher_a3.blend.gz"], {"4c", "4n", "blend_bracket.sh", "cable_router.sh"} | BENCH),
-    ("a2 example (a config: cadcfg too)", ["examples/mm-launcher-a2/checks.json"], {"4a", "4b", "4n", "cadcfg.sh"} | BENCH),
+    ("a2 example (a config: cadcfg too; fastener_access_hint.sh reads 4a's report)", ["examples/mm-launcher-a2/checks.json"],
+     {"4a", "4b", "4n", "cadcfg.sh", "fastener_access_hint.sh"} | BENCH),
     ("a v2a7 review_rows config", ["examples/mm-launcher-v2a7/review_rows_v2a7.json"], {"4n", "cadcfg.sh"} | BENCH | PCO),
     ("the v2a3 blend (cadcfg's suggestion check runs on its report)", ["examples/mm-launcher-v2a3/mm_launcher_v2a3.blend.gz"],
      {"4f", "4g", "4n", "cadcfg.sh"} | BENCH),

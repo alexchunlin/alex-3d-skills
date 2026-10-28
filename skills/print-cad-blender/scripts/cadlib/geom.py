@@ -249,8 +249,10 @@ def csg(base, add=(), sub=(), inter=(), check=True):
     """Union `add`, subtract `sub`, intersect `inter` with the Manifold solver; apply; delete the tools.
     Raises CSGError if the result is empty or not a closed solid (check=False to skip).
     New faces take the base's material (its most used slot). The modifier's index mode gives a tool face the base slot
-    with the tool face's index and appends the tools' slots (empty ones too), so a cut wall could land on an empty slot
-    and render default grey (push-assist PA-A4-T14): every tool face gets the base's index, and the base keeps its slots."""
+    with the tool face's index, or the base slot holding the tool's material, and appends the tools' slots (empty ones
+    too), so a cut wall could land on an empty slot and render default grey (push-assist PA-A4-T14) or take another
+    slot's colour: each tool loses its materials (a mesh shared with a kept object is copied first) and every tool face
+    gets the base's index; the base keeps its slots."""
     tools = []
     pm = base.data.polygons
     idx = [0] * len(pm)
@@ -261,6 +263,9 @@ def csg(base, add=(), sub=(), inter=(), check=True):
         for t in lst:
             if t is None:
                 continue
+            if t.data.users > 1:
+                t.data = t.data.copy()
+            t.data.materials.clear()
             t.data.polygons.foreach_set("material_index", [keep] * len(t.data.polygons))
             m = base.modifiers.new("b", 'BOOLEAN')
             m.operation = op

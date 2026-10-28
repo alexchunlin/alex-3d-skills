@@ -103,21 +103,29 @@ DEFAULTS = {
 def read_stl(path):
     """Triangles (n, 3, 3) float64 from a binary or ASCII STL. The one plain-Python STL reader here: cad printcheck,
     cadcheck and tools/prior_art use it, and so can project scripts (purchased parts come as either; push-assist PA-A3-T9,
-    PA-A5-T13: hand-rolled binary readers failed on ASCII parts). Binary: the header's count matches the file size, or,
-    in a file that isn't ASCII, the size is 84 + 50 n (a writer that left the count 0). ASCII numbers are rounded to float32,
-    so both forms of a part give the same triangles. Raises ValueError otherwise."""
+    PA-A5-T13: hand-rolled binary readers failed on ASCII parts). Binary: the header's count matches the file size, or
+    the count is 0 (a writer that never filled it in) and the size is 84 + 50 n. ASCII ("solid", after any UTF-8 BOM):
+    numbers rounded to float32, so both forms of a part give the same triangles. Anything else, a truncated binary
+    included, raises ValueError."""
     with open(path, "rb") as f:
         data = f.read()
     rec = np.dtype([("n", "<f4", 3), ("v", "<f4", (3, 3)), ("a", "<u2")])
     n = struct.unpack("<I", data[80:84])[0] if len(data) >= 84 else -1
     if n >= 0 and 84 + 50 * n == len(data):
         return np.frombuffer(data, dtype=rec, count=n, offset=84)["v"].astype(np.float64)
-    vs = re.findall(rb"vertex\s+(\S+)\s+(\S+)\s+(\S+)", data, re.I) if data.lstrip()[:5].lower() == b"solid" else []
-    if len(vs) % 3 == 0 and (vs or re.search(rb"endsolid", data, re.I)):
-        return np.array([[float(x) for x in v] for v in vs], dtype=np.float32).astype(np.float64).reshape(-1, 3, 3)   # as binary
-    if n >= 0 and (len(data) - 84) % 50 == 0:
+    text = data[3:] if data.startswith(b"\xef\xbb\xbf") else data
+    vs = re.findall(rb"vertex\s+(\S+)\s+(\S+)\s+(\S+)", text, re.I) if text.lstrip()[:5].lower() == b"solid" else []
+    if vs and len(vs) % 3 == 0:
+        try:
+            return np.array([[float(x) for x in v] for v in vs], dtype=np.float32).astype(np.float64).reshape(-1, 3, 3)
+        except ValueError:
+            raise ValueError("%s: ASCII STL with a vertex that is not three numbers" % path)
+    if not vs and text.lstrip()[:5].lower() == b"solid" and re.search(rb"endsolid", text, re.I) and not re.search(rb"vertex", text, re.I):
+        return np.zeros((0, 3, 3))
+    if n == 0 and len(data) > 84 and (len(data) - 84) % 50 == 0:
         return np.frombuffer(data, dtype=rec, count=(len(data) - 84) // 50, offset=84)["v"].astype(np.float64)
-    raise ValueError("%s: not a binary or ASCII STL (%d bytes)" % (path, len(data)))
+    raise ValueError("%s: not a whole binary or ASCII STL (%d bytes%s)" % (
+        path, len(data), ", header count %d needs %d" % (n, 84 + 50 * n) if n > 0 else ""))
 
 
 # ------------------------------------------------------------------ slicing

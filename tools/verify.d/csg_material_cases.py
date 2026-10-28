@@ -64,6 +64,31 @@ print("CSGMAT " + json.dumps({"case": "union and intersect", "slots": slots, "wa
 b = part(("paint", "pla"), idx=1)
 G.csg(b, sub=[tool("t", [], 0)])
 report("part on its second slot", b, "pla")
+# PR #17 review: the tool's material is the base's other slot. Index mode maps a tool face to the base slot holding
+# the same material, so walls came out accent on a mostly-pla part
+b = part(("pla", "accent"))
+b.data.polygons[0].material_index = 1
+G.csg(b, sub=[tool("t", ["accent"], 0)])
+report_walls = [m.name if m else None for m in b.data.materials]
+walls = sorted({report_walls[p.material_index] for p in b.data.polygons if p.center.x ** 2 + p.center.y ** 2 < 1.1 and abs(p.center.z) < 4.9})
+print("CSGMAT " + json.dumps({"case": "tool carries the base's other material", "slots": report_walls, "walls": walls,
+                              "ok": walls == ["pla"] and report_walls == ["pla", "accent"]}))
+# PR #17 review: a cutter sharing its mesh with a kept object (a linked duplicate) must not recolour the kept object
+keep = G.cyl("PRT_keep", (30, 0), 2.0, -3, 3)
+keep.data.materials.append(mat("green"))
+keep.data.materials.append(mat("pink"))
+for p in keep.data.polygons:
+    p.material_index = 1
+cut = bpy.data.objects.new("cutter_linked", keep.data)
+G.scratch().objects.link(cut)
+cut.location = (-30, 0, 0)
+b = part()
+G.csg(b, sub=[cut])
+ks = [m.name if m else None for m in keep.data.materials]
+kept = sorted({ks[p.material_index] for p in keep.data.polygons})
+walls = sorted({b.data.materials[p.material_index].name for p in b.data.polygons if p.center.x ** 2 + p.center.y ** 2 < 4.4 and abs(p.center.z) < 2.9})
+print("CSGMAT " + json.dumps({"case": "shared cutter mesh", "kept_slots": ks, "kept_faces": kept, "walls": walls,
+                              "ok": ks == ["green", "pink"] and kept == ["pink"] and walls == ["pla"] and "PRT_keep" in bpy.data.objects}))
 # a bare part (cadlib solids have no material until asm.part): it stays bare, no empty slot appended
 b = G.box("bare", -5, 5, -5, 5, -5, 5)
 G.csg(b, sub=[tool("t", ["red"], 0)])
