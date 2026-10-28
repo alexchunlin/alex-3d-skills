@@ -96,7 +96,8 @@ def body_needs(u):
 
 def py_refs(py):
     """Repo paths a Python file a unit runs reaches with os.path.join(ROOT or its own dir, "a", "b") (review: the
-    blend-bracket build imports components/placeholders.py and reads components.json, invisible from the shell)."""
+    blend-bracket build imports components/placeholders.py and reads components.json, invisible from the shell). A part
+    with * or ? is a glob: the files it matches (cadcfg_cases.py walks examples/**/checks*.json, not all of examples/)."""
     try:
         src = open(os.path.join(ROOT, py)).read()
     except OSError:
@@ -111,13 +112,20 @@ def py_refs(py):
             if c == S.rstrip("/"):   # cadlib's home: the library and cadcheck (features reads its DEFAULTS)
                 out.append((c, [f for f in FILES if f.startswith(S + "cadlib/") or f == S + "cadcheck.py"]))
                 break
-            hits = [f for f in FILES if not c.startswith("..") and c != "." and (f == c or f.startswith(c + "/"))]
+            if "*" in c or "?" in c:   # a glob.glob pattern (cadcfg's config walk): the files it matches
+                hits = [f for f in FILES if not c.startswith("..") and VS.glob_re(c).match(f)]
+            else:
+                hits = [f for f in FILES if not c.startswith("..") and c != "." and (f == c or f.startswith(c + "/"))]
             if hits:
                 out.append((c, hits))
                 break
     return out
 
 
+globbed = {d: len(fs) for d, fs in py_refs("tools/verify.d/cadcfg_cases.py") if "*" in d}
+say(sorted(globbed) == ["examples/**/checks*.json", "examples/**/overlay*.json", "examples/**/review_rows*.json",
+                        "skills/print-cad-blender/templates/**/checks*.json"] and all(globbed.values()),
+    "an os.path.join glob reaches the files it matches, not nothing (cadcfg_cases.py's config walk): %s" % globbed)
 gaps = sorted({"%s: %s (%s)" % (u["id"], p, why) for u in M["units"] for p, why in body_needs(u) if not covered(u, p)})
 say(not gaps, "every path a unit's code reads is in its own watch: %s" % ("; ".join(gaps[:8]) or "all covered"))
 
@@ -213,13 +221,20 @@ CASES = [   # the selector test always runs under --changed (review); it is adde
     ("components.json (review)", ["components/components.json"], {"5", "blend_bracket.sh"}),
     ("the workflow template", ["templates/cad-loop.workflow.js"], {"6"}),
     ("tools/transcript", ["tools/transcript/cc_transcript.py"], {"7"}),
-    ("v2a3 example (4n's output feeds bench)", ["examples/mm-launcher-v2a3/checks.json"], {"4f", "4g", "4n"} | BENCH),
+    ("v2a3 example (4n's output feeds bench; cadcfg reads every config)", ["examples/mm-launcher-v2a3/checks.json"],
+     {"4f", "4g", "4n", "cadcfg.sh"} | BENCH),
     ("v2a3 BOM .md (a test input, not a doc)", ["examples/mm-launcher-v2a3/BOM_AND_ASSEMBLY.md"], {"4f", "4g", "4n"} | BENCH),
     ("a3 example", ["examples/mm-launcher-a3/mm_launcher_a3.blend.gz"], {"4c", "4n", "blend_bracket.sh", "cable_router.sh"} | BENCH),
-    ("a2 example", ["examples/mm-launcher-a2/checks.json"], {"4a", "4b", "4n"} | BENCH),
+    ("a2 example (a config: cadcfg too)", ["examples/mm-launcher-a2/checks.json"], {"4a", "4b", "4n", "cadcfg.sh"} | BENCH),
+    ("a v2a7 review_rows config", ["examples/mm-launcher-v2a7/review_rows_v2a7.json"], {"4n", "cadcfg.sh"} | BENCH | PCO),
+    ("the v2a3 blend (cadcfg's suggestion check runs on its report)", ["examples/mm-launcher-v2a3/mm_launcher_v2a3.blend.gz"],
+     {"4f", "4g", "4n", "cadcfg.sh"} | BENCH),
+    ("the template's checks.json", ["skills/print-cad-blender/templates/project/checks.json"],
+     {"3", "3b", "3c", "design_principles.sh", "cadcfg.sh"}),
     ("v2a7 STLs", ["examples/mm-launcher-v2a7/stl.tar.gz"], BENCH | PCO),
     ("demo-turret", ["examples/demo-turret/build.py"], {"1", "2"}),
-    ("slide-gate", ["examples/slide-gate/checks.json"], {"slide-gate"}),
+    ("slide-gate config (cadcfg too)", ["examples/slide-gate/checks.json"], {"slide-gate", "cadcfg.sh"}),
+    ("slide-gate build", ["examples/slide-gate/build.py"], {"slide-gate"}),
     ("a verify.d helper", ["tools/verify.d/fastener_joint_build.py"], {"fastener_joint.sh"}),
     ("bench labels (review: planned bench + 4k only, and bench failed)", ["tools/bench/labels.json"], BENCH),
     ("the selector", ["tools/verify_select.py"], set()),
