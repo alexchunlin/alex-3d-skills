@@ -26,7 +26,8 @@ out = {"printed": [{"name": o.name, "body": C.body(o)} for o in C.PRINTED],
        "purchased": [{"name": o.name, "body": C.body(o)} for o in C.PURCHASED],
        "cables": [o.name for o in C.CABLES], "fasteners": fst,
        "assembly_order": [s.get("step", "") for s in (C.CFG.get("assembly_order") or [])],
-       "service_ops": len(C.CFG.get("service") or []), "slide_out_rows": len(C.CFG.get("slide_out") or [])}
+       "service_ops": len(C.CFG.get("service") or []), "slide_out_rows": len(C.CFG.get("slide_out") or []),
+       "joins": [{"kind": j.get("kind"), "name": j.get("name")} for j in C.JOINS]}     # snap / pip_hinge records
 with open(C._arg("--scan-out"), "w") as f:
     json.dump(out, f, indent=1)
 print("ASSEMBLY_SCAN ok", len(out["printed"]), len(fst))
