@@ -506,29 +506,18 @@ def world_bm(o, M=None):
     if o.type == 'MESH':
         bm.from_mesh(o.data)
     bm.transform(o.matrix_world if M is None else M)
+    # bm.transform leaves the face normals as they were, and FromBMesh tessellates an ngon on its normal's plane: at a
+    # rotated pose a hinge leaf's notched face came out as triangles across the notches, so a hinge whose triangles are
+    # all 0.39 mm apart read "touching" and 0.10 mm (features.pip_hinge, PR #22 review)
+    bm.normal_update()
     return bm
 
 
-_POLYS = {}
-
-
 def bvh_world(o, M=None):
-    """o's BVH in world, its face indices the mesh's polygons. FromPolygons, not FromBMesh: FromBMesh tessellated a
-    concave ngon (a hinge leaf's face notched by the knuckle reliefs, features.pip_hinge) with triangles across the
-    notches, so a hinge whose exported triangles are all 0.39 mm apart read "touching" and 0.10 mm clear."""
-    if o.type != 'MESH' or not len(o.data.vertices):
-        return BVHTree.FromPolygons([], [])
-    import numpy as np
-    me = o.data
-    key = (me.as_pointer(), len(me.vertices), len(me.polygons))
-    if key not in _POLYS:
-        _POLYS.clear() if len(_POLYS) > 4000 else None
-        _POLYS[key] = [tuple(p.vertices) for p in me.polygons]
-    co = np.empty(len(me.vertices) * 3)
-    me.vertices.foreach_get("co", co)
-    Mn = np.array(o.matrix_world if M is None else M)
-    w = co.reshape(-1, 3) @ Mn[:3, :3].T + Mn[:3, 3]
-    return BVHTree.FromPolygons(w.tolist(), _POLYS[key])
+    bm = world_bm(o, M)
+    t = BVHTree.FromBMesh(bm)
+    bm.free()
+    return t
 
 
 def bbox_world(o, M=None):
@@ -3077,15 +3066,36 @@ def _swept_box(bb, v):
     return (Vector(tuple(min(bb[0][k], bb[0][k] + v[k]) for k in range(3))), Vector(tuple(max(bb[1][k], bb[1][k] + v[k]) for k in range(3))))
 
 
-def snap_flex(names):
-    """{partner: mm3} for each snap (features.snap_hook ... records) with its host or its catch among `names` but not
-    both: the barb may ride the partner up to 1.5 x its own volume plus vol_tol."""
-    out = {}
+def snap_out(j, names):
+    """The direction the movers `names` leave snap j's partner by, or None when they hold both or neither: the catch
+    leaves along insert_dir, the host against it (the record's insert_dir is the way the host goes in)."""
+    a, b = j["host"] in names, j["catch"] in names
+    if a == b:
+        return None
+    d = Vector(j.get("insert_dir") or (0, 0, 1)).normalized()
+    return -d if a else d
+
+
+def snap_bound(j):
+    return round(1.5 * float(j.get("flex_mm3") or 0.0) + CFG["vol_tol"], 2)
+
+
+def snap_flex(names, d):
+    """({partner: mm3}, {partner: snap}) for the snaps with their host or catch (not both) among `names`. Flex: the barb
+    may ride its partner up to 1.5 x its own volume plus vol_tol when `d` is within 30 deg of the way out and the
+    retaining face releases (a 90 deg face self-locks: cadsnap.wedge is None). Locked: a partner a permanent snap holds,
+    named in the blocked message. A slide row passed "comes off" past a self-locking barb (PR #22 review)."""
+    flex, locked = {}, {}
     for j in SNAPS:
-        a, b = j["host"] in names, j["catch"] in names
-        if a != b:
-            out[j["catch"] if a else j["host"]] = round(1.5 * float(j.get("flex_mm3") or 0.0) + CFG["vol_tol"], 2)
-    return out
+        out = snap_out(j, names)
+        if out is None or out.dot(Vector(d).normalized()) < math.cos(math.radians(30)):
+            continue
+        partner = j["catch"] if j["host"] in names else j["host"]
+        if CS.wedge(1.0, j.get("retain_deg", 90.0), j.get("mu", 0.5)) is None:
+            locked[partner] = j
+        else:
+            flex[partner] = snap_bound(j)
+    return flex, locked
 
 
 def check_slide():
@@ -3101,7 +3111,7 @@ def check_slide():
         d = Vector(S["dir"]).normalized()
         # fasteners too: A3's battery slid through two adapter nuts that a solids-only sweep never saw (FINDINGS A3-F3)
         # a snap's barb rides its catch on the way out (the arm flexes): the partner is flex, bounded by the barb's volume
-        auto = snap_flex(gnames)
+        auto, locked = snap_flex(gnames, S["dir"])
         flex0 = dict(auto, **(S.get("flex") or {}))
         fx = lambda n: any(fnmatch.fnmatch(n, g) for g in flex0)
         others = {o.name: bvh_world(o) for o in SOLIDS + FASTENERS if o.name not in gnames | ign}
@@ -3206,11 +3216,15 @@ def check_slide():
             rec["flexed"] = {n: {"max_mm3": v, "at_mm": a} for n, (v, a) in flexed.items()}
         if auto:
             rec["snap_flex"] = auto      # generated from the snap records, not the row
+        if locked:
+            rec["snap_locked"] = {n: j["name"] for n, j in locked.items()}
         REPORT["checks"].setdefault("slide", {"findings": []}).setdefault("rows", []).append(rec)
         why = "".join(" (%s overlaps %.1f mm3, past %s; if it is a snap or spring riding the mover, name it in the row's `flex`%s)" % (
             n, o["volume_mm3"], "the %g mm3 its allow covers" % o["bound_mm3"] if o["rest_mm3"] is None else
             "its %g mm3 at rest plus vol_tol (or 0.1%%), the bound of an allow with no max_mm3" % o["rest_mm3"],
             "" if o["rest_mm3"] is None else "; a press fit pushed deeper needs max_mm3 on the allow") for n, o in over.items())
+        why += "".join(" (%s holds it with permanent snap %s: its %g deg retaining face self-locks; give it retain_deg <= 45 to "
+                       "make it separable)" % (n, j["name"], j.get("retain_deg", 90)) for n, j in locked.items() if n in (blocker or []))
         if S.get("expect") == "blocked":
             # an end stop: the motion must be stopped, by the named part, within at_mm (v2 A2 gate open stop, V2A2-T4)
             rng = S.get("at_mm")
@@ -3870,7 +3884,49 @@ def check_insertion():
                 out += [("along %s" % fn, tuple(ax)), ("against %s" % fn, tuple(-ax))]
             if len(out) >= 14:
                 break
+        names = {o.name for o in mv}
+        for j in SNAPS:       # a snapped part goes in along its snap (the record's insert_dir)
+            d = snap_out(j, names)
+            if d is not None and all(abs(d.dot(Vector(v))) < 0.9995 for _, v in out):
+                out.append(("snap %s" % j["name"], tuple(d)))
         return out
+
+    def snap_ride(mv, d):
+        """{partner: bound} for the snaps whose barb may ride its partner while mv goes along d (within 30 deg of the
+        snap's way in, either retaining face: the lead-in deflects the arm on the way in)."""
+        names = {o.name for o in mv}
+        out = {}
+        for j in SNAPS:
+            w = snap_out(j, names)
+            if w is not None and w.dot(Vector(d)) >= math.cos(math.radians(30)):
+                p = j["catch"] if j["host"] in names else j["host"]
+                out[p] = out.get(p, 0.0) + snap_bound(j)
+        return out
+
+    def ride_ok(mv, partners, d):
+        """Sweep mv along d (1 mm steps) until its box clears each partner's; the overlap with that partner must stay
+        within the snap's bound (1.5 x the barb's volume + vol_tol), as the slide check's flex. A hooked part sealed in
+        a box read free +Z when insertion dropped the pair in every direction (PR #22 review)."""
+        dv = Vector(d).normalized()
+        M0 = {o.name: o.matrix_world.copy() for o in mv}
+        ok = True
+        try:
+            for p, bound in partners.items():
+                bp, s = bbox_world(O[p]), 0.0
+                while ok and s < 2000:
+                    for o in mv:
+                        o.matrix_world = Matrix.Translation(dv * s) @ M0[o.name]
+                    bpy.context.view_layer.update()
+                    if s > 0 and all(bb_gap(bbox_world(o), bp) > 0 for o in mv):
+                        break
+                    if sum(inter_volume(o, O[p])[0] for o in mv if bb_gap(bbox_world(o), bp) == 0) > bound:
+                        ok = False
+                    s += 1.0
+        finally:
+            for o in mv:
+                o.matrix_world = M0[o.name]
+            bpy.context.view_layer.update()
+        return ok
 
     def way_in(mv, obst, dirs):
         """First free direction, or None. The first blocker found per (mover, direction) is remembered: while it is
@@ -3882,7 +3938,14 @@ def check_insertion():
             b = memo.get((key, d))
             if b in ob:
                 continue
-            hit = _blocked(mv, obst, d, cache, True)
+            ride = {p: v for p, v in snap_ride(mv, d).items() if p in ob}
+            hit = _blocked(mv, [n for n in obst if n not in ride], d, cache, True) if ride else _blocked(mv, obst, d, cache, True)
+            if not hit and ride:
+                rk = ("ride", key, d)
+                if rk not in memo:
+                    memo[rk] = ride_ok(mv, ride, d)
+                if not memo[rk]:
+                    hit = [(sorted(ride)[0], None, 0.0)]
             if not hit:
                 return dn
             memo[key, d] = hit[0][0]
@@ -3905,8 +3968,7 @@ def check_insertion():
         for m in names:
             if (n, m) not in memo:
                 r = rule_for(n, m)
-                # a snap's host and catch: the arm flexes over its ledge, so a straight line can't take it out (snaps)
-                memo[n, m] = any({n, m} == {j["host"], j["catch"]} for j in SNAPS) or bool(r and r["kind"] == "allow" and (
+                memo[n, m] = bool(r and r["kind"] == "allow" and (
                     r.get("max_mm3") is None or (bb_gap(bbox_world(O[n]), bbox_world(O[m])) == 0
                                                  and inter_volume(O[n], O[m])[0] > CFG["vol_tol"])))
             if memo[n, m]:
@@ -4121,14 +4183,15 @@ def check_flexures():
     fl = CFG["flexures"]
     # a distances row that names a yielding part claims a spring; that spring needs a flexures row (v2 A2: the nip
     # leaf carried every squeeze claim and had none, FINDINGS V2A2-F5)
-    # snap records are checked by `snaps` (their flexing part and its catch both ride a slide's flex)
-    declared = {F["part"] for F in fl} | {j[k] for j in SNAPS for k in ("host", "catch")}
+    declared = {F["part"] for F in fl}
     for D in CFG["distances"]:
         m = re.match(r"\s*((?:PRT|BUY)_[A-Za-z0-9_]+)", str(D.get("compliant") or ""))
         if m and m.group(1) in O and m.group(1) not in declared:
             declared.add(m.group(1))
             finding("flexures", "warn", "%s is named compliant in distances (%s to %s) but has no flexures row: its print orientation is unchecked" % (
                 m.group(1), D["a"], D["b"]), part=m.group(1))
+    # a snap's host and catch are checked by `snaps`: a slide flex on them is that snap (a compliant distances row is not)
+    declared |= {j[k] for j in SNAPS for k in ("host", "catch")}
     for S in CFG["slide_out"]:
         # a slide that lets a part flex over it (a detent) claims a spring too
         for g in (S.get("flex") or {}):
@@ -4198,8 +4261,9 @@ def check_snaps():
     20-45 deg warns, as flexures. A permanent snap (retain >= 80 deg) on a part a service op removes warns.
     Hinges: radial and axial clearance >= print_in_place.min_clearance, the axis within axis_flat_deg of the bed, both
     parts printed together (the same print_rot), the moving part on the hinge's joint. The swept clearance is the
-    interference check's, under a fits rule generated from the record. The slide check lets a snap's barb ride its
-    catch (flex, bounded by the barb's volume) and insertion does not count the catch as an obstacle to its host."""
+    interference check's, under a fits rule generated from the record (it holds the whole pair, leaves too, to 0.28).
+    Along a snap's way out (insert_dir), the slide check lets a separable snap's barb ride its catch (flex, bounded by
+    1.5 x the barb's volume + vol_tol; a self-locking one blocks and is named), and insertion sweeps the same ride."""
     if not JOINS:
         REPORT["not_checked"].append("snaps: no snap or print-in-place records (features.snap_hook, annular_snap, torsion_snap, pip_hinge)")
         return
@@ -4237,12 +4301,16 @@ def check_snaps():
         if r["result"] == "fail":
             finding("snaps", "fail", "%s: %s %.4f > %.4f allowed for %s (%s use; %s)%s" % (
                 tag, rec["quantity"], r["value"], r["limit"], fp.name, j.get("uses"), r["allow_source"],
+                ": a twisted bar's principal stress crosses layers however it lies: lengthen the bar or the lever, or "
+                "thin the bar" if shear else
                 ": the flexing member's tension crosses layer bonds, print it with the %s %s" % (
-                    "arm" if j["kind"] == "snap_hook" else "bar" if shear else "ring's axis",
+                    "arm" if j["kind"] == "snap_hook" else "ring's axis",
                     "upright" if j.get("beam_kind") == "normal" else "in the layer plane") if r["across"] else
                 ": re-size it (thickness=None) or change length, undercut or material"), **rec)
         elif R is None:
             finding("snaps", "warn", "%s: %s has no print_rot, so the layer direction is unchecked" % (tag, fp.name), **rec)
+        elif shear:
+            pass                     # always taken across layers (cadsnap.layer_stress_dir)
         elif (20 < r["angle_deg"] <= 45) if j.get("beam_kind", "along") == "along" else (45 <= r["angle_deg"] < 70):
             finding("snaps", "warn", "%s: the flexing member is %.0f deg off the layer plane; part of its strain crosses layers" % (
                 tag, r["angle_deg"] if j.get("beam_kind", "along") == "along" else 90 - r["angle_deg"]), **rec)

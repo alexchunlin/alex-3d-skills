@@ -30,7 +30,7 @@ TOP_FLAT = 0.5      # mm: flat on the barb's crest, so the tip doesn't print as 
 ROOT_R = 0.5        # root fillet radius / thickness: Bayer's stress-concentration chart levels off near R/h = 0.5 (RECALLED)
 CLEAR = 0.25        # mm: snap catch pocket clearance around the barb (ASSUMPTION: features.RULES fit_slide is 0.25 diametral)
 MIN_DD = 0.1        # mm: smallest diametral interference worth printing; FDM holds about +-0.1 mm (ASSUMPTION)
-ONCE_FACTOR = 0.6   # Bayer: a snap separated often gets about 60 % of the one-time permissible strain (RECALLED)
+REPEAT_FACTOR = 0.6  # Bayer: a snap separated often gets about 60 % of the one-time permissible strain (RECALLED)
 # print-in-place hinge defaults: 0.4 mm radial and axial gaps print and break free on a 0.4 mm nozzle at 0.2 mm layers;
 # 0.3 mm is about the least that reliably doesn't fuse. Common FDM practice (maker guides, test hinges), ASSUMPTION,
 # not a standard: print a test hinge for a new printer or material.
@@ -65,14 +65,15 @@ def wedge(P, alpha_deg, mu):
 
 
 def allowable(material, uses="repeated", across=False):
-    """(allowable strain, source). repeated: cadmat snap_strain (half the yield strain); once: snap_strain / 0.6 (Bayer:
-    repeated use takes about 60 % of the one-time value). across=True (the flexing member's tension crosses layer
-    bonds): no more than across_mpa / E, the layer-bond allowable as a strain."""
+    """(allowable strain, source). once: cadmat snap_strain (half the yield strain: a printed part is brittle, so the
+    one-time value stays well under yield); repeated: 0.6 x that (Bayer: frequent separation takes about 60 % of the
+    one-time value). across=True (the flexing member's tension crosses layer bonds): no more than across_mpa / E, the
+    layer-bond allowable as a strain. (PR #22 review: once = snap_strain / 0.6 was 83 % of PLA's yield strain.)"""
     if uses not in ("repeated", "once"):
         raise ValueError("uses=%r: 'repeated' or 'once'" % uses)
     m = CM.MATERIALS[material]
-    e = m["snap_strain"] if uses == "repeated" else m["snap_strain"] / ONCE_FACTOR
-    src = "%s snap_strain %.4f (yield/2)%s" % (material, m["snap_strain"], "" if uses == "repeated" else " / %.1f, one-time use" % ONCE_FACTOR)
+    e = m["snap_strain"] * (REPEAT_FACTOR if uses == "repeated" else 1.0)
+    src = "%s snap_strain %.4f (yield/2)%s" % (material, m["snap_strain"], " x %.1f, repeated use" % REPEAT_FACTOR if uses == "repeated" else ", one-time use")
     if across:
         ea = m["across_mpa"] / m["E_mpa"]
         if ea < e:
@@ -161,7 +162,10 @@ def beam_angle(print_rot, d):
 def layer_stress_dir(kind, angle):
     """Whether the flexing member's tension crosses layers: 'along' (a beam or bar: its length should lie in the layer
     plane) crosses when it stands > 45 deg off the bed; 'normal' (a ring's axis: the hoop lies in the layers when the
-    axis stands up) crosses when the axis is < 45 deg off the bed."""
+    axis stands up) crosses when the axis is < 45 deg off the bed; 'torsion' (a twisted bar) always does: its principal
+    stress runs at 45 deg to the bar's axis, so on the bar's sides it crosses layers however the bar lies."""
+    if kind == "torsion":
+        return True
     return angle > 45.0 if kind == "along" else angle < 45.0
 
 
@@ -177,7 +181,8 @@ def recheck(rec, material, print_rot=None, mu=None):
     E, nu = m["E_mpa"], m["poisson"]
     mu = m["mu_self"] if mu is None else mu
     ang = beam_angle(print_rot, rec["beam_dir"]) if print_rot is not None else None
-    across = ang is not None and layer_stress_dir(rec.get("beam_kind", "along"), ang)
+    kind = rec.get("beam_kind", "along")
+    across = layer_stress_dir(kind, ang) if ang is not None or kind == "torsion" else False
     allow, src = allowable(material, rec.get("uses", "repeated"), across)
     k = rec["kind"]
     if k == "snap_hook":

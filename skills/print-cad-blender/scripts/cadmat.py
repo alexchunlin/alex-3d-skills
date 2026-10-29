@@ -50,11 +50,11 @@ SOURCES = {m: {k: s for k, (_, s) in t.items()} for m, t in _TABLE.items()}
 for _n, _m in MATERIALS.items():
     _m["in_mpa"] = _m["tensile_in_mpa"] / SF                  # allowable bending or tension along the layers
     _m["across_mpa"] = _m["tensile_across_mpa"] / SF          # allowable stress that pulls layers apart
-    # snap arms and flexures that cycle: half the yield strain. The Bayer snap-fit guide keeps the permissible strain
-    # well under yield, and about 60 % of the one-time value for frequent separation; half of yield is our assumption
+    # a snap arm's one-time strain: half the yield strain. The Bayer snap-fit guide keeps the permissible strain well
+    # under yield (a printed part is brittle); half of yield is our assumption. Separated often: 0.6 x this (cadsnap)
     _m["snap_strain"] = _m["yield_strain"] / 2
     SOURCES[_n].update(in_mpa="tensile_in_mpa / SF", across_mpa="tensile_across_mpa / SF",
-                       snap_strain="yield_strain / 2 (assumption, Bayer snap-fit guide)")
+                       snap_strain="yield_strain / 2, one-time (assumption, Bayer snap-fit guide); repeated x 0.6")
 
 # What an unset key prints at: the slicer's process preset. A Bambu Studio 2.5 project file (X1C preset) has wall_loops 2,
 # sparse_infill_density 15 %, line_width 0.42, bottom_shell_layers 3, top 4; the vendored slicers/profiles/

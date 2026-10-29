@@ -131,13 +131,20 @@ def export_stls(stl_dir, clean=True, threemf=True):
             if declared(ob) != declared(first[stl]):
                 print("EXPORT WARNING %s: %s declares %s but shares stl %r with %s (%s); the STL and 3MF carry %s's" % (
                     stl, ob.name, declared(ob), stl, first[stl].name, declared(first[stl]), first[stl].name))
+    # a print-in-place hinge prints its two parts as one job (pip_<name> below): their own files would print it twice,
+    # so they are not written and count 0 (cadcheck's layer check then reads the model's triangles, the same ones)
+    pip = {n for j in features.JOINS if j["kind"] == "pip_hinge" for n in j["parts"]}
+    for stl, ob in list(first.items()):
+        if pip & {o.name for o in bpy.data.collections["Printed"].objects if o.get("stl") == stl}:
+            done[stl] = 0
+            del first[stl]
     for stl, ob in first.items():
         tris, st = print_tris(ob), declared(ob)
         write_stl(os.path.join(stl_dir, stl + ".stl"), tris, settings_header(st))
         if threemf:
             write_3mf(os.path.join(stl_dir, stl + ".3mf"), stl, tris, st, done[stl])
     # a print-in-place hinge prints its two parts in one job: pip_<name>.stl / .3mf hold both at their home positions
-    # in the static part's print frame (the per-part files stay, for cadcheck's layer check)
+    # in the static part's print frame, the only file for them
     for j in features.JOINS:
         if j["kind"] == "pip_hinge" and all(n in bpy.data.objects for n in j["parts"]):
             a, b = (bpy.data.objects[n] for n in j["parts"])

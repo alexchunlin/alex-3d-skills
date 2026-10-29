@@ -711,7 +711,7 @@ def _material(part, material):
 def _across(beam_dir, kind, print_up):
     """(crosses layers?, angle to the bed) for world print +Z print_up, or (False, None) when it isn't given."""
     if print_up is None:
-        return False, None
+        return kind == "torsion", None
     up = Vector(print_up).normalized()
     ang = math.degrees(math.asin(min(1.0, abs(Vector(beam_dir).normalized().dot(up)))))
     return _cadsnap().layer_stress_dir(kind, ang), ang
@@ -734,6 +734,8 @@ def _ops(ops, *names):
 
 
 def _fwd(along, out, name):
+    if Vector(along).length < 1e-9 or Vector(out).length < 1e-9:
+        raise SnapError("%s: along %r and out %r need a direction" % (name, along, out))
     u, v = Vector(along).normalized(), Vector(out).normalized()
     if abs(u.dot(v)) > 1e-3:
         raise SnapError("%s: along %s and out %s must be perpendicular" % (name, _r(u), _r(v)))
@@ -754,6 +756,18 @@ def _catch_cutters(name, barb, s3, f, back, y, half_w, c, M):
     ch = geom.box(name + "_ch", 0.0, s3 + c, back - y - c, f + c, -half_w - c, half_w + c)
     pk = geom.prism(name + "_pk", geom.offset_convex(barb, c), -half_w - c, half_w + c, 'Z')
     return [geom.xform(ch, M), geom.xform(pk, M)]
+
+
+def _check_in(name, entry_deg=30.0, retain_deg=90.0, **vals):
+    """SnapError for a size that isn't a positive number (None: not given) or a face angle outside its range, before
+    anything divides by it (PR #22 review: undercut=0, length=0, hub_od <= d crashed with ZeroDivisionError)."""
+    for k, v in vals.items():
+        if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or not v > 0 or not math.isfinite(v)):
+            raise SnapError("%s: %s=%r must be a positive number (mm)" % (name, k, v))
+    if not 0 < entry_deg < 90:
+        raise SnapError("%s: entry_deg=%r: a lead-in between 0 and 90 deg (30 is usual)" % (name, entry_deg))
+    if not 0 < retain_deg <= 90:
+        raise SnapError("%s: retain_deg=%r: between 0 and 90 deg (90 self-locks, <= 45 separates)" % (name, retain_deg))
 
 
 def _sized(name, what, uses, allow, src, fix):
@@ -783,6 +797,13 @@ def snap_hook(name, host, catch, at, along, out, length, width, undercut, thickn
     SnapError when no thickness fits (it names the length, undercut or material that would), when at is not on the
     host, or when the catch has no material where its ledge must be. Formulas: reference/snaps.md."""
     S = _cadsnap()
+    _check_in(name, entry_deg, retain_deg, length=length, width=width, undercut=undercut, thickness=thickness,
+              taper=taper, clearance=clearance)
+    if taper > 1:
+        raise SnapError("%s: taper=%r: tip / root thickness, at most 1" % (name, taper))
+    if thickness is not None and length < S.SLENDER * thickness:
+        raise SnapError("%s: length %.1f < %g x thickness %.2f: the beam formulas don't hold for an arm that stubby (it is "
+                        "stiffer and strains more at the root); lengthen it or thin it" % (name, length, S.SLENDER, thickness))
     u, v, wd = _fwd(along, out, name)
     at = Vector(at)
     c = S.CLEAR if clearance is None else clearance
@@ -855,6 +876,9 @@ def annular_snap(name, shaft, hub, at, axis, d, hub_od, interference=None, entry
     up). Returns ops as snap_hook; the record goes to "joins" for cadcheck. Raises SnapError when no interference of at
     least 0.1 mm fits, the bore is smaller than d, or the hub doesn't extend past the bead on the retaining side."""
     S = _cadsnap()
+    _check_in(name, entry_deg, retain_deg, d=d, hub_od=hub_od, interference=interference, clearance=clearance)
+    if hub_od <= d:
+        raise SnapError("%s: hub_od %.2f must be larger than d %.2f" % (name, hub_od, d))
     w, at = Vector(axis).normalized(), Vector(at)
     F = _frame(at, w)
     rad = F.to_3x3() @ Vector((1, 0, 0))
@@ -909,7 +933,7 @@ def annular_snap(name, shaft, hub, at, axis, d, hub_od, interference=None, entry
            "angle_to_bed_deg": None if ang is None else round(ang, 1), "X": round(r["X"], 4), "P_n": round(r["P_n"], 2),
            "W_insert_n": None if r["W_insert_n"] is None else round(r["W_insert_n"], 2),
            "W_release_n": None if r["W_release_n"] is None else round(r["W_release_n"], 2),
-           "flex_mm3": round(math.pi * 2 * rc * hr * (z_hi - z_lo) / 2, 2), "insert_dir": _r(-w),
+           "flex_mm3": round(math.pi * 2 * rc * hr * (z_hi - z_lo) / 2, 2), "insert_dir": _r(w),
            "source": "Bayer snap-fit guide: eps = dd / d, P = dd d E X (X: hub elastic, shaft rigid), W as the hook"})
     return ops
 
@@ -928,13 +952,15 @@ def torsion_snap(name, host, catch, at, along, out, bar_len, lever, width, under
     Returns ops as snap_hook; the record goes to "joins" for cadcheck. Raises SnapError when no bar fits, the bar's ends
     are not in host, or the lever sits inside host."""
     S = _cadsnap()
+    _check_in(name, entry_deg, retain_deg, bar_len=bar_len, lever=lever, width=width, undercut=undercut, bar_d=bar_d,
+              bar_d_max=bar_d_max, thickness=thickness, clearance=clearance)
     u, v, wd = _fwd(along, out, name)
     at = Vector(at)
     c = S.CLEAR if clearance is None else clearance
     mat, msrc = _material(host, material)
     M_ = S.CM.MATERIALS[mat]
     E, nu, mu = M_["E_mpa"], M_["poisson"], M_["mu_self"]
-    across, ang = _across(wd, "along", print_up)
+    across, ang = _across(wd, "torsion", print_up)     # always across: torsion's principal stress is at 45 deg
     allow, asrc = S.allowable(mat, uses, across)
     L1, y, bw = float(lever), float(undercut), float(width)
     tl_ = (bar_len - bw) / 2
@@ -970,7 +996,7 @@ def torsion_snap(name, host, catch, at, along, out, bar_len, lever, width, under
     ops[host.name]["add"] += [bar, plate]
     ops[catch.name]["sub"] += _catch_cutters(name, barb, s3, f, -f, y, bw / 2, c, M)
     _join({"kind": "torsion_snap", "name": name, "host": host.name, "catch": catch.name, "flex_part": host.name,
-           "at": _r(at), "along": _r(u), "out": _r(v), "bar_axis": _r(wd), "beam_dir": _r(wd), "beam_kind": "along",
+           "at": _r(at), "along": _r(u), "out": _r(v), "bar_axis": _r(wd), "beam_dir": _r(wd), "beam_kind": "torsion",
            "bar_len": bar_len, "bar_l": round(tl_, 3), "bars": 2, "bar_d": round(dbar, 3), "bar_d_src": dsrc, "lever": L1,
            "width": bw, "thickness": tp, "undercut": y, "entry_deg": entry_deg, "retain_deg": retain_deg, "uses": uses,
            "clearance": c, "material": mat, "material_src": msrc, "E_mpa": E, "poisson": nu, "mu": mu,
@@ -996,7 +1022,10 @@ def pip_hinge(name, parts, axis_at, axis, length, knuckles, pin_d, clearance=Non
     pin_d:   pin diameter; clearance: radial, pin to bore and knuckle to relief (cadsnap.HINGE 0.4); gap: axial between
              knuckles (0.4); wall: knuckle wall around the bore (1.2)
     lo, hi, home, step: the joint range in degrees about +axis. print_up: world print +Z: horizontal bores get a
-             teardrop. A pin ending inside the last (moving) knuckle gets a 45 deg cone, so it needs no support.
+             teardrop. Use an odd knuckle count, so the pin runs into a static knuckle at both ends. With an even
+             count it ends inside the last (moving) knuckle, cantilevered from one side, with a 45 deg cone so its end
+             is not a flat face. That cone helps only a vertical pin; on the flat axis cadcheck wants, it doesn't
+             make the stub self-supporting (the build prints a note).
     The parts must stop short of the knuckle bores in each other's knuckle spans (leaves tangent to the knuckles).
     Returns ops as snap_hook. strict=False builds a clearance or gap under cadsnap.HINGE "min" (0.3) that cadcheck
     then fails; otherwise that raises SnapError. The record goes to "joins"; cadcheck checks the clearances, that the
@@ -1008,8 +1037,15 @@ def pip_hinge(name, parts, axis_at, axis, length, knuckles, pin_d, clearance=Non
     g = H["gap"] if gap is None else float(gap)
     wl = H["wall"] if wall is None else float(wall)
     A, B = parts
+    _check_in(name, length=length, pin_d=pin_d, clearance=c, gap=g, wall=wl)
+    if not isinstance(knuckles, int) or isinstance(knuckles, bool):
+        raise SnapError("%s: knuckles=%r: a whole number" % (name, knuckles))
     if isinstance(axis, str):
+        if axis.upper() not in ("X", "Y", "Z"):
+            raise SnapError("%s: axis=%r: 'X', 'Y', 'Z' or a unit vector along one" % (name, axis))
         axis = {"X": (1, 0, 0), "Y": (0, 1, 0), "Z": (0, 0, 1)}[axis.upper()]
+    if Vector(axis).length < 1e-9:
+        raise SnapError("%s: axis %r has no direction" % (name, axis))
     w = Vector(axis).normalized()
     k = max(range(3), key=lambda i: abs(w[i]))
     if abs(abs(w[k]) - 1) > 1e-6:
@@ -1054,6 +1090,8 @@ def pip_hinge(name, parts, axis_at, axis, length, knuckles, pin_d, clearance=Non
         ops[A.name]["add"].append(_place(geom.cyl(name + "_pin", (0, 0), pin_d / 2, 0.0, length, 'Z', n), at, w))
         pin_end = length
     else:
+        print("SNAP NOTE %s: %d knuckles: the pin ends inside the last (moving) knuckle, held from one side; an odd "
+              "count holds it at both ends" % (name, knuckles))
         pin_end = last[0] + 0.5 * (last[1] - last[0])
         ops[A.name]["add"].append(_place(geom.cyl(name + "_pin", (0, 0), pin_d / 2, 0.0, pin_end, 'Z', n), at, w))
         ops[A.name]["add"].append(_place(geom.cone(name + "_tip", (0, 0), pin_d / 2, 0.05, pin_end - 0.01,

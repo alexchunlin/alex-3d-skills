@@ -31,11 +31,12 @@ say(S.wedge(10, 64.0, 0.5) is None and S.wedge(10, 63.0, 0.5) is not None, "nega
 er, _ = S.allowable("PLA", "repeated")
 eo, src_o = S.allowable("PLA", "once")
 ea, src_a = S.allowable("PLA", "repeated", across=True)
-say(near(er, M.MATERIALS["PLA"]["snap_strain"]) and near(eo * S.ONCE_FACTOR, er) and near(ea, 15 / 2200) and "across" in src_a,
-    "allowables from cadmat: repeated = snap_strain %.4f, once = / 0.6 = %.4f, across layers = across_mpa / E = %.4f" % (er, eo, ea))
-h = S.size_hook(15, 6, 2.0, 2200, er)
-say(h == 1.2 and S.hook(15, 1.2, 6, 2.0, 2200)["strain"] <= er < S.hook(15, 1.3, 6, 2.0, 2200)["strain"] and S.size_hook(15, 6, 0.8, 2200, er) == 3.0,
-    "size_hook: the thickest arm within the strain, in 0.1 steps (1.2 mm for a 2 mm undercut), capped at l / 5 (3.0 for 0.8)")
+say(near(eo, M.MATERIALS["PLA"]["snap_strain"]) and near(er, 0.6 * eo) and near(ea, 15 / 2200) and "across" in src_a,
+    "allowables from cadmat: once = snap_strain (yield / 2) %.4f, repeated = 0.6 x once = %.4f, across layers = across_mpa / E = %.4f" % (eo, er, ea))
+say(eo < 0.6 * M.MATERIALS["PLA"]["yield_strain"], "review: the one-time allowable stays well under yield (%.0f %% of PLA's)" % (100 * eo / M.MATERIALS["PLA"]["yield_strain"]))
+h = S.size_hook(15, 6, 1.2, 2200, er)
+say(h == 1.2 and S.hook(15, 1.2, 6, 1.2, 2200)["strain"] <= er < S.hook(15, 1.3, 6, 1.2, 2200)["strain"] and S.size_hook(15, 6, 0.3, 2200, er) == 3.0,
+    "size_hook: the thickest arm within the strain, in 0.1 steps (1.2 mm for a 1.2 mm undercut), capped at l / 5 (3.0 for 0.3)")
 say(S.size_hook(4, 6, 1.5, 2200, er) is None, "a 4 mm arm can't take a 1.5 mm undercut: None (snap_hook raises SnapError)")
 t = S.torsion(7, 3.0, 10, 0.6, 2200, 0.35)
 say(near(t["phi_deg"], math.degrees(0.06)) and near(t["shear_strain"], 0.06 * 1.5 / 7) and
@@ -48,8 +49,9 @@ say(near(a["strain"], 0.015) and near(a["X"], X) and near(a["P_n"], 0.15 * 10 * 
 say(near(S.beam_stress(30, 1.5, 4, 2200), 22.0) and near(S.beam_stress(30, 1.5, 4, 2200, "guided"), 44.0) and
     near(S.beam_stress(30, 1.5, 4, 2200, kt=1.5), 33.0), "leaf stress: 3 E h y / 2 l^2 free, 3 E h y / l^2 guided, times kt")
 say(near(S.beam_angle([[1, 0, 0], [0, 1, 0], [0, 0, 1]], (0, 0, 1)), 90) and S.layer_stress_dir("along", 90) and
-    not S.layer_stress_dir("normal", 90) and S.layer_stress_dir("normal", 0),
-    "layer direction: a beam standing up crosses layers, a ring with its axis up does not, a ring lying down does")
+    not S.layer_stress_dir("along", 0) and not S.layer_stress_dir("normal", 90) and S.layer_stress_dir("normal", 0) and
+    S.layer_stress_dir("torsion", 0),
+    "layer direction: a beam standing up crosses layers (flat: not), a ring with its axis up does not, lying down does; a torsion bar always does (45 deg principal stress)")
 try:
     S.allowable("PLA", "often")
     say(False, "uses='often' is refused")
@@ -72,9 +74,9 @@ if bd and os.path.isfile(os.path.join(bd, "manifest.json")):
     rows = [AS.report("fx", {"dir": src, "as": "m.blend"}, __import__("pathlib").Path(run))]
     md = AS.markdown(rows)
     r0 = rows[0]
-    say(r0["snaps"] == 4 and r0["print_in_place"] == 2 and r0["joins"] == 7,
-        "bench assembly: 4 snaps, 2 print-in-place, joins = 1 screw + 6 = 7 from the manifest's joins (%s)" % {k: r0[k] for k in ("snaps", "print_in_place", "joins")})
-    say("| snaps | print-in-place | joins |" in md and "| fx | 14 | 0 | 1 | 1 | 4 | 2 | 7 |" in md, "the markdown table has the columns: %s" % md.splitlines()[-1])
+    say(r0["snaps"] == 5 and r0["print_in_place"] == 2 and r0["joins"] == 8,
+        "bench assembly: 5 snaps, 2 print-in-place, joins = 1 screw + 7 = 8 from the manifest's joins (%s)" % {k: r0[k] for k in ("snaps", "print_in_place", "joins")})
+    say("| snaps | print-in-place | joins |" in md and "| fx | 16 | 0 | 1 | 1 | 5 | 2 | 8 |" in md, "the markdown table has the columns: %s" % md.splitlines()[-1])
     os.remove(os.path.join(run, "fx", "assembly_scan.json"))
     scan.pop("fasteners")
     scan["fasteners"] = []
