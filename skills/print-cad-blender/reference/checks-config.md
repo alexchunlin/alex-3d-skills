@@ -116,11 +116,14 @@ adds `carry`, `fasteners.captive` and `flexures`.
               "terms": [{"what": "glass thread / band", "tol": 1.0}, {"what": "adapter disc in the band", "tol": 0.75}]}],
   "flexures": [{"part": "PRT_nip_cover", "name": "leaf spring", "dir": [0, -0.48, 0.88],   // beam length, world at home
                 "stress_mpa": 20.9},
-               {"part": "PRT_gate_detent", "from": [0, 10, 5], "to": [0, 22, 5]}],      // or the beam's ends
+               {"part": "PRT_gate_detent", "from": [0, 10, 5], "to": [0, 22, 5]},       // or the beam's ends
+               {"part": "PRT_leaf", "dir": [1, 0, 0], "l": 30, "b": 8, "h": 1.5, "deflection": 4,   // dims: stress computed
+                "end": "guided", "kt": 1.5}],                                       // end: free (default) | guided
   "calcs": [{"name": "spigot_M", "value": "=1.2 * FS_N * LEVER", "unit": "N mm"},     // a name like a variable: later calcs use it
             {"name": "spigot_mpa", "value": "=spigot_M / z_eff(SPIG_W, SPIG_D, part='PRT_piston_R')",   // printed section
              "min": 0, "max": "=mat('PRT_piston_R', 'across_mpa')", "unit": "MPa", "why": "spigot root, standing: across layers"}],
   "interlayer_mpa": 15,
+  "print_in_place": {"min_clearance": 0.3, "axis_flat_deg": 10},   // pip_hinge records (snaps check; no rows to write)
   "exposure": {"max_cable_mm": 5, "cables_ok": ["CAB_usb*"], "min_escape": 8, "view_frac": 0.1, "view_z": -0.2,
                "nuts_ok": ["FST_wheel_nut_*"]},
   "masses_g": {"BUY_battery": 620, "BUY_servo_*": 66},
@@ -290,7 +293,8 @@ checks in `--only`, 5 with no rows, and read PASS (PA-A2-T11). An `--only` name 
 - **Index tests.** The probe bundle is cast through `blockers` at every `step` of the `sequence`; a maximal run of open poses is one window. A window spanning the cycle start counts once. Open at the park position is reported.
 - **Exposure.** A cable sample is exposed when `min_escape` of 26 rays leave the assembly without hitting a solid, or when `view_frac` of the 240 directions toward a viewer above or level (`z > view_z`) do. The second rule finds a cable seen through a notch: the A3 bonnet-foot notch scores 6/26 but 8.3 mm at 10%, and R3 said "about 8 mm". Exposed samples within 6 mm form one spot, warned when its extent passes `max_cable_mm`. A nut is warned when 2 or more of its outer samples are exposed, unless it is listed in `nuts_ok`.
 - **Carry and captive.** `carry` re-parents the named objects onto a joint before any sweep, keeping their home pose. Use it for parts modelled at one setting that ride on another body in use (a thumbwheel on a stud). A `captive` fastener (screw or nut) skips the head-buried, stand-off, access and head or nut overlap tests; engagement and nut pairing still apply. Each entry needs a reason a reviewer can check.
-- **Flexures.** The beam direction is mapped through the part's `print_rot` (the STL export matrix). More than 45° off the bed with `stress_mpa` unknown or above `interlayer_mpa` (default 15, R3's limit for PLA across layers, = `mat("PLA", "across_mpa")` in [materials.md](materials.md)) fails; 20-45° warns.
+- **Flexures.** The beam direction is mapped through the part's `print_rot` (the STL export matrix). More than 45° off the bed with `stress_mpa` unknown or above `interlayer_mpa` (default 15, R3's limit for PLA across layers, = `mat("PLA", "across_mpa")` in [materials.md](materials.md)) fails; 20-45° warns. A row with `l`, `b`, `h` and `deflection` gets its stress computed from the part's material (`end` `"free"` or `"guided"`, times `kt`), which replaces a typed `stress_mpa` (more than 20 % apart warns) and fails over `in_mpa` in the layer plane (PA-A3-T22: typed 7.6, computed 9-22 MPa).
+- **Snaps.** No rows: `features.snap_hook`, `annular_snap`, `torsion_snap` and `pip_hinge` records are checked (strain vs the allowable for the flexing part's material, use and layer direction; hinge gaps against `print_in_place`, axis flat, one print). Along the snap's way out, a slide row lets a separable snap's barb ride its catch (bounded; a self-locking one blocks and is named), and insertion sweeps the same bounded ride. The generated hinge `fits` rule holds the whole pair, leaves included, to 0.28 mm. See [snaps.md](snaps.md).
 - **Payload fit.** Rigid probes stand on the `center` floor point: `flat` (thickness along `up`), `edge_on`, `pair_edge_on`
   (`count` side by side along `across`) or `stack_flat`. `shape` is `lens` (two spherical caps, the sharpest rim, so the
   conservative choice for "blocked"), `ellipsoid`, `sphere` or `cylinder`. The probe is overlapped (Manifold) with the

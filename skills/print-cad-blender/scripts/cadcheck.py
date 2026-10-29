@@ -38,7 +38,11 @@ Checks (each one writes evidence into the JSON report, with an explicit `coverag
                 steps that move a servo-held joint before any step is "powered" (held poses)
   insertion     each part and each merged bench group out along a straight line past the earlier steps' parts
   stacks        tolerance stacks from config ("stacks"): worst case and RSS against a limit
-  flexures      declared springs and snap arms: beam direction vs the part's print orientation (layer bonds)
+  flexures      declared springs and snap arms: beam direction vs the part's print orientation (layer bonds); a row with
+                l, b, h and deflection gets its stress computed (cadsnap.beam_stress) instead of a typed stress_mpa
+  snaps         features.snap_hook / annular_snap / torsion_snap / pip_hinge records (the manifest's "joins", no config):
+                strain against the flexing part's allowable for its use and layer direction, a permanent snap on a part
+                a service op removes, hinge clearances, axis flat on the bed, both hinge parts in one print
   calcs         calculations from config ("calcs"): an =expr over the params, material allowables and printed sections
                 (cadmat), against min/max
   stability     centre of mass and static tip angle over a coarse pose grid
@@ -54,6 +58,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cadlib import joints as JT   # noqa: E402  (joint specs and posing, shared with cadlib.route)
 import cadcfg as CC               # noqa: E402  (checks.json hygiene: unknown keys, accepted_warns; no Blender)
 import cadmat as CM               # noqa: E402  (materials, print settings, printed sections, calcs; no Blender)
+import cadsnap as CS              # noqa: E402  (snap-fit and print-in-place hinge math; no Blender)
 
 ARGV = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 
@@ -132,6 +137,9 @@ DEFAULTS = {
     "assembly_order": [],
     "printcheck": {},           # the parts layer check (printcheck.py DEFAULTS)
     "interlayer_mpa": 15.0,     # flexures: bending stress a beam standing off the bed may carry across layers (R3, PLA)
+    # pip_hinge records (snaps check): least radial and axial gap that doesn't fuse (cadsnap.HINGE, common FDM practice),
+    # and how far the hinge axis may tilt off the bed in print orientation
+    "print_in_place": {"min_clearance": 0.3, "axis_flat_deg": 10.0},
     "overhang_warn_mm2": 150,
     "max_bridge_mm": 25,        # printcheck bridge_warn_mm unless "printcheck" sets it
 }
@@ -163,7 +171,7 @@ CONFIG_ROWS = {
     "sightlines": ["frame", "pose", "poses", "origin", "origins", "dir", "first_hit", "max_mm", "through"],
     "stacks": ["limit", "terms", "between", "poses"],
     "stacks.terms": ["what", "tol"],
-    "flexures": ["part", "dir", "from", "to", "stress_mpa"],
+    "flexures": ["part", "dir", "from", "to", "stress_mpa", "l", "b", "h", "deflection", "end", "kt"],
     "calcs": ["value", "min", "max", "unit"],
     "cable_chains": ["cables", "lead"],
     "accepted_warns": ["check", "kind", "object", "match", "any"],
@@ -216,6 +224,23 @@ def _load_params():
 
 
 PARAMS, PARAMS_SRC = _load_params()
+
+
+def _load_joins():
+    """features.snap_hook / annular_snap / torsion_snap / pip_hinge records: the scene's cad_joins (cadlib writes it), or
+    the "joins" of the manifest.json beside the blend."""
+    if "cad_joins" in bpy.context.scene.keys():
+        return json.loads(bpy.context.scene["cad_joins"]), "scene"
+    mp = os.path.join(os.path.dirname(bpy.data.filepath) or ".", "manifest.json")
+    if os.path.isfile(mp):
+        with open(mp) as f:
+            return json.load(f).get("joins") or [], mp
+    return [], None
+
+
+JOINS, JOINS_SRC = _load_joins()
+SNAPS = [j for j in JOINS if j.get("kind") in CS.SNAP_KINDS]
+HINGES = [j for j in JOINS if j.get("kind") in CS.PIP_KINDS]
 EXPRS = []   # [{"at", "expr", "value" or "error"}]
 
 
@@ -286,6 +311,11 @@ for _k in list(CFG):
         elif isinstance(CFG[_k], dict):
             CFG[_k].pop(_p[1], None)
             e["dropped"] = "%s.%s" % (_k, _p[1])
+# a print-in-place hinge's two parts run at its designed clearance, not moving_min_clearance: a generated fits rule
+# (after the config's, so a project rule still wins), so the agent writes no config for it
+for _h in HINGES:
+    CFG["fits"].append({"a": _h["parts"][0], "b": _h["parts"][1], "min_clearance": CFG["print_in_place"]["min_clearance"] - 0.02,
+                        "why": "pip_hinge %s (generated from the manifest record)" % _h["name"], "generated": True})
 QUICK = "--quick" in ARGV
 ONLY = set(_arg("--only", "").split(",")) - {""}
 OUT = _arg("--out") or os.path.join(os.path.dirname(bpy.data.filepath) or ".", "cadcheck.json")
@@ -476,6 +506,10 @@ def world_bm(o, M=None):
     if o.type == 'MESH':
         bm.from_mesh(o.data)
     bm.transform(o.matrix_world if M is None else M)
+    # bm.transform leaves the face normals as they were, and FromBMesh tessellates an ngon on its normal's plane: at a
+    # rotated pose a hinge leaf's notched face came out as triangles across the notches, so a hinge whose triangles are
+    # all 0.39 mm apart read "touching" and 0.10 mm (features.pip_hinge, PR #22 review)
+    bm.normal_update()
     return bm
 
 
@@ -1578,7 +1612,9 @@ def check_interference():
         if cls == "moving" and not why and (isc or not (fit and fit.get("contact"))):
             d, p = min_dist_off(a, b, ta, tb, isc) if isc else min_dist(a, b, ta, tb, ga[2], gb[2])
             prev = worst.get(("min_clearance", key))
-            if prev is None or d < prev["mm"] - (0.005 if between else 0):
+            # an in-range pose within 0.005 of an overtravel minimum is the one reported: a hinge's gap is the same at
+            # every angle, and the first pose sampled (overtravel) left a 0.19 mm hinge "just past the limit", a warn
+            if prev is None or d < prev["mm"] - (0.005 if between else 0) or (prev["overtravel"] and not over and d <= prev["mm"] + 0.005):
                 worst[("min_clearance", key)] = {"a": a.name, "b": b.name, "mm": round(d, 3), "pose": pose_key(pose),
                                                  "overtravel": over, "at": [round(c, 1) for c in p] if p else None,
                                                  "fit": fit.get("why") if fit else None,
@@ -3030,6 +3066,38 @@ def _swept_box(bb, v):
     return (Vector(tuple(min(bb[0][k], bb[0][k] + v[k]) for k in range(3))), Vector(tuple(max(bb[1][k], bb[1][k] + v[k]) for k in range(3))))
 
 
+def snap_out(j, names):
+    """The direction the movers `names` leave snap j's partner by, or None when they hold both or neither: the catch
+    leaves along insert_dir, the host against it (the record's insert_dir is the way the host goes in)."""
+    a, b = j["host"] in names, j["catch"] in names
+    if a == b:
+        return None
+    d = Vector(j.get("insert_dir") or (0, 0, 1)).normalized()
+    return -d if a else d
+
+
+def snap_bound(j):
+    return round(1.5 * float(j.get("flex_mm3") or 0.0) + CFG["vol_tol"], 2)
+
+
+def snap_flex(names, d):
+    """({partner: mm3}, {partner: snap}) for the snaps with their host or catch (not both) among `names`. Flex: the barb
+    may ride its partner up to 1.5 x its own volume plus vol_tol when `d` is within 30 deg of the way out and the
+    retaining face releases (a 90 deg face self-locks: cadsnap.wedge is None). Locked: a partner a permanent snap holds,
+    named in the blocked message. A slide row passed "comes off" past a self-locking barb (PR #22 review)."""
+    flex, locked = {}, {}
+    for j in SNAPS:
+        out = snap_out(j, names)
+        if out is None or out.dot(Vector(d).normalized()) < math.cos(math.radians(30)):
+            continue
+        partner = j["catch"] if j["host"] in names else j["host"]
+        if CS.wedge(1.0, j.get("retain_deg", 90.0), j.get("mu", 0.5)) is None:
+            locked[partner] = j
+        else:
+            flex[partner] = snap_bound(j)
+    return flex, locked
+
+
 def check_slide():
     """Slide-out sweeps. {"object": name} or {"objects": [globs]} moves as one group (the attempt-2 designer's
     service sweeps: flywheel plus its bolts, cover, encoder cap), with "ignore" for parts already removed."""
@@ -3042,7 +3110,10 @@ def check_slide():
         label = S.get("name") or (grp[0].name if len(grp) == 1 else "+".join(globs))
         d = Vector(S["dir"]).normalized()
         # fasteners too: A3's battery slid through two adapter nuts that a solids-only sweep never saw (FINDINGS A3-F3)
-        fx = lambda n: any(fnmatch.fnmatch(n, g) for g in (S.get("flex") or {}))
+        # a snap's barb rides its catch on the way out (the arm flexes): the partner is flex, bounded by the barb's volume
+        auto, locked = snap_flex(gnames, S["dir"])
+        flex0 = dict(auto, **(S.get("flex") or {}))
+        fx = lambda n: any(fnmatch.fnmatch(n, g) for g in flex0)
         others = {o.name: bvh_world(o) for o in SOLIDS + FASTENERS if o.name not in gnames | ign}
         # an allowed pair stays an obstacle, bounded: dropping it let push-assist A7's load cell slide through the cartridge
         # it was allowed 3 mm3 against, studs and all, and nothing failed (PA-A7-T19a). A `flex` part keeps its own bound
@@ -3070,7 +3141,7 @@ def check_slide():
         at_rest = [n for n in others if sum(v for (m, n2), v in rest.items() if n2 == n and (m, n) not in rules) >= CFG["vol_tol"]
                    or any(rest.get(k, 0.0) > bound[k] for k in bound if k[1] == n)]
         minclr = (1e9, None)
-        flex, flexed, rode, over = S.get("flex") or {}, {}, {}, {}
+        flex, flexed, rode, over = flex0, {}, {}, {}
         M0 = {o.name: o.matrix_world.copy() for o in grp}
         step = max(1, len(bm0.verts) // 1500)
         owner = [next(m for k, m in reversed(span) if i >= k) for i in range(0, len(bm0.verts), step)]
@@ -3124,7 +3195,7 @@ def check_slide():
                 if n in at_rest:
                     continue
                 for p, m in zip(pts, owner):
-                    if (m, n) in rules:     # an allowed pair may touch: its clearance is not measured
+                    if (m, n) in rules or n in auto:     # an allowed pair, or a snap's partner, may touch: not measured
                         continue
                     r = ot.find_nearest(p, 3.0)
                     if r[0] is not None and r[3] < minclr[0]:
@@ -3143,11 +3214,17 @@ def check_slide():
             rec["over_allow"] = over    # blockers past their allow's bound
         if flex:
             rec["flexed"] = {n: {"max_mm3": v, "at_mm": a} for n, (v, a) in flexed.items()}
+        if auto:
+            rec["snap_flex"] = auto      # generated from the snap records, not the row
+        if locked:
+            rec["snap_locked"] = {n: j["name"] for n, j in locked.items()}
         REPORT["checks"].setdefault("slide", {"findings": []}).setdefault("rows", []).append(rec)
         why = "".join(" (%s overlaps %.1f mm3, past %s; if it is a snap or spring riding the mover, name it in the row's `flex`%s)" % (
             n, o["volume_mm3"], "the %g mm3 its allow covers" % o["bound_mm3"] if o["rest_mm3"] is None else
             "its %g mm3 at rest plus vol_tol (or 0.1%%), the bound of an allow with no max_mm3" % o["rest_mm3"],
             "" if o["rest_mm3"] is None else "; a press fit pushed deeper needs max_mm3 on the allow") for n, o in over.items())
+        why += "".join(" (%s holds it with permanent snap %s: its %g deg retaining face self-locks; give it retain_deg <= 45 to "
+                       "make it separable)" % (n, j["name"], j.get("retain_deg", 90)) for n, j in locked.items() if n in (blocker or []))
         if S.get("expect") == "blocked":
             # an end stop: the motion must be stopped, by the named part, within at_mm (v2 A2 gate open stop, V2A2-T4)
             rng = S.get("at_mm")
@@ -3807,7 +3884,49 @@ def check_insertion():
                 out += [("along %s" % fn, tuple(ax)), ("against %s" % fn, tuple(-ax))]
             if len(out) >= 14:
                 break
+        names = {o.name for o in mv}
+        for j in SNAPS:       # a snapped part goes in along its snap (the record's insert_dir)
+            d = snap_out(j, names)
+            if d is not None and all(abs(d.dot(Vector(v))) < 0.9995 for _, v in out):
+                out.append(("snap %s" % j["name"], tuple(d)))
         return out
+
+    def snap_ride(mv, d):
+        """{partner: bound} for the snaps whose barb may ride its partner while mv goes along d (within 30 deg of the
+        snap's way in, either retaining face: the lead-in deflects the arm on the way in)."""
+        names = {o.name for o in mv}
+        out = {}
+        for j in SNAPS:
+            w = snap_out(j, names)
+            if w is not None and w.dot(Vector(d)) >= math.cos(math.radians(30)):
+                p = j["catch"] if j["host"] in names else j["host"]
+                out[p] = out.get(p, 0.0) + snap_bound(j)
+        return out
+
+    def ride_ok(mv, partners, d):
+        """Sweep mv along d (1 mm steps) until its box clears each partner's; the overlap with that partner must stay
+        within the snap's bound (1.5 x the barb's volume + vol_tol), as the slide check's flex. A hooked part sealed in
+        a box read free +Z when insertion dropped the pair in every direction (PR #22 review)."""
+        dv = Vector(d).normalized()
+        M0 = {o.name: o.matrix_world.copy() for o in mv}
+        ok = True
+        try:
+            for p, bound in partners.items():
+                bp, s = bbox_world(O[p]), 0.0
+                while ok and s < 2000:
+                    for o in mv:
+                        o.matrix_world = Matrix.Translation(dv * s) @ M0[o.name]
+                    bpy.context.view_layer.update()
+                    if s > 0 and all(bb_gap(bbox_world(o), bp) > 0 for o in mv):
+                        break
+                    if sum(inter_volume(o, O[p])[0] for o in mv if bb_gap(bbox_world(o), bp) == 0) > bound:
+                        ok = False
+                    s += 1.0
+        finally:
+            for o in mv:
+                o.matrix_world = M0[o.name]
+            bpy.context.view_layer.update()
+        return ok
 
     def way_in(mv, obst, dirs):
         """First free direction, or None. The first blocker found per (mover, direction) is remembered: while it is
@@ -3819,7 +3938,14 @@ def check_insertion():
             b = memo.get((key, d))
             if b in ob:
                 continue
-            hit = _blocked(mv, obst, d, cache, True)
+            ride = {p: v for p, v in snap_ride(mv, d).items() if p in ob}
+            hit = _blocked(mv, [n for n in obst if n not in ride], d, cache, True) if ride else _blocked(mv, obst, d, cache, True)
+            if not hit and ride:
+                rk = ("ride", key, d)
+                if rk not in memo:
+                    memo[rk] = ride_ok(mv, ride, d)
+                if not memo[rk]:
+                    hit = [(sorted(ride)[0], None, 0.0)]
             if not hit:
                 return dn
             memo[key, d] = hit[0][0]
@@ -4048,7 +4174,12 @@ def check_flexures():
     """Printed springs, flexures and snap arms against the layer direction (A3-F2: the nip leaf spring printed
     standing up, so its 21-44 MPa bending stress ran across layer bonds). Each entry: {"part", "dir": [x,y,z] or
     "from"/"to" points (world, home pose) along the beam's length, optional "stress_mpa", "why"}. The beam should
-    lie in the layer plane: its angle to the bed is from the part's print_rot, the same matrix the STL export uses."""
+    lie in the layer plane: its angle to the bed is from the part's print_rot, the same matrix the STL export uses.
+    A row with "l", "b", "h" (beam length, width, thickness along the deflection, mm) and "deflection" (mm at the end)
+    gets its stress computed from the part's material: cadsnap.beam_stress, "end" "free" (cantilever, default) or
+    "guided" (a parallel-leaf flexure), times "kt" (default 1, nominal), against the part's in_mpa in the layer plane or
+    the interlayer limit across it. A typed stress_mpa is then only compared: push-assist A3's designer typed 7.6 MPa
+    and the reviewer's script found 9-22 MPa with Kt (PA-A3-T22). Without dimensions the typed value is "declared"."""
     fl = CFG["flexures"]
     # a distances row that names a yielding part claims a spring; that spring needs a flexures row (v2 A2: the nip
     # leaf carried every squeeze claim and had none, FINDINGS V2A2-F5)
@@ -4059,6 +4190,8 @@ def check_flexures():
             declared.add(m.group(1))
             finding("flexures", "warn", "%s is named compliant in distances (%s to %s) but has no flexures row: its print orientation is unchecked" % (
                 m.group(1), D["a"], D["b"]), part=m.group(1))
+    # a snap's host and catch are checked by `snaps`: a slide flex on them is that snap (a compliant distances row is not)
+    declared |= {j[k] for j in SNAPS for k in ("host", "catch")}
     for S in CFG["slide_out"]:
         # a slide that lets a part flex over it (a detent) claims a spring too
         for g in (S.get("flex") or {}):
@@ -4082,9 +4215,34 @@ def check_flexures():
         ang = math.degrees(math.asin(min(1.0, abs(pd.z))))
         st = F.get("stress_mpa")
         rec = {"part": F["part"], "beam_print_dir": [round(c, 3) for c in pd], "angle_to_bed_deg": round(ang, 1), "stress_mpa": st,
-               "interlayer_mpa": lim, "why": F.get("why")}
-        rows.append(rec)
+               "stress_src": "declared" if st is not None else None, "interlayer_mpa": lim, "why": F.get("why")}
         tag = "%s%s" % (F["part"], " (%s)" % F["name"] if F.get("name") else "")
+        dims = [k for k in ("l", "b", "h", "deflection") if F.get(k) is not None]
+        if dims and len(dims) < 4:
+            finding("flexures", "warn", "%s: the row gives %s but not %s, so its stress is not computed" % (
+                tag, "/".join(dims), "/".join(k for k in ("l", "b", "h", "deflection") if k not in dims)), part=F["part"])
+        elif dims:
+            mat = o.get("material") or CM.PRINT_DEFAULTS["material"]
+            M_ = CM.MATERIALS.get(mat, CM.MATERIALS["PLA"])
+            try:
+                cs = CS.beam_stress(float(F["l"]), float(F["h"]), float(F["deflection"]), M_["E_mpa"], F.get("end", "free"), float(F.get("kt", 1.0)))
+            except (ValueError, ZeroDivisionError) as e:
+                finding("flexures", "warn", "%s: stress not computed (%s)" % (tag, e), part=F["part"])
+                cs = None
+            if cs is not None:
+                allow_in = M_["in_mpa"]
+                rec.update(stress_mpa=round(cs, 2), stress_src="computed", declared_mpa=st, material=mat, E_mpa=M_["E_mpa"],
+                           end=F.get("end", "free"), kt=float(F.get("kt", 1.0)), in_mpa=allow_in,
+                           strain=round(cs / M_["E_mpa"], 5), formula="cadsnap.beam_stress (Roark Table 8.1)")
+                if st is not None and abs(st - cs) > 0.2 * cs:
+                    finding("flexures", "warn", "%s: stress_mpa %g typed, %.1f MPa computed from l, h and deflection%s: the "
+                            "computed value is checked" % (tag, st, cs, " (kt %g)" % float(F["kt"]) if F.get("kt") else
+                                                          ", nominal: give kt for the root's stress concentration"), **rec)
+                st = cs
+                if ang <= 45 and cs > allow_in:
+                    finding("flexures", "fail", "%s: computed bending stress %.1f MPa > %s in_mpa %g (in the layer plane): "
+                            "lengthen or thin the beam, or deflect it less" % (tag, cs, mat, allow_in), **rec)
+        rows.append(rec)
         if ang > 45 and (st is None or st > lim):
             finding("flexures", "fail", "%s: the beam stands %.0f deg off the bed, so bending stress%s crosses layer bonds (limit %g MPa): "
                     "print it with the beam in the layer plane" % (tag, ang, " of %g MPa" % st if st else "", lim), **rec)
@@ -4092,6 +4250,106 @@ def check_flexures():
             finding("flexures", "warn", "%s: beam %.0f deg off the bed; part of the bending stress crosses layers" % (tag, ang), **rec)
     REPORT["checks"].setdefault("flexures", {"findings": []})["rows"] = rows
     REPORT["coverage"].append("flexures: %d declared springs or snap arms against print orientation" % len(rows))
+
+
+def check_snaps():
+    """Snap fits and print-in-place hinges from their cadlib records (features.snap_hook, annular_snap, torsion_snap,
+    pip_hinge: the scene's cad_joins or the manifest's "joins"), so the agent writes no config for them.
+    Snaps: the strain (a torsion bar's shear strain against (1 + nu) x) recomputed by cadsnap for the flexing part's
+    material as built, against its allowable for the record's `uses`, and across layers (the layer-bond allowable as a
+    strain) when the beam stands > 45 deg off the bed in its print_rot (a ring snap: when its axis lies < 45 deg off it);
+    20-45 deg warns, as flexures. A permanent snap (retain >= 80 deg) on a part a service op removes warns.
+    Hinges: radial and axial clearance >= print_in_place.min_clearance, the axis within axis_flat_deg of the bed, both
+    parts printed together (the same print_rot), the moving part on the hinge's joint. The swept clearance is the
+    interference check's, under a fits rule generated from the record (it holds the whole pair, leaves too, to 0.28).
+    Along a snap's way out (insert_dir), the slide check lets a separable snap's barb ride its catch (flex, bounded by
+    1.5 x the barb's volume + vol_tol; a self-locking one blocks and is named), and insertion sweeps the same ride."""
+    if not JOINS:
+        REPORT["not_checked"].append("snaps: no snap or print-in-place records (features.snap_hook, annular_snap, torsion_snap, pip_hinge)")
+        return
+    set_pose({})
+    rows, pip = [], CFG["print_in_place"]
+    removed_by = {}
+    for op in CFG.get("service") or []:
+        for o in SOLIDS:
+            if any(fnmatch.fnmatch(o.name, g) for g in op.get("remove", [])):
+                removed_by.setdefault(o.name, []).append(op.get("op"))
+    rot = lambda o: [list(r) for r in o["print_rot"]] if "print_rot" in o.keys() else None
+    for j in SNAPS:
+        tag = "%s %s" % (j["kind"], j["name"])
+        miss = [n for n in (j["host"], j["catch"]) if n not in O]
+        if miss:
+            finding("snaps", "fail", "%s: %s not in the model (renamed after the call? name the solids with their final PRT_ "
+                    "names)" % (tag, ", ".join(miss)), name=j["name"])
+            continue
+        fp = O[j["flex_part"]]
+        mat = fp.get("material") or CM.PRINT_DEFAULTS["material"]
+        if mat not in CM.MATERIALS:
+            finding("snaps", "fail", "%s: %s's material %r is not in cadmat.MATERIALS" % (tag, fp.name, mat), name=j["name"])
+            continue
+        R = rot(fp)
+        r = CS.recheck(j, mat, R)
+        shear = j["kind"] == "torsion_snap"
+        rec = {"kind": j["kind"], "name": j["name"], "flex_part": fp.name, "host": j["host"], "catch": j["catch"],
+               "material": mat, "uses": j.get("uses"), "value": round(r["value"], 5), "limit": round(r["limit"], 5),
+               "quantity": "shear strain" if shear else "strain", "allow_source": r["allow_source"], "across_layers": r["across"],
+               "angle_to_bed_deg": None if r["angle_deg"] is None else round(r["angle_deg"], 1),
+               "P_n": round(r["P_n"], 2), "W_insert_n": None if r["W_insert_n"] is None else round(r["W_insert_n"], 2),
+               "W_release_n": None if r["W_release_n"] is None else round(r["W_release_n"], 2), "retain_deg": j.get("retain_deg"),
+               "result": r["result"]}
+        rows.append(rec)
+        if r["result"] == "fail":
+            finding("snaps", "fail", "%s: %s %.4f > %.4f allowed for %s (%s use; %s)%s" % (
+                tag, rec["quantity"], r["value"], r["limit"], fp.name, j.get("uses"), r["allow_source"],
+                ": a twisted bar's principal stress crosses layers however it lies: lengthen the bar or the lever, or "
+                "thin the bar" if shear else
+                ": the flexing member's tension crosses layer bonds, print it with the %s %s" % (
+                    "arm" if j["kind"] == "snap_hook" else "ring's axis",
+                    "upright" if j.get("beam_kind") == "normal" else "in the layer plane") if r["across"] else
+                ": re-size it (thickness=None) or change length, undercut or material"), **rec)
+        elif R is None:
+            finding("snaps", "warn", "%s: %s has no print_rot, so the layer direction is unchecked" % (tag, fp.name), **rec)
+        elif shear:
+            pass                     # always taken across layers (cadsnap.layer_stress_dir)
+        elif (20 < r["angle_deg"] <= 45) if j.get("beam_kind", "along") == "along" else (45 <= r["angle_deg"] < 70):
+            finding("snaps", "warn", "%s: the flexing member is %.0f deg off the layer plane; part of its strain crosses layers" % (
+                tag, r["angle_deg"] if j.get("beam_kind", "along") == "along" else 90 - r["angle_deg"]), **rec)
+        ops = sorted({op for n in (j["host"], j["catch"]) for op in removed_by.get(n, [])})
+        if (j.get("retain_deg") or 0) >= 80 and ops:
+            finding("snaps", "warn", "%s is permanent (retain %g deg) but service op%s %s remove%s %s: give it retain_deg <= 45 "
+                    "(separable) or a release tab" % (tag, j["retain_deg"], "" if len(ops) == 1 else "s", ", ".join(map(str, ops)),
+                                                       "s" if len(ops) == 1 else "", " / ".join(n for n in (j["host"], j["catch"]) if n in removed_by)),
+                    **rec)
+    for h in HINGES:
+        tag = "pip_hinge %s" % h["name"]
+        miss = [n for n in h["parts"] if n not in O]
+        if miss:
+            finding("snaps", "fail", "%s: %s not in the model" % (tag, ", ".join(miss)), name=h["name"])
+            continue
+        A, B = (O[n] for n in h["parts"])
+        RA, RB = rot(A), rot(B)
+        ang = CS.beam_angle(RA, h["axis"]) if RA else None
+        same = RA is not None and RB is not None and all(abs(RA[i][k] - RB[i][k]) < 1e-6 for i in range(3) for k in range(3))
+        rec = {"kind": "pip_hinge", "name": h["name"], "parts": h["parts"], "joint": h["joint"], "radial_mm": h["clearance"],
+               "axial_mm": h["gap"], "min_mm": pip["min_clearance"], "axis_to_bed_deg": None if ang is None else round(ang, 1),
+               "same_print": same, "moving_body": body(B)}
+        rows.append(rec)
+        for what, v in (("radial clearance", h["clearance"]), ("axial gap", h["gap"])):
+            if v < pip["min_clearance"] - 1e-9:
+                finding("snaps", "fail", "%s: %s %.2f mm < %.2f: the knuckles fuse in print; use the 0.4 default" % (
+                    tag, what, v, pip["min_clearance"]), **rec)
+        if ang is not None and ang > pip["axis_flat_deg"]:
+            finding("snaps", "fail", "%s: the hinge axis stands %.0f deg off the bed in %s's print orientation: print it with "
+                    "the axis flat (knuckle gaps print as vertical slots, the pin needs no support)" % (tag, ang, A.name), **rec)
+        if not same:
+            finding("snaps", "fail", "%s: %s and %s have different print_rot, so they can't print together in place: give both "
+                    "the same print_rot (the export writes pip_%s.stl with both)" % (tag, A.name, B.name, h["name"]), **rec)
+        if body(B) != h["joint"]:
+            finding("snaps", "fail", "%s: %s is on %s, not the hinge's joint %s: asm.part(..., joint=%r)" % (
+                tag, B.name, body(B), h["joint"], h["joint"]), **rec)
+    REPORT["checks"].setdefault("snaps", {"findings": []})["rows"] = rows
+    REPORT["coverage"].append("snaps: %d snaps (strain vs allowable, layer direction) and %d print-in-place hinges (clearances, axis, "
+                              "one print) from cadlib records (%s)" % (len(SNAPS), len(HINGES), JOINS_SRC))
 
 
 def check_calcs():
@@ -4556,7 +4814,7 @@ CHECKS = (("parts", check_parts), ("interference", check_interference), ("fasten
           ("service", check_service), ("drop", check_drop), ("index", check_index), ("slide", check_slide),
           ("distances", check_distances), ("payload", check_payload), ("sightlines", check_sightlines),
           ("assembly", check_assembly), ("insertion", check_insertion), ("stacks", check_stacks), ("flexures", check_flexures),
-          ("calcs", check_calcs), ("stability", check_stability), ("cables", check_cables))
+          ("snaps", check_snaps), ("calcs", check_calcs), ("stability", check_stability), ("cables", check_cables))
 # flexures is not here: it also checks compliant distances rows and slide flexes, and says so in not_checked itself
 ROWS_OF = {"service": "service", "drop": "drop_tests", "index": "index_tests", "slide": "slide_out", "distances": "distances",
            "payload": "payload_fit", "sightlines": "sightlines", "assembly": "assembly_order", "insertion": "assembly_order",

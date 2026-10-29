@@ -19,6 +19,7 @@
  },
  "conditional": {
   "skills/print-cad-blender/reference/checks-config.md": "SKILL.md Reference: 'Read it when cadcheck flags something you designed on purpose'",
-  "skills/print-cad-blender/reference/design-principles.md": "SKILL.md Reference: 'Worth reading when you choose it for a new project'"
+  "skills/print-cad-blender/reference/design-principles.md": "SKILL.md Reference: 'Worth reading when you choose it for a new project'",
+  "skills/print-cad-blender/reference/snaps.md": "SKILL.md Joining: read when a part snaps or hinges in place"
  }
 }
