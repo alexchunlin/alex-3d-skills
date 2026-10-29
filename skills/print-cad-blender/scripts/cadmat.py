@@ -29,6 +29,9 @@ _TABLE = {   # key: (value, source)
                                    "MPa ('25 MPa = PLA tensile across layers'); 30 / SF 2 = 15, R3's interlayer_mpa"),
         "flex_in_mpa": (76, "Bambu PLA Basic TDS: bending strength 76 MPa (X-Y), the figure push-assist PA-R8 used"),
         "yield_strain": (0.033, "Prusament PLA TDS: elongation at yield 3.3 %"),
+        "poisson": (0.35, "assumption: 0.33-0.36 is the range quoted for PLA; no TDS gives it (cadsnap: annular, torsion)"),
+        "mu_self": (0.5, "assumption: no published PLA-on-PLA value at hand; Bayer's snap-fit guide lists 0.5-0.7 for "
+                         "PC on PC and 0.3-0.4 for POM on POM, as recalled (cadsnap mating forces)"),
     },
     "PETG": {
         "density": (1.27e-3, "g/mm3; Prusament PETG TDS: 1.27 g/cm3"),
@@ -38,6 +41,8 @@ _TABLE = {   # key: (value, source)
                                    "value is entered"),
         "flex_in_mpa": (None, "not entered"),
         "yield_strain": (0.049, "Prusament PETG TDS: elongation at yield 4.9 %"),
+        "poisson": (0.38, "assumption: about 0.38 is quoted for PET/PETG; no TDS gives it"),
+        "mu_self": (0.5, "assumption, as PLA's (no value at hand)"),
     },
 }
 MATERIALS = {m: {k: v for k, (v, _) in t.items()} for m, t in _TABLE.items()}
