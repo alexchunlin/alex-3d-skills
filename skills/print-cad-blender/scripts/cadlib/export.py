@@ -13,22 +13,26 @@ settings go there as text ("alex-3d-skills cadlib PETG walls=3 infill=40%"), whi
 import bpy, os, struct, zipfile
 from xml.sax.saxutils import quoteattr, escape
 from mathutils import Vector, Matrix
-from . import asm
+from . import asm, features
 import cadmat
 
 CAD_NS = "https://github.com/alexchunlin/alex-3d-skills/print-settings"
 
 
-def print_tris(ob):
+def print_tris(ob, others=()):
+    """The part's triangles in print orientation, centred in XY on the bed. With others, theirs too, in the same frame
+    (ob's print_rot, one offset): a print-in-place pair printed as one job at their assembled positions."""
     R = Matrix(ob["print_rot"]) if "print_rot" in ob.keys() else Matrix.Identity(3)
-    me = ob.data
-    me.calc_loop_triangles()
-    Mw = ob.matrix_world
-    vs = [R @ (Mw @ v.co) for v in me.vertices]
-    xs, ys, zs = [v.x for v in vs], [v.y for v in vs], [v.z for v in vs]
+    tris = []
+    for o in (ob,) + tuple(others):
+        me = o.data
+        me.calc_loop_triangles()
+        Mw = o.matrix_world
+        vs = [R @ (Mw @ v.co) for v in me.vertices]
+        tris += [(vs[t.vertices[0]], vs[t.vertices[1]], vs[t.vertices[2]]) for t in me.loop_triangles]
+    xs, ys, zs = [v.x for t in tris for v in t], [v.y for t in tris for v in t], [v.z for t in tris for v in t]
     off = Vector((-(min(xs) + max(xs)) / 2, -(min(ys) + max(ys)) / 2, -min(zs)))
-    vs = [v + off for v in vs]
-    return [(vs[t.vertices[0]], vs[t.vertices[1]], vs[t.vertices[2]]) for t in me.loop_triangles]
+    return [tuple(v + off for v in t) for t in tris]
 
 
 def write_stl(path, tris, header=b"alex-3d-skills cadlib"):
@@ -132,6 +136,16 @@ def export_stls(stl_dir, clean=True, threemf=True):
         write_stl(os.path.join(stl_dir, stl + ".stl"), tris, settings_header(st))
         if threemf:
             write_3mf(os.path.join(stl_dir, stl + ".3mf"), stl, tris, st, done[stl])
+    # a print-in-place hinge prints its two parts in one job: pip_<name>.stl / .3mf hold both at their home positions
+    # in the static part's print frame (the per-part files stay, for cadcheck's layer check)
+    for j in features.JOINS:
+        if j["kind"] == "pip_hinge" and all(n in bpy.data.objects for n in j["parts"]):
+            a, b = (bpy.data.objects[n] for n in j["parts"])
+            stl, tris, st = "pip_%s" % j["name"], print_tris(a, (b,)), declared(a)
+            write_stl(os.path.join(stl_dir, stl + ".stl"), tris, settings_header(st))
+            if threemf:
+                write_3mf(os.path.join(stl_dir, stl + ".3mf"), stl, tris, st)
+            done[stl] = 1
     return done   # stl name -> quantity
 
 

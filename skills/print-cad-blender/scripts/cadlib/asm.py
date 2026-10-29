@@ -9,7 +9,7 @@ Conventions (what cadcheck and the web viewer rely on):
   bed-fit/overhang checks both use print_rot, so they cannot disagree. Its print settings (material, walls, infill,
   layer_h, shells, line_w; cadmat) go to the manifest, the 3MF and the STL header, and cadcheck calcs read them.
 - Fasteners carry fst_head / fst_dir / fst_len (local), so checks know which end is the head.
-- write_manifest() dumps parts, joints, fasteners, cables, features and parameters as JSON, so a
+- write_manifest() dumps parts, joints, fasteners, cables, features, joins (snaps, printed hinges) and parameters as JSON, so a
   reviewer doesn't have to reverse-engineer the script (attempt 1: 7 calls reading code, A1-T8).
 """
 import bpy, bmesh, json, math, os
@@ -49,6 +49,7 @@ def new_scene(params=None):
     for d in (PARTS, JOINTS, MATS, COLLS, PARAMS):
         d.clear()
     features.LOG.clear()
+    features.JOINS.clear()
     if params:
         PARAMS.update({k: v for k, v in params.items() if isinstance(v, (int, float, str, bool, list, tuple, dict))})
         # in the .blend too, so cadcheck can evaluate "=EXPR" rows on a copied blend without its manifest
@@ -330,8 +331,12 @@ def manifest():
         parts[name] = {**{k: v for k, v in info.items() if k not in ("path",)}, "bbox_world_home": [lo, hi]}
         if info.get("kind") == "PRT":
             parts[name]["print"] = cadmat.print_settings(info)
+    fs = features.fastener_summary(PARTS)
+    snaps = sum(1 for j in features.JOINS if j["kind"] != "pip_hinge")
+    pip = len(features.JOINS) - snaps
     return {"units": "mm", "params": PARAMS, "joints": js, "parts": parts, "features": features.LOG,
-            "fastener_summary": features.fastener_summary(PARTS)}
+            "fastener_summary": fs, "joins": features.JOINS,
+            "join_summary": {"screws": fs["screws"], "snaps": snaps, "print_in_place": pip, "joins": fs["screws"] + snaps + pip}}
 
 
 def write_manifest(path):
@@ -343,6 +348,9 @@ def write_manifest(path):
     if fs["screws"]:   # screw variety in the build log: fewer spec x length kinds is fewer bags to buy
         print("FASTENERS %d screws, %d distinct spec x length: %s" % (
             fs["screws"], fs["distinct"], ", ".join("%s (%d)" % kv for kv in fs["by_spec_length"].items())))
+    js = m["join_summary"]
+    if js["snaps"] or js["print_in_place"]:
+        print("JOINS %d: %d screws, %d snaps, %d print-in-place" % (js["joins"], js["screws"], js["snaps"], js["print_in_place"]))
     return path
 
 
