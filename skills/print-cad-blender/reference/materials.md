@@ -23,6 +23,8 @@ beam that lies in the layer plane. "across" means stress that pulls layers apart
 | `E_mpa` | 2200 | 1500 | Prusament PLA / PETG TDS, tensile modulus (Bambu PLA Basic gives about 2750) |
 | `yield_strain` | 0.033 | 0.049 | Prusament PLA / PETG TDS, elongation at yield |
 | `density` (g/mm³) | 1.24e-3 | 1.27e-3 | Prusament TDS. PLA's value is the same as cadcheck's `pla_density` |
+| `poisson` | 0.35 | 0.38 | **Assumption**, the commonly quoted ranges; no TDS gives it. Annular and torsion snaps ([snaps.md](snaps.md)) |
+| `mu_self` | 0.5 | 0.5 | **Assumption**, friction against the same material. No PLA value was at hand; Bayer's snap-fit guide lists 0.5-0.7 for PC on PC (as recalled). Snap mating forces |
 
 **Check the numbers before you trust them.** They were entered without network access, from the documents named here
 as recalled. Check each one against the current TDS before you rely on its last digit. `cadmat.SOURCES` holds the same
