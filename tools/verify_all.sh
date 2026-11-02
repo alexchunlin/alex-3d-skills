@@ -130,9 +130,10 @@ if [ -f "$A2" ]; then
   python3 -I -c "
 import json,sys; d=json.load(open(sys.argv[1]))
 f=d['summary']['fail_list']; drop=[x for x in d['checks']['drop']['findings'] if x['status']=='fail']
-bad=[x for x in f if not any(k in x for k in ('FST_fw_bolt','FST_adapter','feeder_one_candy'))]
-sys.exit(1 if (bad or drop or d['summary']['fails']!=15) else 0)" "$V/a2/cadcheck.json" \
-    && ok "A2: exactly the 15 R2-confirmed fails, slide tracer feeds 29/29 at every tilt" || bad "A2: unexpected fails or feed result"
+cap=[x for x in f if x.startswith('clearance: PRT_feeder_disc to FST_cap_R-1 only 0.40 mm across a joint')]
+bad=[x for x in f if x not in cap and not any(k in x for k in ('FST_fw_bolt','FST_adapter','feeder_one_candy'))]
+sys.exit(1 if (bad or drop or len(cap)!=1 or d['summary']['fails']!=16) else 0)" "$V/a2/cadcheck.json" \
+    && ok "A2: exactly the 15 R2-confirmed fails plus the disc-to-cap-screw gap (0.40 mm at every feeder angle), slide tracer feeds 29/29 at every tilt" || bad "A2: unexpected fails or feed result"
 fi
 fi  #@ end 4a
 if want 4c; then  #@ watch: @core examples/mm-launcher-a3/**
@@ -153,8 +154,9 @@ if [ -f "$A3" ]; then
   python3 -I -c "
 import json,sys; d=json.load(open(sys.argv[1])); s=d['summary']
 nip=[x for x in s['fail_list'] + [w for w in s['warn_list'] if w.startswith('fasteners')] if 'nip_stud' in x or 'nip_nut' in x]
-sys.exit(1 if (s['fails'] != 2 or nip or d['checks']['index']['findings']) else 0)" "$V/a3/cadcheck.json" \
-    && ok "A3: exactly the 2 R3-confirmed fails, no nip-mechanism findings, feeder index 1 candy per fire" || bad "A3: unexpected fails"
+cap=[x for x in s['fail_list'] if x.startswith('clearance: PRT_feeder_disc to FST_cap_R-1 only 0.40 mm across a joint')]
+sys.exit(1 if (s['fails'] != 3 or len(cap) != 1 or nip or d['checks']['index']['findings']) else 0)" "$V/a3/cadcheck.json" \
+    && ok "A3: exactly the 2 R3-confirmed fails plus the disc-to-cap-screw gap (0.40 mm), no nip-mechanism findings, feeder index 1 candy per fire" || bad "A3: unexpected fails"
 fi
 fi  #@ end 4c
 if want 4d; then  #@ watch: @core examples/mm-launcher-v2a1/**
@@ -407,7 +409,7 @@ print(len(w)); sys.exit(0 if ok else 1)" "$V/v2a7/cadcheck.json" \
   $CAD check "$V/v2a7/model.blend" "$V27/checks.json" "$V/v2a7/held.json" --only fasteners,assembly --overlay "$V27/overlay_v2a7_steps.json" --overlay-only >/dev/null
   python3 -I -c "
 import json,sys; w=json.load(open(sys.argv[1]))['summary']['warn_list']; h=json.load(open(sys.argv[2]))['assembly']['held_poses']
-ok = len(w) == 2 and w[0].startswith('insertion: BUY_bus_junction') and '+Z PRT_nip_cover at 67.59' in w[0] and w[1].startswith('insertion: BUY_mm_fill') \
+ok = len(w) == 2 and w[0].startswith('insertion: BUY_bus_junction') and '+Z PRT_nip_cover at 67.08' in w[0] and w[1].startswith('insertion: BUY_mm_fill') \
   and len(h) == 1 and h[0]['why'] == \"the step's pose; FST_gcap_5 is reachable only at tilt=45\" and h[0]['drive_step'].startswith('8 ')
 sys.exit(0 if ok else 1)" "$V/v2a7/ins.json" "$V/v2a7/held.json" \
     && ok "V2A7 with step facts: insertion leaves the in-place splice and the M&M fill; one held-pose row (step pose + FST_gcap_5)" || bad "V2A7 step facts"

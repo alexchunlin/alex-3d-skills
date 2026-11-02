@@ -8,7 +8,7 @@ BUILD_DIR: snap_fits_build.py's output (its manifest.json feeds the bench fixtur
 import json, math, os, sys, tempfile
 ROOT = sys.argv[1]
 sys.path.insert(0, os.path.join(ROOT, "skills", "print-cad-blender", "scripts"))
-sys.path.insert(0, os.path.join(ROOT, "tools", "bench"))
+sys.path.insert(0, os.path.dirname(os.path.join(ROOT, "tools", "bench", "assembly.py")))   # names the file it imports, for verify_select
 import cadsnap as S
 import cadmat as M
 

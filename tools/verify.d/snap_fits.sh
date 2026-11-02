@@ -2,7 +2,7 @@
 # and computed stress on flexures rows with dimensions: push-assist's flexures check trusted a typed 7.6 MPa that a
 # reviewer's script put at 9-22 (PA-A3-T22); A3-F2's leaf spring printed standing up; v2 had ~103 screws in 18 types.
 # watch: @core skills/print-cad-blender/scripts/cadsnap.py skills/print-cad-blender/scripts/cadlib/export.py
-# watch: tools/verify.d/snap_fits_build.py tools/verify.d/snap_fits_cases.py tools/bench/assembly.py
+# watch: tools/verify.d/snap_fits_build.py tools/verify.d/snap_fits_cases.py tools/bench/assembly.py tools/bench/fixtures/**
 # Sourced by tools/verify_all.sh (uses $ROOT $V $BL, calls ok/bad). About 15 s: plain python3 cases, one build, one
 # cad check on it.
 SF="$V/snaps"; mkdir -p "$SF"
