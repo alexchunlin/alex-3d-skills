@@ -18,7 +18,7 @@ tool or a rule closes it. Changes follow the same path.
    "Why not the existing code" section.
 3. **Proves itself.** Add a `tools/verify.d/<name>.sh` script with a `# watch:` header for the paths it reads, plus a
    negative control (a planted bug the check must catch). Run your own scripts and
-   `sh tools/verify_all.sh --changed --dry-run` to see what else your change touches.
+   `sh tools/verify_all.sh --changed origin/next --dry-run` to see what else your change touches.
 4. **Doesn't regress the bench.** If you claim a check now catches a labelled issue, tighten its locator in
    `tools/bench/labels.json` and show `python3 -I tools/bench/replay.py compare BASE NEW`: recall up, false fails and
    noise warns not up.
