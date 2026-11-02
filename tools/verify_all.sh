@@ -17,7 +17,7 @@ HW="${HW:-$HOME/code-stuff/mmlauncher/mm-launcher/mm-launch-hw}"
 #@ group @core = skills/print-cad-blender/scripts/cad skills/print-cad-blender/scripts/cadcheck.py skills/print-cad-blender/scripts/cadcfg.py skills/print-cad-blender/scripts/cadmat.py skills/print-cad-blender/scripts/cadsnap.py skills/print-cad-blender/scripts/cadq.py skills/print-cad-blender/scripts/cadlib/**
 #@ group @layer = skills/print-cad-blender/scripts/printcheck.py
 # none: docs (but a watch wins: design_principles.sh reads FINDINGS.md, 4f a BOM .md), and tools no test here runs
-#@ none: docs/** **/*.md !skills/*/scripts/** skills/cad-design-review/** tools/verify.d/README .gitignore tools/revision_watcher.py
+#@ none: docs/** **/*.md LICENSE !skills/*/scripts/** skills/cad-design-review/** tools/verify.d/README .gitignore tools/revision_watcher.py
 #@ none: tools/prior_art/blend_compare.py tools/prior_art/dfam_compare.py tools/prior_art/fastener_joint_*.py tools/prior_art/mech_*.py
 #@ none: tools/prior_art/nm_model_vertices.py tools/prior_art/overhang_regions.py tools/prior_art/print3d_toolbox_compare.py
 #@ none: tools/prior_art/ramp_stl.py tools/prior_art/stl_edges_compare.py tools/prior_art/sweep_compare.py tools/prior_art/tri_dist.py tools/prior_art/trimesh_compare.py
