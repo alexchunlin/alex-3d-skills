@@ -13,7 +13,7 @@
   "  confirmed_by: 'print YYYY-MM-DD' when a real print confirmed it; print_evidence: [{date: YYYY-MM-DD, by: who printed and looked,",
   "  printed: what was printed (parts, settings, supports), result: fail | pass | partial, observed: what was seen, action: what it",
   "  needs (optional), photo: path (optional)}]. Add an entry per print, on any finding or label.",
-  "known_true_positives: planted overlay rows and exploratory review rows: real fails that credit nothing and are not false fails.",
+  "known_true_positives: planted overlay rows, exploratory review rows, and real tool findings on a designer config that no reviewer raised (measured, with the evidence in why): real fails that credit nothing and are not false fails.",
   "locators (every list): any of {check, objects, kind, region?, partial?}. A report line 'check: message' (cadcheck fail/warn",
   "  lists, 'printcheck: <stl>: ...', 'bom: BAD ...') matches when it starts with check, names every object (whole token; * ? [..]",
   "  glob over a family; a named row or test when the line names no object), and matches the kind regex (the defect, never a",
@@ -2051,6 +2051,28 @@
    "kind": "slide-out blocked by",
    "why": "V2R7's exploratory exit rows for the groove cap at tilt 45 / 0: the blocked directions are facts its review used (FINDINGS: back-up hits the nip cover at 54), not defects on their own; forward-up is clear",
    "source": "tools/verify_all.sh 4k; docs/FINDINGS.md:1690"
+  },
+  {
+   "attempt": "a2",
+   "check": "clearance",
+   "objects": [
+    "PRT_feeder_disc",
+    "FST_cap_R-1"
+   ],
+   "kind": "across a joint",
+   "why": "a real 0.40 mm gap under the 0.50 running minimum that no reviewer raised: cad q sweep reads 0.40 at every feeder angle over the joint's range (0..60); the screw-head top at z 258.0 under the disc at 258.4. Before b6a0192 (PR #22) cadcheck reported it as a warn 'just past the limit (feeder=62.5)'; it is the same gap in range. The screw collided in A1 (A1-F3)",
+   "source": "tools/verify_all.sh 4a, 4c"
+  },
+  {
+   "attempt": "a3",
+   "check": "clearance",
+   "objects": [
+    "PRT_feeder_disc",
+    "FST_cap_R-1"
+   ],
+   "kind": "across a joint",
+   "why": "a real 0.40 mm gap under the 0.50 running minimum that no reviewer raised: cad q sweep reads 0.40 at every feeder angle over the joint's range (-30..30); the screw-head top at z 258.0 under the disc at 258.4. Before b6a0192 (PR #22) cadcheck reported it as a warn 'just past the limit (feeder=32.5)'; it is the same gap in range. The screw collided in A1 (A1-F3)",
+   "source": "tools/verify_all.sh 4a, 4c"
   }
  ]
 }
