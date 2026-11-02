@@ -1,4 +1,5 @@
 # features.fastener_joint (sourced by tools/verify_all.sh; uses $ROOT $CAD $V, calls ok/bad). Writes under $V/fj.
+# watch: @core tools/verify.d/fastener_joint_build.py tools/verify.d/fastener_joint_review.py
 # Builds the same 4-joint test assembly at M3 and at M4 (nut trap, self-tap, insert, tapped purchased part), then:
 # lengths picked from the stock list by the rule, hole diameters measured in the cut parts, cadcheck 0 fails with
 # the bolt through its nut, and the four mistakes it must refuse (FINDINGS A1-F10, A2-F3, A3-F5).

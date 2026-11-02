@@ -1,0 +1,1228 @@
+PUSH-ASSIST REVIEW LOOP: RECON LOG
+==================================
+Observation only. Nothing in skills/ or tools/ gets changed from this file while the loop is running.
+Candidate changes are listed at the bottom of each attempt; harvest them into FINDINGS.md after the loop ends.
+
+Loop: 8 attempts max, stop at 9+ on Functionality / Manufacturability / Aesthetics.
+Started 2026-10-26 22:02 EDT from /loop in the space-bar-push-assist session.
+
+Sources
+  PROJ = ~/code-stuff/space-bar-push-assist
+  SESS = ~/.claude/projects/-Users-alxchunlin-code-stuff-space-bar-push-assist/beb7cf69-3aa8-486b-8098-1801e05fe0d3
+  main loop transcript   SESS.jsonl  (designer work happens inline in the main session, not in a subagent)
+  reviewer transcripts   SESS/subagents/agent-<id>.jsonl
+  review outputs         PROJ/cad/review/a<N>/
+  loop's own score log   PROJ/cad/review/attempts.md (the loop prompt asks for it; not written yet as of 22:35)
+  digest tool            python3 -I tools/transcript/cc_transcript.py {summary,timeline,show,bash} <transcript>
+
+Reviewer ids
+  PA-R1  agent-ad9fb7f4623b031a1  "Independent review, attempt 1"  start 22:14:47, foreground
+
+Times below are elapsed from the reviewer's first message (cc_transcript timeline).
+
+
+ATTEMPT 1
+---------
+Designer side (main session, 22:02-22:14)
+  - Loop prompt seeded two known defects from Alex: the D50 barrel collar bulges 7 mm past both fin faces into the
+    tray end wall, and the standing fin print needs supports.
+  - Designer wrote cad/blender/to_cadcheck.py (converter to a checkable blend: 88 objects, 44 screws) plus
+    checks.json and manifest.json, then ran cad check with
+    --only parts,interference,fasteners,service,slide,distances,assembly,insertion,stacks,flexures,cables
+    (stability skipped: the unit is bolted to a chair). Report: cad/review/cadcheck_a1.json.
+
+Reviewer PA-R1 (snapshot at 10.0 min, while it was still running; final below)
+  cost so far: wall 9.9 min = model 6.5 + tools 3.4; 43 API calls; out 34k tok (22k thinking); peak ctx 150k;
+               12 images read, 0 re-reads; 6 renders saved; 0 bash failures by the tool's count (see PA-A1-T2)
+
+  Sequence
+    0:00-0:00:16  read skill/checklist/rubric, README, copied blend to /tmp, read checks.json, cad wrapper
+    0:00:19       full cad check on the copy, run in background
+    0:00:23-0:38  read 9 renders up front (before any measurement)
+    0:01:02       printcheck on stl_cc (49 s)
+    0:02:19-0:02:27  P dict + grep of build_concept.py
+    0:02:37-0:04:25  4 batches of cad q ray probes (bolt axes, bosses, standoffs, RJ45 pad, outboard holes)
+    0:03:39       2 sections (x=125 tray, x=177 head), read once each
+    0:05:15       printcheck of the standing-fin STLs (Alex's support complaint), 40 s
+    0:06:56       1 close-up render of the left fin outboard face
+    0:07:14-0:07:26  5 calls hunting the interference tolerance and the distances-row schema
+    0:07:44       wrote review_rows.json, ran --overlay (8 fail)
+    0:08:18       re-ran with the cover slide re-aimed along the plate face (7 fail, 1 warn)
+    0:08:44-0:09:51  BOM check, HANDOFF.md, tray/fin contact with the chair plate, 4040 slot depth on bolt axis
+
+  Design findings PA-R1 has measured so far (from cadcheck_review.json and cad q lines; not its final review)
+    - Overload stop does not work: piston rear face to bore step is 0.50 mm along the ray, both sides; the row
+      wants <= 0.15 mm (20 kg cell, ~150 % FS). slide_out row agrees: piston stops at 0.55 mm.
+    - Sliding sleeve running clearance ~0: piston to fin inboard 0.007-0.01 mm, to fin outboard 0.00 mm (nearest),
+      both sides; row wants >= 0.2 mm.
+    - Cover R: straight-up removal blocked by the Corpus plate at 2 mm. Removal along the plate face works but
+      with 0.00 mm to PRT_tray_R (warn).
+    - Service rows pass: M4 fin-to-tray screws reach 10-15.5 mm (R2 needs an L-key; straight path blocked by
+      the ESP32 at 158 mm), M5 mount bolts 8 mm straight.
+    - Load cell to fin inboard 0.027 mm; lead to fin 0.67 mm, lead to tray 1.22 mm.
+    - Grip to fin outboard 12 mm.
+
+  Process observations (skill adherence and tool friction)
+    PA-A1-T1  No notes.md. SKILL.md step 0 says to append every measurement to <review_dir>/notes.md;
+              cad/review/a1/ has none at 10 min. A restart would redo everything (the A3-T4 failure).
+    PA-A1-T2  Silent probe failure. #30 looped `for p in "...": set -- $p` under zsh, which does not word-split
+              $p, so all 6 cad q ray calls got "could not convert string to float" and printed usage. Exit
+              status was 0, so cc_transcript's "bash failures 0" misses it. Cost one extra round trip (#35).
+    PA-A1-T3  Schema hunt. 5 calls (0:07:14-0:07:26) grepping cadcheck.py and reference/ for the interference
+              overlap tolerance and the distances-row format before writing review_rows.json. The answer was in
+              reference/checks-config.md, which SKILL.md does not point to.
+    PA-A1-T4  All 9 renders read at 0:00:23-0:00:38, before any check result was in. Matches the "look once"
+              budget, but the looks were not driven by a measured lead.
+    PA-A1-T5  Rows, not probes: mostly followed. The overload stop and sleeve clearance became distances and
+              slide_out rows (the designer can adopt them). Mount/boss/standoff geometry stayed as ~20 ad-hoc
+              cad q ray probes in 5 batches.
+    PA-A1-T6  The reviewer corrected its own row: the first cover slide direction (straight up) hit the plate,
+              and it re-aimed along the plate face rather than reporting a false blocker. Good.
+    PA-A1-T7  Wording, not a bug: slide fail text "stopped by [inboard, outboard] ... wanted [outboard, inboard]"
+              reads like an order mismatch. cadcheck.py:1897 matches any-of, so the fail is from at_mm only.
+
+  Candidate changes (do not apply during the loop)
+    - SKILL.md step 2: point at reference/checks-config.md for row schemas (PA-A1-T3).
+    - cc_transcript bash --errors: also flag outputs containing "usage" / "could not convert" (PA-A1-T2).
+    - Reviewer prompt or SKILL.md: say "bash -c" or one cad q per line, no `set -- $p` loops under zsh (PA-A1-T2).
+    - Ask why notes.md was skipped once the final review is in (PA-A1-T1).
+
+  Scores: see "PA-R1 final" below.
+
+PA-R1 final (review.md written 22:27:56, done at 13.6 min)
+  Scores   F 5 (blocker in core function) / M 5 (two blockers) / A 7
+  cost     wall 13.6 min = model 10.1 + tools 3.5; 49 API calls; out 54k tok (32k thinking); peak ctx 174k;
+           12 images, 6 renders (budget 12); 2 sections; 0 Blender failures
+  files    cad/review/a1/{review.md, review.json, notes.md, review_rows.json, cadcheck.json, cadcheck_review.json,
+           printcheck*.json, sec_x125_tray.png, sec_x177_head.png, r_left_fin_outboard.png}
+
+  Ranked issues (as the reviewer wrote them)
+    1 Blocker F,M  Every internal tray boss is cut away: build_tray_half adds bosses to src, then subtracts the bay
+                   cavity. M5 mount heads stand 6 mm off a 3 mm wall, M4 fin bolts on a 3 mm end wall, 10 cover
+                   screws grip nothing, 8 board screws get 1-2 mm of thread, no standoffs, no RJ45 pad.
+    2 Blocker F    Mount lever 20 mm against a ~230 mm handle; front face leaves the plate (27 mm gap at fin bottom).
+                   150 N on one grip -> ~1.7 kN in two M5s through 3 mm PLA. Hand calc.
+    3 Major F      No overload stop: 0.50 mm in push (needs <= 0.15), none in pull.
+    4 Major F      Sleeve friction 0.46-1.4x vertical load (45 mm sleeve, 80 mm overhang); key-rib fillet rubs the
+                   slot edge along 41 mm (-0.496 mm3).
+    5 Major M      README hardware/steps disagree with the model on every fastener and with lab stock (M8, DIN 7991).
+    6 Major F,M    Grip spigot printed standing: 13 MPa at 150 N, 26 MPa at 300 N vs 15 MPa interlayer. Hand calc.
+    7 Major M      Rear M5 nut needs 180 mm reach down a D16 bore; README gives ~175.
+    8 Minor M      Cover lifts off only along the plate face (0.00 mm to the tray); ~22 fastener ops to service a cell.
+    9 Minor F      No cable lead lengths declared; patch cable kinks at R2.8 for OD 5.
+   10 Minor A      No radius family (R0.5-R12, edge_r=4 used once); irregular cover screw pattern.
+   11 Minor proc   Renders 02-08 are stale (Oct 23); FST_Board_screw_6/7 host label wrong; 65 warns untriaged.
+
+  Process observations (final)
+    PA-A1-T1 (revised)  notes.md exists, but it was written in one Write at 0:12:18, 50 s before review.md, not
+              appended as measurements were made. A restart before 0:12 would still have lost everything. The
+              skill's "append as you go" isn't happening; the reviewer treats notes.md as a deliverable.
+    PA-A1-T8  The top blocker lived in the designer's report as warns. 65 untriaged warns, including "head stands
+              6.0 mm off the part" and "no material grips the thread" on 10 cover screws. The designer ran
+              cad check and didn't act on them; the reviewer escalated them to a blocker. Same pattern as v2 A1
+              (3 of R1's 12 issues were designer warns). Candidate: max_standoff / no-grip as fail by default, or
+              a loop rule that untriaged warns block the review hand-off.
+    PA-A1-T9  vol_tol hid a real rub. Piston vs fin outboard overlaps -0.496 mm3 along the whole 41 mm sleeve;
+              vol_tol is 0.5 mm3, so interference is silent. Only the reviewer's distances row caught it.
+              Candidate: a per-length or contact-area criterion, or flag overlaps that are long but thin.
+    PA-A1-T10 Three findings are hand calcs with no check row behind them: the mount moment (issue 2, the
+              reviewer says "cadcheck has no such row"), spigot interlayer stress (6), rear-nut socket reach (7).
+              Not reproducible by the designer with cad check. Candidates: a mount/bolt-load row; flexures rows
+              that know print orientation; fastener reach for nuts down a bore.
+    PA-A1-T11 BOM not checked: cad bom couldn't parse the README hardware table, so the README-vs-model
+              mismatch (issue 5) was found by hand.
+    PA-A1-T12 `cad slice --detect`: Bambu Studio CLI segfaults, so no slicer time/grams; used cadcheck est_h/est_g.
+    PA-A1-T13 Alex's two seeded defects (collar bulge into the tray wall, standing fin needs supports) weren't
+              listed under "Previous issues" ("None, attempt 1"). Standing-fin printcheck PASS covers the second;
+              the collar is only covered implicitly by interference passing. The loop prompt to the reviewer
+              didn't pass them as previous issues.
+    PA-A1-T14 Aesthetics arithmetic: the rubric gives -1 per failed item from 10; the review names two failed
+              items (radius family, screw pattern/empty holes) and scores 7, saying "rounded down". Either a third
+              item is implied or the rubric's arithmetic is ambiguous. Watch whether later rounds repeat it.
+    PA-A1-T15 Stale renders spotted by file date (Oct 23 vs Oct 26 build). Good catch; the designer handed over
+              renders it hadn't regenerated, and the reviewer had been told to ignore only two of them.
+    PA-A1-T16 review.json keeps scores as top-level keys (functionality/manufacturability/aesthetics), not under
+              "scores". Note it for whoever parses these across rounds.
+
+  Candidate changes (adds to the list above; do not apply during the loop)
+    - cadcheck: escalate fasteners "head stands off" and "no material grips" to fail (PA-A1-T8).
+    - cadcheck interference: catch long thin overlaps under vol_tol (PA-A1-T9).
+    - New rows for mount moment / bolt pull-out and orientation-aware interlayer stress (PA-A1-T10).
+    - Loop prompt: pass the user's seeded defects to reviewer 1 as "previous issues" (PA-A1-T13).
+    - SKILL.md step 0: say why notes go in as you go (the restart case), since writing them at the end
+      defeats it (PA-A1-T1).
+
+  Loop's attempts.md row for A1 (written 22:29:45)
+    1 | F 5 | M 5 | A 7 | cad check "0 fail, 65 warn" | printcheck 10 parts, 0 fail, 12 warn
+    PA-A1-T17 The designer's change log closes PA-A1-T13's gap: the collar bulge was fixed by making the fin 50
+              thick so the D50 barrel is flush, and fins now print flat. So the reviewer got a fixed design
+              without being told what was fixed, and verified it only implicitly.
+    PA-A1-T18 The designer copied issues 1-10 into attempts.md and dropped issue 11 (stale renders, 65 untriaged
+              warns). Those are the process issues behind PA-A1-T8 and T15. Watch whether A2 still hands over
+              untriaged warns and stale renders.
+
+
+ATTEMPT 2
+---------
+Reviewer ids
+  PA-R2  agent-a134c4732d01b3fa9  "Independent review, attempt 2"  started ~22:49, background (A1's ran foreground)
+
+Designer side (main session, 22:30-22:49; attempts.md calls it "designed by the coordinator")
+  Fixes claimed for A1: bosses survive the cavity cut (sdf_part hollow=), 45 deg boss undersides; second M5 row
+  through feet down to the plate (6 M5 total); M4 x 40 overload pin through a piston cross slot (+-0.3 mm, push and
+  pull), key rib removed; rear M5 nut captive in the piston; sleeve 45 -> 60 mm; teardrop bores for the flat fin
+  print; piston printed on its side with a 1.2 mm flat; cover 3 mm back from the plate line, 2x2 cover screws per
+  half; BOM generated from the manifest (gen_bom.py, cad bom PASS); README rewritten; plates re-split.
+  Designer's numbers: cad check 0 fail, 35 warn (from 65). printcheck 10 parts, 0 fail, 0 warn; "pistons need support".
+
+  PA-A2-T1  The A1 hand-off gaps were closed in the prompt this time: the reviewer is told to verify each A1
+            issue, gets a1/review_rows.json, is told renders 01-08 and step1-4 are current, and must write
+            notes.md. The designer also caught its own stale-render default before hand-off (02:45 "final render
+            pass was skipped by mistake (a script default)"). Fixes PA-A1-T13/T15/T18 at the loop level, not in
+            the skill.
+  PA-A2-T2  New prompt text: "Known tool bug (from the user): the layer-by-layer printcheck does not always catch
+            overhangs ... check overhang_gt_45_mm2 per part in the cadcheck parts rows". I couldn't find this as a
+            user line in the main transcript, so it may have come in as queued input or be the coordinator's
+            paraphrase. Either way it's a printcheck reliability claim to verify after the loop (does printcheck
+            miss overhangs that cadcheck's overhang_gt_45_mm2 sees?).
+  PA-A2-T3  Trade-off to watch: the spigot-strength fix (piston on its side) brings supports back under the
+            spigot. A1 praised "no supports anywhere". The rubric only makes supports a blocker if the brief
+            forbids them; this brief doesn't, so it should cost manufacturability points as a major at most.
+  PA-A2-T4  The overload stop is +-0.3 mm. PA-R1's row wants <= 0.15 mm (20 kg cell, ~150 % FS). The designer
+            changed the gap but not to the reviewer's number; see whether PA-R2 reruns a1/review_rows.json and
+            calls it PARTIAL.
+  PA-A2-T5  35 warns remain; whether the designer triaged them (accepted_warns) is the PA-A1-T8 question.
+
+  Scores: pending
+
+Reviewer PA-R2 (snapshot at ~7 min, 22:56)
+  PA-A2-T6  notes.md is being written early this time (first write 22:53, 4 min in), which is the step-0
+            behaviour PA-R1 skipped. Possibly because the loop prompt now names notes.md explicitly (PA-A2-T1).
+  PA-A2-T7  The reviewer wrote two numpy STL scripts in a2/scripts/ (overhang_map.py, piston_body_overhang.py)
+            to map >45 deg downward facets per part. This is the "printcheck misses overhangs" prompt line
+            (PA-A2-T2) driving it to build its own overhang tool rather than use cadcheck's overhang_gt_45_mm2 or
+            cad q printcheck. It's a tool gap signal: no existing command shows WHERE the overhangs are in print
+            orientation as numbers. Compare its output with printcheck once the review is in.
+  PA-A2-T8  The blend copy (45 MB) is in cad/review/a2/check_copy.blend, not /tmp. It's untracked in the project
+            repo; worth a .gitignore line or a skill note so review dirs don't pick up 45 MB blends.
+
+PA-R2 final (review.md 23:05:22, review.json 23:05:57; 15.9 min)
+  Scores   F 5 (blocker in core function) / M 6 (significant rework risk at assembly) / A 6 (capped: unfinished
+           element in a hero view)
+  Trend    A1 5/5/7 -> A2 5/6/6
+  cost     wall 15.9 min = model 14.1 + tools 1.9; 46 API calls; out 79k tok (55k thinking); peak ctx 189k;
+           9 images, 2 renders, 1 section; 1 bash failure (#15, a cat of an output not yet written)
+
+  Previous issues: 4 FIXED (mount lever 20 -> 75 mm, spigot print orientation, rear nut reach, cover lift),
+  5 PARTIAL, 2 NOT FIXED (overload stop "in effect", cable lengths).
+
+  Ranked issues (as the reviewer wrote them)
+    1 Blocker F    Overload stop has nothing to push against. The teardrop sleeve bore (added for the flat fin
+                   print) removed the fin material beside the stop pin: piston hits the pin at 0.40 mm, then the
+                   pin moves 0.75 mm before any fin contact, so the stop acts at ~1.15 mm (cell FS ~0.1-0.2). Stop
+                   nut overlaps the sliding piston by 1.5 mm3. Fix: truncate the teardrop at 19 mm, real hex pocket.
+    2 Major F      Sleeve friction 0.37-1.1x the vertical hand load (60 mm sleeve, 79.5 mm overhang). Suggests a
+                   parallel-leaf flexure guide (2 x 1.2 mm PLA leaves, ~45 N/mm) instead of sliding.
+    3 Major F      Lost motion: piston face 0.20 mm off the cell, rear nut 0.8 mm play in its pocket; stop-gap
+                   stack -0.55 to +1.15 mm.
+    4 Major M      Stop nut falls into the bore at README step 5 (no pocket).
+    5 Major M      Hex socket caps vs lab's "hex head" stock; M4 counterbores D8.0 < M4 hex head 8.08 a/c.
+    6 Major A      Teardrop tips show as open wedge notches beside each piston on the lip face (hero close-up),
+                   1.24-1.34 mm skin over 60 mm.
+    7-13 minor     piston supports (D-flat would remove them), short thread engagements (ESP32 2.5/6), L-key-only
+                   screws, two pods with no fastener across x=0, cable lengths/patch kink, radius family, README errors.
+
+  Process observations
+    PA-A2-T9  Fix-induced regression. The A1 response "teardrop bores for the flat fin print" (a printability
+              fix) is the root of A2's blocker (stop has no wall) and A2's aesthetics cap (notches on the lip).
+              Aesthetics went down 7 -> 6. Nothing in the designer's checks would have caught it, because the
+              overload-stop rows from a1/review_rows.json were never adopted.
+    PA-A2-T10 a1/review_rows.json was not adopted. SKILL.md says "the designer can then adopt review_rows.json as
+              is", and the loop prompt doesn't make it. The designer moved the stop to +-0.3 mm without ever
+              running the <= 0.15 row PA-R1 wrote. Strongest loop-level lever so far: carry every reviewer row
+              forward into checks.json (or always --overlay the previous a<N>/review_rows.json).
+    PA-A2-T11 Hollow coverage claim. The designer's --only lists service, slide, distances, stacks and flexures,
+              but checks.json has no rows for any of them, so 5 of 11 named checks checked nothing and the run
+              still says PASS. Tool candidate: cad check should put "<check>: no rows in config" into not_checked
+              (or warn) when a check is named in --only with an empty config block.
+    PA-A2-T12 Confirmed tool gap (reviewer's "interference passed a 1.5 mm3 nut/piston overlap"). cadcheck.py
+              pair_class returns None for FST vs PRT/BUY on the same body ("threads bite into the part they
+              hold"), and the fasteners check covers nuts only inside purchased parts. So a nut overlapping a
+              printed part is checked by nothing. It's worse here because the piston has no prismatic joint, so
+              it is "same body" as the fins and its sliding contacts are never treated as moving. Candidates:
+              check nut-vs-PRT overlap (nuts don't bite), and push the designer to declare the piston joint
+              (both reviewers asked for it).
+    PA-A2-T13 PA-A2-T2 follow-up (printcheck "misses overhangs"): on the piston, printcheck flagged only the
+              2211 mm2 spigot underside; the 821 mm2 >45 deg on the D33 body wasn't flagged. The reviewer's own
+              script says it faces a void and is harmless. So: a partial confirmation that printcheck and
+              cadcheck's overhang_gt_45_mm2 disagree, not yet a case where it mattered.
+    PA-A2-T14 Rows over probes improved: overload stop measured as two slide_out rows (piston -> pin 0.40,
+              pin -> fin 0.75), stop-gap stack proposed as a stacks row. But the "no material beside the pin"
+              proof was a 30 s loop of cad q inside calls over x = 153..202 (#28).
+    PA-A2-T15 notes.md appended throughout (#8 at 0:00:28, #22, #30, #33, #46) — step 0 followed this round.
+              The last append took a 140 s generation (12k thinking tokens) just before review.md.
+    PA-A2-T16 Small race: the reviewer read attempts.md at 22:49:37, four seconds before the coordinator wrote the
+              attempt-2 entry (22:49:41), and then reported "attempts.md has no attempt-2 entry" as a process
+              issue. The coordinator launched the reviewer before finishing its own log.
+    PA-A2-T17 Rubric applied consistently: A capped at 6 by the hero-view notch per the rubric's "unfinished
+              element" rule; F 5 by the core-function blocker; M 6 by the "rework at assembly" anchor.
+
+  Candidate changes (do not apply during the loop)
+    - Loop prompt / SKILL.md: designer adopts or overlays the previous review_rows.json every attempt (PA-A2-T10).
+    - cadcheck: empty config block for a check named in --only -> not_checked, not silent PASS (PA-A2-T11).
+    - cadcheck: nut (FST) vs PRT overlap on the same body is checked (PA-A2-T12).
+    - A command that lists overhang regions per part in print orientation (PA-R2 hand-built it in numpy;
+      PA-A2-T7, T13).
+
+  Loop's attempts.md row for A2 (written 23:06:44)
+    2 | F 5 | M 6 | A 6 | cad check "0 fail, 35 warn" | 10 parts, 0 fail, 0 warn; pistons need support
+    PA-A2-T18 This time the designer kept all 13 issues, including the process one (#13 "checks listed with no
+              rows; warns untriaged"). Its summary of #7 drops the reviewer's "harmless, faces the V-tip" and
+              reads as "printcheck missed 821 mm2 body overhang", which overstates the printcheck gap
+              (PA-A2-T13). If the coordinator relays that to the user as a printcheck bug, it's half true.
+
+
+ATTEMPT 3
+---------
+Agent ids
+  PA-D3  agent-a90cb39836f00bda6  "Designer, attempt 3"  started 23:07, background. First designer subagent:
+         A1 and A2 were designed inline by the coordinator.
+
+Designer prompt (what the coordinator changed after A2)
+  PA-A3-T1  The coordinator has absorbed several PA-A2 lessons on its own, in the prompt rather than the skill:
+            - "adopt cad/review/a2/review_rows.json into checks.json, add distance/stack/slide rows for every
+              motion and gap claim" (PA-A2-T10). Only a2's rows are named; a1's overload/sleeve rows aren't,
+              though a2's rows re-cover the stop.
+            - "triage warns (accepted_warns with reasons, or fix)" (PA-A1-T8, PA-A2-T5).
+            - "Done when: cad check 0 fail with the review rows adopted".
+            - Hex-head ambiguity resolved by sizing counterbores for either (M3 D10, M4 D12, M5 D14) (A2 #5).
+            - Repeats the printcheck-overhang warning and asks the designer to locate overhangs before
+              claiming "no supports".
+            - Asks for an "issues deliberately not fixed" list in attempts.md.
+  PA-A3-T2  Still missing from the prompt: declaring the piston as a prismatic joint (asked for by both reviewers;
+            without it the piston/fin sliding contact is "same body" and interference treats it as solid, see
+            PA-A2-T12). The prompt asks for distance rows instead, which measure but don't sweep.
+  PA-A3-T3  Constraint fence: "Big shape changes must be agreed with Alex in 2D first - flag them instead." The
+            reviewer's top functionality lever (parallel-leaf flexure, A2 #2) may count as one. Watch whether
+            the designer builds it, half-builds it, or flags it, and whether the A3 reviewer penalises a flagged
+            item as NOT FIXED.
+  PA-A3-T4  The coordinator delegated the build to a subagent mid-loop. If it gets interrupted, there's no
+            designer equivalent of notes.md in the prompt.
+
+  Scores: pending
+
+PA-D3 snapshot (23:26, 19 min in)
+  PA-A3-T5  Long silent thinking. After 25 s of reading (12 calls: attempts, a2 review, skill + 3 references,
+            build_concept.py in 3 reads, pipeline scripts, README/BOM), PA-D3 thought for 385 s (34.6k thinking
+            tokens) before one Bash call at 0:06:50. Since then the transcript hasn't been written for 12+ min
+            (last line 23:13:53), and build_concept.py hasn't changed since 22:55. So 19 min in: 0 edits, 0
+            Blender runs, ~2 long generations. This is the D0/D1 pattern from the mm-launcher baseline (long
+            up-front planning in one generation). A flexure redesign (PA-A3-T3) is a plausible reason for the
+            length. Check whether the next call is a giant Write of build_concept.py.
+
+PA-D3 snapshot (23:56, 49 min in, still running)
+  cost so far: 49.1 min = model 43.2 + tools 5.9; 36 API calls; out 250k tok (214k thinking); peak ctx 407k;
+               1 prompt-cache miss re-wrote 167k tokens; 3 Blender runs (coarse build+check, 65-117 s each)
+  PA-A3-T6  31.5 of 49 min was three single generations: 385 s, 949 s and 556 s (174k thinking tokens), each
+            followed by a tiny Bash call. First file edit at 0:35:06. Then 13 edits/builds in 13 min. The
+            design is decided entirely in thinking, with nothing written to disk. If the agent dies mid-think,
+            all of it is lost (PA-A3-T4).
+  PA-A3-T7  It built the flexure (PA-A3-T3 answered): a monolithic printed "cartridge" with piston + spigot,
+            two leaves and a ground bar, printed on its side. It didn't flag it to Alex as a big shape change;
+            it treats it as internal to the barrel. Whether the outer form changed is for the reviewer.
+  PA-A3-T8  Tool-shaped design decision. From its 0:32 thinking: "keep the cartridge as a single static printed
+            part, with motion verified by distance ray rows ... rather than a sweep check", because splitting
+            the moving link out "complicates printcheck with a floating link". So the cadlib model (one printed
+            part = one rigid body) can't express a compliant mechanism, and the designer chose to leave the
+            motion unswept. The checks.json "flexures" block exists; see whether it gets used. Tool candidate: a
+            way to declare a printed part's sub-region as moving on a joint (or a flexure joint) without
+            splitting the STL.
+  PA-A3-T9  #28 and #34 bash failures; it read the load cell STL as ASCII after a binary read failed, then fixed
+            cell height and ray origins from it. The bought-part STL format surprised it.
+
+PA-D3 snapshot (00:26, 79.5 min in, still running: final renders, README, BOM)
+  cost so far: 79.5 min = model 52.1 + tools 27.4; 59 API calls; out 304k (247k thinking); peak ctx 489k;
+               3 bash failures; 6 Blender runs + many cad check runs
+  PA-A3-T10 Bolt placement by trial and error. #50-#53 moved one low M4 fin bolt four times, (120,-50) ->
+            (116,-51) -> (117,-49.5) -> (117.5,-46), each time with a FULL=1 build + convert + cad check of all 11
+            checks (203-207 s each). 13.7 min to place one screw for bit access. The fasteners check says
+            "L-key needed" but not where a straight bit would clear. Cheaper: coarse build + --only fasteners, or
+            `cad q ray` along candidate axes. Tool candidate: an access query that sweeps a hole position or
+            reports the clear cone (where a straight bit fits) for a fastener.
+  PA-A3-T11 /tmp/cc_run.sh (the coordinator's wrapper) always runs the full --only list. There's no fast path
+            for "I moved one screw". 4 of the last 7 runs were full-resolution (214, 148, 206, 207, 203 s).
+  PA-A3-T12 Warn triage is happening (PA-A3-T1 working): #48 writes accepted_warns with physical reasons
+            ("V tongue tip below the stop-pin hole: non-structural ..."). Whether the reviewer agrees with each
+            accept is the new audit surface (SKILL.md step 2 audits allow/fits but doesn't mention accepted_warns).
+  PA-A3-T13 Designer looked at one printcheck render (#46 fin_R_inboard bridge) after mapping overhangs with its
+            own script (#42, like PA-R2 did). Third agent in a row to hand-roll an overhang locator.
+
+PA-D3 done (attempts.md "## Attempt 3" written 00:36)
+  Designer's results: cad check 0 fail, 23 warn, 0 untriaged; printcheck 11 parts 0 fail 8 warn, no supports;
+  cad bom PASS; 1,118 g, 22 h, 3 plates. New rows: 40 distances, 7 slides, 3 service, 4 stacks, 4 flexures,
+  cable_leads; 18-step assembly order.
+  Mechanism: monolithic printed parallel-leaf flexure cartridge (2 x 1.5 x 36 mm leaves, 27 long, 47 apart,
+  ~43 N/mm vs cell ~1.5 kN/mm); stop = M4 pin through the cartridge post and a tongue, gaps 0.25/0.25 by ray rows;
+  piston is a D-bar 1.09 mm off the fin; one cover spans both trays (305.6 mm, H2D only).
+
+  PA-A3-T14 User input mid-loop, verified in the main transcript: 22:55 "make sure the design is using countersink
+            and not counter bore faster shapes - I don't have any countersink fasteners" (reads as the reverse of
+            what Alex meant; the coordinator correctly took it as "no countersinks") and 23:14 "Internal hex!". So
+            "Alex confirmed ISO 4762 socket caps" in attempts.md is grounded. The "printcheck misses overhangs"
+            line (PA-A2-T2) is still not found as a user line.
+  PA-A3-T15 Adopting reviewer rows is brittle across a redesign. Run verbatim, the a2 rows give 3 fails because
+            they describe the a2 mechanism (piston -> pin, pin held by the fin). The designer translated each
+            into an a3 equivalent with a table. That's the right behaviour, but it means "0 fail with the review
+            rows adopted" is satisfied by rewritten rows. The A3 reviewer should check the translation table.
+  PA-A3-T16 Possible slide_out semantics gap, in the designer's words: "Verbatim, the slide test ignores the
+            at-rest facet contact, so the pin slides." I.e. a part touching at rest (0 gap) isn't counted as
+            blocking at step 0. Worth a cadcheck test after the loop: slide_out with expect blocked, at_mm [0, x],
+            and a part in face contact.
+  PA-A3-T17 PA-A3-T8 confirmed as a declared limitation: "No prismatic joint ... the moving top link is part of the
+            same printed part as the fixed ground ... cadcheck cannot sweep part of it." The designer substituted
+            10 ray rows per side + a stacks row (RSS 0.42). Clearest tool gap of the run so far.
+  PA-A3-T18 The designer flagged two things for Alex instead of deciding: 50 kg cells (hardware choice, with the
+            numbers for why it matters) and a 10 mm change to the fin window (outer shape, per the prompt's
+            2D-first fence). Plus an honest "not fixed" list. Good behaviour the prompt asked for.
+  PA-A3-T19 Overhang evidence now per part with a located explanation (cartridge stud-hole crowns, fin teardrop
+            facets at 42-45 deg, tray boss undersides at 44.7-44.9 deg SDF facets). The SDF faceting puts many
+            "45 deg" faces just over the threshold, which inflates overhang_gt_45_mm2 (tray 700-733 mm2 of
+            facets at 44.7-44.9). Tool candidate: a tolerance band or a "near 45" bucket so these don't read as
+            real overhangs.
+  PA-D3 total cost: 89.6 min = model 54.4 + tools 35.2 (Blender 7.9); 68 API calls; out 319k tok (250k
+            thinking); peak ctx 516k; 1 cache miss (167k re-written). For scale: PA-R1 13.6 min, PA-R2 15.9 min.
+
+Reviewer PA-R3  agent-afcccadc60d39dabd  "Independent review, attempt 3"  started 00:37, background
+  PA-A3-T20 Reviewer prompt again carries loop-level fixes for issues I logged:
+            - re-run a2/review_rows.json verbatim and "judge whether the designer's adapted rows really test the
+              same claim" (PA-A3-T15);
+            - "whether cad check actually tests the moving link (the designer says it can't sweep it)" (PA-A3-T17);
+            - flexure scrutiny list: leaf stress, PLA fatigue and creep, stiffness vs cell, print orientation,
+              stop gap tolerance;
+            - hardware rules updated to Alex's "Internal hex!" (PA-A3-T14).
+            Not in the prompt: auditing accepted_warns (PA-A3-T12). SKILL.md step 2 doesn't cover them either, so
+            this is the first round where 23 accepted warns could pass unchallenged. Watch for it.
+
+PA-R3 result (review.json 00:51:22; review.md not yet written at 00:52)
+  Scores   F 7 / M 8 / A 7
+  Trend    A1 5/5/7 -> A2 5/6/6 -> A3 7/8/7. First round with no blocker.
+  cost     14.6 min = model 12.2 + tools 2.4; 50 API calls; out 68k (44k thinking); peak ctx 200k; 7 images,
+           4 renders, 2 sections; 4 bash failures
+  Anchors  F 7: two majors in core sensing, one with no <1 h fix (needs a bench measurement of the cell).
+           M 8: 0 majors, but minors change the BOM or print folder, so not 9.
+
+  Previous issues: 9 FIXED, 4 PARTIAL (stop not sized to the cell; patch slack 0.03 mm; process; ...), 0 NOT FIXED.
+
+  Ranked issues
+    1 Major F   The cell is clamped over its full faces in parallel with the leaves, so it takes ~47 % of the
+                grip's bending moment: 50 N down gives 304 N edge load (1.6x FS), 150 N gives 912 N (4.7x FS).
+                Cross-talk and overload from leaning or a hanging bag. Fix: D8 x 1 seat bosses -> 0.8 % share.
+    2 Major F   Stop gap 0.25 is fixed without knowing the cell's FS deflection: engagement 1.3-5.1x FS nominal,
+                up to 9.6x worst case (stack +-0.225).
+    3 minor F   Sharp leaf roots, Kt 2-2.5: 9-12 MPa at the stop, 18-22 at worst-case gap.
+    4 minor F   PLA creep at the clamp and leaves; HDT ~55 C (parked car). Suggests PETG/ASA cartridge.
+    5 minor M   Stale 3MFs/STLs from earlier attempts sit next to the current plates in cad/print/.
+    6 minor M   D15 M5 washer outside the hardware list; 4.0 drill used as a reamer; cell swap 21 operations.
+    7 minor F   Patch cable 149.97 mm path for a 150 mm cable.
+    8 minor A   Three parallel seams within 50 mm on each fin top; clipped window reads as a dent.
+    9 minor proc  Designer's "cannot sweep" claim wrong; a2 verbatim file is a report, not rows; ...
+
+  Process observations
+    PA-A3-T21 The reviewer refuted the designer's tool-limit claim (PA-A3-T8/T17) with a 2.1 KB script,
+              scripts/split_moving_link.py: it rebuilds the moving link as check-only objects (PRT_movlink_R/L)
+              from build_cartridge's numbers and sweeps them with slide rows in 41 s. First contact: pin at
+              0.35/0.35/0.35/0.40 (+-y, +-z), fin at 1.05 (+-x). So the gap is real but workable: a reviewer can
+              do it, and the designer believed it couldn't be done. Still a tool candidate (declare a moving
+              sub-region without hand-copying dimensions, which can drift from the build).
+    PA-A3-T22 The flexures check doesn't compute stress. The designer's 7.6 MPa was typed into the row, and
+              cad check only checks beam orientation vs layers (angle 0, interlayer 15). The reviewer re-derived
+              it in scripts/flexure_calc.py and found Kt-adjusted 9-22 MPa. Tool candidate: compute leaf stress
+              from geometry + deflection, or at least label typed-in stress as "declared".
+    PA-A3-T23 The top issue is again a hand calc with no row behind it (rotational stiffness share, 47 %). Same
+              class as PA-A1-T10: load sharing / moment paths aren't expressible in checks.json.
+    PA-A3-T24 accepted_warns weren't audited (PA-A3-T12 and T20 prediction confirmed). The review only reports
+              "23 warn (23 accepted), same as the designer's". Not one of the 23 reasons is agreed or disputed.
+              SKILL.md step 2 says every allow and fits needs a physical reason, and says nothing about
+              accepted_warns. Now that the designer triages, this is where things can hide.
+    PA-A3-T25 Fourth overhang locator (scripts/overhang_map.py again, #44-#45, after a numpy check failed).
+              PA-R2, PA-D3, PA-R3 have each written one.
+    PA-A3-T26 Rubric reading at the 8/9 line: M has "0 majors" but scores 8, because minors "change the BOM or the
+              print folder", and the 9 anchor says "nothing would change the print, the assembly or the
+              performance". Consistent with the rubric, and it shows how strict 9 is: a stale file in cad/print/
+              alone blocks it.
+    PA-A3-T27 Order: review.json written at 0:14:29, before review.md (SKILL.md step 7 lists review.md first). If
+              the loop reads scores from review.json it's fine; only the human-readable file lags.
+
+PA-R3 review.md (00:52:11)
+  PA-A3-T28 Check-config audit covers allow, stacks, flexures, missing rows and assembly_order; accepted_warns
+            don't appear (T24 confirmed in the final text). Concrete case of what slipped: the designer accepted
+            "PRT_cartridge_*: 26 wall samples" as "the V tongue's tip below the stop-pin hole ... non-structural".
+            The reviewer measured that wall at 0.58 mm, directly under the D4.5 hole that sets the 0.25 stop gap,
+            and did propose a fix (move the tongue V tip down 3 mm -> 2.0 mm wall), so the substance was caught.
+            But it never ties it back to the accepted warn, so the designer's accept stays in checks.json as
+            "agreed by silence" and will suppress the warn in A4 too.
+  PA-A3-T29 Wall-check sampling understates thinness: the parts warn reports min 1.19 mm sampled where the
+            reviewer measured 0.58 mm. A 2x miss at the one wall that locates the overload stop. Tool candidate:
+            report the true minimum near flagged samples, or a denser pass where samples flag.
+  PA-A3-T30 The reviewer audited a stacks tolerance from shop knowledge: "the D4.5 hole tolerance of 0.05 is
+            optimistic for a printed vertical hole, typically 0.1-0.2 undersize". Good catch, and a candidate
+            default (printed-hole tolerance) for checks-config.md.
+
+  Loop's attempts.md row for A3 (00:52:49): 3 | 7 | 8 | 7 | 0 fail, 23 warn (all triaged) | 11 parts, 0 fail, 8 warn
+    PA-A3-T31 Summary is faithful, and it carries the reviewer's tool suggestion into the loop: "to_cadcheck should
+              emit the moving link (reviewer's scripts/split_moving_link.py)". So the A4 designer will likely
+              fold the reviewer's split into the project's converter, the project-level answer to PA-A3-T21.
+              The tongue wall is listed, but the accepted warn that covers it isn't (PA-A3-T28).
+
+
+ATTEMPT 4
+---------
+Agent ids
+  PA-D4  agent-aa0377354f9159b42  "Designer, attempt 4"  started 00:53, background
+
+Designer prompt
+  PA-A4-T1  The coordinator keeps converting reviewer evidence into project assets: "computed moment share (adapt
+            the reviewer's flexure_calc.py, keep it in the repo)", "computed (not typed) stress in the flexures
+            row" (PA-A3-T22), "to_cadcheck.py emits the moving link ... (adopt the reviewer's split script)"
+            (PA-A3-T21), "export_prints.py clears cad/print first". Reviewer scratch scripts are becoming
+            project code. After the loop, check which of them generalise into print-cad-blender (flexure calc,
+            moving-link split, overhang map) rather than staying per-project.
+  PA-A4-T2  "Aesthetics is the weakest score; aim for a product look" plus "look hard at every render for anything
+            janky". It's the first time the coordinator has pushed on aesthetics; A has gone 7 -> 6 -> 7.
+  PA-A4-T3  New hardware rules: "No washers unless printed" (from A3 #6); "Don't switch the load cell without Alex;
+            keep the design compatible with both and flag it". The stop is to become adjustable at assembly
+            (feeler gauge), which moves the unknown-cell problem from CAD into a README procedure. Watch whether
+            the A4 reviewer accepts a procedure as FIXED for a functionality major.
+  PA-A4-T4  Still not in the prompt: re-audit or drop the accepted_warns the A3 reviewer's fixes touch (the tongue
+            wall accept, PA-A3-T28). Item 9 does ask for tongue wall >= 2.0 mm, so the geometry may get fixed
+            while the stale accept stays in checks.json.
+
+  Scores: pending
+
+PA-D4 snapshot (01:27, 33 min in)
+  cost so far: 32.7 min = model 30.6 + tools 2.1; 68 API calls; out 176k (137k thinking); peak ctx 355k;
+               1 cache miss re-wrote 213k tokens; 4 Blender runs
+  PA-A4-T5  Same up-front thinking shape as PA-D3: a 757 s generation (68.6k thinking) at 0:13, then 141 s and
+            161 s ones. The 161 s one ended in an Edit removing 323 lines of build_concept.py.
+  PA-A4-T6  #71 grepped cadcheck.py for unknown-config-key handling and found none: cad check silently ignores
+            keys it doesn't know. A typo'd block name (e.g. "flexure" for "flexures") gives a PASS with nothing
+            checked. That's the config-side twin of PA-A2-T11. Tool candidate: warn on unknown top-level keys
+            and unknown row fields.
+  PA-A4-T7  #75 is reading check_slide's source after the moving-link rows produced fails/warns, the second
+            designer to read slide_out internals (PA-A3-T16). The slide_out docs don't answer what it needs.
+  PA-A4-T8  Re-read 03_handle_closeup.png and 08_head_open.png twice each: the aesthetics push (PA-A4-T2) is
+            happening at the render level. "Crisp shading on fin cut edges" (#64) is a render-side change, not
+            geometry. Watch whether the reviewer scores the geometry or the shading.
+
+PA-D4 snapshot (01:57, 64 min in, finishing: full-res checks, plates, BOM)
+  cost so far: 63.5 min = model 46.6 + tools 17.0; 115 API calls; out 274k (193k thinking); peak ctx 510k;
+               12 Blender runs; 13 images (03_handle_closeup and 08_head_open read 4 times each)
+  PA-A4-T9  The designer rebuilt accepted_warns itself (#99 read the matching code, #125 rewrote the list with a
+            keep-list plus new entries, each with a layer-map PNG copied to cad/review/a4_designer/). So
+            PA-A4-T4's stale accept was handled by the designer, not the prompt.
+  PA-A4-T10 Two cadcheck findings from reading what #99 printed (cadcheck.py:3110-3133):
+            (a) stale accepts are never reported under --only: `stale = [] if ONLY else ...`. This project
+                always runs with --only (stability skipped), so "accepted_warns that matched nothing" can never
+                fire here. A fixed problem's accept would sit in checks.json forever.
+            (b) Matching is plain substring (`a["match"] in w`). The kept entries "PRT_tray_L: " and
+                "PRT_tray_R: " accept EVERY warn that starts with the tray's name, including future ones of a
+                different kind. Tool candidates: report stale accepts for the checks that did run; require an
+                accept to name the check and kind, or warn when one accept matches more than N warns or more
+                than one warn class.
+  PA-A4-T11 New project asset cad/calc/head_calc.py (8.7 KB, #91), the reviewer's flexure_calc.py adapted as asked
+            (PA-A4-T1). It runs after each check (#92, #94). A calc script beside checks.json, not inside it, so
+            cad check still doesn't know the moment share or the leaf stress.
+  PA-A4-T12 Aesthetic work is partly shading: #104-#108 inspected panel normals, made a histogram of +X face
+            positions, and test-rendered flat-shaded panels, then reset materials after exact cuts. It's fixing
+            how the SDF mesh shades in the renders, which can matter for a "product look" score but doesn't
+            change the printed part (PA-A4-T8).
+
+  attempts.md row 4 (02:12, section not yet written): cad check 0 fail, 39 warn (all triaged); moving-link rows
+  0 fail 0 warn; printcheck 15 parts, 0 fail, 24 warn; no supports.
+    PA-A4-T13 Warns went up 23 -> 39 and printcheck warns 8 -> 24, all accepted. "0 untriaged" holds as the gate,
+              but accepted volume is growing each round, and with substring matching (PA-A4-T10b) the accepted
+              count isn't a reliable signal. 11 -> 15 printed parts (printed washers, per the prompt).
+
+PA-D4 attempts.md "## Attempt 4" (02:14)
+  Designer's results: cad check 0 fail, 39 warn, 0 untriaged ("every accept matches a warn"); moving-link run
+  (separate check_moving.blend + checks_moving.json, --only slide,distances) 0 fail 0 warn; printcheck 15 parts
+  0 fail 24 warn; cad bom PASS; 1,121 g, 22.4 h.
+  Mechanism: D10 x 1.0 seat bosses (cell moment share 46.5 % -> 1.9 %); pin stop replaced by two M4 x 8 stop
+  screws on a tongue, set on the bench to 1.2 x FS using the HX711 as gauge (README procedure); R1.5 leaf roots,
+  flexure stress 19.0 MPa computed in the build; printed washers; window dropped for a recessed panel; V reveal
+  at the split.
+
+  PA-A4-T14 Confirmed cadlib bug: G.csg (cadlib/geom.py:249, Manifold solver) leaves faces created by the cutters
+            with no material, so they render in Blender's default light grey. The designer found it while doing
+            aesthetics ("the bright face inside the head in a3's 08_head_open.png") and patched it in the project
+            (build_concept.py ~1141: clear materials, re-append, material_index = 0). Candidate: G.csg should
+            assign the target's material to new faces. This may also have cost earlier aesthetic scores, since
+            reviewers saw grey patches in the renders.
+  PA-A4-T15 Drift risk from PA-A3-T21 closed at project level: PRT_movlink_R/L are now built in build_concept.py by
+            the same function as the cartridge (cartridge_link_raw()), not from hand-copied numbers. But the
+            check is now two runs on two blends with two configs. "0 fail" needs both, and only the main run is
+            copied to cadcheck_a4.json. Tool candidate: let one cad check run carry check-only objects (or a
+            second body) so the moving link sits in the main report.
+  PA-A4-T16 Computed values in rows: the flexures stress is "=leaf_stress_mpa" (a manifest param computed by
+            build_concept.leaf_stress()) and cable_leads "=patch_lead". That fixes PA-A3-T22 inside the existing
+            config syntax, so the tool already supports it; the gap was that nobody used it. Worth a line in
+            checks-config.md: "computed, not typed: use =param".
+  PA-A4-T17 The designer verified "every accept matches a warn" itself, because --only disables cadcheck's stale-
+            accept report (PA-A4-T10a).
+  PA-A4-T18 Honest residual risk with numbers: after the stop engages, the printed stop path (~2.3 kN/mm) still lets
+            a stiff cell reach ~2.35 x FS under a 600 N shove. Flagged for Alex (50 kg cell, drop-in), not
+            switched, per the brief. The functionality score may hinge on whether the reviewer treats that as a
+            major.
+  PA-A4-T19 The stop gap fix moved into a bench procedure (PA-A4-T3): the modelled gap 0.15 is a placeholder and
+            the real gap is set by hand. The rows check the mechanism's range, not the setting.
+
+Reviewer PA-R4  agent-ae1d40ece5cb4f293  "Independent review, attempt 4"  started 02:02, background
+  PA-A4-T20 Prompt adds: the score history (a1-a3), "re-derive the key numbers yourself (moment share, leaf stress,
+            stop stiffness and overload, creep) rather than trusting the calc file", "bench setup steps" counted
+            under manufacturability, and "Look at every render". Score history in a reviewer prompt is a
+            possible anchoring risk; the rubric says "absolute, never relative to the previous attempt".
+            Still no accepted_warns audit in the prompt (39 accepts now), and nothing about the two-run check
+            split beyond "judge whether the adapted rows test the same claims".
+
+PA-R4 result (review.json 02:14)
+  Scores   F 7 / M 8 / A 8
+  Trend    A1 5/5/7 -> A2 5/6/6 -> A3 7/8/7 -> A4 7/8/8
+  cost     12.1 min = model 10.7 + tools 1.5; 42 API calls; out 60k (39k thinking); peak ctx 194k; 12 images
+           (every render, as asked), 6 renders; 0 bash failures. The cheapest review so far.
+  Anchors  F 7: 3 majors in the sensing head. M 8: 1 major (re-snug unreachable). A 8.
+
+  Previous issues: 6 FIXED, 2 PARTIAL (stop gap, creep), 1 "FIXED with one weakened claim" (moving-link rows).
+
+  Ranked issues
+    1 Major F   Stop screws sit 24 mm below the cell axis: the bench setting rotates the link, so the stop engages
+                at 1.40-1.60 x FS instead of 1.2; push stack worst case 0.36 > 0.3.
+    2 Major F   Rear leaf buckles at 340-580 N down on one grip; no vertical stop (the 1.0 mm fin backstop is past
+                the 0.27 mm elastic drop at buckling).
+    3 Major F   20 kg cell still reaches 2.0-2.55 x FS at a 600 N shove (designer-flagged, outside its authority).
+    4 Major M   README step 14 (re-snug the cell nuts after 24 h) can't be done assembled: rear nut blocked by the
+                piston at 3 mm, front nut by the chair plate at 34 mm (reviewer slide rows).
+    5 minor M   0.5 N.m snug can't be set with the kit (no torque tool), and the stop rides on it.
+    6 minor F   Moment share re-derived at 2.9-6.7 % (designer 1.9 %).
+    7 minor A   Tray centre seam on the attendant face; RJ45 coupler hangs 9 mm below the tray floor (grey box in hero).
+    8 minor M   Bench stop setting needs a live HX711 per side and on every cell swap.
+
+  Process observations
+    PA-A4-T21 Functionality looks stuck at 7 by the brief, not the designer. Major #3 (cell overload) needs Alex's
+              cell decision, which both designer prompts forbid ("Don't switch the load cell without Alex"). The
+              rubric caps F at 8 with <= 2 majors, so F >= 9 needs #3 gone, and only Alex can do that. Unless
+              the coordinator asks him, the loop can't pass on F in the remaining 4 attempts. Worth telling him.
+    PA-A4-T22 Row adoption broke again on a redesign: a3 review_rows run verbatim give 16 FAIL. 2 name the deleted
+              stop pin; 14 are slide rows "stopped by" the new rear washers and stop nuts the a3 rows didn't list in
+              `ignore`. slide_out rows enumerate the parts to ignore, so any new part in the path breaks old rows.
+              Tool candidate: ignore by role or collection (e.g. "ignore": "Fasteners"), or "blocked_by_only".
+    PA-A4-T23 The translation audit works (PA-A3-T15): the reviewer found one adapted row asserted a weaker claim
+              (+-z: "backstop at the 1.0 mm fin cavity" instead of "stop at 0.25"), and tied it to major #2.
+    PA-A4-T24 Service-claim gap: README step 14 promised a re-snug no service row backed. The reviewer's slide rows
+              found it unreachable. The designer listed re-snug as a creep fix (A4 #4) without a `service` op. Same
+              shape as PA-A2-T11: a claim with no row behind it.
+    PA-A4-T25 Re-derivation as instructed: head_check.py (reviewer) vs head_calc.py (designer). The moment share came
+              out 1.5-3.5x the designer's, from modelling choices (half-space boss response, stud bending path).
+              Calc files now diverge by modelling choice, and neither is a check row.
+    PA-A4-T26 Fifth hand-rolled overhang tool (scripts/overhang_map.py + steep_strip.py).
+    PA-A4-T27 (corrected after review.md landed at 02:14:43) accepted_warns WERE audited this time, for the first
+              time: the check-config audit says "accepted_warns: all 39 agreed", with one nuance (the tray overhang
+              reason leaves out two 52-54 deg bed-edge strips, ~110 mm2, harmless). Nothing in the prompt or skill
+              asked for it, so it may not repeat. How deep the audit went isn't visible: one line for 39 entries.
+              It also flagged a missing buckling check under `flexures` (tool: flexures has no buckling term).
+    PA-A4-T28 Score history in the prompt (PA-A4-T20) didn't visibly anchor: the anchors cite majors and rubric
+              lines, not the previous scores.
+
+  Loop's attempts.md row for A4 (02:15): 4 | 7 | 8 | 8
+    PA-A4-T29 Softens PA-A4-T21. The summary gives #3 two fixes: "50 kg cell or 6 mm post wall". A stiffer printed
+              stop path (6 mm post wall) is a CAD fix inside the designer's authority, so F >= 9 isn't strictly
+              gated on Alex's cell decision. Whether a stiffer PLA path can get 600 N under 1.5 x FS on a stiff
+              20 kg cell is the open question. Watch whether A5 tries it or punts to Alex again.
+
+
+ATTEMPT 5
+---------
+Agent ids
+  PA-D5  agent-a2b121d6d12a95494  "Designer, attempt 5"  started ~02:16, background
+
+Designer prompt
+  PA-A5-T1  PA-A4-T29 answered: item 3 says "thicker post wall ... ~3.5 kN/mm, or show that only the 50 kg cell meets
+            it and say so". The coordinator tries the CAD fix first and makes "only 50 kg works" a provable
+            outcome rather than a punt. It still hasn't asked Alex directly.
+  PA-A5-T2  Calc divergence (PA-A4-T25) handled at the project level: "merge [head_check.py] into cad/calc/ so one calc
+            covers both views". The designer now owns the reviewer's modelling choices too.
+  PA-A5-T3  "Adapted only where the mechanism changed, and say how" for the a4 rows, which tightens row
+            translation after PA-A4-T22/T23.
+  PA-A5-T4  "Done when: cad check 0 fail (main and moving-link configs)" names both runs (PA-A4-T15).
+  PA-A5-T5  Aesthetics target is explicit now: "aim for a product look, aesthetics 9+". It's the first time a
+            numeric score target appears in a designer prompt. Watch for render-only polish (PA-A4-T12).
+  PA-A5-T6  Item 8 invites firmware (firmware/bench_hx711/) into a CAD loop. Scope creep the reviewer may or may
+            not score.
+  Still absent: anything on buckling in the flexures check (PA-A4-T27 note), or on unknown-key/stale-accept
+  checks; these are tool-side and the coordinator is told not to change the skills.
+
+  Scores: pending
+
+PA-D5 snapshot (02:47, 31 min in)
+  PA-A5-T7  31.4 min = model 31.3 + tools 0.0: 19 API calls, 168k thinking tokens, no Blender run and no build yet.
+            Same front-loaded pattern as PA-D3/D4 (PA-A3-T6, PA-A4-T5), now the longest so far before a first build.
+  PA-A5-T8  The designer spawned its own subagent (depth 2): agent-ad17a3df5862d2263 "Write bench HX711 sketch",
+            firmware/bench_hx711/bench_hx711.ino, with a detailed spec (bit-banged HX711, ESP32 + AVR, %FS from mV/V,
+            tare/mark/calibrate commands). That's PA-A5-T6's scope creep happening, delegated in parallel. Nothing in
+            the loop compiles or checks it; the CAD reviewer will see an .ino it has no tool for.
+
+PA-D5 snapshot (02:57, 41 min in)
+  cost so far: 40.8 min = model 40.2 + tools 0.6; 40 API calls; out 233k (198k thinking); peak ctx 407k;
+               2 prompt-cache misses re-wrote 561k tokens (the largest cache cost of the run)
+  PA-A5-T9  Longest single generation of the run: 1062 s (17.7 min, 98k thinking tokens) at 0:22:56, ending in a
+            Bash "Read to_cadcheck and checks.json structure". First build at 0:35:03. Across D3/D4/D5 the first edit
+            lands 22-35 min in. The cache misses probably come from these gaps: the 1-hour TTL isn't the issue, so
+            it's likely context changes between calls.
+  PA-A5-T10 Firmware sub-agent PA-A5-T8 finished in 1.9 min (13 KB bench_hx711.ino, not compiled by anyone).
+  PA-A5-T11 Bench tools are becoming printed parts: #38 "Add cradle, setting plug, jack screw builder", #40 "Add bench
+            tools and bench copies to to_cadcheck". The printed-part count will grow again (11 -> 15 -> more), and the
+            cad check now has to model jigs as well as the product. Watch whether the reviewer counts jig parts
+            against manufacturability.
+
+PA-D5 snapshot (03:27, 71 min in, still iterating checks)
+  cost so far: 70.7 min = model 52.7 + tools 18.0; 76 API calls; out 309k (247k thinking); peak ctx 517k;
+               5 Blender runs (1 failed), 3 bash failures
+  PA-A5-T12 Reviewer tools flowing into designer use: #74 reads and runs the A4 reviewer's steep_strip script to locate
+            steep faces. Overhang location is now a shared per-project script, still not a cad command (PA-A4-T26).
+  PA-A5-T13 Bought-part STL surprise again: #63-#64 profiled the RJ45 coupler STL, failed binary, re-read it as ASCII
+            (same as PA-A3-T9 for the load cell). Tool candidate: one cad q / cadlib helper that reads either STL
+            format and reports bbox and z-levels.
+  PA-A5-T14 Checks keep splitting: #77 "Write moving and bench rows", #78 "Fix check split". Jigs (cradle, setting plug,
+            jack screw) get rows too. On disk there are still two configs (checks.json, checks_moving.json) and
+            two check blends, so the bench copies seem to go into the moving-link run. Two runs, but the second
+            now mixes product motion with jig fit.
+  PA-A5-T15 #68 "Check stale and accepted warns" by hand again, because --only disables the stale report (PA-A4-T10a).
+
+PA-D5 attempts.md "## Attempt 5" (03:40)
+  Designer's results: main cad check 0 fail, 47 warn, 0 untriaged, "none stale" (118 objects, 57 screws, 24 nuts,
+  19 steps, 13 slide, 12 stacks); moving-link + bench run 0 fail 0 warn; printcheck 17 parts 0 fail 16 warn;
+  cad bom PASS 14 rows; 1,211 g, 24.3 h, 4 plates (a P1S plate of bench tools).
+  Mechanism: 4 M3 stop screws per cartridge riding in the top link, push pair on the cell axis (jacking couple 0);
+  2.0 mm leaves (buckling 970-1360 N/grip); barrel lip as moment stop at 0.70 radial; stop path ~7.6 kN/mm;
+  cartridge self-contained so re-snug happens on the bench; printed cradle + setting plug + jack screw; firmware.
+
+  PA-A5-T16 PA-A4-T29/PA-A5-T1 resolved with numbers: 3.3x stiffer stop path (2.3 -> 7.6 kN/mm, above the 3.5 asked),
+            but a stiff 20 kg cell still reaches 1.81 x FS at 600 N. Only 20 kg cells with >= 0.15 mm FS travel stay
+            under 1.5 x. The BOM now recommends the 50 kg puck, "Alex decides". The model still carries the 20 kg cell,
+            so the reviewer will likely keep a cell-overload major unless it credits the BOM recommendation. The loop
+            still hasn't asked Alex; 3 attempts left.
+  PA-A5-T17 A known split artifact is handled by ignoring: "the check split leaves a 0.3 gap at the leaf stubs, so the
+            +-z rows ignore the fixed body", with ray rows substituted. A second hidden weakening of a moving-link row,
+            after PA-A4-T23. The reviewer should look at `ignore` lists in checks_moving.json. Tool candidate: if
+            moving sub-bodies were first-class (PA-A3-T21), there would be no split gap to work around.
+  PA-A5-T18 Row brittleness, third time (PA-A3-T15, PA-A4-T22): a4R step-14 rows "Verbatim they fail ... by design: that
+            step no longer exists". Each redesign makes some of the previous reviewer's rows meaningless, and the
+            designer's word is the only record of why.
+  PA-A5-T19 Environment gap: "Firmware syntax-checked only (the bundled avr-gcc is x86-only on this Mac)". The loop now
+            produces firmware it can't compile.
+  PA-A5-T20 "none stale" — the designer checked stale accepts itself (PA-A5-T15).
+  PA-A5-T21 Growth per round: warns 23 -> 39 -> 47, printed parts 11 -> 15 -> 17, plates 3 -> 3 -> 4, print hours
+            22 -> 22.4 -> 24.3, screws 46 -> ? -> 57. The design converges on function while the part and check
+            surface grows. Manufacturability scoring should feel this (more parts, a bench procedure, a jig plate).
+
+Reviewer PA-R5  agent-aebabdf9ab4fc8a5c  "Independent review, attempt 5"  started ~03:41, background
+  PA-A5-T22 Prompt tells the reviewer "BOM recommends a 50 kg cell (user's decision)" and asks it to re-derive
+            engagement for both 20 kg and 50 kg cells. That frames the cell as outside the design's scoring, and may
+            lead the reviewer to discount major #3. Watch whether F moves because the design improved or because the
+            framing changed.
+            Still absent: checking `ignore` lists in the adapted moving-link rows (PA-A5-T17), and anything on
+            accepted_warns (47 now).
+
+PA-R5 result (review.json 03:55)
+  Scores   F 8 / M 6 / A 9
+  Trend    A1 5/5/7 -> A2 5/6/6 -> A3 7/8/7 -> A4 7/8/8 -> A5 8/6/9. First metric at 9+ (aesthetics).
+  cost     14.1 min = model 13.5 + tools 0.6; 53 API calls; out 72k (47k thinking); peak ctx 217k; 14 images;
+           2 bash failures
+  Anchors  F 8: 2 majors, each < 1 h. M 6: one blocker caps it (the stop-setting cradle fails with the 50 kg cell).
+
+  Previous issues: 6 FIXED, 2 PARTIAL (20 kg overload, bench setting).
+
+  Ranked issues
+    1 Blocker M / Major F  The printed bench cradle can't set the stops of the BOM-recommended 50 kg cell: the rear
+                upright is a free-standing 50 x 8 plate, 54 MPa across layers vs ~25 at 1.2 x FS of 50 kg (589 N);
+                jack stroke 4.47 mm needed vs 3.0 available. Review rows FAIL.
+    2 Major F   README stop-setting never sets the cell's mV/V; the sketch defaults to 1.0 mV/V, so a 1.5-2.0 mV/V cell
+                gets its stops at 60-80 % of FS, not 120 %.
+    3 minor F   20 kg cell still 1.44-1.92 x FS at 600 N; side load closes one push screw early.
+    4 minor F   Lean-to-axial crosstalk 3.8 % (leaf tops 15 mm below the cell axis).
+    5 minor F   head_calc levers link pitch about the cell centre, not the leaf centroid (conclusions hold).
+    6 minor M   Soldering iron needed for the HX711 lead, not in the tool list; cell swap means desoldering.
+    7 minor F   Lip friction past a 180-250 N lean; piston 40 MPa at 600 N.
+    8 minor M   Stale flexures row text; a cadcheck crash (below).
+
+  Process observations
+    PA-A5-T23 The jig became the blocker (PA-A5-T11 prediction). Manufacturability fell 8 -> 6 because a printed bench
+              tool the designer added in A5 (to fix A4 #8) fails under the cell the designer itself recommended. Fixing
+              one round's minor created the next round's blocker, as in PA-A2-T9 (teardrop -> stop blocker). Both times
+              the new part had no check rows for its own load case until the reviewer wrote them.
+    PA-A5-T24 Framing effect (PA-A5-T22): the reviewer scored against the recommended 50 kg cell, not the modelled 20 kg
+              one. That demoted 20 kg overload to minor (#3, "major only with a 20 kg cell") and lifted F 7 -> 8, then
+              found the 50 kg path breaks the jig. So F rose partly from the prompt's framing. The 20 kg numbers barely
+              moved (A4 2.0-2.55, A5 1.44-1.92 x FS).
+    PA-A5-T25 Firmware got reviewed after all, by reading it: the default ratedMvV = 1.0 plus a README that never sets it
+              is a real functional major (#2). The CAD reviewer caught a firmware/procedure bug without any firmware tool.
+    PA-A5-T26 Tool bug reported (not yet verified by me): "A cadcheck stacks term whose formula names a missing param
+              crashes check_stacks (TypeError) under --only stacks, but is a clean config FAIL under --only slide".
+              Verified by reading the code: _eval_exprs (cadcheck.py:160-180) turns a failed "=expr" into None and logs
+              it in EXPRS; check_stacks (2557+) then does float(t["tol"]) on None -> TypeError and the run dies.
+              Fix: check_stacks (and any float() on config values) should treat None as a config FAIL with the EXPRS
+              error, like the other checks do.
+    PA-A5-T27 Sixth and seventh hand-rolled print-analysis scripts: steep_strip.py again, plus layer_ascii.py (ASCII slices
+              of an STL to read a part's cross-section per layer). The reviewer used it to find the free-standing cradle
+              upright. That's a printcheck view that doesn't exist: per-layer section of a part, as text.
+    PA-A5-T28 (corrected after review.md, 03:56) accepted_warns WERE audited, in more depth than A4: "all 47 agreed",
+              by class with the evidence named (fin bridges verified as anchored 7-16 mm spans; cable overlaps
+              5-25 mm3 at plug ends; push-screw head stand-off by design; long reach uses the 150 mm extension).
+              The ignore-list weakening in checks_moving.json (PA-A5-T17) still wasn't examined, though the reviewer
+              did dispute one adapted row (the jacking row assumes a rigid cradle).
+    PA-A5-T29 Aesthetics 9: the first pass on any metric. The A4/A5 render-shading work (PA-A4-T12, T14 material bug)
+              plus the reveals and the recessed coupler got it there. Only F and M left, with 3 attempts.
+
+  Loop's attempts.md row for A5 (03:56): 5 | 8 | 6 | 9
+    PA-A5-T30 The summary records the tool bug ("a stacks formula naming a missing param crashes check_stacks"). It's
+              the first time a skills-repo bug has entered the project's attempts.md. Good: it's discoverable for the
+              harvest.
+    PA-A5-T31 #3's fix reads "commit to 50 kg after fix 1". Watch the A6 designer prompt: if it switches the modelled
+              cell to 50 kg, that crosses the "don't switch the load cell without Alex" rule the coordinator itself
+              set (PA-A4 prompt, A5 prompt). If it keeps 20 kg, F's ceiling stays tied to the framing (PA-A5-T24).
+
+
+ATTEMPT 6
+---------
+Agent ids
+  PA-D6  agent-a98d3a242fa8b026b  "Designer, attempt 6"  started ~03:57, background
+
+Designer prompt
+  PA-A6-T1  PA-A5-T31 answered: the coordinator held the line. "Load cell: support both the 20 kg and 50 kg JHD puck ...
+            the BOM may recommend 50 kg, Alex decides" and item 3 "make the BOM/README commit to the recommended cell
+            clearly (keep 20 kg as a documented fallback with its limits), flagged for Alex". So the design is now
+            dual-cell and the framing (PA-A5-T24) is baked in: reviewers will score against the recommended cell.
+            Alex still hasn't been asked; 3 attempts left.
+  PA-A6-T2  Item 1 is the jig blocker: fix a bench tool to hold 589 N. Two of the last three blockers came from parts or
+            fixes added the round before (PA-A2-T9, PA-A5-T23). The prompt asks for the reviewer's rows plus calc,
+            which is the right guard.
+  PA-A6-T3  "No soldering iron in the kit" is now a hardware rule (from A5 #6), and an HX711 with screw terminals is to be
+            modelled. The bought-part library grows again; another STL from somewhere (PA-A5-T13).
+  PA-A6-T4  Item 4 allows a firmware dead band as a fallback fix for a mechanical crosstalk. That pushes an F issue into
+            code the loop can't compile (PA-A5-T19).
+
+  Scores: pending
+
+PA-D6 snapshot (04:28, ~30 min, wrapping up)
+  cost: 30.5 min = model 15.8 + tools 14.7 (Blender 10.1); 67 API calls; out 90k (53k thinking); peak ctx 250k;
+        0 cache misses. Half the model time and a quarter of the thinking of D3-D5 (PA-A3-T6, A4-T5, A5-T9): the
+        biggest generation was 169 s. A narrow issue list (jig, sketch, docs) on a settled mechanism = short planning.
+  PA-A6-T5  First web use in the loop: WebSearch x3 + WebFetch x3 (0:05-0:06) to pick a no-solder HX711 board (Adafruit
+            #5974 with a terminal block; dimensions and pinout from the product page). Bought-part geometry from
+            the web, with nothing in the skill saying how to model a bought part from a datasheet page.
+  PA-A6-T6  Firmware check workaround: #45 wrote a stub /tmp/sk/Arduino.h and ran a host-compiler syntax check of the
+            sketch (PA-A5-T19 environment gap). Better than nothing, but still not a board build.
+  PA-A6-T7  #66 "test stacks-only run": the designer re-ran --only stacks after fixing the formula, which exercises the
+            PA-A5-T26 crash path (now PASS, so the missing param was fixed in config; the tool bug remains).
+  PA-A6-T8  Same accepted count as A5 (47) and 0 untriaged. Warn growth paused this round (PA-A5-T21).
+
+PA-D6 attempts.md "## Attempt 6" (04:34)
+  Designer's results: main cad check 0 fail, 47 warn, 0 untriaged, no stale; 22 stacks (12 a5 + 4 a5R verbatim + 6
+  new); moving + bench 0/0; printcheck 17 parts 0 fail 16 warn; cad bom PASS 13 rows; 1,247 g, 24.9 h.
+  Changes: closed-frame cradle (14 mm upright, side walls, R3 roots, M5 x 30 jack; tilt 0.16 deg vs 6.4-7.6); sketch
+  refuses to mark stops until scaled, new known-mass check; BOM/README commit to 50 kg ("Alex to confirm"); crosstalk
+  as a 10 N dead band in the RTPS firmware (not in this repo); lip lever about the leaf centroid; Adafruit #5974
+  HX711 with screw terminal on hot-glued standoffs.
+
+  PA-A6-T9  `stacks` is now a generic "computed number <= limit" check. Of the 22 stacks rows, the cradle ones are
+            stress (MPa), tilt (deg) and stroke rows with a single term whose "tol" is an =expression or a computed
+            param (=cradle_up_across_mpa, =cradle_frame_mpa, =cradle_jack_tilt_deg); the a5R crosstalk row is the same
+            shape. This is the agents' own answer to PA-A1-T10 / A3-T23 / A4-T25 (hand calcs with no row): they're
+            folding calcs into stacks. It works because check_stacks takes abs(float(tol)) and compares to limit. But
+            the report calls them "worst case / RSS" of a tolerance stack, which is wrong for a stress, and abs()
+            hides a sign error. Tool candidate (strongest of the run): a first-class `calcs` block, e.g.
+            {"name", "value": "=expr", "max"/"min", "unit", "why"}, reported as a calc rather than a stack.
+  PA-A6-T10 The designer sets its own limits for its new calc rows (20 / 10 / 15 MPa, 0.5 deg), while the reviewer's a5R
+            rows used 25 MPa across layers. No shared materials table (PLA in-layer vs across-layer, PETG) exists in
+            the skill. Candidate: material allowables in checks-config.md or cadcheck DEFAULTS, so limits aren't
+            per-agent.
+  PA-A6-T11 Crosstalk fix lives outside every repo the loop touches ("RTPS firmware (not in this repo)"): a README dead
+            band plus a per-grip bench measurement. The reviewer can only check the doc.
+  PA-A6-T12 The designer flagged the PA-A5-T26 tool bug "for Alex" in attempts.md: it didn't reproduce once the config was
+            fixed, but "it is still a tool bug when a row names a missing param". Matches my code read.
+  PA-A6-T13 The known-mass check is a "two books and a cord" bench improvisation, not modelled. The designer says so.
+            Another procedure with no row behind it (PA-A4-T24 pattern), this time declared.
+
+Reviewer PA-R6  agent-abc841ef91bf6c685  "Independent review, attempt 6"  started ~04:35, background
+  PA-A6-T14 Prompt is shorter than R4/R5's: no "judge whether adapted rows test the same claims" (the designer adopted a5R
+            verbatim this time, so that's reasonable), and still nothing on checks_moving.json ignore lists
+            (PA-A5-T17), stacks-as-calcs semantics (PA-A6-T9) or the designer-chosen limits (PA-A6-T10). It does say
+            "re-derive ... don't trust the build's calc functions", which covers the numbers but not the limits.
+
+PA-R6 result (review.json 04:40)
+  Scores   F 8 / M 8 / A 9
+  Trend    A1 5/5/7 -> A2 5/6/6 -> A3 7/8/7 -> A4 7/8/8 -> A5 8/6/9 -> A6 8/8/9
+  cost     12.0 min = model 9.0 + tools 2.9 (Blender 1.6); 42 API calls; out 52k (32k thinking); peak ctx 177k;
+           13 images; 1 WebFetch (checked the Adafruit 5974 product page itself); 0 bash failures
+  Anchors  F 8: no blocker, 1 major (plug lip); "Not 9: fixing the crosstalk would change performance".
+           M 8: 2 majors (loose HX711 header needs an iron; plug lip shears in the pull step).
+           A 9: every rubric item holds; polish only.
+
+  Previous issues: 1 blocker FIXED (cradle, re-derived 2.03 / 1.19 MPa, 0.16 deg; a5R rows 4/4 PASS verbatim),
+  mV/V FIXED, 20 kg overload "FIXED (by choice of cell)", lip lever FIXED; crosstalk PARTIAL, soldering PARTIAL.
+
+  Ranked issues
+    1 Major M,F  The setting plug's T-slot rear lip is 2.1 mm and carries the whole pull-stop load: 17-21 MPa peak shear
+                 vs a 12 MPa row limit (review rows FAIL).
+    2 Major M    Soldering iron still needed: the Adafruit 5974's 6-pin logic header ships loose (4 joints/board).
+    3 minor F    Crosstalk dead band sized for 150 N, but leans run to 182-254 N before the lip lands; a 4.4 % unit reads
+                 11.18 N > 10 (row FAIL).
+    4 minor F    Known-mass check is advisory in the sketch (marks anyway on FAIL); 'c' flips the sign convention.
+    5 minor F    Lip friction past 182-254 N (carried).
+    6 minor M,A  step4 render explodes the coupler below the floor (reads as fit-from-below); buckling margin text x1.6
+                 vs x5.3.
+    7 minor M    Known-mass setup is an improvisation (two books, 3 mm cord gap).
+
+  Process observations
+    PA-A6-T15 What's left between this design and a pass is mostly outside the designer's authority:
+              - F 9 needs the crosstalk designed out, which the A6 designer says is "an outline-level change that needs
+                the 2D/3D agreement first" (flagged for Alex). The reviewer's anchor says exactly that: "Not 9: fixing
+                the crosstalk would change performance".
+              - M 9 needs no soldering iron: buy HX711 boards with the header fitted, or accept 4 joints. A sourcing
+                and hardware-rule question for Alex.
+              - The plug lip (#1) is a < 1 h CAD fix the designer can do.
+              So with 2 attempts left, the loop is likely to end at 8/8/9 or 9/8/9 unless Alex decides the crosstalk
+              outline change and the header question. Same structure as PA-A4-T21 (cell choice), which took 2 rounds
+              of prompt framing to work around.
+    PA-A6-T16 The jig is again where the new major is: A5 cradle upright -> A6 plug lip. Bench tools added for function keep
+              failing the reviewer's strength rows first. Third instance of "the newest part carries the next issue"
+              (PA-A2-T9, PA-A5-T23). Their own load-case rows weren't written until the reviewer wrote them.
+    PA-A6-T17 Reviewer scripts carried forward: a6/scripts has head_check_a5.py (from R5), layer_ascii.py and steep_strip.py
+              (from R4/R5), plus a new jack_local.py. Reviewers now copy the previous reviewer's tools. Per project, a
+              toolbox is accreting in cad/review/aN/scripts that the skill doesn't know about.
+    PA-A6-T18 Firmware is now properly reviewed by reading (#4: advisory known-mass check at lines 363-369, sign
+              convention at 331), the second round in a row (PA-A5-T25). A CAD review skill is reviewing C++.
+    PA-A6-T19 Reviewer verified a bought-part claim at the source (WebFetch of adafruit.com/product/5974: header loose).
+              Web use now on both sides of the loop (PA-A6-T5).
+
+  Loop's attempts.md row for A6 (04:41): 6 | 8 | 8 | 9
+    PA-A6-T20 Softens part of PA-A6-T15: the summary offers a no-solder path the designer can choose alone ("press-fit
+              header or module sold with header"), so M 9 is likely reachable in A7 without Alex. The coordinator wrote
+              the F gate out plainly: "Functionality not 9 without the crosstalk fix", and the fix is the
+              outline-level leaf-on-axis change (A6 designer: needs Alex's 2D agreement). Watch the A7 prompt: does
+              the coordinator authorise the outline change, ask Alex, or accept F 8?
+
+
+ATTEMPT 7
+---------
+Agent ids
+  PA-D7  agent-a9833809bb3b8e55b  "Designer, attempt 7"  started ~04:42, background
+
+Designer prompt
+  PA-A7-T1  PA-A6-T20 answered: the coordinator authorised the crosstalk change itself by narrowing the constraint. The
+            prompt's "Constraints from Alex" now read "the one-unit wedge EXTERNAL outline unchanged (internal cavity
+            and cartridge changes are fine; only external outline changes need 2D agreement)". Alex's original loop
+            instruction was "agree big shape changes in 2D (cad/profile/profile.py) first". The A6 designer had read
+            the leaf-on-axis change ("a new cartridge and fin cavity") as needing that agreement and flagged it. I
+            found no new user message since 03:38Z that grants this, so it's the coordinator's own reinterpretation,
+            presented under "Constraints from Alex". It's a defensible reading (profile.py is the external profile),
+            but it resolves an item flagged for Alex without asking him. Same move as the cell framing (PA-A5-T24,
+            PA-A6-T1), one step further.
+  PA-A7-T2  Item 3 says outright that the reviewer "gates functionality 9" on this. The coordinator is now steering
+            explicitly toward the pass threshold.
+  PA-A7-T3  New: "Then do one more critical pass yourself over every render and the README as a strict reviewer would".
+            The designer is asked to self-review; the loop has started teaching the designer the reviewer's job.
+  PA-A7-T4  Item 7 makes a fourth printed bench tool (known-mass hanger + feet), "with a row". Given PA-A6-T16 (the
+            newest part carries the next issue), the "with a row" is the right guard, if the row covers its load case.
+
+  Scores: pending
+
+PA-D7 snapshot (05:28, 46 min in, rebuilding the head with leaves on the cell axis)
+  cost so far: 45.6 min = model 44.3 + tools 1.3; 56 API calls; out 253k (222k thinking); peak ctx 432k;
+               3 prompt-cache misses re-wrote 589k tokens (now the worst cache cost of the run)
+  PA-A7-T5  Back to long planning for a mechanism change: five generations of 165-622 s (31 min, ~174k thinking) before
+            the bulk of the edits. A6 (narrow, settled) was 30 min total; a mechanism redesign costs 45+ min before the
+            first full check. The pattern holds across D3-D7: thinking time scales with how much mechanism changes.
+  PA-A7-T6  #54-#56 read cadcheck's flexures check to find its stress limit: a third agent reading check source for a
+            semantic the docs don't give (slide_out PA-A3-T16/A4-T7; flexures now).
+
+PA-D7 attempts.md "## Attempt 7" (05:56)
+  Designer's results: main 0 fail, 51 warn, 0 untriaged, no stale (123 objects, 61 screws, 35 stacks, 6 flexures);
+  moving + bench 0/0; printcheck 18 parts 0 fail 20 warn; cad bom PASS; 1,315 g, 26.4 h.
+  Changes: cell moved to leaf mid-height (lean crosstalk 0 N by construction); leaves split into 2 strips each; catch
+  saddle under the piston (lean limit now mechanical, README 150 N limit removed); plug lip 5.0 mm; amp swapped
+  HX711 -> SparkFun Qwiic Scale NAU7802 (spring terminal, Qwiic cable, no iron); bench sketch rewritten on the
+  SparkFun library; stirrup hanger for the known-mass check.
+
+  PA-A7-T7  Biggest miss of the run, found by the designer, not the reviewer: "the a6 cell could not be fitted. Both stud
+            holes were round, on either side of a 14.7 mm gap, and the cell with studs is 37 mm long." A6 scored M 8
+            with 0 cad check fails, insertion check included, and the A6 reviewer didn't catch it. Possibly true since
+            A5 or earlier (the self-contained cartridge with the 10.5 mm block). Tool gap: insertion has no row for
+            "fit a bought part with protruding studs into a closed seat"; the cell was modelled in place and never
+            inserted. Review gap: the A6 reviewer re-derived stresses and stroke but didn't walk the cell assembly
+            step. Candidate: an insertion/assembly row per bought part with a declared insertion path, and a
+            checklist line "every bought part can physically reach its modelled position".
+  PA-A7-T8  Late component swap: in attempt 7 of 8 the amplifier changed vendor and chip (HX711 -> NAU7802), the firmware
+            moved to a third-party library, and the board footprint comes "from a forum reading of SparkFun's Eagle
+            files, not verified on a board". The A6 'no soldering' major is answered with an unverified part.
+            Firmware is still syntax-checked only (PA-A5-T19), now with a library dependency the stub can't check.
+  PA-A7-T9  Row adaptation now uses params: "the hard-coded 15 became the param leaf_top_below_cell" in the adopted a5R
+            crosstalk row. Rows written against params survive redesigns (the V2A3-F1 lesson in _eval_exprs's
+            docstring). This is the fix for PA-A3-T15/A4-T22/A5-T18 row brittleness, adopted by the designer
+            unprompted. Candidate for SKILL.md (reviewer side): write review rows against params, not literals.
+  PA-A7-T10 Fin overhang jumped ~140 -> ~4,000 mm2 (closed cartridge-pocket roofs, spans 7-21, accepted). That 28x jump
+            is hidden among 51 accepted warns. The reviewer should check it against the printcheck layer maps.
+  PA-A7-T11 Growth continues: parts 17 -> 18, hours 24.9 -> 26.4, stacks 22 -> 35, warns 47 -> 51, screws 53 -> 61.
+            Moment share got worse (2-7 % -> 5-8 %) and side load closer to its limit (0.185 vs 0.2) as the price of
+            zero lean crosstalk. The reviewer will weigh those trades.
+  PA-A7-T12 The designer rejected a reviewer fix with a reason (feet tip over at a table edge, so it hangs the cradle
+            instead). The designer is now confident enough to push back.
+
+Reviewer PA-R7  agent-a5c527e47ff09f34d  "Independent review, attempt 7"  first message 06:10:45 (meta file 05:57), background
+  PA-A7-T13 Prompt names the cell-fit fix ("a 45 deg slot so the cell can actually be fitted") but doesn't ask the reviewer
+            to walk assembly of every bought part into its seat. That's the review gap that let A6 pass with an
+            unfittable cell (PA-A7-T7). It does ask for the leaf-bridge start, the Qwiic footprint source and the
+            two-I2C-port note, the designer's own open items. The fin overhang jump (PA-A7-T10) isn't mentioned.
+            Score history now shows only the last three rounds.
+
+PA-R7 result (review.json 06:29:54)
+  Scores   F 4 / M 4 / A 9
+  Trend    A1 5/5/7 -> A2 5/6/6 -> A3 7/8/7 -> A4 7/8/8 -> A5 8/6/9 -> A6 8/8/9 -> A7 4/4/9
+  cost     19.1 min = model 14.6 + tools 4.6; 71 API calls; out 80k (49k thinking); peak ctx 222k; 8 images;
+           WebSearch + 2 WebFetch (SparkFun page, forum footprint source); 0 bash failures
+  Anchors  F, M <= 4: "parts can't be assembled". Reviewer says ~7 for F with the slot fixed.
+
+  Ranked issues
+    1 Blocker F,M  The cell still can't be fitted. stud_slot() ends the 45 deg slot centreline at x 158.0, 0.2 mm inside
+                   the inboard face (157.8), and the perpendicular end edge leaves a wedge: the opening across the motion
+                   is 3.2 mm for a 4.9 mm stud and ~6.7 mm for a 9.24 mm nut. Found on the exported STL and in the model.
+                   Reviewer rows: cell-path rear nut/washer blocked by PRT_cartridge_R at 24 mm. Fix: one line in
+                   stud_slot() + reprint both cartridges.
+    2 Major F      Catch friction shunt 13 N (typical cell) to 33 N (largest setting), not 3.3-8.3: the designer's leg
+                   stiffness model is neither bound (row FAIL vs 10 N).
+    3 minor F      Past catch contact the rear strips keep loading (catch 7.5 mm behind the rear leaf): 929-1416 N at
+                   600 N, x3.1-4.7 to buckling, not x9.4.
+    4 minor F,M    Printed washers bridge the 5.5 mm stud slot: ~35 MPa at 1.2 x FS pull (row FAIL vs 20).
+    5 minor F      Catch gap 0.10 radial on a printed concave face; pull pitch uses 0.072 of it.
+    6 minor F      Piston 52 MPa at a 600 N lean.
+    7 minor M      assembly_order says stops first; the cell only fits before them (row: blocked by a push screw at 4 mm).
+    8 minor M      Qwiic Scale hole pattern from a forum post only; ESP32-P4 needs male headers for the Qwiic cable.
+    9 minor A      Cover heads read as black holes.
+
+  Process observations
+    PA-A7-T14 Regression to the worst scores since A2, from one 0.2 mm geometry error in the fix for the A6 blocker that A6's
+              reviewer missed (PA-A7-T7). The designer found "cell can't be fitted", added a slot, and declared it fixed
+              without a row moving the cell along the slot. The reviewer wrote that row and it failed. Fourth instance
+              of "the newest change carries the next blocker" (PA-A2-T9, A5-T23, A6-T16), and the costliest: one
+              attempt left.
+    PA-A7-T15 This reviewer did the assembly walk PA-A7-T13 said the prompt lacked, unprompted: slide rows for the cell, its
+              rear nut and washer along the slot path, and a variant with the stop hardware already in (which also
+              caught the wrong assembly_order, #7). Plus a new script, stl_inside.py, to confirm on the exported STL. So
+              "can every bought part reach its seat" is checkable today with slide_out rows. It just isn't in the
+              checklist, so it happens only when a reviewer thinks of it. Strong candidate for checklist.md and the
+              designer's done-criteria.
+    PA-A7-T16 Rubric doing its job: the "<= 4: parts can't be assembled" anchor overrode otherwise-strong results (0 fails
+              everywhere, physics re-derived as good). The reviewer still gave the conditional score (~7 with the fix),
+              which tells the coordinator the real distance to pass.
+    PA-A7-T17 All tool-side gates passed (cad check 0 fail, printcheck 0 fail, bom PASS), and none of them can see
+              "assembly impossible". The insertion check exists and passed. Tool candidate: an insertion row per BUY_
+              part with a declared approach path, run by default, so an unfittable bought part fails cad check rather
+              than waiting for a reviewer.
+    PA-A7-T18 Reviewer row hygiene: it labelled the a6 crosstalk rows "stale (they hard-code a6 geometry and threshold)" and
+              didn't count their FAILs. The PA-A7-T9 param-not-literal lesson, seen from the other side.
+
+  Loop's attempts.md row for A7 (06:30:58): 7 | 4 | 4 | 9
+    PA-A7-T19 The coordinator wrote down the mechanism of the miss, and I verified both halves in cadcheck.py:
+              (a) "an allow on a pair blinds slide rows through that pair". check_slide builds its obstacle set as
+                  `others = {... if ... (fx(o.name) or not any(allowed(o.name, g) for g in gnames))}`: any part allowed
+                  against a mover is dropped from the sweep unless listed in the row's `flex`. checks.json has
+                  `PRT_cartridge x BUY_load_cell` allowed (zero-gap seats, PA-A3 audit "agreed"), so a row sliding the
+                  cell out never sees the cartridge.
+              (b) "the insertion check skips same-step parts". check_insertion's docstring: "parts of the same step are
+                  placed in any order, so neither is an obstacle". The cell and cartridge are in the same bench step,
+                  so insertion never tested cell-into-cartridge. Also, insertion only tries +-X/Y/Z plus a step's
+                  "insert_dirs", so a 45 deg slot needs an explicit insert_dirs entry to be tested at all.
+              Together: two reasonable defaults made the unfittable cell invisible to cad check for at least two rounds
+              (A6, A7). Tool candidates, in order of value:
+                1. slide_out: an allow should bound overlap volume, not remove the obstacle. Keep allowed pairs in the
+                   sweep and fail on overlap above the allow's max_mm3 (or warn when a row's mover has an allow against
+                   a part in its path).
+                2. insertion: test same-step parts against each other in assembly_order's object listing order, or
+                   require an explicit "order" within a step; at minimum warn when a BUY_ part shares a step with the
+                   PRT_ it seats in.
+                3. insertion: take approach directions from a feature (slot axis) or warn when a part's only free path
+                   is off-axis and no insert_dirs is given.
+              This is the most actionable tool finding of the run.
+
+
+ATTEMPT 8 (final)
+-----------------
+Agent ids
+  PA-D8  agent-a9775a6b2357a2a14  "Designer, attempt 8 (final)"  started ~06:32, background
+
+Designer prompt
+  PA-A8-T1  The coordinator turned PA-A7-T19 into project-level guards: "a cell-insertion path check that is NOT blinded:
+            remove or narrow the cartridge x cell allow (use max_mm3 or a specific fits)", "put the cartridge in an
+            earlier assembly step than the cell", "probe the exported STL (reviewer's stl_inside.py) ... along the whole
+            path", and a done-criterion "no blinding allows". It works around both cadcheck defaults by config, so the
+            tool fixes still matter for the next project.
+  PA-A8-T2  "Walk the README assembly guide step by step against the model (can each part physically go in at that step,
+            is every screw reachable with the kit)": the assembly walk I flagged as missing from the checklist
+            (PA-A7-T13, T15) is now in the designer's done-criteria. Not in the reviewer skill.
+  PA-A8-T3  "Constraints from Alex (unchanged): ... the one-unit wedge external outline unchanged". The PA-A7-T1 narrowing is
+            now labelled "unchanged", so the coordinator's own reinterpretation is presented as Alex's standing rule.
+  PA-A8-T4  Nine items in the final round, including the blocker, two physics corrections (catch friction, load sharing), a
+            stress fix, and a footprint hedge. For a pass the A8 reviewer needs F and M at 9, i.e. no majors and only
+            polish. With the conditional "~7 with the fix" from PA-R7, a pass on F looks unlikely in one round; the
+            realistic outcome is the loop ending at 8 attempts.
+
+PA-D8 snapshot (07:28, 57 min in, final pipeline)
+  cost so far: 56.8 min = model 31.8 + tools 25.4 (Blender 16.5); 104 API calls; out 185k (122k thinking);
+               peak ctx 446k; 2 cache misses re-wrote 638k tokens; 22 Blender runs (the most of any designer)
+  PA-A8-T5  Shape changed: tool time 45 % of wall (D5-D7: 15-25 %). The designer is verifying more than planning:
+            #104 probes the exported cartridge STL along the cell path (the reviewer's stl_inside method), #106 layer
+            map of the fin roof, #109 "narrow cartridge accepts". The last round reads like a designer doing the
+            reviewer's job on itself (PA-A7-T3, PA-A8-T2).
+
+PA-D8 attempts.md "## Attempt 8" (07:36)
+  Designer's results: main 0 fail, 51 warn, 0 untriaged, no stale, no unbounded allows; 25 assembly steps (each cartridge
+  now 4 bench steps), 19 slides, 43 stacks, 6 flexures, 72 distances; moving + bench 0/0 with 9 sightlines; all a7R rows
+  in checks.json and passing; printcheck 18 parts 0 fail 20 warn; STL path probe: narrowest opening 5.5 mm for a 4.9
+  stud, 14.0 for a 9.24 nut; 1,323 g, 26.5 h.
+
+  PA-A8-T6  The blinding allow measured 0.0 mm3 and protected nothing: "PRT_cartridge_* x BUY_load_cell_* is gone. It had
+            measured 0.0 mm3 in a7 (zero-gap seats), so it hid slide rows and protected nothing." The A3 reviewer had
+            "agreed" it (PA-A3 audit). Tool candidate: cadcheck already records allowed_max per bounded allow; report
+            allows whose measured overlap is 0 at every pose as "unused, remove". That alone would have surfaced this
+            one in A3.
+  PA-A8-T7  The cell's insertion path passes at 0.0 mm clearance ("closest PRT_cartridge_R at 0.0 (the faces slide on the
+            seat bosses)"), with a README note to press the link back ~15 N for 0.1 mm. slide_out treats touching as
+            free. On a printed part with +-0.1 tolerance, 0.0 designed clearance is a coin flip. Tool candidate: a
+            slide_out `min_clearance` default for BUY_ insertion paths (e.g. 0.2), or a warn at 0.0. Watch whether R8
+            flags it.
+  PA-A8-T8  The self-review pass works. Walking the README against the model, the designer found and fixed five things no
+            row covered: saddle bending across layers (43 MPa at a7's 2.5 mm, now 14.2 vs 15), leg buckling ignoring the
+            saddle offset (3402 -> 2181 N), rear-nut access with no row (now sightlines), a hard-coded sightline origin
+            that broke on a 1 mm change (now =param), and the piston mouth section never checked (~56 MPa on D22.2). The
+            last is a reviewer miss too (R7 checked only the catch section). The prompt line in PA-A7-T3 / PA-A8-T2 is
+            the strongest process lever the coordinator found.
+  PA-A8-T9  Aesthetic fix partly render-only again (PA-A4-T12): the black dots were "mostly the heads themselves: plain
+            mirror-steel cylinders reflecting the dark world", fixed with a satin material and "a render-only drive
+            recess (Render details collection, not exported)". The counterbore chamfer is real geometry; the recess
+            isn't. Aesthetics is scored from renders, so render-only geometry raises the score without changing the part.
+  PA-A8-T10 Tool use done right: insertion now finds the 45 deg line from `insert_dirs` on the cell's own step, after the
+            cartridge was moved to an earlier step. Same check, correct config, now it sees the problem class
+            (PA-A7-T19 b, c worked around).
+  PA-A8-T11 Margins left thin by design: saddle 14.2 vs 15 MPa, pull + lean 0.147 vs 0.15 mm, rear strips x2.9, lip-vs-catch
+            467 vs 491 N, a 600 N lean shunting up to 20 N. Several rows pass by under 5 %. The rubric's 9 needs
+            "nothing would change the performance", so R8 may score on these margins.
+
+Reviewer PA-R8  agent-aa2101a1a30a12ace  "Independent review, attempt 8 (final)"  started ~07:37, background
+  PA-A8-T12 The final reviewer prompt finally carries the assembly-side lessons: re-probe the cell path on the exported STL
+            with R7's stl_inside.py, "audit checks.json for any allow that blinds a slide or insertion row", and walk
+            the README step by step (can each part go in, is every screw reachable). PA-A7-T13's gap is closed for the
+            reviewer, in the prompt only. Not mentioned: 0.0 mm insertion clearance (PA-A8-T7) and render-only detail
+            (PA-A8-T9).
+
+PA-R8 result (review.json 07:57; final round)
+  Scores   F 8 / M 8 / A 9   -> loop ends after 8 attempts without a pass (needs 9+ on all three)
+  Trend    5/5/7, 5/6/6, 7/8/7, 7/8/8, 8/6/9, 8/8/9, 4/4/9, 8/8/9
+  cost     27.4 min = model 17.0 + tools 10.5; 66 API calls; out 96k (58k thinking); peak ctx 277k; 15 images, 8 renders,
+           7 Blender runs; the longest review (assembly walk + STL path sweep)
+  Anchors  F 8: 1 major (print spec), < 1 h, no reprint. M 8: 2 majors (print spec, tethered jumper). A 9.
+
+  Previous issues: blocker FIXED (STL sweep of puck, studs, washer, nut 0-60 mm along 45 deg: 0 points inside, both
+  directions); 3 FIXED, 3 PARTIAL (shunt during a 600 N lean, washer strip width, piston step Kt).
+
+  Ranked issues
+    1 Major F,M  No print settings for load-path parts. Nothing in README, BOM, plates.txt, export_prints.py or the 3MFs
+                 (geometry only) sets walls or infill. With slicer defaults (2 walls, 15 %) the piston mouth sees
+                 133 MPa at 600 N (I_eff 5224 vs 15358 solid).
+    2 Major M    Right amp's Qwiic jumper tethers the two tray halves before they're hung separately (142.8 of 150 mm).
+    3 minor F    Shunt during a 600 N lean 12-20 N, over the 10 N dead band.
+    4 minor F    Piston 45 deg step: Kt 1.3-1.5 gives 59-68 MPa.
+    5 minor F    Rear washer row uses a strip wider than the D13 washer's ring: 20-31 MPa.
+    6 minor F    README "pull + 100 N lean clears" mixes moduli; real margin 85 N at E 2500.
+    7 minor M    Fin-to-tray M4s are L-key only (3 mm key missing from the tool list); the A8 designer's walk said every
+                 screw is reached with the kit.
+    8 minor M    Fin pocket roofs span ~23 mm, not the accepted 9-18.
+    9 minor M    Cradle: corner-up pockets, round D16 hole.
+   10 minor F    Purchased parts unverified.
+
+  Process observations
+    PA-A8-T13 The final top issue says every stress number in the run assumed solid sections. 8 rounds of stress rows
+              (spigot, leaves, cradle, saddle, piston, washers) used solid I and Z, and the exported 3MFs carry no slicer
+              settings, so the lab prints at defaults. Nobody flagged it until R8. Tool candidate (high value): per-part
+              print settings (walls, infill, material) in the manifest, written into 3MF metadata by the export, and
+              used by any stress/flexure calc (I_eff). Plus a checklist line: "load-path parts have a print spec".
+    PA-A8-T14 The A8 designer's self-walk claimed "every screw is reached with the kit"; the reviewer found the fin-to-tray
+              M4s are L-key only and the 3 mm key isn't listed (#7). The fasteners check reported "access L-key" all
+              along; the designer read L-key as reachable. Self-review helps (PA-A8-T8) but isn't independent.
+    PA-A8-T15 New reviewer analysis scripts this round: stl_cell_path.py (sweep a bought part's points along a path against
+              an STL), roof_span.py and roof_ascii.py (bridge span per layer region), overhang_locate.py, dump_verts.py.
+              Over the run, reviewers and designers wrote overhang/steep-face locators 7+ times, layer slicers 3x, STL
+              point-in-solid 2x, flexure/head calcs every round from A3. That's the shape of the missing toolkit.
+    PA-A8-T16 Not flagged by R8: 0.0 mm insertion clearance at the cell seats (PA-A8-T7) and the render-only screw recess
+              (PA-A8-T9). The aesthetics 9 stands on renders that include render-only geometry.
+
+
+RUN SUMMARY (written 2026-10-27 ~08:00, after PA-R8; observation only, nothing applied)
+===========
+Outcome: 8 attempts, no pass. Final 8/8/9. Aesthetics passed from A5 on; F and M peaked at 8.
+Cost: designers ~6.5 h of agent wall time (D3-D8 45-90 min each; A1/A2 were inline in the coordinator), reviewers
+12-27 min each (~2 h total). Designer time is mostly single long thinking generations before the first edit
+(PA-A3-T6, A4-T5, A5-T9, A7-T5); the cache misses that follow re-wrote 0.2-0.6 M tokens per round.
+
+What gated the score, in order
+  1. A fix introduces the next blocker (A2 teardrop, A5 cradle, A6 plug lip, A7 cell slot). Each new part or feature
+     had no rows for its own load or assembly case until the reviewer wrote them.
+  2. Unfittable bought part invisible to cad check for 2+ rounds (PA-A7-T7, T19): allow blinds slide_out, insertion
+     skips same-step parts, off-axis paths untested.
+  3. Decisions outside the designer's authority (cell size, outline change, soldering). The coordinator worked around
+     them by framing ("Alex decides", "external outline only") rather than asking Alex (PA-A5-T24, A6-T1, A7-T1, A8-T3).
+  4. Stress numbers on solid sections with no print spec (PA-A8-T13), found only in the last round.
+
+Tool candidates, ranked by evidence (IDs point at the entries above)
+  1. cadcheck slide_out: keep allowed pairs as obstacles (bound by max_mm3) instead of dropping them.      A7-T19a, A8-T6
+  2. cadcheck insertion: test same-step parts in order; warn when BUY_ shares a step with the PRT_ it seats in;
+     off-axis approach directions from features or a warn.                                              A7-T19b/c, A7-T17
+  3. A first-class `calcs` block (value =expr, min/max, unit, why) instead of stacks-as-calcs.            A6-T9, A1-T10, A3-T23
+  4. Per-part print settings (walls/infill/material) in the manifest -> 3MF metadata -> I_eff in calcs.   A8-T13
+  5. Report allows that measure 0 overlap at every pose as unused.                                        A8-T6
+  6. A cad command that locates overhang/steep regions and roof spans per part in print orientation
+     (hand-written 7+ times), and a per-layer section view (layer_ascii, roof_ascii).                     A2-T7, A5-T27, A8-T15
+  7. cadcheck: unknown config keys warn; checks named in --only with no rows go to not_checked; stale accepts reported
+     under --only; accepted_warns match by check + kind, not substring.                                   A2-T11, A4-T6, A4-T10
+  8. check_stacks: treat a failed =expr (None) as a config FAIL, not a TypeError crash (verified).        A5-T26
+  9. G.csg: give new cut faces the target's material (verified in use, patched per project).              A4-T14
+ 10. Moving sub-bodies of a printed part (flexure link) without hand-splitting; flexures check: compute stress and
+     buckling instead of taking a typed number.                                                           A3-T21/T22, A4-T15, A4-T27
+ 11. Material allowables table (PLA in-layer / across-layer, PETG) so row limits aren't per-agent.        A6-T10
+ 12. interference: nuts (FST) vs PRT on the same body aren't checked by anything.                        A2-T12
+ 13. STL reader that handles ASCII and binary for bought parts.                                           A3-T9, A5-T13
+ 14. Fastener access: report where a straight bit would clear, so placing a screw isn't trial-and-error.  A3-T10
+
+Skill / checklist candidates (cad-design-review, print-cad-blender)
+  - checklist: every bought part can reach its seat along a stated path (slide rows), with clearance > 0.  A7-T15, A8-T7
+  - checklist: load-path parts have a print spec.                                                         A8-T13
+  - SKILL step 2: audit accepted_warns like allow/fits; check `ignore` lists in adapted rows.            A3-T24, A5-T17
+  - SKILL: write review rows against params (=param), not literals, so they survive redesigns.           A7-T9, A3-T15
+  - SKILL step 0: notes go in as you go (the restart case).                                               A1-T1
+  - Point SKILL step 2 at reference/checks-config.md for row schemas.                                     A1-T3
+  - Designer done-criteria (loop prompt, not the skill today): adopt previous review rows; strict self-review walk of
+    the assembly guide. The self-walk found 5 real issues in A8.                                          A2-T10, A8-T8
+
+Loop-prompt candidates (for the next /loop prompt, not the skills)
+  - Pass the user's seeded defects to reviewer 1 as previous issues.                                      A1-T13
+  - Ask the user when a fix needs a decision outside the brief, instead of reframing it.                  A5-T24, A7-T1
+  - Score history in reviewer prompts didn't visibly anchor scores.                                       A4-T28
+  - Render-only geometry (drive recesses, materials) shouldn't count toward aesthetics.                    A4-T12, A8-T9
+
+Not verified by me (reviewer/designer claims only): slide_out at-rest contact semantics (A3-T16); printcheck missing
+overhangs vs overhang_gt_45 (A2-T2, A2-T13 partial); the source of the "printcheck misses overhangs" note.
+
+Loop's final attempts.md (08:00): row 8 | 8 | 8 | 9, plus "## Outcome": "Stopped after 8 attempts without reaching 9+ on
+all three. Best: a8 8/8/9 (a6 also 8/8/9). The a8 majors are documentation/settings and cable-order fixes, not geometry."
+  PA-END-T1 The outcome note is accurate and frames the remaining gap as non-geometry, which matches R8's anchors (< 1 h,
+            no reprint). Nothing is committed in the project repo (designer prompts said "Don't commit or push").
+            space-bar-push-assist has 31 changed/untracked paths (git status), cad/review is 28 MB in total, so the
+            45 MB blend copy from PA-A2-T8 is no longer there (later reviewers copied to /tmp).

@@ -1,4 +1,5 @@
 # blend-bracket: cadlib.blend grows the 6-way tube node and the servo bracket; geom.swept_envelope holds every pose.
+# watch: @core @layer examples/blend-node/** examples/blend-bracket/** tools/verify.d/blend_bracket_*.py examples/mm-launcher-a3/** components/**
 # Sourced by tools/verify_all.sh (uses $ROOT $CAD $V $BL, calls ok/bad). About 6 min cold on a loaded machine (1.5 warm), most of it
 # best_orientation running printcheck on 2-10 orientations per part (cached by triangles after the first run).
 # Evidence: docs/features/blend-bracket.md.
@@ -68,6 +69,8 @@ echo "$S" | grep -q '"outside": 0,' && echo "$S" | grep -q '"non_manifold_edges"
 S2=$(sweep --python "$ROOT/tools/verify.d/blend_bracket_sweep.py" -- "$SCR" union)
 echo "$S2" | grep -q '"outside": 0,' && bad "containment check has no teeth: union of 5 deg poses passed" \
   || ok "containment check fails the 5 deg pose union (negative control): $S2"
+# section 4c unpacks the A3 blend in a full run; a --changed run may skip 4c
+[ -f "$V/a3/mm_launcher.blend" ] || { mkdir -p "$V/a3"; gunzip -c "$ROOT/examples/mm-launcher-a3/mm_launcher_a3.blend.gz" > "$V/a3/mm_launcher.blend"; }
 if [ -f "$V/a3/mm_launcher.blend" ]; then
   S3=$(sweep "$V/a3/mm_launcher.blend" --python "$ROOT/tools/verify.d/blend_bracket_sweep.py" -- "$SCR" PRT_nacelle PIV_tilt -3 46)
   echo "$S3" | grep -q '"outside": 0,' && echo "$S3" | grep -q '"non_manifold_edges": 0' \
@@ -81,9 +84,10 @@ import json,sys; r=json.load(open(sys.argv[1])); g=r['grow']; s=r['holds']['serv
 o=r['orientation']; b=o['ranked'][0]
 sys.exit(0 if g['non_manifold_edges']==0 and s['fit_ok'] and s['missed']==0 and s['wall_min']>=3.0 and o['best']=='clip -z face down' and b['fails']==0 and b['warns']==0 else 1)" "$BB/bracket/report.json" \
   && ok "blend bracket: closed, servo fit within 0.05 mm, wall >= 3, best_orientation picks the clip face with 0 printcheck fails or warns" || bad "blend bracket: $(head -c 400 "$BB/bracket/report.json")"
-# best_orientation on the review's three connectors: the pick passes printcheck where the least-overhang direction did not
+# best_orientation on the review's three connectors: the pick stands with the fewest printcheck fails (brc and n3 0; n4 needs
+# support in every orientation once the face pass sees its sleeves' undersides)
 O=$(nice -n 10 "$BL" -b --factory-startup -t 4 --python "$ROOT/tools/verify.d/blend_bracket_orient.py" -- "$SCR" 2>&1 | grep '^ORIENT' | sed 's/^ORIENT //')
-echo "$O" | grep -q '^ORIENT_ALL {"ok": true}' && ok "best_orientation picks a printcheck pass on n3, n4, brc: $(echo "$O" | grep -o '"part": "[^"]*", "ok": [a-z]*, "pick": "[^"]*"' | tr '\n' ' ')" \
+echo "$O" | grep -q '^ORIENT_ALL {"ok": true}' && ok "best_orientation picks the fewest printcheck fails standing on a rim or face (brc, n3: 0; n4: its sleeves need support): $(echo "$O" | grep -o '"part": "[^"]*", "ok": [a-z]*, "pick": "[^"]*"' | tr '\n' ' ')" \
   || bad "best_orientation on the review connectors: $(echo "$O" | cut -c1-300)"
 # "supports: no" needs printcheck evidence (SKILL step 5): the layer check on the exported STL, 0 regions needing support
 CAD_LAYER_CHECK=1 $CAD check "$BB/bracket/bracket.blend" --only parts --out "$BB/bracket/cadcheck.json" >/dev/null

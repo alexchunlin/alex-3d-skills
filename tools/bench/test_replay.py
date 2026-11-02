@@ -60,7 +60,10 @@ def checks(R) -> list[str]:
     want("one false fail, the unlabelled slide fail", row["false_fails"] == 1 and row["false_fail_list"] == ["slide: PRT_z slide-out blocked by ['PRT_y'] at 3 mm"]
          and row["false_fails_rows"] == 1)
     want("known true positive excused, credits nothing", row["known_tp_fails"] == 1)
-    want("noise warns and hit share", (row["warns_untriaged"], row["noise_warns"], row["hit_warns"], row["hit_share"]) == (6, 4, 2, 0.333))
+    want("noise warns and hit share", (row["warns_untriaged"], row["noise_warns"], row["hit_warns"], row["hit_share"]) == (7, 4, 2, 0.333))
+    want("an unproven-pair warn is counted apart, not as noise", row["unproven_warns"] == 1
+         and not any("not proven clear" in w for w in row["noise_warn_list"]) and "PRT_e x PRT_f" in row["unproven_warn_list"][0])
+    want("the compare gate fails a rise in unproven warns", ("unproven_warns", -1) in R.GATE)
     want("printability finding: fail at its region, the ledge elsewhere is noise", row["pf_fail"] == 1 and row["pf_findings"] == 1
          and "z 12.0" in row["pf"]["PF-p"]["designer_line"])
     s = R.summary_row([row], "ALL-v1", lab["printability"])
@@ -87,6 +90,16 @@ def checks(R) -> list[str]:
         f.write_text(json.dumps({**r1, "errors": {}}) + "\n" + json.dumps(r2) + "\n")
         o = io.StringIO()
         want("compare refuses a run with errors", R.compare(f, "aaaaaaa", "bbbbbbb", out=o) == 2 and "run errors" in o.getvalue())
+        want("score lists print-confirmed failures", row["pf_must_fail"] == ["PF-p"])
+        ok_row = {**r1, "errors": {}}
+        lost = {**ok_row, "commit": "bbbbbbb00", "pf": {"PF-p": {"designer": "warn"}}}
+        f.write_text(json.dumps(ok_row) + "\n" + json.dumps({**ok_row, "commit": "bbbbbbb00"}) + "\n")
+        o = io.StringIO()
+        want("compare passes an unchanged row", R.compare(f, "aaaaaaa", "bbbbbbb", out=o) == 0)
+        f.write_text(json.dumps(ok_row) + "\n" + json.dumps(lost) + "\n")
+        o = io.StringIO()
+        want("compare: a print-confirmed failure that no longer fails is worse", R.compare(f, "aaaaaaa", "bbbbbbb", out=o) == 1
+             and "PF-p: a real print failed there" in o.getvalue())
         try:
             R._verify_meta(Path(td), None)
             want("--from-verify without meta.json refuses", False)

@@ -257,7 +257,13 @@ Renders:
 | Token cost | reference moved to `reference/blend.md` (read on demand); SKILL.md has one line, api.md one row | always-read SKILL.md + api.md: +2,852 chars over `next` before, +354 now |
 | `cadlib/__init__` loaded numpy and openvdb on every import | `blend` loads on first use (module `__getattr__`) | full `verify_all` |
 
-## The printcheck gap (report; fix to come as its own PR against `next`)
+## The printcheck gap (report; fixed by printcheck's face pass, PR "printcheck: sloped overhangs")
+
+**Since the fix (with the user's two bands: under 30° from horizontal fails, 30-45° warns):** printcheck's face pass
+fails the ramp rows from 5 to 25 deg (17.0 to 3.9 mm past the 30° line), warns on 30-40, and passes 45 and 50. n4 on
+tube1's rim fails twice (6.0 and 7.6 mm) and warns once; n3 on tube0's rim fails once (3.4 mm). brc on the cradle rim
+keeps 0 fails. Their bore ceilings are sloped bridges (11-14 mm), not fails. `best_orientation` still picks rims: n3 on tube2's rim
+has 0 fails (two warns), n4 needs support in every orientation. The table below is the state before.
 
 **What printcheck does.** It rasterizes each 0.2 mm layer and compares it with the layer below only. New pixels within
 the 45 deg allowance (0.2 mm plus half a pixel) are supported. An unsupported region narrower than `min_feature_mm`
@@ -332,8 +338,8 @@ they didn't.
   at voxel 0.5 hit the 40M-cell guard. They need a coarser voxel (the error names it), splitting, or sparse
   evaluation near the surface (not done).
 - **Printability is reported, not designed in.** The node needs supports in every orientation. There is no overhang-
-  aware field term (for example a 45 deg chamfer under horizontal sleeves) yet. `best_orientation` can only be as good
-  as printcheck, which misses gradual overhangs (see "The printcheck gap").
+  aware field term (for example a 45 deg chamfer under horizontal sleeves) yet. `best_orientation` ranks by printcheck, whose face pass
+  now sees gradual overhangs (see "The printcheck gap").
 - **Grown sockets don't retain the tube.** The fit is a 0.4 mm diametral slip (0.2 radial). Use a screw through the
   sleeve (`holes=features.screw_hole(...)`) or glue.
 - **`clip` is a world-axis box.** For a tilted flat, subtract a rotated `geom.box` through `holes`.

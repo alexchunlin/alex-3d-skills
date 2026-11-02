@@ -1,7 +1,8 @@
 """printcheck: layer-based support analysis of printed parts, on the exported STLs (print frame, bed at z = 0).
 
     cad printcheck <stl_dir | part.stl ...> [--manifest manifest.json] [--out printcheck.json] [--render DIR]
-                   [--layer 0.2] [--px 0.1] [--only GLOB]
+                   [--layer 0.2] [--px 0.1] [--only GLOB] [--config checks.json] [--where]
+                   [--section Z[,Z..] | auto] [--cell MM] [--window X0,Y0,X1,Y1]
 
 Each STL is sliced at the layer height (mid-layer, like a slicer) into a raster. A pixel of layer k is supported when
 it lies within the self-supporting allowance of layer k-1 (h * tan(overhang_deg): 0.2 mm per 0.2 mm layer at 45 deg,
@@ -13,8 +14,22 @@ plus half a pixel of raster slack each side). Each connected unsupported region 
               the anchor (or to a bridged part of it).
               Warn above `cantilever_warn_mm` (1.0), fail above `cantilever_mm` (3.0) on a part marked supports: no.
   island      touches nothing below it (starts in mid-air). Fail above `island_mm2` (0.5) on supports: no.
+The face pass (face_regions) catches what the layer check cannot: it compares each layer with the one below only and
+accepts sub-millimetre steps, so a gradual overhang never builds up (a 20 mm ramp 5-40 deg from horizontal: 0 fails).
+Downward faces flatter than 45 deg from horizontal, off the bed, are grouped through shared vertices; each region's
+boundary is anchored where material continues down from it one layer lower, or where it meets the first layer. A
+region anchored on two sides at heights within 2 mm is a sloped bridge (a horizontal bore's ceiling); otherwise
+overhang_mm is how far it reaches past the overhang_deg cone of its nearest anchor. Warn past face_warn_mm (2), fail
+past cantilever_mm (3) beyond the steeper overhang_fail_deg cone (60 from vertical: faces flatter than 30 deg from
+horizontal, about Bambu/Orca's default support threshold) with face_fail_mm2 (5) or more projected, on supports: no; the
+30-45 deg band only warns (the user's two bands, 2026-10-27). All-flat regions are the layer check's.
+Tangent bed contact (bed_contacts): a curved underside, such as a cylinder lying on the bed, touching it along a line
+under two extrusion lines wide fails on supports: no; cut a flat about 0.3 x r or orient the part another way. The STL's edges in more than two faces warn: a line contact between solids, or, where faces lie
+back to back, a zero-thickness sheet from a coplanar boolean.
 Locations are in the print frame (the STL) and, with a manifest (print_rot, bbox_world_home) or from cadcheck, the
-world frame. Exit status 1 when any part fails.
+world frame. --where lists every region that is not ok and every face region; --section prints layers as text (see
+section_lines; on a directory --where --section auto prints about 900 lines for v2's 36 parts: pass --only PART).
+Exit status 1 when any part fails.
 
 Why: v2 shipped "supports: no" on every part; jar_valve's three bayonet tabs start 2.1 mm above the bed, cantilevered
 about 10 mm, and feeder_cover's top screw ear is a 10.5 mm cantilever at z 32. cadcheck missed both: it measured every
@@ -24,17 +39,32 @@ model rather than the STLs (FINDINGS "v2 post-freeze", docs/evidence-v2-supports
 Plain numpy. Runs under Blender's Python (cadcheck, `cad q printcheck`, `cad printcheck`) or any python3 with numpy;
 --render needs Blender.
 """
-import fnmatch, glob, json, math, os, struct, sys
+import fnmatch, glob, json, math, os, re, struct, sys
 from collections import deque
 import numpy as np
 
-_VERSION = "3"   # bump when analyze() changes what it reports (cache key)
+_VERSION = "4"   # bump when analyze() changes what it reports (cache key)
+
+
+def _source_key():
+    """sha1 of this file: part of the cache key, so an edit to the analysis can't pass on results cached before it."""
+    import hashlib
+    try:
+        with open(os.path.abspath(__file__), "rb") as f:
+            return hashlib.sha1(f.read()).hexdigest()
+    except (OSError, NameError):
+        return "nosource"
+
+
+_SOURCE = _source_key()
 
 DEFAULTS = {
     "layer_h": 0.2,           # mm
     "px": 0.1,                # raster pixel, mm; grown for big parts so a layer stays under max_cells
     "max_cells": 1.5e6,
-    "overhang_deg": 45.0,     # self-supporting angle from vertical
+    "overhang_deg": 45.0,     # self-supporting angle from vertical: the layer allowance and the face pass's warn line
+    "overhang_fail_deg": 60.0,  # the face pass's fail line, from vertical: faces flatter than 30 deg from horizontal (the
+                                # user's call, 2026-10-27; about Bambu/Orca's default support threshold angle of 30)
     "bridge_warn_mm": 25.0,   # FINDINGS / features.RULES: PLA bridges to 25 mm
     "bridge_frac": 0.5,       # share of a region one bridge direction anchors at both ends (holes in a roof cut the rest)
     "cantilever_warn_mm": 1.0,  # beyond the 45 deg allowance: past about two perimeters a ledge sags
@@ -44,22 +74,58 @@ DEFAULTS = {
     "min_feature_mm": 0.4,    # one extrusion line: an unsupported sliver with no core this wide is not printed (v1 A1/A3
                               # base_shell 0.2 mm fins, hopper's 0.1 mm funnel-lip hairline), so it neither fails nor supports
     "max_regions": 25,        # per part, in the report (counts stay complete)
+    # face pass: downward faces steeper than overhang_deg from vertical, grouped through shared vertices, measured from
+    # their anchored edges along the overhang_deg cone (see face_regions). v2's sloped faces reach 1.6 mm past it at most
+    # (beam's corner facets), the 40 deg ramp 3.3 and the grown 4-way node 8.9-10.0, so: warn past face_warn_mm, fail
+    # past cantilever_mm on face_fail_mm2 or more projected (a 3 x 6 mm tab at 10 deg is 18 mm2 and fails, as its flat
+    # twin fails the layer check; PR #11 review). overhang_deg is the slicer's support angle measured from vertical: 45
+    # here is a 45 deg threshold; Bambu/Orca's "threshold angle" 30 (from horizontal) is overhang_deg 60
+    "face_flat_deg": 1.0,     # a region of faces all flatter than this is the layer check's: it tells bridge from cantilever
+    "face_warn_mm": 2.0,
+    "face_fail_mm2": 5.0,
+    "face_min_mm2": 2.0,      # smaller face regions are listed, never flagged
+    "face_probe_mm": 0.5,     # boundary edges are probed for an anchor every this many mm
+    "face_probe_reach_mm": 2.0,  # and at most this far out (downhill edges of flat slopes; see face_regions)
+    "face_bridge_dz_mm": 2.0,
+    "contact_min_mm": 0.9,    # tangent bed contact (bed_contacts): narrower than two 0.45 mm extrusion lines
+    "contact_len_mm": 3.0,    # over at least this length (a plate's rounded corners are shorter)
+    "contact_up_mm": 1.0,     # where the widening is measured
+    "contact_r_mm": 3.5,      # and the underside's radius, from that widening, at least this: r 5 lying cylinders read
+                              # 4.0-4.6 (the estimate runs 10-20 % low), the review bracket's cradle rim (a 3 mm wall
+                              # with a 1.5 mm rounded foot and fillets) 3.1    # a sloped bridge's two anchors differ in height by no more than this (0.4 added 4
+                                 # warns on v2 flywheel's bore tops)
+    "nm_min_edge_mm": 0.01,   # STL edge count: shorter edges are slivers (v2 hood's nanometre edges)
 }
 
 
 # ------------------------------------------------------------------ input
 
 def read_stl(path):
-    """Triangles (n, 3, 3) float64 from a binary or ASCII STL."""
+    """Triangles (n, 3, 3) float64 from a binary or ASCII STL. The one plain-Python STL reader here: cad printcheck,
+    cadcheck and tools/prior_art use it, and so can project scripts (purchased parts come as either; push-assist PA-A3-T9,
+    PA-A5-T13: hand-rolled binary readers failed on ASCII parts). Binary: the header's count matches the file size, or
+    the count is 0 (a writer that never filled it in) and the size is 84 + 50 n. ASCII ("solid", after any UTF-8 BOM):
+    numbers rounded to float32, so both forms of a part give the same triangles. Anything else, a truncated binary
+    included, raises ValueError."""
     with open(path, "rb") as f:
         data = f.read()
-    if len(data) >= 84:
-        n = struct.unpack("<I", data[80:84])[0]
-        if 84 + 50 * n == len(data):
-            rec = np.frombuffer(data, dtype=np.dtype([("n", "<f4", 3), ("v", "<f4", (3, 3)), ("a", "<u2")]), count=n, offset=84)
-            return rec["v"].astype(np.float64)
-    vs = [list(map(float, l.split()[1:4])) for l in data.decode("ascii", "replace").splitlines() if l.strip().startswith("vertex")]
-    return np.array(vs, dtype=np.float64).reshape(-1, 3, 3)
+    rec = np.dtype([("n", "<f4", 3), ("v", "<f4", (3, 3)), ("a", "<u2")])
+    n = struct.unpack("<I", data[80:84])[0] if len(data) >= 84 else -1
+    if n >= 0 and 84 + 50 * n == len(data):
+        return np.frombuffer(data, dtype=rec, count=n, offset=84)["v"].astype(np.float64)
+    text = data[3:] if data.startswith(b"\xef\xbb\xbf") else data
+    vs = re.findall(rb"vertex\s+(\S+)\s+(\S+)\s+(\S+)", text, re.I) if text.lstrip()[:5].lower() == b"solid" else []
+    if vs and len(vs) % 3 == 0:
+        try:
+            return np.array([[float(x) for x in v] for v in vs], dtype=np.float32).astype(np.float64).reshape(-1, 3, 3)
+        except ValueError:
+            raise ValueError("%s: ASCII STL with a vertex that is not three numbers" % path)
+    if not vs and text.lstrip()[:5].lower() == b"solid" and re.search(rb"endsolid", text, re.I) and not re.search(rb"vertex", text, re.I):
+        return np.zeros((0, 3, 3))
+    if n == 0 and len(data) > 84 and (len(data) - 84) % 50 == 0:
+        return np.frombuffer(data, dtype=rec, count=(len(data) - 84) // 50, offset=84)["v"].astype(np.float64)
+    raise ValueError("%s: not a whole binary or ASCII STL (%d bytes%s)" % (
+        path, len(data), ", header count %d needs %d" % (n, 84 + 50 * n) if n > 0 else ""))
 
 
 # ------------------------------------------------------------------ slicing
@@ -195,9 +261,11 @@ def _nearest(free, seed, cap=4000):
     return float(np.sqrt(best.max())) + 0.5
 
 
-def _chords(R, P, ys, xs, p, ndir=12, cap=800, dirs=None):
+def _chords(R, P, ys, xs, p, ndir=12, cap=800, dirs=None, Az=None, dz=None):
     """For each of ndir directions: share of R's pixels whose straight line through R ends on supported material P at
-    both ends, and the longest such line (mm). Lines are marched in 0.7 pixel steps."""
+    both ends, and the longest such line (mm). Lines are marched in 0.7 pixel steps. With Az (anchor height per pixel),
+    a line counts only when its two anchors are within dz in height: a slab whose underside climbs from a low pillar
+    to a high one is a cantilever off the low one, not a bridge (PR #11 review)."""
     if cap and len(ys) > cap:
         k = np.linspace(0, len(ys) - 1, cap).astype(int)
         ys, xs = ys[k], xs[k]
@@ -209,10 +277,11 @@ def _chords(R, P, ys, xs, p, ndir=12, cap=800, dirs=None):
         th = math.radians(deg)
         dy, dx = math.sin(th) * 0.7, math.cos(th) * 0.7
         st = np.arange(1, maxst + 1, dtype=np.float64)
-        ends, lens = [], []
+        ends, lens, ez = [], [], []
         for sgn in (1, -1):
             hitP = np.zeros(len(ys), bool)
             L = np.zeros(len(ys))
+            zz = np.full(len(ys), np.nan)
             for c0 in range(0, len(ys), 4000):
                 yy, xx = ys[c0:c0 + 4000, None], xs[c0:c0 + 4000, None]
                 cy = np.floor(yy + 0.5 + sgn * dy * st).astype(np.int64)
@@ -224,12 +293,273 @@ def _chords(R, P, ys, xs, p, ndir=12, cap=800, dirs=None):
                 rows = np.arange(len(first))
                 hitP[c0:c0 + 4000] = inb[rows, first] & P[cyc[rows, first], cxc[rows, first]]
                 L[c0:c0 + 4000] = st[first] * 0.7
+                if Az is not None:
+                    zz[c0:c0 + 4000] = Az[cyc[rows, first], cxc[rows, first]]
             ends.append(hitP)
             lens.append(L)
+            ez.append(zz)
         both = ends[0] & ends[1]
+        if Az is not None:
+            with np.errstate(invalid="ignore"):
+                both &= np.abs(ez[0] - ez[1]) <= dz
         span = float((lens[0] + lens[1])[both].max()) * p if both.any() else 0.0
         res.append((float(both.mean()), span, deg, both, ys, xs))
     return res
+
+
+# ------------------------------------------------------------------ face pass
+
+def _weld(tris, tol=1e-4):
+    """Vertex ids per triangle corner, merging corners within tol (float32 STL corners of one vertex agree exactly)."""
+    q = np.round(tris.reshape(-1, 3) / tol).astype(np.int64)
+    _, inv = np.unique(q, axis=0, return_inverse=True)
+    return inv.reshape(-1, 3)
+
+
+def _edge_keys(F, nv=None):
+    """(3n,) sorted-edge keys and the face each comes from, corner order (0,1), (1,2), (2,0). Keys from two calls
+    compare only when both pass the same vertex count nv."""
+    E = np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]])
+    E = np.sort(E, 1)
+    return E[:, 0] * (nv or (int(F.max()) + 1 if len(F) else 1)) + E[:, 1], np.tile(np.arange(len(F)), 3)
+
+
+def _face_groups(F, idx):
+    """Connected groups (lists of indices into idx) of the faces idx, joined through shared vertices."""
+    key, fi = F[idx].reshape(-1), np.repeat(np.arange(len(idx)), 3)
+    o = np.argsort(key, kind="stable")
+    ks, fs = key[o], fi[o]
+    parent = np.arange(len(idx))
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+    for s in np.nonzero(ks[1:] == ks[:-1])[0]:
+        a, b = find(fs[s]), find(fs[s + 1])
+        if a != b:
+            parent[a] = b
+    roots = np.array([find(i) for i in range(len(idx))])
+    order = np.argsort(roots, kind="stable")
+    cut = np.nonzero(np.diff(roots[order]))[0] + 1
+    return np.split(order, cut)
+
+
+def _fill_tris(T, x0, y0, p, W, H):
+    """Footprint of the 3D triangles T (n, 3, 3) on an (H, W) grid: pixels whose centres lie in a triangle's xy
+    projection, plus each corner's, edge midpoint's and centroid's pixel so slivers narrower than a pixel still mark
+    their path. Returns the mask and the lowest surface z per pixel (inf off the footprint)."""
+    Z = np.full((H, W), np.inf)
+    ij = lambda P: (np.clip(np.floor((P[..., 1] - y0) / p).astype(np.int64), 0, H - 1),
+                    np.clip(np.floor((P[..., 0] - x0) / p).astype(np.int64), 0, W - 1))
+    for P in (T[:, 0], T[:, 1], T[:, 2], T.mean(1), (T[:, 0] + T[:, 1]) / 2, (T[:, 1] + T[:, 2]) / 2, (T[:, 2] + T[:, 0]) / 2):
+        np.minimum.at(Z, ij(P), P[:, 2])
+    lo, hi = T[:, :, :2].min(1), T[:, :, :2].max(1)
+    c0 = np.clip(np.ceil((lo[:, 0] - x0) / p - 0.5), 0, W).astype(np.int64)
+    c1 = np.clip(np.floor((hi[:, 0] - x0) / p - 0.5) + 1, 0, W).astype(np.int64)
+    r0 = np.clip(np.ceil((lo[:, 1] - y0) / p - 0.5), 0, H).astype(np.int64)
+    r1 = np.clip(np.floor((hi[:, 1] - y0) / p - 0.5) + 1, 0, H).astype(np.int64)
+    nw, nh = np.maximum(c1 - c0, 0), np.maximum(r1 - r0, 0)
+    cnt = nw * nh
+    for s in range(0, len(T), 20000):
+        sl = slice(s, s + 20000)
+        c = cnt[sl]
+        tot = int(c.sum())
+        if not tot:
+            continue
+        t = np.repeat(np.arange(len(c)), c)
+        k = np.arange(tot) - np.repeat(np.cumsum(c) - c, c)
+        w = nw[sl][t]
+        cols, rows = c0[sl][t] + k % w, r0[sl][t] + k // w
+        px, py = x0 + (cols + 0.5) * p, y0 + (rows + 0.5) * p
+        A, B, Cc = T[sl][t, 0], T[sl][t, 1], T[sl][t, 2]
+        e = lambda U, V: (V[:, 0] - U[:, 0]) * (py - U[:, 1]) - (V[:, 1] - U[:, 1]) * (px - U[:, 0])
+        d0, d1, d2 = e(B, Cc), e(Cc, A), e(A, B)          # barycentric weights of A, B, C (times twice the area)
+        inside = ((d0 >= 0) & (d1 >= 0) & (d2 >= 0)) | ((d0 <= 0) & (d1 <= 0) & (d2 <= 0))
+        den = d0 + d1 + d2
+        ok = inside & (np.abs(den) > 1e-12)
+        z = (d0 * A[:, 2] + d1 * B[:, 2] + d2 * Cc[:, 2])[ok] / den[ok]
+        np.minimum.at(Z, (rows[ok], cols[ok]), z)
+    return np.isfinite(Z), Z
+
+
+def _excess(R, Z, Az, p, tan, cap=3000):
+    """Largest over R's pixels of the horizontal distance past the self-supporting cone of the nearest anchor: for a
+    pixel at height z, min over anchors of (distance - (z - anchor z) * tan). A flat ledge gives its reach; a slope
+    printed at the allowed angle gives 0, however its facets are cut."""
+    fy, fx = np.nonzero(R)
+    ay, ax = np.nonzero(np.isfinite(Az))
+    if not len(fy) or not len(ay):
+        return 0.0, None
+    if len(fy) > cap:
+        k = np.linspace(0, len(fy) - 1, cap).astype(int)
+        fy, fx = fy[k], fx[k]
+    if len(ay) > cap:
+        k = np.linspace(0, len(ay) - 1, cap).astype(int)
+        ay, ax = ay[k], ax[k]
+    fz, az = Z[fy, fx], Az[ay, ax]
+    best = np.full(len(fy), np.inf)
+    for i in range(0, len(ay), 1000):
+        d = np.hypot(fy[:, None] - ay[None, i:i + 1000], fx[:, None] - ax[None, i:i + 1000]) * p
+        best = np.minimum(best, (d - np.maximum(fz[:, None] - az[None, i:i + 1000], 0.0) * tan).min(1))
+    j = int(np.argmax(best))
+    return max(0.0, float(best[j])), (fy[j], fx[j])
+
+
+def face_regions(tris, C, zmin=0.0):
+    """Downward faces flatter than overhang_deg from horizontal, off the bed (centroid above the first layer),
+    grouped through shared vertices. Flat faces stay in a region with sloped ones, so a horizontal bore's ceiling
+    stays one arch anchored on both sides, not two half-arches each anchored on one. The 45 deg line has cadcheck's 1e-3 margin on the normal (44.92 deg):
+    float32 STLs carry up to 2,276 mm2 of exact 45 deg faces on one part (PR #6 review). Returns the regions and, by layer, the probes that ask for each piece of a region's
+    boundary whether there is material just outside it one layer down (a wall or a self-supporting slope continues
+    down from the edge: it is anchored). The layer loop answers them from its own sections."""
+    h = C["layer_h"]
+    nrm = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
+    a2 = np.linalg.norm(nrm, axis=1)
+    nz = nrm[:, 2] / np.maximum(a2, 1e-30)
+    # angle of the face from horizontal: 0 = a flat ceiling, 90 = a wall
+    fh = np.degrees(np.arccos(np.clip(-nz, -1.0, 1.0)))
+    cos_o = math.cos(math.radians(C["overhang_deg"]))
+    F = _weld(tris)
+    # corners that weld together make a zero-area face whose doubled edge would hide a real boundary edge
+    deg = (F[:, 0] == F[:, 1]) | (F[:, 1] == F[:, 2]) | (F[:, 2] == F[:, 0])
+    sel = np.nonzero(~deg & (a2 > 1e-12) & (nz < -cos_o - 1e-3) & (tris[:, :, 2].mean(1) > h))[0]
+    if not len(sel):
+        return [], {}
+    # the bed band: downward faces within the first layer. A region edge shared with one sits on the bed: anchored, at
+    # whatever height the facets put it (a lying r 15 cylinder's lowest kept edge is at z 0.23 with 36 facets)
+    nv = int(F.max()) + 1
+    bk, _ = _edge_keys(F[np.nonzero(~deg & (a2 > 1e-12) & (nz < 0) & (tris[:, :, 2].mean(1) <= h))[0]], nv)
+    bed_keys = np.unique(bk)
+    A = a2 / 2
+    regions, probes = [], {}
+    step = C["face_probe_mm"]
+    for g in _face_groups(F, sel):
+        fid = sel[g]
+        ar = float(A[fid].sum())
+        if ar < C["min_region_mm2"]:
+            continue
+        T = tris[fid]
+        # boundary edges: in one face of the group only
+        key, fi = _edge_keys(F[fid], nv)
+        uk, cnt = np.unique(key, return_counts=True)
+        bnd = np.nonzero(cnt[np.searchsorted(uk, key)] == 1)[0]
+        on_bed = np.isin(key[bnd], bed_keys)
+        e0 = np.array([0, 1, 2])[bnd // len(fid)]
+        f = fi[bnd]
+        a, b = T[f, e0], T[f, (e0 + 1) % 3]
+        c = T[f, (e0 + 2) % 3]
+        d = b[:, :2] - a[:, :2]
+        L = np.linalg.norm(d, axis=1)
+        o = np.stack([d[:, 1], -d[:, 0]], 1) / np.maximum(L, 1e-9)[:, None]
+        mid = (a[:, :2] + b[:, :2]) / 2
+        flip = ((c[:, :2] - mid) * o).sum(1) > 0
+        o[flip] *= -1                                       # outward: away from the face's third corner
+        # how far out to look: one allowance past the layer's raster slack, or, across a downhill edge (where the slope
+        # carries on down: a bed-side chamfer's foot, a bore's sides), as far as a slope this flat moves in 1.5 layers
+        r = h * math.tan(math.radians(C["overhang_deg"]))
+        nx = nrm[fid][f, :2] / np.maximum(a2[fid][f], 1e-30)[:, None]
+        down = (o * -nx).sum(1) > 0.5 * np.maximum(np.linalg.norm(nx, axis=1), 1e-9)
+        fhe = np.radians(np.maximum(fh[fid][f], 1.0))
+        reach = np.where(down, np.clip(1.5 * h / np.tan(fhe), 2 * r, C["face_probe_reach_mm"]), 2 * r)
+        n = np.maximum(1, np.ceil(L / step)).astype(np.int64)
+        e = np.repeat(np.arange(len(a)), n)
+        t = (np.arange(int(n.sum())) - np.repeat(np.cumsum(n) - n, n) + 0.5) / np.repeat(n, n)
+        P = a[e] + t[:, None] * (b[e] - a[e])
+        reg = {"_faces": fid, "_pts": P, "_out": o[e], "_seg": np.repeat(L / n, n), "_dir": d[e] / np.maximum(L[e], 1e-9)[:, None],
+               "_sup": np.zeros(len(P), bool), "_reach": reach[e], "area_mm2": ar}
+        # probe the layer whose mid-height is 0.5-1.5 layers below the edge point. Edges within the first layer border
+        # the bed band (faces there are the bed's), so they are anchored: v1 A3 feeder_shroud's flare starts at z 0.2
+        kp = np.floor((P[:, 2] - zmin - 0.75 * h) / h).astype(np.int64)
+        kp[(P[:, 2] - zmin <= h * 1.05) | on_bed[e]] = -1
+        reg["_sup"][kp < 0] = True
+        for k in np.unique(kp[kp >= 0]):
+            probes.setdefault(int(k), []).append((len(regions), np.nonzero(kp == k)[0]))
+        reg["_fh"] = fh[fid]
+        regions.append(reg)
+    return regions, probes
+
+
+def _probe(reg, ii, cur, x0, y0, p, W, H, C):
+    """Mark the probes ii of reg anchored when this layer has material just outside the edge: from half an allowance
+    out to the probe's reach, in half-allowance steps, plus half a raster pixel."""
+    P, o, reach = reg["_pts"][ii], reg["_out"][ii], reg["_reach"][ii]
+    r = C["layer_h"] * math.tan(math.radians(C["overhang_deg"]))
+    hit = np.zeros(len(ii), bool)
+    for s in np.arange(0.5 * r, float(reach.max()) + 1e-9, 0.5 * r):
+        q = P[:, :2] + o * (s + 0.5 * p)
+        cx = np.floor((q[:, 0] - x0) / p).astype(np.int64)
+        cy = np.floor((q[:, 1] - y0) / p).astype(np.int64)
+        inb = (cx >= 0) & (cx < W) & (cy >= 0) & (cy < H) & (s <= reach + 1e-9)
+        hit[inb] |= cur[cy[inb], cx[inb]]
+    reg["_sup"][ii] |= hit
+
+
+def classify_face_region(reg, tris, p, C, zmin=0.0, print_to_world=None):
+    """Footprint of the region as pixels, its anchored boundary as the pixels just outside it, and the layer check's
+    measures on that pair: a bridge when straight lines in one direction end on anchors at both ends for at least
+    bridge_frac of it (a horizontal hole's top, a drill-point roof, a tube's underside between two walls); else a
+    cantilever whose overhang_mm is how far it reaches past the 45 deg cone of its nearest anchor (a ramp, a tube's
+    underside off one wall, a ledge); floating when no edge is anchored."""
+    fid = reg["_faces"]
+    T = tris[fid]
+    lo, hi = T.reshape(-1, 3).min(0), T.reshape(-1, 3).max(0)
+    S = reg["_sup"]
+    fh = reg["_fh"]
+    w = np.linalg.norm(np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]), axis=1)
+    out = {"area_mm2": round(reg["area_mm2"], 1), "projected_mm2": round(float((w * np.cos(np.radians(fh))).sum() / 2), 1),
+           "deg_limit": C["overhang_deg"], "deg_fail": C["overhang_fail_deg"],
+           "deg_from_vertical": [round(90 - float(fh.max()), 1), round(90 - float(fh.min()), 1)],
+           "mean_deg_from_vertical": round(90 - float((fh * w).sum() / w.sum()), 1),
+           "z_mm": [round(float(lo[2]), 2), round(float(hi[2]), 2)],
+           "anchored_edge_mm": round(float(reg["_seg"][S].sum()), 1), "edge_mm": round(float(reg["_seg"].sum()), 1)}
+    cen = (T.mean(1) * w[:, None]).sum(0) / w.sum()
+    out["at_print"] = [round(float(v), 1) for v in cen]
+    out["extent_mm"] = [round(float(v), 1) for v in (hi - lo)[:2]]
+    if print_to_world is not None:
+        Rw, tw = print_to_world
+        out["at_world"] = [round(float(v), 1) for v in np.asarray(Rw) @ (cen + [0, 0, zmin]) + np.asarray(tw)]
+    # the cheap verdicts first (PR #11 review: small parts went 0.64 -> 1.80 s measuring regions nobody judges)
+    if hi[2] - lo[2] <= C["layer_h"] + 1e-6 or fh.max() < C["face_flat_deg"]:
+        out["kind"] = "flat"
+        return out
+    if out["projected_mm2"] < C["face_min_mm2"]:
+        out["kind"] = "small"
+        return out
+    marg = 4
+    x0, y0 = lo[0] - marg * p, lo[1] - marg * p
+    W = int(math.ceil((hi[0] - lo[0]) / p)) + 2 * marg
+    H = int(math.ceil((hi[1] - lo[1]) / p)) + 2 * marg
+    R, Z = _fill_tris(T, x0, y0, p, W, H)
+    Az = np.full((H, W), np.inf)
+    if S.any():
+        P, o, seg, dr = reg["_pts"][S], reg["_out"][S], reg["_seg"][S], reg["_dir"][S]
+        k = np.maximum(1, np.ceil(seg / (0.5 * p))).astype(np.int64)
+        e = np.repeat(np.arange(len(P)), k)
+        t = (np.arange(int(k.sum())) - np.repeat(np.cumsum(k) - k, k) + 0.5) / np.repeat(k, k) - 0.5
+        Q = P[e, :2] + dr[e] * (t * seg[e])[:, None]
+        for s in (0.5, 1.0, 1.5):
+            q = Q + o[e] * (s * p)
+            cx = np.clip(np.floor((q[:, 0] - x0) / p).astype(np.int64), 0, W - 1)
+            cy = np.clip(np.floor((q[:, 1] - y0) / p).astype(np.int64), 0, H - 1)
+            np.minimum.at(Az, (cy, cx), P[e, 2])
+        Az[R | ~_dilate(R, N8)] = np.inf
+    A = np.isfinite(Az)
+    tan = math.tan(math.radians(C["overhang_deg"]))
+    if not A.any():
+        out.update(kind="floating", overhang_mm=round(float(max(hi[0] - lo[0], hi[1] - lo[1])), 1))
+    else:
+        ys, xs = np.nonzero(R)
+        ch = _chords(R, A, ys.astype(float), xs.astype(float), p, Az=Az, dz=C["face_bridge_dz_mm"])
+        frac, span, ang, both, sy, sx = max(ch, key=lambda c: (round(c[0], 2), -c[1]))
+        if frac >= C["bridge_frac"]:
+            out.update(kind="bridge", span_mm=round(span, 1), anchored_frac=round(frac, 2))
+        else:
+            ex, _ = _excess(R, Z, Az, p, tan)
+            exf, _ = _excess(R, Z, Az, p, math.tan(math.radians(C["overhang_fail_deg"])))
+            out.update(kind="cantilever", overhang_mm=round(ex, 1), overhang_fail_mm=round(exf, 1), anchored_frac=round(frac, 2))
+    return out
 
 
 def analyze(tris, cfg=None, supports="no", print_to_world=None, keep_pixels=False):
@@ -259,6 +589,8 @@ def analyze(tris, cfg=None, supports="no", print_to_world=None, keep_pixels=Fals
     regions = []
     prev = None
     n_thin = 0
+    fregs, probes = face_regions(tris, C)
+    secs, k_up = {}, max(1, int(round(C["contact_up_mm"] / h - 0.5)))
     thin_offs = _disk(C["min_feature_mm"] / 2 / p)
     for k in range(nl):
         z = min((k + 0.5) * h, hi[2] - 1e-4) + 1.37e-4
@@ -268,6 +600,10 @@ def analyze(tris, cfg=None, supports="no", print_to_world=None, keep_pixels=Fals
         else:
             cur = _layer_mask(tris, tz, z, x0, y0, p, W, H)
         last_cross = cross
+        if k == 0 or k == k_up:
+            secs[k] = cur
+        for ri, ii in probes.get(k, ()):
+            _probe(fregs[ri], ii, cur, x0, y0, p, W, H, C)
         if prev is None:
             prev = cur
             continue
@@ -343,6 +679,13 @@ def analyze(tris, cfg=None, supports="no", print_to_world=None, keep_pixels=Fals
                 regions.append(reg)
         prev = cur
     nosup = str(supports or "").lower() in ("no", "none", "false", "")
+    faces = []
+    for fr in fregs:
+        g = classify_face_region(fr, tris, p, C, zmin, print_to_world)
+        g["status"] = _face_status(g, C, nosup)
+        if keep_pixels:
+            g["_faces"] = fr["_faces"]
+        faces.append(g)
     for g in regions:
         if g["kind"] == "island" and g["area_mm2"] >= C["island_mm2"]:
             g["status"] = "fail" if nosup else "support"
@@ -356,21 +699,180 @@ def analyze(tris, cfg=None, supports="no", print_to_world=None, keep_pixels=Fals
             g["status"] = "ok"
     sev = {"fail": 0, "support": 1, "warn": 2, "ok": 3}
     regions.sort(key=lambda g: (sev[g["status"]], -g.get("overhang_mm", g.get("span_mm", 0)), -g["area_mm2"]))
-    findings = _findings(regions)
+    sev["layer"] = 4
+    faces.sort(key=lambda g: (sev[g["status"]], -g.get("overhang_mm", g.get("span_mm", 0)), -g["area_mm2"]))
+    nm = stl_edges(tris, C)
+    contacts = bed_contacts(tris, C, secs.get(0), secs.get(k_up), (k_up + 0.5) * h, x0, y0, p, W, H, nosup, print_to_world, zmin)
+    if print_to_world is not None:
+        nm["at_world"] = _to_world(nm["at"], print_to_world, zmin)
+        nm["sheet_at_world"] = _to_world(nm["sheet_at"], print_to_world, zmin)
+    findings = _findings(regions, faces, nm, contacts)
     by = lambda kind: [g for g in regions if g["kind"] == kind]
+    fl = [g for g in faces if g["status"] in ("fail", "support", "warn")]
     out = {"layers": nl, "layer_h": h, "px_mm": round(p, 3), "allowance_mm": round(r_mm, 3), "height_mm": round(float(hi[2]), 2),
-           "supports": supports, "needs_support": any(g["status"] in ("fail", "support") for g in regions),
+           "supports": supports, "needs_support": any(g["status"] in ("fail", "support") for g in regions + faces + contacts),
            "n_islands": sum(g["status"] in ("fail", "support") for g in by("island")),
            "n_cantilevers": sum(g["status"] in ("fail", "support") for g in by("cantilever")),
            "max_overhang_mm": max([g["overhang_mm"] for g in by("cantilever")] or [0.0]),
            "max_bridge_mm": max([g["span_mm"] for g in by("bridge")] or [0.0]),
            "n_regions": len(regions), "n_thin_dropped": n_thin, "regions": regions[:C["max_regions"]] if not keep_pixels else regions,
-           "findings": findings}
+           "n_face_overhangs": sum(g["status"] in ("fail", "support") for g in faces),
+           "max_face_overhang_mm": max([g["overhang_mm"] for g in faces if g["status"] != "layer" and "overhang_mm" in g] or [0.0]),
+           "max_face_overhang_fail_mm": max([g["overhang_fail_mm"] for g in faces if g["status"] != "layer" and "overhang_fail_mm" in g] or [0.0]),
+           "bed_contacts": contacts,
+           "face_overhang_mm2": round(sum(g["projected_mm2"] for g in fl), 1), "n_face_regions": len(faces),
+           "faces": [g for g in faces if g["projected_mm2"] >= C["face_min_mm2"]][:C["max_regions"]] if not keep_pixels else faces,
+           "stl_nonmanifold_edges": nm["n"], "stl_nonmanifold_at": nm["at"], "stl_sheet_edges": nm["sheet"],
+           "stl_sheet_at": nm["sheet_at"], "findings": findings}
     return out
 
 
-def _findings(regions):
+def _face_status(g, C, nosup):
+    """Face-pass verdict. A flat region (all faces within face_flat_deg of horizontal, or all within one layer) is the
+    layer check's call: it sees the whole region at its layer and tells a bridge from a cantilever, so the region is
+    listed here as 'layer' and judged there."""
+    sup = "fail" if nosup else "support"
+    if g["z_mm"][1] - g["z_mm"][0] <= C["layer_h"] + 1e-6 or g["deg_from_vertical"][0] > 90 - C["face_flat_deg"]:
+        return "layer"
+    if g["projected_mm2"] < C["face_min_mm2"]:
+        return "ok"
+    if g["kind"] == "bridge":
+        return "warn" if g["span_mm"] > C["bridge_warn_mm"] else "ok"
+    # two bands: past cantilever_mm beyond the overhang_fail_deg cone fails; the 30-45 deg band (from horizontal) only
+    # ever warns, so a designer can orient or chamfer it away
+    soft = "warn" if nosup else "support"
+    if g["kind"] == "floating":
+        return sup if g["deg_from_vertical"][1] > C["overhang_fail_deg"] and g["projected_mm2"] >= C["face_fail_mm2"] else soft
+    if g["overhang_fail_mm"] > C["cantilever_mm"]:
+        return sup if g["projected_mm2"] >= C["face_fail_mm2"] else soft
+    if g["overhang_mm"] > C["face_warn_mm"]:
+        return soft
+    return "ok"
+
+
+def bed_contacts(tris, C, sec0, sec_up, z_up, x0, y0, p, W, H, nosup, print_to_world=None, zmin=0.0):
+    """Tangent bed contact: a curved underside (a lying cylinder, a round-bottomed part) touches the bed along a line,
+    and the part widens fast above it. The contact is drawn from the faces and edges lying on the bed. A stretch of it
+    narrower than contact_min_mm (0.9: two 0.45 mm extrusion lines, the narrowest strip that holds a bonded perimeter
+    pair; below that the first layer stands on one bead) that is longer than contact_len_mm, is not the rounded edge of a
+    wider contact, and under an underside of radius contact_r_mm or more (from the section's width at contact_up_mm)
+    is one finding. A real flat (a
+    cylinder with a 0.3 r flat: 1.5 mm at r 5) is wide enough, and a thin wall standing on the bed does not widen."""
+    if sec0 is None or sec_up is None:
+        return []
+    nrm = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
+    a2 = np.linalg.norm(nrm, axis=1)
+    on = (np.abs(tris[:, :, 2]) <= 1e-3)
+    flat = on.all(1) & (a2 > 1e-12) & (nrm[:, 2] < -0.999 * np.maximum(a2, 1e-30))
+    Cm, _ = _fill_tris(tris[flat], x0, y0, p, W, H) if flat.any() else (np.zeros((H, W), bool), None)
+    for i, j in ((0, 1), (1, 2), (2, 0)):                  # edges lying on the bed: a vertex-down cylinder's contact line
+        m = on[:, i] & on[:, j]
+        if not m.any():
+            continue
+        A, B = tris[m, i, :2], tris[m, j, :2]
+        n = np.maximum(1, np.ceil(np.linalg.norm(B - A, axis=1) / (0.5 * p))).astype(np.int64)
+        e = np.repeat(np.arange(len(A)), n)
+        t = (np.arange(int(n.sum())) - np.repeat(np.cumsum(n) - n, n)) / np.repeat(n, n)
+        Q = A[e] + t[:, None] * (B[e] - A[e])
+        Cm[np.clip(((Q[:, 1] - y0) / p).astype(int), 0, H - 1), np.clip(((Q[:, 0] - x0) / p).astype(int), 0, W - 1)] = True
+    if not Cm.any():
+        return []
+    half = _disk(C["contact_min_mm"] / 2 / p)
+    narrow = Cm & ~_dilate(~_dilate(~Cm, half), half)       # what an opening at half the minimum width removes
     out = []
+    for ys, xs in _components(narrow) if narrow.sum() < 2e5 else []:
+        length = max(xs.max() - xs.min() + 1, ys.max() - ys.min() + 1) * p
+        if length < C["contact_len_mm"]:
+            continue
+        N = np.zeros_like(Cm)
+        N[ys, xs] = True
+        near = _dilate(N, half)
+        if (Cm & ~narrow & _dilate(N, _disk(1.0 / p))).sum() > len(ys):
+            continue                                          # the rounded edge of a wider contact (a rim, a plate corner)
+        up = float((sec_up & _dilate(N, _disk(2.0 / p))).sum())
+        if up < 2 * near.sum():
+            continue                                          # does not widen: a thin wall, not a curved underside
+        w_up = float((sec_up & _dilate(N, _disk(5.0 / p))).sum()) * p * p / length
+        if w_up * w_up / (8 * z_up) < C["contact_r_mm"]:
+            continue                                          # a wall's rounded foot, not a lying cylinder
+        g = {"length_mm": round(length, 1), "bed_width_mm": round(float((Cm & near).sum()) * p * p / length, 2),
+             "first_layer_mm": round(float((sec0 & _dilate(N, _disk(3.0 / p))).sum()) * p * p / length, 1),
+             "width_up_mm": round(w_up, 1), "up_mm": round(z_up, 1), "min_width_mm": C["contact_min_mm"],
+             "r_mm": round(w_up * w_up / (8 * z_up), 1),
+             "at_print": [round(float(x0 + (xs.mean() + 0.5) * p), 1), round(float(y0 + (ys.mean() + 0.5) * p), 1), 0.0],
+             "status": "fail" if nosup else "support"}
+        if print_to_world is not None:
+            g["at_world"] = _to_world([g["at_print"]], print_to_world, zmin)[0]
+        out.append(g)
+    return out
+
+
+def _to_world(pts, print_to_world, zmin):
+    Rw, tw = print_to_world
+    return [[round(float(v), 1) for v in np.asarray(Rw) @ (np.array(p) + [0, 0, zmin]) + np.asarray(tw)] for p in pts]
+
+
+def stl_edges(tris, C):
+    """Edges shared by more than two faces in the triangles as an STL stores them: float32 corners, welded only where
+    they are equal (as a slicer's loader does), collapsed faces dropped, edges under nm_min_edge_mm ignored. v2
+    base_shell has 7: r 5 mm cylinders touching the inner wall along a line. The model keeps those vertex pairs apart,
+    so its own manifold test passes, and the export makes them one (PR #6 review). v2 hood's one 22.45 mm edge in 4
+    faces is not counted: two of the faces are 4 nm wide (4e-5 mm2, opposite normals), a zero-volume sliver that slices
+    to nothing, not two solids touching."""
+    T = np.asarray(tris, np.float32).astype(np.float64)
+    u, inv = np.unique(T.reshape(-1, 3), axis=0, return_inverse=True)
+    F = inv.reshape(-1, 3)
+    # collapsed faces and needles (under nm_min_edge_mm / 10 wide: v2 hood's 22 mm long, 5 um wide slivers) go first
+    L = np.linalg.norm(T - T[:, [1, 2, 0]], axis=2).max(1)
+    wide = np.linalg.norm(np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]), axis=1) / np.maximum(L, 1e-30) >= C["nm_min_edge_mm"] / 10
+    F = F[(F[:, 0] != F[:, 1]) & (F[:, 1] != F[:, 2]) & (F[:, 2] != F[:, 0]) & wide]
+    if not len(F):
+        return {"n": 0, "at": [], "sheet": 0, "sheet_at": []}
+    key, fi = _edge_keys(F)
+    uk, cnt = np.unique(key, return_counts=True)
+    n1 = int(F.max()) + 1
+    bad = uk[cnt > 2]
+    a, b = u[bad // n1], u[bad % n1]
+    bad = bad[np.linalg.norm(a - b, axis=1) >= C["nm_min_edge_mm"]]
+    # an edge where two of the faces lie back to back (coplanar, opposite normals) belongs to a zero-thickness sheet,
+    # usually left by a coplanar boolean, not to two solids touching along a line: push-assist tray_R has 653 such edges
+    # on x = -76.4 and 3 others (PR #11 review). Counted apart, with their own fix.
+    Fv = u[F]
+    N = np.cross(Fv[:, 1] - Fv[:, 0], Fv[:, 2] - Fv[:, 0])
+    N /= np.maximum(np.linalg.norm(N, axis=1), 1e-30)[:, None]
+    o = np.argsort(key, kind="stable")
+    ks, fs = key[o], fi[o]
+    lo = np.searchsorted(ks, bad)
+    hi = np.searchsorted(ks, bad, side="right")
+    cen = Fv.mean(1)
+
+    def back_to_back(k, ff):
+        """Two faces at the edge with opposite normals that lie on the same side of it (overlapping, not two coplanar
+        walls of solids meeting at the edge)."""
+        e0, e1 = u[k // n1], u[k % n1]
+        d = (e1 - e0) / max(np.linalg.norm(e1 - e0), 1e-30)
+        side = cen[ff] - e0
+        side -= np.outer(side @ d, d)
+        for i in range(len(ff)):
+            for j in range(i + 1, len(ff)):
+                if N[ff[i]] @ N[ff[j]] < -0.999 and side[i] @ side[j] > 0:
+                    return True
+        return False
+    is_sheet = np.array([back_to_back(k, fs[i:j]) for k, i, j in zip(bad, lo, hi)], bool)
+    mid = lambda kk: [[round(float(v), 1) for v in m] for m in ((u[kk // n1] + u[kk % n1]) / 2)[:5]]
+    return {"n": int((~is_sheet).sum()), "at": mid(bad[~is_sheet]), "sheet": int(is_sheet.sum()), "sheet_at": mid(bad[is_sheet])}
+
+
+def _findings(regions, faces=(), nm=None, contacts=()):
+    out = []
+    for g in contacts:
+        if g["status"] in ("fail", "warn"):
+            out.append({"status": g["status"], "kind": "tangent", "z_mm": 0.0, "msg": "tangent bed contact: a curved underside touches "
+                        "the bed along a line %.0f mm long, %.1f mm wide at the bed and %.1f mm in the first layer (under %g mm, two "
+                        "extrusion lines), %.1f mm wide %.1f mm up; cut a flat about %.1f mm wide (0.3 x r, r about %.0f mm) or "
+                        "orient it differently, at z 0.0 (print %s%s)" % (
+                            g["length_mm"], g["bed_width_mm"], g["first_layer_mm"], g["min_width_mm"], g["width_up_mm"], g["up_mm"],
+                            0.3 * g["r_mm"], g["r_mm"], g["at_print"], ", world %s" % g["at_world"] if "at_world" in g else "")})
     for g in regions:
         if g["status"] in ("fail", "warn"):
             what = {"island": "an island starts in mid-air (%.1f mm2)" % g["area_mm2"],
@@ -378,6 +880,26 @@ def _findings(regions):
                     "bridge": "a %.1f mm bridge" % g.get("span_mm", 0)}[g["kind"]]
             out.append({"status": g["status"], "kind": g["kind"], "z_mm": g["z_mm"], "msg": "%s at z %.1f (print %s%s)" % (
                 what, g["z_mm"], g["at_print"], ", world %s" % g["at_world"] if "at_world" in g else "")})
+    for g in faces:
+        if g["status"] in ("fail", "warn"):
+            d0, d1 = g["deg_from_vertical"]
+            what = ("a %.1f mm sloped bridge" % g["span_mm"] if g["kind"] == "bridge" else
+                    "a sloped overhang anchored nowhere" if g["kind"] == "floating" else
+                    "a %.1f mm sloped overhang past %g deg from vertical" % (g["overhang_fail_mm"], g["deg_fail"])
+                    if g["status"] == "fail" else "a %.1f mm sloped overhang past %g deg" % (g["overhang_mm"], g["deg_limit"]))
+            out.append({"status": g["status"], "kind": "overhang", "z_mm": g["z_mm"][0], "msg": "%s (%.0f mm2 projected, faces %.0f-%.0f deg "
+                        "from vertical, z %.1f-%.1f) at z %.1f (print %s%s)" % (what, g["projected_mm2"], d0, d1, g["z_mm"][0], g["z_mm"][1], g["z_mm"][0],
+                        g["at_print"], ", world %s" % g["at_world"] if "at_world" in g else "")})
+    if nm and nm["n"]:
+        out.append({"status": "warn", "kind": "nonmanifold", "z_mm": None, "msg": "%d edges shared by more than 2 faces as exported (float32 STL: "
+                    "solids touching along a line; a slicer's mesh check counts them; overlap them by 0.1 mm or more) at print %s%s" % (
+                    nm["n"], "; ".join(str(a) for a in nm["at"][:3]), ", world %s" % "; ".join(str(a) for a in nm["at_world"][:3])
+                    if nm.get("at_world") else "")})
+    if nm and nm.get("sheet"):
+        out.append({"status": "warn", "kind": "nonmanifold", "z_mm": None, "msg": "%d edges in more than 2 faces as exported where faces lie back to back: "
+                    "a zero-thickness sheet, usually a coplanar boolean (extend the cutter 0.1 mm past the face it is flush with) "
+                    "at print %s%s" % (nm["sheet"], "; ".join(str(a) for a in nm["sheet_at"][:3]), ", world %s" % "; ".join(
+                        str(a) for a in nm["sheet_at_world"][:3]) if nm.get("sheet_at_world") else "")})
     return out
 
 
@@ -388,7 +910,7 @@ def analyze_cached(tris, cfg=None, supports="no", print_to_world=None):
     C = dict(DEFAULTS)
     C.update(cfg or {})
     T = np.ascontiguousarray(np.asarray(tris, np.float32))
-    key = hashlib.sha1(T.tobytes() + json.dumps(C, sort_keys=True).encode() + str(supports).encode() + _VERSION.encode()).hexdigest()
+    key = hashlib.sha1(T.tobytes() + json.dumps(C, sort_keys=True).encode() + str(supports).encode() + _VERSION.encode() + _SOURCE.encode()).hexdigest()
     d = os.path.join(os.environ.get("TMPDIR", "/tmp"), "cad-printcheck-cache")
     fp = os.path.join(d, key + ".json")
     res = None
@@ -410,9 +932,13 @@ def analyze_cached(tris, cfg=None, supports="no", print_to_world=None):
     if print_to_world is not None:
         Rw, tw = print_to_world
         z0 = float(np.asarray(tris)[:, :, 2].min())
-        for g in res["regions"]:
+        for g in res["regions"] + res["faces"] + res["bed_contacts"]:
             g["at_world"] = [round(float(v), 1) for v in np.asarray(Rw) @ (np.array(g["at_print"]) + [0, 0, z0]) + np.asarray(tw)]
-        res["findings"] = _findings(res["regions"])
+        res["findings"] = _findings(res["regions"], res["faces"], {"n": res["stl_nonmanifold_edges"], "at": res["stl_nonmanifold_at"],
+                                                                   "at_world": _to_world(res["stl_nonmanifold_at"], print_to_world, z0),
+                                                                   "sheet": res["stl_sheet_edges"], "sheet_at": res["stl_sheet_at"],
+                                                                   "sheet_at_world": _to_world(res["stl_sheet_at"], print_to_world, z0)},
+                                    res["bed_contacts"])
     return res
 
 
@@ -452,7 +978,7 @@ def find_manifest(stl_path):
     return None
 
 
-def run(paths, manifest=None, cfg=None, only=None, render_dir=None, out=None):
+def run(paths, manifest=None, cfg=None, only=None, render_dir=None, out=None, where=None, sec_opt=None):
     files = []
     for pth in paths:
         files += sorted(glob.glob(os.path.join(pth, "*.stl"))) if os.path.isdir(pth) else [pth]
@@ -467,7 +993,7 @@ def run(paths, manifest=None, cfg=None, only=None, render_dir=None, out=None):
         info = man.get(name, {})
         sup = info.get("supports", "no" if not man else None)
         wm = world_map(tris - [0, 0, tris[:, :, 2].min()], info.get("print_rot"), info.get("bbox_world_home"))
-        r = analyze(tris, cfg, supports=sup if sup is not None else "no", print_to_world=wm, keep_pixels=bool(render_dir))
+        r = analyze(tris, cfg, supports=sup if sup is not None else "no", print_to_world=wm, keep_pixels=bool(render_dir or where))
         r.update(stl=name, file=fp, objects=info.get("objects", []), supports=sup)
         if render_dir and (r["findings"] or any(g["status"] == "support" for g in r["regions"])):
             r["render"] = render_flags(tris, r, os.path.join(render_dir, name + "_printcheck.png"))
@@ -476,10 +1002,15 @@ def run(paths, manifest=None, cfg=None, only=None, render_dir=None, out=None):
                     for g in r["regions"] if g["status"] != "ok"][:8]
             if maps:
                 r["layer_maps"] = maps
-        for g in r["regions"]:
+        if where:
+            r["where"] = where_lines(name, r) + [l for z in _section_zs(r, where) for l in section_lines(tris, z, r, cfg, **sec_opt)]
+        for g in r["regions"] + r["faces"]:
             g.pop("_px", None)
             g.pop("_map", None)
-        r["regions"] = r["regions"][:(cfg or {}).get("max_regions", DEFAULTS["max_regions"])]
+            g.pop("_faces", None)
+        mr = (cfg or {}).get("max_regions", DEFAULTS["max_regions"])
+        r["regions"] = r["regions"][:mr]
+        r["faces"] = [g for g in r["faces"] if g["projected_mm2"] >= (cfg or {}).get("face_min_mm2", DEFAULTS["face_min_mm2"])][:mr]
         rows.append(r)
     fails = [(r["stl"], f["msg"]) for r in rows for f in r["findings"] if f["status"] == "fail"]
     warns = [(r["stl"], f["msg"]) for r in rows for f in r["findings"] if f["status"] == "warn"]
@@ -502,8 +1033,131 @@ def print_summary(rep, out=None):
         print("  no manifest found: every part checked as supports: no, print frame only (pass --manifest for world coordinates)")
     for r in rep["parts"]:
         print("  %-22s h %5.1f  %s" % (r["stl"], r["height_mm"], "; ".join(
-            "%s %s" % (f["status"].upper(), f["msg"]) for f in r["findings"][:4]) or "ok (max bridge %.1f mm, max ledge %.1f mm)" % (
-            r["max_bridge_mm"], r["max_overhang_mm"])))
+            "%s %s" % (f["status"].upper(), f["msg"]) for f in r["findings"][:4]) or "ok (max bridge %.1f mm, max ledge %.1f mm, "
+            "max sloped overhang %.1f mm)" % (r["max_bridge_mm"], r["max_overhang_mm"], r["max_face_overhang_mm"])))
+        for l in r.get("where", []):
+            print("    " + l)
+
+
+# ------------------------------------------------------------------ where: region list and layer sections as text
+
+def _face_what(g):
+    return {"bridge": lambda: "sloped bridge span %.1f mm" % g["span_mm"], "floating": lambda: "anchored nowhere",
+            "flat": lambda: "flat: the layer check's call", "small": lambda: "under face_min_mm2",
+            "cantilever": lambda: "%.1f mm past %g deg, %.1f past %g" % (g["overhang_mm"], g["deg_limit"], g["overhang_fail_mm"],
+                                                                      g["deg_fail"])}[g["kind"]]()
+
+
+def where_lines(name, r):
+    """One line per region worth reading: every layer-check region that is not ok, every face-pass region (sloped
+    overhangs and the flat ones the layer check judges), worst first."""
+    out = ["%s: supports %s, h %.1f mm, %d layers of %g mm, raster %g mm; %d edges in more than 2 faces" % (
+        name, r["supports"], r["height_mm"], r["layers"], r["layer_h"], r["px_mm"], r["stl_nonmanifold_edges"])]
+    loc = lambda g: "print %s%s" % (g["at_print"], ", world %s" % g["at_world"] if "at_world" in g else "")
+    for g in r["regions"]:
+        if g["status"] == "ok":
+            continue
+        m = {"island": "island %.1f mm2" % g["area_mm2"], "cantilever": "cantilever %.1f mm, %.1f mm2" % (g.get("overhang_mm", 0), g["area_mm2"]),
+             "bridge": "bridge span %.1f mm, %.1f mm2" % (g.get("span_mm", 0), g["area_mm2"])}[g["kind"]]
+        out.append("%-7s layer z %5.1f        %-36s extent %s  %s" % (g["status"].upper(), g["z_mm"], m, g["extent_mm"], loc(g)))
+    for g in r.get("bed_contacts", []):
+        out.append("%-7s bed   z   0.0        tangent contact %.0f mm long, %.1f mm wide at the bed, %.1f in the first layer, %.1f at "
+                   "z %.1f; r about %.0f mm  print %s%s" % (g["status"].upper(), g["length_mm"], g["bed_width_mm"], g["first_layer_mm"],
+                                                         g["width_up_mm"], g["up_mm"], g["r_mm"], g["at_print"],
+                                                         ", world %s" % g["at_world"] if "at_world" in g else ""))
+    for g in r["faces"]:
+        if g["projected_mm2"] < DEFAULTS["face_min_mm2"]:
+            continue
+        m = _face_what(g)
+        out.append("%-7s faces z %5.1f-%-5.1f %-36s %.0f mm2 projected, %.0f-%.0f deg from vertical, anchored %.0f of %.0f mm edge  %s" % (
+            g["status"].upper(), g["z_mm"][0], g["z_mm"][1], m, g["projected_mm2"], g["deg_from_vertical"][0], g["deg_from_vertical"][1],
+            g["anchored_edge_mm"], g["edge_mm"], loc(g)))
+    return out
+
+
+def _section_zs(r, where):
+    """--section Z[,Z...] or auto (where each flagged region starts, up to 4), as (z, window) pairs."""
+    if where in ("list", None):
+        return []
+    if where != "auto":
+        return [(float(z), None) for z in str(where).split(",")]
+    out = []
+    for g in [g for g in r["regions"] if g["status"] != "ok"] + [g for g in r["faces"] if g["status"] in ("fail", "warn", "support")]:
+        z = g["z_mm"] if not isinstance(g["z_mm"], list) else g["z_mm"][0] + r["layer_h"]
+        c, e = g["at_print"], g["extent_mm"]
+        win = [c[0] - e[0] / 2 - 6, c[1] - e[1] / 2 - 6, c[0] + e[0] / 2 + 6, c[1] + e[1] / 2 + 6]
+        for i, (z0, w0) in enumerate(out):
+            if abs(z - z0) < r["layer_h"] / 2:     # the same layer: one section, its window grown to hold both
+                out[i] = (z0, [min(w0[0], win[0]), min(w0[1], win[1]), max(w0[2], win[2]), max(w0[3], win[3])])
+                break
+        else:
+            out.append((z, win))
+    return out[:4]
+
+
+def section_lines(tris, zw, res, cfg=None, cell=None, window=None):
+    """The layer at print height z as text, top row = +y (layer_ascii / roof_ascii in the push-assist reviews):
+         #  solid, carried by the layer below        :  solid in the layer below only        .  air
+         B C I  this layer's unsupported pixels the layer check calls a bridge / cantilever / island (lower case: ok)
+         V      faces of a flagged sloped overhang that this layer prints over (v: a sloped region judged ok)
+    Each character is a cell of cell mm (default: the window fits 100 x 50); the worst mark in it wins. Under the map,
+    the layer's regions with their spans. res is analyze(..., keep_pixels=True) on the same triangles."""
+    z, win = zw if isinstance(zw, tuple) else (zw, None)
+    win = window or win
+    C = dict(DEFAULTS)
+    C.update(cfg or {})
+    h = C["layer_h"]
+    T = np.asarray(tris, np.float64)
+    T = T[np.linalg.norm(np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]), axis=1) > 1e-12]
+    T = T - [0, 0, T[:, :, 2].min()]
+    lo, hi = T.reshape(-1, 3).min(0), T.reshape(-1, 3).max(0)
+    k = max(0, min(res["layers"] - 1, int(math.floor(z / h + 1e-6))))
+    x0, y0, x1, y1 = win if win else (lo[0] - 1, lo[1] - 1, hi[0] + 1, hi[1] + 1)
+    c = cell or max(res["px_mm"], (x1 - x0) / 100.0, (y1 - y0) / 50.0)
+    c = max(res["px_mm"], math.ceil(c / res["px_mm"] - 1e-9) * res["px_mm"])
+    q = max(1, int(round(c / res["px_mm"])))
+    p = c / q
+    W, H = int(math.ceil((x1 - x0) / c)) * q, int(math.ceil((y1 - y0) / c)) * q
+    tz = T[:, :, 2]
+    cur = _layer_mask(T, tz, min((k + 0.5) * h, hi[2] - 1e-4) + 1.37e-4, x0, y0, p, W, H)
+    prev = _layer_mask(T, tz, (k - 0.5) * h + 1.37e-4, x0, y0, p, W, H) if k else np.zeros_like(cur)
+    rank = np.zeros((H, W), np.int8)            # . : # v V b c i B C I
+    rank[prev & ~cur] = 1
+    rank[cur] = 2
+    pix = lambda xs, ys: (np.clip(((ys - y0) / p).astype(int), 0, H - 1), np.clip(((xs - x0) / p).astype(int), 0, W - 1),
+                          (xs >= x0) & (xs < x0 + W * p) & (ys >= y0) & (ys < y0 + H * p))
+    notes = []
+    for g in res["faces"]:
+        if "_faces" not in g or g["z_mm"][1] < k * h or g["z_mm"][0] > (k + 1) * h or g["status"] == "layer":
+            continue
+        F = T[g["_faces"]]
+        F = F[(F[:, :, 2].max(1) >= k * h) & (F[:, :, 2].min(1) <= (k + 1) * h)]
+        if not len(F):
+            continue
+        m, _ = _fill_tris(F, x0, y0, p, W, H)
+        flag = g["status"] in ("fail", "warn", "support")
+        rank[m & cur] = np.maximum(rank[m & cur], 4 if flag else 3)
+        notes.append("%s faces z %.1f-%.1f: %s, %.0f mm2 projected, %.0f-%.0f deg from vertical, %s" % (
+            "V" if flag else "v", g["z_mm"][0], g["z_mm"][1], _face_what(g),
+            g["projected_mm2"], g["deg_from_vertical"][0], g["deg_from_vertical"][1], g["status"]))
+    for g in res["regions"]:
+        if g.get("layer") != k or "_px" not in g:
+            continue
+        xs, ys, _, _ = g["_px"]
+        r_, c_, ok = pix(xs, ys)
+        flag = g["status"] != "ok"
+        v = {"bridge": 5, "cantilever": 6, "island": 7}[g["kind"]] + (3 if flag else 0)
+        rank[r_[ok], c_[ok]] = np.maximum(rank[r_[ok], c_[ok]], v)
+        what = {"island": "island", "cantilever": "cantilever %.1f mm" % g.get("overhang_mm", 0),
+                "bridge": "bridge span %.1f mm, anchored %d%%" % (g.get("span_mm", 0), round(100 * g.get("anchored_frac", 0)))}[g["kind"]]
+        notes.append("%s %s, %.1f mm2, extent %s, %s, print %s%s" % ("BCI"[v - 8] if flag else "bci"[v - 5], what, g["area_mm2"], g["extent_mm"],
+                     g["status"], g["at_print"], ", world %s" % g["at_world"] if "at_world" in g else ""))
+    cellr = rank.reshape(H // q, q, W // q, q).max((1, 3))
+    ch = np.array(list(".:#vVbciBCI"))
+    out = ["section z %.1f (layer %d, %.2f-%.2f) x %.1f..%.1f y %.1f..%.1f, cell %.2f mm" % (k * h + h / 2, k, k * h, (k + 1) * h, x0, x0 + W * p, y0, y0 + H * p, c)]
+    for j in range(cellr.shape[0] - 1, -1, -1):
+        out.append("%7.1f %s" % (y0 + (j + 0.5) * c, "".join(ch[cellr[j]])))
+    return out + (notes or ["(no unsupported pixels or sloped overhangs in this layer)"])
 
 
 # ------------------------------------------------------------------ renders
@@ -605,7 +1259,10 @@ def _main(argv):
     i = 0
     while i < len(argv):
         a = argv[i]
-        if a.startswith("--"):
+        if a == "--where":
+            opt["where"] = "list"
+            i += 1
+        elif a.startswith("--"):
             opt[a[2:]] = argv[i + 1] if i + 1 < len(argv) else ""
             i += 2
         else:
@@ -623,7 +1280,10 @@ def _main(argv):
         with open(opt["config"]) as f:
             cfg.update(json.load(f).get("printcheck", {}))
     out = opt.get("out") or os.path.join(pos[0] if os.path.isdir(pos[0]) else os.path.dirname(os.path.abspath(pos[0])), "printcheck.json")
-    rep = run(pos, opt.get("manifest"), cfg, opt.get("only"), opt.get("render"), out)
+    where = opt.get("section") or opt.get("where")
+    sec = {"cell": float(opt["cell"]) if "cell" in opt else None,
+           "window": [float(v) for v in opt["window"].split(",")] if "window" in opt else None}
+    rep = run(pos, opt.get("manifest"), cfg, opt.get("only"), opt.get("render"), out, where=where, sec_opt=sec)
     print_summary(rep, out)
     return 1 if rep["summary"]["fails"] else 0
 

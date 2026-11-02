@@ -1,9 +1,10 @@
 """Repro for a cadcheck gap: a neighbouring part overlapping a screw head above the bearing face is not flagged.
 
     cad build tools/prior_art/cadcheck_head_overlap_repro.py -- --out DIR
-    cad check DIR/repro.blend "" DIR/cadcheck.json        # 0 fails, 0 warns (it should fail)
+    cad check DIR/repro.blend "" DIR/cadcheck.json        # was 0 fails, 0 warns; now 1 fail, "FST_m4 head overlaps PRT_rib"
 
-docs/features/fastener-joint.md, "cadcheck gap found in review", has the cadcheck lines involved.
+docs/features/fastener-joint.md, "cadcheck gap found in review", has the cadcheck lines involved; tools/verify.d/fastener_overlap.sh
+runs this repro.
 """
 import os, sys
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")

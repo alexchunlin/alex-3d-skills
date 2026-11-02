@@ -24,6 +24,13 @@ export const meta = {
 //    the same skill, brief and tool source (V2A1-T1). parallel_builds runs them at once, each into its own
 //    model.blend, and leaves params.py and checks.json to the planner and the finisher. Off by default until
 //    a run has proven it.
+//  - Models per role (CONFIG.models, merged per role from args.models): builders run on Sonnet, plan, finish and review
+//    on the session's model (null). On the pan-tilt mates task Sonnet got 24/24 rows like Opus at about half the cost;
+//    Haiku was slower, missed a row and used 5-7x the tokens. Each value goes to agent()'s opts.model, which the
+//    workflow-authoring skill types only as a string and lists no values for; 'sonnet', 'opus' and 'haiku' are the
+//    names the Agent tool accepts in this environment (a live Workflow run on 2026-10-27
+//    confirmed 'sonnet' -> claude-sonnet-5-5 and an args.models 'haiku' -> claude-haiku-5-5). Bad roles or values throw.
+//    Changing a role's model invalidates the resumeFromRunId cache from that role's first agent() call onward.
 // No filesystem access in workflow scripts, so state crosses runs through args and files on disk.
 // To resume a killed run with cached agents, use Workflow({scriptPath, resumeFromRunId}).
 // ---------------------------------------------------------------------------------------------
@@ -39,7 +46,21 @@ const CONFIG = Object.assign({
   render_budget: 12,                         // preview renders per build agent
   stop_after: 0,                             // >0: stop after this attempt's review
   parallel_builds: false,                    // true: builders run at once; the planner owns params.py (V2A1-T1)
+  models: {},                                // per role; see MODELS below
 }, typeof args === 'object' && args ? args : {})
+// Per-role agent() model; null = the workflow's default (the session model). args.models overrides single roles.
+const MODELS = Object.assign({ plan: null, build: 'sonnet', finish: null, review: null }, CONFIG.models)
+{
+  const m = CONFIG.models, roles = ['plan', 'build', 'finish', 'review']
+  const plain = typeof m === 'object' && m !== null && !Array.isArray(m) && Object.prototype.toString.call(m) === '[object Object]'   // not a prototype test: args may come from another JS realm
+  if (!plain) throw new Error(`cad-loop: args.models must be an object like {build: 'sonnet'}, got ${JSON.stringify(m)} (${Array.isArray(m) ? 'array' : typeof m})`)
+  for (const [k, v] of Object.entries(m)) {
+    if (!roles.includes(k)) throw new Error(`cad-loop: args.models has unknown role "${k}"; roles are ${roles.join(', ')}`)
+    if (v !== null && (typeof v !== 'string' || !v.trim())) throw new Error(`cad-loop: args.models.${k} must be null (session model) or a model name like 'sonnet', got ${JSON.stringify(v)}`)
+  }
+}
+CONFIG.models = MODELS
+const withModel = (role, opts) => MODELS[role] ? { ...opts, model: MODELS[role] } : opts
 
 const HW = CONFIG.hw
 const PCB = `${CONFIG.skills}/skills/print-cad-blender`
@@ -250,12 +271,12 @@ let passed = false
 
 for (let n = CONFIG.start_attempt; n <= CONFIG.max_attempts && !passed; n++) {
   phase('Plan')
-  const plan = await agent(planPrompt(n, history, prevReview), { label: `plan #${n}`, phase: 'Plan', schema: PLAN_SCHEMA })
+  const plan = await agent(planPrompt(n, history, prevReview), withModel('plan', { label: `plan #${n}`, phase: 'Plan', schema: PLAN_SCHEMA }))
   if (!plan) { log(`attempt ${n}: planner returned nothing; stopping`); break }
   log(`attempt ${n}: ${plan.work.length} subsystems to change, ${plan.deferred.length} deferred`)
 
   phase('Build')
-  const runBuild = w => agent(buildPrompt(n, w), { label: `build #${n} ${w.subsystem}`, phase: 'Build', schema: BUILD_SCHEMA })
+  const runBuild = w => agent(buildPrompt(n, w), withModel('build', { label: `build #${n} ${w.subsystem}`, phase: 'Build', schema: BUILD_SCHEMA }))
   const builds = []
   if (CONFIG.parallel_builds) {         // each builder writes its own /tmp model.blend; the finisher merges
     builds.push(...await parallel(plan.work.map(w => () => runBuild(w))))
@@ -265,12 +286,12 @@ for (let n = CONFIG.start_attempt; n <= CONFIG.max_attempts && !passed; n++) {
   builds.forEach((b, i) => { if (b) log(`attempt ${n} ${plan.work[i].subsystem}: cadcheck ${b.check.fails}F/${b.check.warns}W`) })
 
   phase('Finish')
-  const design = await agent(finishPrompt(n, plan, builds), { label: `finish #${n}`, phase: 'Finish', schema: FINISH_SCHEMA })
+  const design = await agent(finishPrompt(n, plan, builds), withModel('finish', { label: `finish #${n}`, phase: 'Finish', schema: FINISH_SCHEMA }))
   if (!design) { log(`attempt ${n}: finisher returned nothing; stopping`); break }
   log(`attempt ${n} designed: ${design.printed_parts.length} printed parts, cadcheck ${design.check.fails}F/${design.check.warns}W`)
 
   phase('Review')
-  const review = await agent(reviewPrompt(n, prevReview), { label: `review #${n}`, phase: 'Review', schema: REVIEW_SCHEMA })
+  const review = await agent(reviewPrompt(n, prevReview), withModel('review', { label: `review #${n}`, phase: 'Review', schema: REVIEW_SCHEMA }))
   attempts.push({ n, plan, design, review })
   if (!review) { log(`attempt ${n}: reviewer returned nothing; stopping`); break }
   const { functionality: f, manufacturability: m, aesthetics: a } = review

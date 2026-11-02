@@ -16,13 +16,15 @@ properties written by cadlib.asm.joint() or from the "joints" block of the confi
 
 Checks (each one writes evidence into the JSON report, with an explicit `coverage` list):
   parts         manifold, volume, print-orientation bed fit, overhang area, min wall, bed contact, and the layer support
-                check (printcheck.py: bridges, cantilevers, islands per 0.2 mm layer) on the exported STLs
+                check (printcheck.py: bridges, cantilevers, islands per 0.2 mm layer; sloped overhangs per face region)
+                on the exported STLs
   interference  every pair in ALL four collections, swept over the joints that separate the two bodies,
-                including overtravel past each limit; contacts between different bodies are failures
+                including overtravel past each limit; between the samples, swept bounds, then the swept envelopes of
+                the moving parts (cadlib.geom), then refinement of envelope hits; contacts between different bodies fail
   clearance     min distance between parts on different bodies over the same sweep
-  fasteners     head not buried, thread engagement (bolt-to-nut pairing), shanks or nuts inside purchased
-                parts, driver access (straight bit, then an L-key with a swing arc) per pose, including the
-                fastener's own continuous joints; head stand-off and protruding thread
+  fasteners     head not buried, head or nut overlapping a solid on its body, thread engagement (bolt-to-nut
+                pairing), shanks or nuts inside purchased parts, driver access (straight bit, then an L-key with a
+                swing arc) per pose, including the fastener's own continuous joints; head stand-off and protruding thread
   service       tool access for service operations from config ("service"): whole assembly present,
                 listed parts removed, at the stated pose
   drop          drop tests from config ("drop_tests"): straight rays, or mode "slide" (fall, slide on walls,
@@ -36,7 +38,13 @@ Checks (each one writes evidence into the JSON report, with an explicit `coverag
                 steps that move a servo-held joint before any step is "powered" (held poses)
   insertion     each part and each merged bench group out along a straight line past the earlier steps' parts
   stacks        tolerance stacks from config ("stacks"): worst case and RSS against a limit
-  flexures      declared springs and snap arms: beam direction vs the part's print orientation (layer bonds)
+  flexures      declared springs and snap arms: beam direction vs the part's print orientation (layer bonds); a row with
+                l, b, h and deflection gets its stress computed (cadsnap.beam_stress) instead of a typed stress_mpa
+  snaps         features.snap_hook / annular_snap / torsion_snap / pip_hinge records (the manifest's "joins", no config):
+                strain against the flexing part's allowable for its use and layer direction, a permanent snap on a part
+                a service op removes, hinge clearances, axis flat on the bed, both hinge parts in one print
+  calcs         calculations from config ("calcs"): an =expr over the params, material allowables and printed sections
+                (cadmat), against min/max
   stability     centre of mass and static tip angle over a coarse pose grid
   cables        path length vs. lead length, chains, junctions, ends that come apart across a joint, kinked corners,
                 two routes in one tube, exposed cable
@@ -48,6 +56,9 @@ from mathutils import Vector, Matrix
 from mathutils.bvhtree import BVHTree
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cadlib import joints as JT   # noqa: E402  (joint specs and posing, shared with cadlib.route)
+import cadcfg as CC               # noqa: E402  (checks.json hygiene: unknown keys, accepted_warns; no Blender)
+import cadmat as CM               # noqa: E402  (materials, print settings, printed sections, calcs; no Blender)
+import cadsnap as CS              # noqa: E402  (snap-fit and print-in-place hinge math; no Blender)
 
 ARGV = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 
@@ -69,6 +80,13 @@ DEFAULTS = {
     "overtravel_deg": 2.5,
     "overtravel_mm": 1.0,       # past the ends of a prismatic (slide) joint
     "max_poses_per_group": 48,
+    # between two sampled poses a part moves up to reach x step: interference sweeps each pair's bounds, then the moving
+    # part's geom.swept_envelope (oversize by sweep_tol + envelope_voxel), and refines only envelope hits (halving
+    # cells until a collision is found, no point can move more than sweep_tol unseen, or max_guard_poses are spent)
+    "sweep_tol": 0.25,
+    "max_guard_poses": 256,     # refinement poses per envelope hit; one settled by bounding boxes alone counts 1/16
+    "envelope_voxel": 1.0,      # geom.swept_envelope's voxel (pad = sweep_tol + voxel); doubled when the grid is too large
+    "envelope_max_poses": 600,  # a chain envelope (pan x tilt) coarsens its steps to stay under this many poses
     "allow": [],
     "vol_tol": 0.5,
     "moving_min_clearance": 0.5,
@@ -80,6 +98,7 @@ DEFAULTS = {
                   # 2.5 mm hex key for M3 socket heads (ISO 2936 short leg ~20, long ~58): A2-F1
                   "lkey_short": 18.0, "lkey_insert": 2.5, "lkey_long": 56.0, "lkey_r": 1.25, "lkey_swing_deg": 60.0,
                   "max_standoff": 2.0, "max_protrusion": 3.0, "captive": {},
+                  "hint_tilt_deg": 10.0,   # a bit that can't reach: the smallest tilt up to this that clears (PA-A3-T10)
                   # ISO 4762 / 7045 / 10642 lengths commonly stocked (mm), by shank diameter
                   "stock_lengths": {"2": [3, 4, 5, 6, 8, 10, 12, 14, 16, 20],
                                     "2.5": [3, 4, 5, 6, 8, 10, 12, 14, 16, 20, 25],
@@ -90,6 +109,7 @@ DEFAULTS = {
     "service": [],
     "index_tests": [],
     "stacks": [],
+    "calcs": [],                # [{"name", "value": "=expr", "min", "max", "unit", "why"}]: a computed number against limits
     # exposed = >= min_escape of 26 rays leave the assembly (R2's bare bus run scored 10-12), or >= view_frac of 240
     # directions toward a viewer above or level (z > view_z) do. A3's bonnet-foot notch scores 6/26 and was missed;
     # at 10% of the viewer directions it is 8.3 mm long (R3: "about 8 mm"), FINDINGS A3-F7
@@ -109,17 +129,65 @@ DEFAULTS = {
     "cable_junctions_ok": [],   # globs of cables whose meeting ends are a real connector
     "cable_min_bend_od": 0.75,  # a corner whose centreline radius is under this x OD is a kink (V2A7-F2)
     "joint_drives": {},         # {"PIV_x": "BUY_servo_x" or null}: what holds a joint during assembly (default: by name)
-    # [{"match": "substring of the warn text", "why": "..."}]: a warn you looked at and accept. The summary counts
-    # untriaged warns separately. v2 A1 finished at 0 fails, 34 warns; 3 of R1's issues (A1-05, 07, 08) were warns
-    # in that list that nobody acted on (FINDINGS V2A1-F5)
+    # [{"check": "parts", "object": "PRT_x", "kind": "wall samples", "why": "..."}]: a warn you looked at and accept.
+    # The summary counts untriaged warns separately. v2 A1 finished at 0 fails, 34 warns; 3 of R1's issues (A1-05, 07,
+    # 08) were warns in that list that nobody acted on (FINDINGS V2A1-F5). The old {"match": substring} still works
     "accepted_warns": [],
+    "fits": [],
+    "assembly_order": [],
+    "printcheck": {},           # the parts layer check (printcheck.py DEFAULTS)
+    "interlayer_mpa": 15.0,     # flexures: bending stress a beam standing off the bed may carry across layers (R3, PLA)
+    # pip_hinge records (snaps check): least radial and axial gap that doesn't fuse (cadsnap.HINGE, common FDM practice),
+    # and how far the hinge axis may tilt off the bed in print orientation
+    "print_in_place": {"min_clearance": 0.3, "axis_flat_deg": 10.0},
+    "overhang_warn_mm2": 150,
+    "max_bridge_mm": 25,        # printcheck bridge_warn_mm unless "printcheck" sets it
 }
+# The fields of each row, for the unknown-key warn (cadcfg.py). Top-level keys are DEFAULTS', and so are the members
+# of a dict section (fasteners, exposure, collections; printcheck takes printcheck.py DEFAULTS) plus any listed here;
+# CONFIG_NAMED sections are keyed by object or joint name. Any row may carry "why", "name" and "past_limit_ok"; a key
+# starting with "_" is a note. "sec.sub" is a dict (or a list of dicts) inside a row. A typo'd key was ignored without
+# a word: "flexure" for "flexures" passed with nothing checked (push-assist PA-A4-T6). reference/checks-config.md
+# documents every key here (tools/verify.d/cadcfg.sh).
+CONFIG_ROWS = {
+    "allow": ["a", "b", "max_mm3"],
+    "fits": ["a", "b", "min_clearance", "contact", "contact_normal"],
+    "assembly_order": ["step", "objects", "order", "bench", "merge", "pose", "pose_how", "powered", "insert_dirs", "insert_ok"],
+    "service": ["op", "fasteners", "pose", "remove"],
+    "drop_tests": ["emit", "dir", "poses", "sweep", "expect", "mode", "stall_deg", "stall_margin_deg", "capture_mm",
+                   "payload_mm", "max_mm", "ignore", "home_only_ok"],
+    "drop_tests.emit": ["frame", "center", "normal", "radius", "step"],
+    "drop_tests.expect": ["hit", "angle"],
+    "drop_tests.expect.angle": ["center", "frame", "axis", "zero", "positive", "range"],
+    "index_tests": ["joint", "sequence", "step", "probe", "blockers", "expect_windows", "pose"],
+    "index_tests.probe": ["frame", "center", "dir", "radius", "depth"],
+    "slide_out": ["object", "objects", "dir", "dist", "step", "min_clearance", "expect", "blocked_by", "at_mm", "ignore",
+                  "pose", "flex"],
+    "distances": ["a", "b", "min", "max", "ray", "payload_mm", "tape_mm", "compliant", "pose", "poses"],
+    "distances.ray": ["frame", "origin", "dir", "sweep"],
+    "distances.ray.sweep": ["center", "axis", "from", "to", "step"],
+    "payload_fit": ["against", "center", "frame", "up", "across", "place", "count", "gap", "size", "shape", "expect",
+                    "margin", "pose"],
+    "sightlines": ["frame", "pose", "poses", "origin", "origins", "dir", "first_hit", "max_mm", "through"],
+    "stacks": ["limit", "terms", "between", "poses"],
+    "stacks.terms": ["what", "tol"],
+    "flexures": ["part", "dir", "from", "to", "stress_mpa", "l", "b", "h", "deflection", "end", "kt"],
+    "calcs": ["value", "min", "max", "unit"],
+    "cable_chains": ["cables", "lead"],
+    "accepted_warns": ["check", "kind", "object", "match", "any"],
+    "joints": ["axis", "lo", "hi", "home", "step", "continuous", "kind"],
+    "couplings": ["to", "ratio", "offset"],
+    "fasteners": ["min_engagement"],
+}
+CONFIG_NAMED = ["joints", "couplings", "carry", "printers", "masses_g", "cable_leads", "joint_drives"]
 
 T0 = time.time()
 CFG = json.loads(json.dumps(DEFAULTS))
+CFG_FILES = []   # (path, as read): each file's own keys are checked (cadcfg.unknown_keys)
 if _arg("--config"):
     with open(_arg("--config")) as f:
         user = json.load(f)
+    CFG_FILES.append((_arg("--config"), user))
     for k, v in user.items():
         if isinstance(v, dict) and isinstance(CFG.get(k), dict):
             CFG[k].update(v)
@@ -129,6 +197,7 @@ _replaced = set()
 for _ov in [ARGV[i + 1] for i, a in enumerate(ARGV[:-1]) if a == "--overlay"]:     # repeatable
     with open(_ov) as f:
         extra = json.load(f)
+    CFG_FILES.append((_ov, extra))
     for k, v in extra.items():
         if isinstance(v, list) and isinstance(CFG.get(k), list):
             if "--overlay-only" in ARGV and k not in _replaced:
@@ -155,6 +224,23 @@ def _load_params():
 
 
 PARAMS, PARAMS_SRC = _load_params()
+
+
+def _load_joins():
+    """features.snap_hook / annular_snap / torsion_snap / pip_hinge records: the scene's cad_joins (cadlib writes it), or
+    the "joins" of the manifest.json beside the blend."""
+    if "cad_joins" in bpy.context.scene.keys():
+        return json.loads(bpy.context.scene["cad_joins"]), "scene"
+    mp = os.path.join(os.path.dirname(bpy.data.filepath) or ".", "manifest.json")
+    if os.path.isfile(mp):
+        with open(mp) as f:
+            return json.load(f).get("joins") or [], mp
+    return [], None
+
+
+JOINS, JOINS_SRC = _load_joins()
+SNAPS = [j for j in JOINS if j.get("kind") in CS.SNAP_KINDS]
+HINGES = [j for j in JOINS if j.get("kind") in CS.PIP_KINDS]
 EXPRS = []   # [{"at", "expr", "value" or "error"}]
 
 
@@ -169,8 +255,7 @@ def _eval_exprs(x, at):
         return [_eval_exprs(v, "%s[%d]" % (at, i)) for i, v in enumerate(x)]
     if isinstance(x, str) and x.startswith("="):
         try:
-            v = eval(x[1:], {"__builtins__": {}, "min": min, "max": max, "abs": abs, "round": round, "sqrt": math.sqrt,
-                             "math": math}, dict(PARAMS))
+            v = eval(x[1:], CM.BASE_ENV, dict(PARAMS))
             if isinstance(v, tuple):
                 v = list(v)
             EXPRS.append({"at": at, "expr": x[1:], "value": v})
@@ -181,9 +266,56 @@ def _eval_exprs(x, at):
     return x
 
 
+ROW_INDEX = {}   # section -> each kept row's index in the config, for labels after a skipped row
 for _k in list(CFG):
-    if _k != "accepted_warns":
-        CFG[_k] = _eval_exprs(CFG[_k], _k)
+    if _k in ("accepted_warns", "calcs"):     # calcs are evaluated in order by check_calcs (they name each other)
+        continue
+    if isinstance(CFG[_k], list):
+        # a row with a failed expression is skipped, named in its config fail: a None in a row crashed the check that
+        # read it (check_stacks: float(None), push-assist PA-A5-T26) and took the whole report with it
+        _keep, ROW_INDEX[_k] = [], []
+        for _i, _r in enumerate(CFG[_k]):
+            _n = len(EXPRS)
+            _v = _eval_exprs(_r, "%s[%d]" % (_k, _i))
+            _bad = [e for e in EXPRS[_n:] if "error" in e]
+            for e in _bad:
+                e["skipped"] = "%s row%s" % (_k, " '%s'" % CC.row_label(_r) if isinstance(_r, dict) and CC.row_label(_r) else "")
+            if not _bad:
+                _keep.append(_v)
+                ROW_INDEX[_k].append(_i)
+        CFG[_k] = _keep
+        continue
+    _n = len(EXPRS)
+    CFG[_k] = _eval_exprs(CFG[_k], _k)
+    for e in EXPRS[_n:]:
+        # a failed setting: its default if DEFAULTS has one, else the key goes, so the code's own fallback applies; an
+        # entry of a section keyed by name (couplings.PIV_x, masses_g.BUY_x) goes whole. A None left in place crashed
+        # cadlib.joints (a coupling ratio) and the fasteners check (min_engagement) with no report (PR #10 review)
+        if "error" not in e:
+            continue
+        _p = [x.split("[")[0] for x in e["at"].split(".")]
+        if len(_p) == 1:
+            if _k in DEFAULTS:
+                CFG[_k] = e["default"] = json.loads(json.dumps(DEFAULTS[_k]))
+            else:
+                CFG.pop(_k, None)
+                e["dropped"] = _k
+        elif _k in CONFIG_NAMED or len(_p) > 2:
+            _d = CFG[_k] if _k in CONFIG_NAMED else CFG[_k].get(_p[1])
+            _e = _p[1] if _k in CONFIG_NAMED else _p[2]
+            if isinstance(_d, dict) and _e in _d:
+                _d.pop(_e)
+                e["dropped"] = "%s '%s'" % (_k if _k in CONFIG_NAMED else "%s.%s" % (_k, _p[1]), _e)
+        elif isinstance(DEFAULTS.get(_k), dict) and _p[1] in DEFAULTS[_k]:
+            CFG[_k][_p[1]] = e["default"] = json.loads(json.dumps(DEFAULTS[_k][_p[1]]))
+        elif isinstance(CFG[_k], dict):
+            CFG[_k].pop(_p[1], None)
+            e["dropped"] = "%s.%s" % (_k, _p[1])
+# a print-in-place hinge's two parts run at its designed clearance, not moving_min_clearance: a generated fits rule
+# (after the config's, so a project rule still wins), so the agent writes no config for it
+for _h in HINGES:
+    CFG["fits"].append({"a": _h["parts"][0], "b": _h["parts"][1], "min_clearance": CFG["print_in_place"]["min_clearance"] - 0.02,
+                        "why": "pip_hinge %s (generated from the manifest record)" % _h["name"], "generated": True})
 QUICK = "--quick" in ARGV
 ONLY = set(_arg("--only", "").split(",")) - {""}
 OUT = _arg("--out") or os.path.join(os.path.dirname(bpy.data.filepath) or ".", "cadcheck.json")
@@ -278,7 +410,10 @@ def drivers(names):
 
 
 def relevant_joints(a, b):
-    return drivers(set(joint_chain(a)) ^ set(joint_chain(b)))
+    """The free (driver) joints between a and b. A joint with no range moves nothing: it used to stay in the group as a
+    one-sample driver, which left the between-samples guard no cells, so it skipped the pair (PR #21 review, opp_axis
+    with an unranged PIV_flip: a 30.2 mm3 collision went unseen)."""
+    return frozenset(d for d in drivers(set(joint_chain(a)) ^ set(joint_chain(b))) if JT.ranged(d, JOINTS, COUPLE))
 
 
 def set_pose(pose):
@@ -332,27 +467,30 @@ def thin(lst, k, keep=()):
     return [lst[i] for i in sorted(keep | pick)]
 
 
-def pose_grid(drv, quick=False, cap=None):
-    """Joint-angle combinations for a group of driver joints, thinned to `cap`. Thinning keeps each joint's limits and
-    overtravel poses: it used to keep only the list ends, which are the overtravel poses, so in a two-joint group the
-    in-range limits (tilt -3 and 46 in v2 A1) were never visited and a collision there showed only as an overtravel
-    warn (FINDINGS V2A1-V2)."""
+def pose_axes(drv, quick=False, cap=None):
+    """(sorted drivers, one [(value, overtravel)] list per driver): the lattice pose_grid takes the product of, thinned
+    to `cap` poses. Thinning keeps each joint's limits and overtravel poses: it used to keep only the list ends, which
+    are the overtravel poses, so in a two-joint group the in-range limits (tilt -3 and 46 in v2 A1) were never visited
+    and a collision there showed only as an overtravel warn (FINDINGS V2A1-V2)."""
     drv = sorted(drv)
-    if not drv:
-        return [({}, False)]
     per = [samples(j, quick) for j in drv]
     keeps = [(0, 1, -2, -1) if len(p) > 3 and p[0][1] else (0, -1) for p in per]
     cap = cap or CFG["max_poses_per_group"]
-    while math.prod(len(p) for p in per) > cap:
+    while per and math.prod(len(p) for p in per) > cap:
         i = max(range(len(per)), key=lambda k: len(per[k]) - len(keeps[k]))
         floor = len(keeps[i]) + (0 if len(keeps[i]) == 4 else 1)
         if len(per[i]) <= floor:
             break
         per[i] = thin(per[i], max(floor, len(per[i]) - 2), keeps[i])
-    out = []
-    for combo in itertools.product(*per):
-        out.append(({j: a for j, (a, _) in zip(drv, combo)}, any(ot for _, ot in combo)))
-    return out
+    return drv, per
+
+
+def pose_grid(drv, quick=False, cap=None):
+    """Joint-angle combinations for a group of driver joints: [(pose, overtravel)] over pose_axes' lattice."""
+    drv, per = pose_axes(drv, quick, cap)
+    if not drv:
+        return [({}, False)]
+    return [({j: a for j, (a, _) in zip(drv, combo)}, any(ot for _, ot in combo)) for combo in itertools.product(*per)]
 
 
 def pose_key(p):
@@ -361,23 +499,29 @@ def pose_key(p):
 
 # ------------------------------------------------------------------ geometry helpers
 
-def world_bm(o):
+def world_bm(o, M=None):
+    """o's mesh in world coordinates, at the current pose or at matrix_world M (the guard poses parts without the
+    depsgraph, cadlib.joints.world_at)."""
     bm = bmesh.new()
     if o.type == 'MESH':
         bm.from_mesh(o.data)
-    bm.transform(o.matrix_world)
+    bm.transform(o.matrix_world if M is None else M)
+    # bm.transform leaves the face normals as they were, and FromBMesh tessellates an ngon on its normal's plane: at a
+    # rotated pose a hinge leaf's notched face came out as triangles across the notches, so a hinge whose triangles are
+    # all 0.39 mm apart read "touching" and 0.10 mm (features.pip_hinge, PR #22 review)
+    bm.normal_update()
     return bm
 
 
-def bvh_world(o):
-    bm = world_bm(o)
+def bvh_world(o, M=None):
+    bm = world_bm(o, M)
     t = BVHTree.FromBMesh(bm)
     bm.free()
     return t
 
 
-def bbox_world(o):
-    bb = [o.matrix_world @ Vector(c) for c in o.bound_box]
+def bbox_world(o, M=None):
+    bb = [(o.matrix_world if M is None else M) @ Vector(c) for c in o.bound_box]
     return (Vector((min(v.x for v in bb), min(v.y for v in bb), min(v.z for v in bb))),
             Vector((max(v.x for v in bb), max(v.y for v in bb), max(v.z for v in bb))))
 
@@ -389,6 +533,437 @@ def bb_gap(A, B):
         d = max(lb[k] - ha[k], la[k] - hb[k], 0.0)
         g = max(g, d)
     return g
+
+
+def obb_gap(a, b, Ma=None, Mb=None):
+    """Gap between the two objects' own (oriented) bounding boxes: the largest separation along the 15 separating axes,
+    a lower bound on the distance between the parts (bb_gap uses world-aligned boxes, which grow as a part turns)."""
+    Ma, Mb = a.matrix_world if Ma is None else Ma, b.matrix_world if Mb is None else Mb
+    return box_gap([Ma @ Vector(c) for c in a.bound_box], [Ma.to_3x3().col[i] for i in range(3)],
+                   [Mb @ Vector(c) for c in b.bound_box], [Mb.to_3x3().col[i] for i in range(3)])
+
+
+def box_gap(ca, ua, cb, ub):
+    """Separating-axis gap between two boxes given as corners and edge directions."""
+    ua, ub = [x.normalized() for x in ua], [x.normalized() for x in ub]
+    best = 0.0
+    for u in ua + ub + [x.cross(y) for x in ua for y in ub]:
+        if u.length < 1e-6:
+            continue
+        u = u.normalized()
+        pa, pb = [u.dot(c) for c in ca], [u.dot(c) for c in cb]
+        best = max(best, min(pb) - max(pa), min(pa) - max(pb))
+    return best
+
+
+def spin_box(o, piv, u):
+    """Corners and edges (world, current pose) of a box around everything o can fill while spinning about the axis
+    (piv, u): its height range along the axis by its largest radius each way across it (the router's spin envelope,
+    cadlib.route._envelope, as a box)."""
+    piv, u = Vector(piv), Vector(u).normalized()
+    e1 = u.cross(Vector((1, 0, 0)) if abs(u.x) < 0.9 else Vector((0, 1, 0))).normalized()
+    e2 = u.cross(e1)
+    mw = o.matrix_world
+    vs = [mw @ v.co - piv for v in o.data.vertices]
+    hs = [v.dot(u) for v in vs]
+    R = max((v - u * v.dot(u)).length for v in vs)
+    return [piv + u * h + e1 * x + e2 * y for h in (min(hs), max(hs)) for x in (-R, R) for y in (-R, R)], [u, e1, e2]
+
+
+def turning(a, b, piv, u, depth=4, cap=400000, pad=0.0):
+    """For a and b where one turns about the axis (piv, u) against the other: a test clear(lo, hi) -> True when they
+    can't meet while a turns from lo to hi radians against b (from home, right-handed about u), starting apart.
+    Turning keeps each point's height h along the axis and radius r from it, and adds to its angle phi, so parts that
+    start apart can only meet where a triangle of each shares (h, r, phi). Each triangle lies in a box: its vertex
+    heights, radii from its closest approach to the axis out to its farthest vertex, and its vertices' angle range (all
+    of it when it spans the axis); a's angles widen by the turn. No box of a meeting a box of b proves the turn clear:
+    a disc over a plate or a hub in a bore at any angle, a journal next to its arm over a small turn. A large triangle
+    has a loose box, so the triangles of the box pairs that still meet are cut in four and only their children's pairs
+    tested again, up to `depth` times (v2's launcher body against the nip stop sleeve, 0.27 mm apart, needed it); past
+    `cap` pairs the turn is left unproven. This is cadsmith mech's "turning about a common hinge line" test (PR #6),
+    on the mesh triangles. Box pairs that share (h, r) are found once per call level."""
+    import numpy as np
+    u = np.array(u, float) / np.linalg.norm(u)
+    e1 = np.cross(u, [1.0, 0, 0] if abs(u[0]) < 0.9 else [0, 1.0, 0])
+    e1 /= np.linalg.norm(e1)
+    e2 = np.cross(u, e1)
+    eps = 1e-4
+
+    def tris(o):
+        me = o.data
+        me.calc_loop_triangles()
+        co = np.empty(len(me.vertices) * 3)
+        me.vertices.foreach_get("co", co)
+        M = np.array(o.matrix_world)
+        co = co.reshape(-1, 3) @ M[:3, :3].T + M[:3, 3] - np.array(piv, float)
+        t = np.empty(len(me.loop_triangles) * 3, dtype=np.int64)
+        me.loop_triangles.foreach_get("vertices", t)
+        return co[t.reshape(-1, 3)]
+
+    def boxes(W):
+        h, P = W @ u, np.stack([W @ e1, W @ e2], 2)        # (n, 3), (n, 3, 2)
+        rmin = np.full(len(W), np.inf)
+        for i, j in ((0, 1), (1, 2), (2, 0)):       # each edge's closest approach to the axis (the origin here)
+            p0, e = P[:, i], P[:, j] - P[:, i]
+            t = np.clip(-(p0 * e).sum(1) / np.maximum((e * e).sum(1), 1e-18), 0, 1)
+            rmin = np.minimum(rmin, np.linalg.norm(p0 + e * t[:, None], axis=1))
+        cr = [(P[:, j, 0] - P[:, i, 0]) * -P[:, i, 1] - (P[:, j, 1] - P[:, i, 1]) * -P[:, i, 0] for i, j in ((0, 1), (1, 2), (2, 0))]
+        spans = ((cr[0] >= 0) & (cr[1] >= 0) & (cr[2] >= 0)) | ((cr[0] <= 0) & (cr[1] <= 0) & (cr[2] <= 0))
+        rmin[spans] = 0.0
+        ang = np.arctan2(P[..., 1], P[..., 0])
+        d = (ang - ang[:, :1] + np.pi) % (2 * np.pi) - np.pi
+        f0, f1 = ang[:, 0] + d.min(1), ang[:, 0] + d.max(1)
+        f0[spans], f1[spans] = -np.pi, 3 * np.pi       # the whole circle
+        r1 = np.linalg.norm(P, axis=2).max(1)
+        if pad > 0:                                 # an axis a little off the line: every bound grows by pad
+            w = np.where(rmin > pad, np.arcsin(np.minimum(1.0, pad / np.maximum(rmin, 1e-9))), 2 * np.pi)
+            f0, f1 = f0 - w, f1 + w
+            f0[rmin <= pad], f1[rmin <= pad] = -np.pi, 3 * np.pi
+            return np.stack([h.min(1) - pad, h.max(1) + pad, np.maximum(0.0, rmin - pad), r1 + pad, f0, f1], 1)
+        return np.stack([h.min(1), h.max(1), rmin, r1, f0, f1], 1)
+
+    def split(W):                                   # each triangle into four, (n, 3, 3) -> (4n, 3, 3)
+        m01, m12, m20 = (W[:, 0] + W[:, 1]) / 2, (W[:, 1] + W[:, 2]) / 2, (W[:, 2] + W[:, 0]) / 2
+        return np.stack([np.stack(x, 1) for x in ((W[:, 0], m01, m20), (m01, W[:, 1], m12), (m20, m12, W[:, 2]), (m01, m12, m20))], 1).reshape(-1, 3, 3)
+
+    def meet_hr(A, B, ia, ib):
+        X, Y = A[ia], B[ib]
+        return (X[:, 1] >= Y[:, 0] - eps) & (X[:, 0] <= Y[:, 1] + eps) & (X[:, 3] >= Y[:, 2] - eps) & (X[:, 2] <= Y[:, 3] + eps)
+
+    def meet_phi(A, B, ia, ib, lo, hi):
+        a0, wa = A[ia, 4] + lo - eps, A[ia, 5] - A[ia, 4] + (hi - lo) + 2 * eps
+        wb = B[ib, 5] - B[ib, 4]
+        dd = (B[ib, 4] - a0) % (2 * np.pi)
+        return (dd <= wa) | (dd + wb >= 2 * np.pi) | (wa >= 2 * np.pi) | (wb >= 2 * np.pi)
+
+    WA, WB = tris(a), tris(b)
+    A, B = boxes(WA), boxes(WB)
+    if not len(A) or not len(B):
+        return lambda lo, hi: True
+    ka = np.nonzero((A[:, 1] >= B[:, 0].min() - eps) & (A[:, 0] <= B[:, 1].max() + eps) & (A[:, 3] >= B[:, 2].min() - eps) & (A[:, 2] <= B[:, 3].max() + eps))[0]
+    kb = np.nonzero((B[:, 1] >= A[:, 0].min() - eps) & (B[:, 0] <= A[:, 1].max() + eps) & (B[:, 3] >= A[:, 2].min() - eps) & (B[:, 2] <= A[:, 3].max() + eps))[0]
+    IA, IB = [], []
+    step = max(1, 1000000 // max(1, len(kb)))
+    for i in range(0, len(ka), step):
+        X = A[ka[i:i + step]]
+        ia, ib = np.nonzero((X[:, None, 1] >= B[None, kb, 0] - eps) & (X[:, None, 0] <= B[None, kb, 1] + eps)
+                            & (X[:, None, 3] >= B[None, kb, 2] - eps) & (X[:, None, 2] <= B[None, kb, 3] + eps))
+        IA.append(ka[i:i + step][ia])
+        IB.append(kb[ib])
+        if sum(len(x) for x in IA) > cap:
+            return lambda lo, hi: False         # too many to test each turn: leave it to the bisection
+    IA = np.concatenate(IA) if IA else np.zeros(0, int)
+    IB = np.concatenate(IB) if IB else np.zeros(0, int)
+
+    def clear(lo, hi):
+        Wa, Wb, Ba, Bb, ia, ib = WA, WB, A, B, IA, IB
+        for level in range(depth + 1):
+            hit = meet_phi(Ba, Bb, ia, ib, lo, hi)
+            ia, ib = ia[hit], ib[hit]
+            if not len(ia):
+                return True
+            if level == depth or len(ia) * 16 > cap:
+                return False
+            ua, ra = np.unique(ia, return_inverse=True)      # cut the triangles still in play, test their children
+            ub, rb = np.unique(ib, return_inverse=True)
+            Wa, Wb = split(Wa[ua]), split(Wb[ub])
+            Ba, Bb = boxes(Wa), boxes(Wb)
+            ia = (ra[:, None] * 4 + np.arange(4)[None, :]).repeat(4, 1).reshape(-1)
+            ib = np.tile(rb[:, None] * 4 + np.arange(4)[None, :], (1, 4)).reshape(-1)
+            keep = meet_hr(Ba, Bb, ia, ib)
+            ia, ib = ia[keep], ib[keep]
+        return False
+    return clear
+
+
+def motions(o, other, drv, info):
+    """How o moves against `other` over the group's driver joints: [(joint, kind, pivot, axis, lo, hi)], innermost
+    first, at home, lo/hi in deg (or mm) relative to home over the swept range with overtravel (0..360 for a wheel).
+    A coupled joint's range follows its driver's (joints.values). Joints both parts ride are left out."""
+    out = []
+    mine = [j for j in joint_chain(o) if j not in set(joint_chain(other)) and JT.ranged(j, JOINTS, COUPLE)]
+    home = JT.values(JOINTS, COUPLE, {})
+    for j in mine:
+        d = JT.driver_of(j, COUPLE)[0]
+        if d not in drv:
+            continue
+        sd = JOINTS[d]
+        if j not in info:
+            info[j] = JT.motion(j, JOINTS)
+        kind, piv, u = info[j]
+        if sd.get("continuous"):
+            lo, hi = 0.0, 360.0
+        else:
+            ot = CFG["overtravel_mm"] if sd.get("kind") == "prismatic" else CFG["overtravel_deg"]
+            v = [JT.values(JOINTS, COUPLE, {d: float(x)})[j] - home[j] for x in (sd["lo"] - ot, sd["hi"] + ot)]
+            lo, hi = min(v), max(v)
+        out.append((j, kind, Vector(piv), Vector(u).normalized(), lo, hi))
+    return out
+
+
+def _cyl(P, piv, u):
+    """Cylindrical bounds about the axis (piv, u) of the convex hull of points P: (h0, h1, r0, r1, f0, width); width
+    is 2 pi or more when the hull reaches the axis."""
+    e1 = u.cross(Vector((1, 0, 0)) if abs(u.x) < 0.9 else Vector((0, 1, 0))).normalized()
+    e2 = u.cross(e1)
+    rel = [p - piv for p in P]
+    hs = [q.dot(u) for q in rel]
+    xy = [(q.dot(e1), q.dot(e2)) for q in rel]
+    r1 = max(math.hypot(x, y) for x, y in xy)
+    ang = sorted(math.atan2(y, x) for x, y in xy)
+    gaps = [(ang[(i + 1) % len(ang)] - ang[i]) % (2 * math.pi) for i in range(len(ang))]
+    g = max(range(len(gaps)), key=lambda i: gaps[i])
+    if gaps[g] <= math.pi + 1e-9:       # the hull holds the axis
+        return min(hs), max(hs), 0.0, r1, -math.pi, 4 * math.pi
+    r0 = 1e18                           # outside: the nearest of all segments between points is the hull's nearest
+    for i in range(len(xy)):
+        for k in range(i, len(xy)):
+            (x0, y0), (x1, y1) = xy[i], xy[k]
+            ex, ey = x1 - x0, y1 - y0
+            t = max(0.0, min(1.0, -(x0 * ex + y0 * ey) / max(ex * ex + ey * ey, 1e-18)))
+            r0 = min(r0, math.hypot(x0 + ex * t, y0 + ey * t))
+    return min(hs), max(hs), r0, r1, ang[(g + 1) % len(ang)], 2 * math.pi - gaps[g]
+
+
+def _sweep_pts(P, m):
+    """Corners of a box holding the points P swept by motion m (joint, kind, pivot, axis, lo, hi)."""
+    _, kind, piv, u, lo, hi = m
+    if kind == "prismatic":
+        Q = [p + u * a for p in P for a in (lo, 0.0, hi)]
+        lo3 = Vector([min(q[i] for q in Q) for i in range(3)])
+        hi3 = Vector([max(q[i] for q in Q) for i in range(3)])
+        return _corners((lo3, hi3))
+    h0, h1, r0, r1, f0, w = _cyl(P, piv, u)
+    w += math.radians(hi - lo)
+    f0 += math.radians(lo)
+    e1 = u.cross(Vector((1, 0, 0)) if abs(u.x) < 0.9 else Vector((0, 1, 0))).normalized()
+    e2 = u.cross(e1)
+    if w >= 2 * math.pi:
+        xs = ys = (-r1, r1)
+    else:
+        angs = [f0, f0 + w] + [k * math.pi / 2 for k in range(-8, 9) if f0 < k * math.pi / 2 < f0 + w]
+        pts = [(r * math.cos(t), r * math.sin(t)) for t in angs for r in (r0, r1)]
+        xs, ys = (min(x for x, _ in pts), max(x for x, _ in pts)), (min(y for _, y in pts), max(y for _, y in pts))
+    return [piv + e1 * x + e2 * y + u * h for x in xs for y in ys for h in (h0, h1)]
+
+
+def _obb(o):
+    return [o.matrix_world @ Vector(c) for c in o.bound_box]
+
+
+def swept_apart(a, ma, b, mb, margin=0.01):
+    """Broad phase: can a (moving by ma) and b (by mb) never meet? A part's own box is swept through each motion but
+    the last into a bounding box; against a part that doesn't move, the last revolute motion stays a ring sector
+    [r0, r1] x [h0, h1] x angle about its axis and is compared with the other part's bounds about the same axis.
+    Otherwise both swept boxes are compared."""
+    if not ma and not mb:
+        return False
+    if ma and mb:
+        A, B = _obb(a), _obb(b)
+        for m in ma:
+            A = _sweep_pts(A, m)
+        for m in mb:
+            B = _sweep_pts(B, m)
+        return bb_gap(_aabb(A), _aabb(B)) > margin
+    (o, mo, other) = (a, ma, b) if ma else (b, mb, a)
+    P = _obb(o)
+    for m in mo[:-1]:
+        P = _sweep_pts(P, m)
+    last = mo[-1]
+    if last[1] == "prismatic":
+        return bb_gap(_aabb(_sweep_pts(P, last)), _aabb(_obb(other))) > margin
+    _, _, piv, u, lo, hi = last
+    A, B = _cyl(P, piv, u), _cyl(_obb(other), piv, u)
+    if A[0] > B[1] + margin or B[0] > A[1] + margin or A[2] > B[3] + margin or B[2] > A[3] + margin:
+        return True
+    wa = A[5] + math.radians(hi - lo) + 2 * margin / max(1.0, min(A[3], B[3]))
+    if wa >= 2 * math.pi or B[5] >= 2 * math.pi:
+        return False
+    d = (B[4] - (A[4] + math.radians(lo) - margin / max(1.0, min(A[3], B[3])))) % (2 * math.pi)
+    return not (d <= wa or d + B[5] >= 2 * math.pi)
+
+
+def _aabb(P):
+    return (Vector([min(p[i] for p in P) for i in range(3)]), Vector([max(p[i] for p in P) for i in range(3)]))
+
+
+def envelope_of(o, mo, cache, guard):
+    """geom.swept_envelope of o over its motions (swept_envelope_chain for 2+), cached per part and motion chain, with
+    its BVH. None when it can't be built (grid too large even at a coarse voxel)."""
+    key = (o.name, tuple(m[0] for m in mo))
+    if key in cache:
+        return cache[key]
+    from cadlib import geom as G, blend as BL, route as RT
+    out, voxel, src, ring = None, CFG["envelope_voxel"], o, None
+    if len(mo) > 1 and mo[0][1] == "revolute" and JOINTS[mo[0][0]].get("continuous"):
+        # a wheel spinning inside a chain: its spin is a solid of revolution (the router's annulus about the spin axis,
+        # route._envelope), so only the other joints are swept. Sampling the full turn in the chain coarsened it to a
+        # 27 mm pad (PR #14 review: PRT_flywheel over flywheel + tilt + pan)
+        co, F = RT._envelope(o, mo[0][0], joint_chain(o), JOINTS, COUPLE)
+        me = bpy.data.meshes.new("CADCHECK_ring")
+        me.from_pydata([tuple(v) for v in co.tolist()], [], [tuple(f) for f in F.tolist()])
+        ring = src = bpy.data.objects.new("CADCHECK_ring_" + o.name, me)
+        tmpcoll().objects.link(ring)
+        bpy.context.view_layer.update()
+        mo = mo[1:]
+    for _ in range(4):
+        try:
+            if len(mo) == 1:
+                _, kind, piv, u, lo, hi = mo[0]
+                ob = G.swept_envelope([src], piv, axis=u, lo=lo, hi=hi, tol=CFG["sweep_tol"], voxel=voxel,
+                                      prismatic=kind == "prismatic", name="CADCHECK_env_" + o.name)
+            else:
+                ob = G.swept_envelope_chain([src], [m[1:] for m in mo], tol=CFG["sweep_tol"], voxel=voxel,
+                                            max_poses=CFG["envelope_max_poses"], name="CADCHECK_env_" + o.name)
+            out = (ob, bvh_world(ob), bbox_world(ob))
+            log("envelope %s over %s: %s" % (o.name, [m[0] for m in mo], {k: ob["envelope"][k] for k in ("poses", "pad", "tris", "t_s") if k in ob["envelope"]}))
+            guard["envelopes"] += 1
+            guard["envelope_tris"] += ob["envelope"]["tris"]
+            guard["pads"].append((o.name, ob["envelope"]["pad"]))
+            break
+        except BL.GridTooLarge:
+            voxel *= 2
+    if ring is not None:
+        bpy.data.objects.remove(ring)
+        bpy.data.meshes.remove(me)
+    if out is None:
+        guard["envelope_failed"].append(o.name)
+    cache[key] = out
+    return out
+
+
+def envelope_meets(a, ma, b, mb, cache, guard):
+    """Narrow phase: does the envelope of each moving side meet the other side (its envelope, or the part at home)?
+    False proves the pair clear over the whole range; True (or None: no envelope) sends it to refinement."""
+    sides = []
+    for o, mo in ((a, ma), (b, mb)):
+        if mo:
+            e = envelope_of(o, mo, cache, guard)
+            if e is None:
+                return None
+            sides.append(e[1:] + (e[0],))
+        else:
+            if ("home", o.name) not in cache:
+                cache[("home", o.name)] = (bvh_world(o), bbox_world(o), o)
+            sides.append(cache[("home", o.name)])
+    (ta, ba, oa), (tb, bb, ob) = sides
+    if bb_gap(ba, bb) > 0:
+        return False
+    if ta.overlap(tb):
+        return True
+    # no surfaces cross: a shell of one wholly inside the other is still a meeting. One vertex per connected shell: a
+    # joined placeholder's small pin can sit inside the envelope while its far block doesn't (PR #14 review, multishell_a)
+    return any(inside(tb, oa.matrix_world @ v, bb) for v in shell_pts(oa)) or any(inside(ta, ob.matrix_world @ v, ba) for v in shell_pts(ob))
+
+
+_SHELLS = {}
+
+
+def shell_pts(o):
+    """One vertex (local) per connected shell of o's mesh, kept per mesh."""
+    me = o.data
+    key = (me.as_pointer(), len(me.vertices), len(me.edges))
+    if key not in _SHELLS:
+        par = list(range(len(me.vertices)))
+
+        def find(i):
+            while par[i] != i:
+                par[i] = par[par[i]]
+                i = par[i]
+            return i
+        for e in me.edges:
+            ra, rb = find(e.vertices[0]), find(e.vertices[1])
+            if ra != rb:
+                par[ra] = rb
+        roots = {}
+        for i in range(len(par)):
+            roots.setdefault(find(i), i)
+        _SHELLS[key] = [me.vertices[i].co.copy() for i in roots.values()]
+    return _SHELLS[key]
+
+
+def ring_of(o, c, cache):
+    """o's solid of revolution about its continuous joint c (the router's annulus, route._envelope), as a temporary
+    object at home, kept per part."""
+    if (o.name, c) not in cache:
+        from cadlib import route as RT
+        co, F = RT._envelope(o, c, joint_chain(o), JOINTS, COUPLE)
+        me = bpy.data.meshes.new("CADCHECK_ring")
+        me.from_pydata([tuple(v) for v in co.tolist()], [], [tuple(f) for f in F.tolist()])
+        ring = bpy.data.objects.new("CADCHECK_ring_" + o.name, me)
+        tmpcoll().objects.link(ring)
+        cache[(o.name, c)] = ring
+    return cache[(o.name, c)]
+
+
+def coaxial(a, b, rel, drv, info, ring_cache):
+    """For a pair whose relative motion is turning about one axis line: {"a", "b", "piv", "u", "range": cell -> (lo,
+    hi) radians a turns against b, "clear": None}; else None. The joints between them (rel) may be several on one line
+    (v2's feeder and jar, hood and nip_lift: the relative angle is the signed sum of their angles, linear in the drivers,
+    so a cell's extremes are at its corners). A part spinning on a continuous joint of its own is replaced by its solid
+    of revolution about that joint first (a flywheel), which takes that joint out of rel."""
+    if not rel or any(JOINTS[j].get("kind") == "prismatic" for j in rel):
+        return None
+    side = {}
+    for o, other in ((a, b), (b, a)):
+        ch = [j for j in joint_chain(o) if JT.ranged(j, JOINTS, COUPLE)]
+        side[o.name] = o
+        if ch and ch[0] in rel and JOINTS[ch[0]].get("continuous") and len(rel) > 1:
+            ring = ring_of(o, ch[0], ring_cache)
+            # the turning test assumes the parts start apart, and only the real parts are measured at the samples: a
+            # part with a vertex inside the ring's band could lie wholly inside it and never cross a surface (PR #21
+            # review, ring_inside: a post in a spinning blade's path read clear). Then keep the real part.
+            if not _in_band(side.get(other.name, other), ring, info.setdefault(ch[0], JT.motion(ch[0], JOINTS))):
+                side[o.name] = ring
+                rel = [j for j in rel if j != ch[0]]
+    for j in rel:
+        if j not in info:
+            info[j] = JT.motion(j, JOINTS)
+    _, p0, u0 = info[rel[0]]
+    p0, u0 = Vector(p0), Vector(u0).normalized()
+    reach = max((side[o.name].matrix_world @ v.co - p0).length for o in (a, b) for v in side[o.name].data.vertices)
+    sgn, pad = {}, 0.0
+    home = JT.values(JOINTS, COUPLE, {})
+    for j in rel:
+        _, p, u = info[j]
+        u, d = Vector(u).normalized(), Vector(p) - p0
+        th, off = math.acos(min(1.0, abs(u.dot(u0)))), (d - u0 * d.dot(u0)).length
+        if th > 0.02 or off > 0.5:
+            return None
+        # a joint whose axis is a little off the line (or shifted from it) moves a point by up to its turn x (angle x
+        # reach + offset) more than the turn about the line: the boxes are padded by that (PR #21 review: 1e-6 on
+        # |u.u0| let 0.08 deg through unpadded)
+        dr, k = JT.driver_of(j, COUPLE)
+        sd = JOINTS[dr]
+        turn = 2 * math.pi if sd.get("continuous") else min(2 * math.pi, max(
+            abs(math.radians(JT.values(JOINTS, COUPLE, {dr: float(x)})[j] - home[j])) for x in (sd["lo"] - CFG["overtravel_deg"], sd["hi"] + CFG["overtravel_deg"])))
+        pad += turn * (th * reach + off)
+        sgn[j] = (1 if j in joint_chain(a) else -1) * (1 if u.dot(u0) > 0 else -1)
+
+    def rng(cell):
+        angs = []
+        for c in itertools.product(*cell):
+            v = JT.values(JOINTS, COUPLE, dict(zip(drv, c)))
+            angs.append(math.radians(sum(s * (v[j] - home[j]) for j, s in sgn.items())))
+        return min(angs), max(angs)
+    return {"a": side[a.name], "b": side[b.name], "piv": p0, "u": u0, "range": rng, "clear": None, "pad": pad + 1e-4}
+
+
+def _in_band(o, ring, mot):
+    """Does any vertex of o lie inside the ring's band (its height and radius ranges about the spin axis)?"""
+    _, piv, u = mot
+    piv, u = Vector(piv), Vector(u).normalized()
+
+    def hr(ob):
+        out = []
+        for v in ob.data.vertices:
+            q = ob.matrix_world @ v.co - piv
+            h = q.dot(u)
+            out.append((h, (q - u * h).length))
+        return out
+    R = hr(ring)
+    h0, h1, r0, r1 = min(h for h, _ in R), max(h for h, _ in R), min(r for _, r in R), max(r for _, r in R)
+    return any(h0 <= h <= h1 and r0 <= r <= r1 for h, r in hr(o))
 
 
 MANIFOLD_OK = {}
@@ -465,26 +1040,94 @@ def own_volume(o):
     return v
 
 
-def sample_pts(o, cap=4000):
+_LOCAL_PTS = {}
+
+
+def sample_pts(o, cap=4000, M=None):
+    """Vertices then triangle centres (thinned to cap), in world at the current pose or at M. The local points are
+    kept per mesh: reading t.center for every triangle at every pose was most of min_dist's time."""
     me = o.data
-    mw = o.matrix_world
-    pts = [mw @ v.co for v in me.vertices]
+    key = (me.as_pointer(), len(me.vertices), cap)
+    if key not in _LOCAL_PTS:
+        loc = [v.co.copy() for v in me.vertices]
+        me.calc_loop_triangles()
+        loc += [t.center.copy() for t in me.loop_triangles]
+        if len(loc) > cap:
+            st = len(loc) / cap
+            loc = [loc[int(i * st)] for i in range(cap)]
+        _LOCAL_PTS[key] = loc
+    mw = o.matrix_world if M is None else M
+    return [mw @ p for p in _LOCAL_PTS[key]]
+
+
+_DENSE = {}
+
+
+def dense_pts(o, cap=20000):
+    """(local points, r): points on o's surface such that every surface point is within r of one of them. Each
+    triangle is cut into n x n similar pieces (n from its longest edge) and their corners kept, so r = the longest
+    piece edge / sqrt(3) (no point of a triangle is farther than that from its nearest corner). The spacing grows
+    until the count fits cap. Kept per mesh. sample_pts (vertices and triangle centres) has no such bound: a 95 mm
+    blade face read 12.6 mm where the gap was 4.2 (PR #14 review, scene blade_box)."""
+    import numpy as np
+    me = o.data
+    key = (me.as_pointer(), len(me.vertices), cap)
+    if key in _DENSE:
+        return _DENSE[key]
     me.calc_loop_triangles()
-    pts += [mw @ t.center for t in me.loop_triangles]
-    if len(pts) > cap:
-        st = len(pts) / cap
-        pts = [pts[int(i * st)] for i in range(cap)]
-    return pts
+    co = np.empty(len(me.vertices) * 3)
+    me.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    t = np.empty(len(me.loop_triangles) * 3, dtype=np.int64)
+    me.loop_triangles.foreach_get("vertices", t)
+    T = co[t.reshape(-1, 3)]
+    L = np.max(np.linalg.norm(T - np.roll(T, 1, axis=1), axis=2), axis=1)
+    area = 0.5 * np.linalg.norm(np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]), axis=1).sum()
+    sp = max(0.1, math.sqrt(2 * area / cap))
+    while True:
+        n = np.maximum(1, np.ceil(L / sp)).astype(int)
+        if ((n + 1) * (n + 2) // 2).sum() <= cap * 1.5 or sp > 1e3:
+            break
+        sp *= 1.25
+    pts = [co]
+    for k in np.unique(n):
+        if k == 1:
+            continue
+        Tk = T[n == k]
+        ij = np.array([(i, j) for i in range(k + 1) for j in range(k + 1 - i)], float) / k
+        pts.append((Tk[:, None, 0] + ij[None, :, :1] * (Tk[:, None, 1] - Tk[:, None, 0]) + ij[None, :, 1:] * (Tk[:, None, 2] - Tk[:, None, 0])).reshape(-1, 3))
+    P = np.concatenate(pts)
+    r = float((L / n).max()) / math.sqrt(3) if len(L) else 0.0
+    _DENSE[key] = (P, r)
+    return _DENSE[key]
 
 
-def min_dist(a, b, ta, tb):
+def dist_lb(a, b, ta, tb, Ma, Mb):
+    """A lower bound on the distance between a and b (BVHs ta, tb, world matrices Ma, Mb): the nearest of a's dense
+    points to b's surface (exact, BVH) less a's covering radius, from the side with the smaller radius. If every point
+    of a is within r of a sample, the true gap D satisfies min over samples of dist(sample, b) <= D + r."""
+    import numpy as np
+    (Pa, ra), (Pb, rb) = dense_pts(a), dense_pts(b)
+    (P, r, M, t) = (Pa, ra, Ma, tb) if ra <= rb else (Pb, rb, Mb, ta)
+    W = P @ np.array(M.to_3x3()).T + np.array(M.translation)
+    best = 1e9
+    for q in W.tolist():
+        h = t.find_nearest(q, best)
+        if h[0] is not None and h[3] < best:
+            best = h[3]
+    return best - r
+
+
+def min_dist(a, b, ta, tb, Ma=None, Mb=None):
+    """Nearest sampled distance between a and b (each one's sample points against the other's BVH). Each query is
+    capped at the best so far, which gives the same result with less of the tree searched."""
     best = (1e9, None)
-    for p in sample_pts(a):
-        r = tb.find_nearest(p)
+    for p in sample_pts(a, M=Ma):
+        r = tb.find_nearest(p, best[0])
         if r[0] is not None and r[3] < best[0]:
             best = (r[3], p)
-    for p in sample_pts(b):
-        r = ta.find_nearest(p)
+    for p in sample_pts(b, M=Mb):
+        r = ta.find_nearest(p, best[0])
         if r[0] is not None and r[3] < best[0]:
             best = (r[3], p)
     return best
@@ -542,13 +1185,14 @@ def inside(t, p, bb=None):
 
 
 def rule_for(a, b):
-    """First matching rule in "allow" (designed overlap, skipped entirely) or "fits"
-    (designed running fit: its own min_clearance, optional contact=true for thrust/bearing faces)."""
+    """First matching rule in "allow" (designed overlap: skipped, or up to max_mm3; a slide row keeps the pair, bounded)
+    or "fits" (designed running fit: its own min_clearance, optional contact=true for thrust/bearing faces), with its
+    "kind" and its "index" in that list."""
     for key in ("allow", "fits"):
-        for rule in CFG.get(key, []):
+        for i, rule in enumerate(CFG.get(key, [])):
             pa, pb = rule.get("a", "*"), rule.get("b", "*")
             if (fnmatch.fnmatch(a, pa) and fnmatch.fnmatch(b, pb)) or (fnmatch.fnmatch(b, pa) and fnmatch.fnmatch(a, pb)):
-                return dict(rule, kind=key)
+                return dict(rule, kind=key, index=i)
     return None
 
 
@@ -561,7 +1205,11 @@ REPORT = {"tool": "cadcheck", "blend": bpy.data.filepath, "generated": time.strf
           "config": {k: v for k, v in CFG.items() if k not in ("drop_tests",)}, "checks": {}, "coverage": [], "not_checked": []}
 FAILS, WARNS = [], []
 PAST_LIMITS = []   # poses outside a joint's range (check_pose_values)
+UNPROVEN_KIND = "not proven clear between the sampled poses"     # the unproven-pair warn's text (verify_all, bench)
+UNPROVEN_PAIRS = []     # pairs the between-sample refinement could not finish (check_interference)
 UNBOUNDED_ALLOWS = {}   # allow rules with no max_mm3 that skip a pair across a joint: "a x b" -> why (check_interference)
+NOTES = []   # information lines printed with the summary, never warns (insertion: a listed order that doesn't fit)
+ALLOW_USE = {}   # allow rule index -> {"mm3": largest overlap measured on a pair it covers, "rows": slide rows} (check_slide)
 
 
 def present(check, label, names):
@@ -689,10 +1337,9 @@ def stl_dirs():
     return [x for x in (os.path.join(d, "stl"), os.path.join(os.path.dirname(d), "stl")) if os.path.isdir(x)]
 
 
-def layer_check(o, dirs):
-    """printcheck.analyze on the exported STL (what gets sliced), or on the model's print triangles when there is no STL
-    on disk. FINDINGS "v2 post-freeze": the face-based ceiling test passed jar_valve's cantilevered bayonet tabs and
-    feeder_cover's 10.5 mm screw ear, both marked supports: no."""
+def layer_tris(o, dirs):
+    """The triangles printcheck reads for a printed part: its exported STL when on disk (what gets sliced), else the
+    model's print triangles. Returns (tris, source, note, printcheck module, printcheck config, print_to_world)."""
     import numpy as np
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import printcheck as PC
@@ -701,7 +1348,13 @@ def layer_check(o, dirs):
     for d in dirs:
         fp = os.path.join(d, "%s.stl" % o.get("stl"))
         if os.path.isfile(fp):
-            st = PC.read_stl(fp)
+            try:
+                st = PC.read_stl(fp)
+                if not len(st):
+                    raise ValueError("%s: no triangles" % fp)
+            except (ValueError, OSError) as e:   # an empty or cut-short export (PR #17 review): say so, check the model
+                note = "UNREADABLE %s: re-export it; checked the model's triangles" % e
+                break
             lo_m, hi_m = tris.reshape(-1, 3).min(0), tris.reshape(-1, 3).max(0)
             lo_s, hi_s = st.reshape(-1, 3).min(0), st.reshape(-1, 3).max(0)
             if len(st) != len(tris) or np.abs(lo_m - lo_s).max() > 0.05 or np.abs(hi_m - hi_s).max() > 0.05:
@@ -712,7 +1365,16 @@ def layer_check(o, dirs):
     pc = dict(CFG.get("printcheck") or {})
     pc.setdefault("overhang_deg", CFG["overhang_deg"])
     pc.setdefault("bridge_warn_mm", CFG.get("max_bridge_mm", 25))
-    res = PC.analyze_cached(tris, pc, supports=o.get("supports"), print_to_world=(Rn.T, -Rn.T @ off))
+    return tris, src, note, PC, pc, (Rn.T, -Rn.T @ off)
+
+
+def layer_check(o, dirs):
+    """printcheck.analyze on the exported STL (what gets sliced), or on the model's print triangles when there is no STL
+    on disk: the layer check, the face pass (sloped overhangs) and the STL's edges in more than two faces. FINDINGS
+    "v2 post-freeze": the face-based ceiling test passed jar_valve's cantilevered bayonet tabs and feeder_cover's
+    10.5 mm screw ear, both marked supports: no."""
+    tris, src, note, PC, pc, wm = layer_tris(o, dirs)
+    res = PC.analyze_cached(tris, pc, supports=o.get("supports"), print_to_world=wm)
     return res, src, note
 
 
@@ -778,7 +1440,7 @@ def check_parts():
         sd = sorted(dims[:2])
         fits = {k: sd[0] <= sorted(v[:2])[0] and sd[1] <= sorted(v[:2])[1] and dims[2] <= v[2] for k, v in P.items()}
         infill = float(o.get("infill", 20))
-        shell = min(abs(vol), area * 0.84)
+        shell = min(abs(vol), area * float(o.get("walls", 2)) * float(o.get("line_w", 0.42)))   # 2 x 0.42 = the old 0.84
         used = shell + max(0.0, abs(vol) - shell) * infill / 100.0
         g, h = used * CFG["pla_density"], used / CFG["flow_mm3_s"] / 3600 + 0.1
         stl = o.get("stl")
@@ -804,7 +1466,9 @@ def check_parts():
         if bed < 20:
             finding("parts", "warn", "%s: only %.0f mm2 flat on the bed in print orientation" % (o.name, bed), object=o.name)
         nosup = str(o.get("supports", "")).lower() in ("no", "none", "false", "")
-        if over > CFG.get("overhang_warn_mm2", 150) and nosup:
+        # the summed area: only when the layer check (with its per-region face pass) is off; summed, it warned on v2
+        # beam's corner facets (205 mm2), which print, and cannot say where (PR #6 review)
+        if over > CFG.get("overhang_warn_mm2", 150) and nosup and os.environ.get("CAD_LAYER_CHECK") == "0":
             finding("parts", "warn", "%s: %.0f mm2 of sloped overhang steeper than %g deg, supports=no" % (o.name, over, CFG["overhang_deg"]), object=o.name)
         # layer check (printcheck) on the exported STL; it replaces the ceiling-span warn, which called every flat
         # downward face a bridge without asking whether it was anchored on two sides (FINDINGS "v2 post-freeze")
@@ -814,7 +1478,8 @@ def check_parts():
             LAYER_DONE[stl] = layer_check(o, dirs)
             lc, src, note = LAYER_DONE[stl]
             if note:
-                finding("parts", "warn", "%s: %s" % (o.name, note), object=o.name)
+                bad = note.startswith("UNREADABLE ")
+                finding("parts", "fail" if bad else "warn", "%s: %s" % (o.name, note[len("UNREADABLE "):] if bad else note), object=o.name)
             for f in lc["findings"]:
                 finding("parts", f["status"], "%s (%s): %s%s" % (o.name, src, f["msg"], ", supports: %s" % (o.get("supports") or "unset")
                         if f["status"] == "fail" else ""), object=o.name, stl=stl, kind=f["kind"], z=f["z_mm"])
@@ -822,7 +1487,10 @@ def check_parts():
             lc, src, note = LAYER_DONE[stl]
             row["layer_check"] = {"source": src, "needs_support": lc["needs_support"], "max_overhang_mm": lc["max_overhang_mm"],
                                   "max_bridge_mm": lc["max_bridge_mm"], "n_islands": lc["n_islands"], "n_cantilevers": lc["n_cantilevers"],
-                                  "regions": [g for g in lc["regions"] if g["status"] != "ok"][:6], "px_mm": lc["px_mm"]}
+                                  "regions": [g for g in lc["regions"] if g["status"] != "ok"][:6], "px_mm": lc["px_mm"],
+                                  "max_face_overhang_mm": lc["max_face_overhang_mm"], "face_overhang_mm2": lc["face_overhang_mm2"],
+                                  "faces": [g for g in lc["faces"] if g["status"] in ("fail", "warn", "support")][:6],
+                                  "stl_nonmanifold_edges": lc["stl_nonmanifold_edges"]}
         if "print_rot" not in o.keys():
             finding("parts", "warn", "%s has no print_rot; checked as modelled" % o.name, object=o.name)
         if o.get("bevel_clamped"):
@@ -835,7 +1503,7 @@ def check_parts():
         REPORT["not_checked"].append("parts: layer support check skipped (CAD_LAYER_CHECK=0)")
     srcs = sorted(set(v[1] for v in LAYER_DONE.values()))
     REPORT["coverage"].append("parts: %d printed objects (%d unique STLs): manifold, bed fit %s, overhang, wall probe, bed contact; "
-                              "layer support check (bridge / cantilever / island) on %s" % (
+                              "layer support check (bridge / cantilever / island), sloped-overhang face pass and edges in >2 faces on %s" % (
                                   len(PRINTED), len(seen), list(P), "the exported STLs" if srcs and all(x != "model" for x in srcs)
                                   else "the model's print triangles (no stl/ on disk)" if srcs == ["model"] else "STLs where exported, else the model"))
 
@@ -852,7 +1520,7 @@ def pair_class(a, b):
         if kinds == {"FST"}:
             return None if (is_nut(a) or is_nut(b)) else "fst_fst"  # bolt through its nut: fastener check pairs them
         if "FST" in kinds and kinds & {"PRT", "BUY"}:
-            return None  # threads bite into the part they hold; fastener check covers heads
+            return None  # threads bite into the part they hold; check_fastener_overlaps tests heads and nuts
         if kinds == {"CAB"}:
             return None
         return "cable"
@@ -871,81 +1539,369 @@ def check_interference():
         groups.setdefault(relevant_joints(a, b), []).append((a, b, cls, rule))
     res = {"groups": [], "collisions": [], "contacts": [], "solid_overlaps": [], "cable_overlaps": [], "min_clearance": [], "allowed_max": []}
     worst = {}
-    tested_pairs = 0
-    for drv, pairs in sorted(groups.items(), key=lambda kv: len(kv[0])):
-        grid = pose_grid(drv, QUICK)
-        objs = {o.name: o for p in pairs for o in p[:2]}
-        moving = {n for n, o in objs.items() if drivers(joint_chain(o)) & drv}
-        static_cache = {}
-        set_pose({})
-        for n in objs:
-            if n not in moving:
-                static_cache[n] = (bvh_world(objs[n]), bbox_world(objs[n]))
-        res["groups"].append({"joints": sorted(drv), "poses": len(grid), "pairs": len(pairs)})
-        log("interference group %s: %d pairs x %d poses" % (sorted(drv) or "static", len(pairs), len(grid)))
-        for pose, over in grid:
+    tested = [0]
+    info = {}       # joint -> JT.motion at home, for the reach bound
+
+    def measure(a, b, cls, rule, pose, over, geo, guard_pose=None, need=0.0):
+        """One pair at one pose: collisions, contacts and clearance go into `worst`. Returns (clearance, loose): 0 when
+        they overlap or touch, else the nearest distance, or the box gap when the boxes are further apart than the warn
+        margin (loose: the world-aligned boxes only). None when the pair is skipped. The sampled poses are set in the
+        scene; a guard pose (between samples) is not: geo gives each part's matrix (joints.world_at), the gap is also
+        taken between the parts' own boxes, and the scene is posed only to measure an overlap's volume."""
+        why = rule if rule and rule["kind"] == "allow" else None
+        fit = rule if rule and rule["kind"] == "fits" else None
+        between = guard_pose is not None
+        ga, gb = geo(a), geo(b)
+        gap = bb_gap(ga[1], gb[1])
+        margin = CFG["moving_warn_clearance"] if cls == "moving" else 0.01
+        if gap > margin and not between:
+            return gap, True
+        if between and gap <= need:     # the guard asks only whether the gap beats `need`
+            gap = max(gap, obb_gap(a, b, ga[2], gb[2]))
+        if between and gap > margin:
+            return gap, False
+        tested[0] += 1
+        ta, tb = tree(a, geo), tree(b, geo)
+        ov = ta.overlap(tb)
+        key = (a.name, b.name)
+        isc = contact_faces(fit, a, b) if fit and fit.get("contact") else None
+        if ov and isc and all(isc(a.matrix_world.to_3x3() @ a.data.polygons[i].normal) for i, _ in ov):
+            ov = None     # touching only on declared contact faces; the rest of the pair is measured below
+        if ov:
+            if why and why.get("max_mm3") is None:
+                if cls == "moving":
+                    UNBOUNDED_ALLOWS.setdefault("%s x %s" % key, why.get("why", ""))
+                return None
+            if between:
+                set_pose(guard_pose)
+            vol, region, solver = inter_volume(a, b)
+            if why:
+                # a bounded allow: a riding detent or a crush rib may overlap up to max_mm3, a deeper clash
+                # still fails. An unbounded allow across a joint hid any clash in every sweep (V2R5 A5-06)
+                bound = float(why["max_mm3"])
+                b_rec = worst.setdefault(("allowed_max", key), {"a": a.name, "b": b.name, "max_mm3": bound, "volume_mm3": 0.0,
+                                                                "pose": None, "why": why.get("why")})
+                if vol > b_rec["volume_mm3"]:
+                    b_rec.update(volume_mm3=round(vol, 2), pose=pose_key(pose))
+                if vol <= bound:
+                    return 0.0, False
+            rec = {"a": a.name, "b": b.name, "pose": pose_key(pose), "overtravel": over, "tri_overlaps": len(ov),
+                   "volume_mm3": round(vol, 2), "region": region, "solver": solver}
+            if between:
+                rec["between_samples"] = True
+            if cls == "moving":
+                tag = "collisions" if vol >= CFG["vol_tol"] else ("contacts" if not (fit and fit.get("contact") and not isc) else None)
+            elif cls == "cable":
+                tag = "cable_overlaps" if vol >= CFG["vol_tol"] else None
+            else:
+                tag = "solid_overlaps" if vol >= CFG["vol_tol"] else None
+            if why:   # past a bounded allow's max_mm3: a clash, whatever vol_tol says
+                tag = {"moving": "collisions", "cable": "cable_overlaps"}.get(cls, "solid_overlaps")
+                rec["allow_max_mm3"] = float(why["max_mm3"])
+            if tag:
+                prev = worst.get((tag, key))
+                # a pose between samples replaces the worst only when it is worse by more than float noise
+                if prev is None or rec["volume_mm3"] > prev["volume_mm3"] + (0.05 if between else 0) or (prev["overtravel"] and not over):
+                    rec["n_poses"] = (prev or {}).get("n_poses", 0) + 1
+                    rec["in_range_poses"] = (prev or {}).get("in_range_poses", 0) + (0 if over else 1)
+                    worst[(tag, key)] = rec
+                else:
+                    prev["n_poses"] += 1
+                    prev["in_range_poses"] += 0 if over else 1
+            return 0.0, False
+        if cls == "moving" and not why and (isc or not (fit and fit.get("contact"))):
+            d, p = min_dist_off(a, b, ta, tb, isc) if isc else min_dist(a, b, ta, tb, ga[2], gb[2])
+            prev = worst.get(("min_clearance", key))
+            # an in-range pose within 0.005 of an overtravel minimum is the one reported: a hinge's gap is the same at
+            # every angle, and the first pose sampled (overtravel) left a 0.19 mm hinge "just past the limit", a warn
+            if prev is None or d < prev["mm"] - (0.005 if between else 0) or (prev["overtravel"] and not over and d <= prev["mm"] + 0.005):
+                worst[("min_clearance", key)] = {"a": a.name, "b": b.name, "mm": round(d, 3), "pose": pose_key(pose),
+                                                 "overtravel": over, "at": [round(c, 1) for c in p] if p else None,
+                                                 "fit": fit.get("why") if fit else None,
+                                                 "min": fit.get("min_clearance", CFG["moving_min_clearance"]) if fit else CFG["moving_min_clearance"]}
+                if between:
+                    worst[("min_clearance", key)]["between_samples"] = True
+            # the refinement needs a lower bound (dist_lb); a sampled pose's min_dist only says where to look again
+            return (max(1e-6, dist_lb(a, b, ta, tb, ga[2], gb[2])), False) if between else (d, "nb")   # 0 means overlap
+        return None
+
+    def tree(o, geo):
+        g = geo(o)
+        if g[0] is None:
+            g[0] = bvh_world(o, g[2])
+        return g[0]
+
+    def refine_fit(a, b, cls, rule, ma, mb, drv, per, cyc, moving):
+        """A declared fit the envelope meets: "turning" when one turns about one axis against the other and their
+        triangles never share (h, r, angle) over the range (a journal), else a sweep with every point moving under
+        sweep_tol between poses: "collision" (recorded) at the first overlap of vol_tol or more, "clear", or
+        "unproven" past 4 x max_guard_poses poses. -> (result, pose range)"""
+        lims = [(JOINTS[j]["lo"], JOINTS[j]["hi"]) for j in drv]
+        rngs = [((p[0][0], p[0][0] + 360.0) if c else (p[0][0], p[-1][0])) for p, c in zip(per, cyc)]
+        span = ", ".join("%s=%g..%g" % (j.replace("PIV_", ""), lo, hi) for j, (lo, hi) in zip(drv, rngs))
+        rel = ma + mb
+        terms = JT.move_terms(_corners(bbox_world(a)), joint_chain(a), joint_chain(b), JOINTS, COUPLE, info)
+        rates_ = [JT.move_rate(terms.get(j, []), _corners(bbox_world(b))) for j in drv]
+        cells = None
+        if len(rel) == 1 and rel[0][1] == "revolute" and len(drv) == 1:
+            # per lattice cell: the turning test proves the cells away from anything but the journal
+            j, _, piv, u, _, _ = rel[0]
+            sign, home = (1 if ma else -1), JT.values(JOINTS, COUPLE, {})[j]
+            set_pose({})
+            clear = turning(a, b, piv, u)
+            vals = [v for v, _ in per[0]] + ([per[0][0][0] + 360.0] if cyc[0] else [])
+            cells = []
+            for lo, hi in zip(vals, vals[1:]):
+                x = sorted(math.radians(sign * (JT.values(JOINTS, COUPLE, {drv[0]: v})[j] - home)) for v in (lo, hi))
+                if not clear(*x):
+                    cells.append((lo, hi))
+            if not cells:
+                return "turning", span
+        axes_list = []
+        for cell in (cells or [None]):
+            axes = []
+            for i, (j, (lo, hi), c) in enumerate(zip(drv, rngs, cyc)):
+                if cell is not None:
+                    lo, hi = cell
+                n = max(1, int(math.ceil(rates_[i] * (hi - lo) / CFG["sweep_tol"])))
+                axes.append([lo + (hi - lo) * k / n for k in range(n + 1)])
+            axes_list.append(axes)
+        if sum(math.prod(len(x) for x in axes) for axes in axes_list) > 4 * CFG["max_guard_poses"]:
+            return "unproven", span
+        home = {o.name: (bvh_world(o), o.matrix_world.copy()) for o in (a, b) if o.name not in moving}
+        for combo in (c for axes in axes_list for c in itertools.product(*axes)):
+            pose = dict(zip(drv, (round(v, 4) for v in combo)))
+            jv, mats, M = JT.values(JOINTS, COUPLE, pose), {}, {}
+            for o in (a, b):
+                M[o.name] = home[o.name][1] if o.name in home else JT.world_at(o.name, JOINTS, jv, mats, O)
+            if bb_gap(bbox_world(a, M[a.name]), bbox_world(b, M[b.name])) > 0:
+                continue
+            ta = home[a.name][0] if a.name in home else bvh_world(a, M[a.name])
+            tb = home[b.name][0] if b.name in home else bvh_world(b, M[b.name])
+            ov = ta.overlap(tb)
+            if not ov:
+                continue
             set_pose(pose)
-            cache = dict(static_cache)
-            for n in moving:
-                cache[n] = (bvh_world(objs[n]), bbox_world(objs[n]))
-            for a, b, cls, rule in pairs:
-                why = rule if rule and rule["kind"] == "allow" else None
-                fit = rule if rule and rule["kind"] == "fits" else None
-                (ta, ba), (tb, bb) = cache[a.name], cache[b.name]
-                gap = bb_gap(ba, bb)
-                margin = CFG["moving_warn_clearance"] if cls == "moving" else 0.01
-                if gap > margin:
-                    continue
-                tested_pairs += 1
-                ov = ta.overlap(tb)
+            vol, region, solver = inter_volume(a, b)
+            if vol >= CFG["vol_tol"]:
+                over = any(not c and (v < lo - 1e-9 or v > hi + 1e-9) for v, c, (lo, hi) in zip(pose.values(), cyc, lims))
                 key = (a.name, b.name)
-                isc = contact_faces(fit, a, b) if fit and fit.get("contact") else None
-                if ov and isc and all(isc(a.matrix_world.to_3x3() @ a.data.polygons[i].normal) for i, _ in ov):
-                    ov = None     # touching only on declared contact faces; the rest of the pair is measured below
-                if ov:
-                    if why and why.get("max_mm3") is None:
-                        if cls == "moving":
-                            UNBOUNDED_ALLOWS.setdefault("%s x %s" % key, why.get("why", ""))
+                prev = worst.get(("collisions", key))
+                rec = {"a": a.name, "b": b.name, "pose": pose_key(pose), "overtravel": over, "tri_overlaps": len(ov),
+                       "volume_mm3": round(vol, 2), "region": region, "solver": solver, "between_samples": True,
+                       "n_poses": (prev or {}).get("n_poses", 0) + 1, "in_range_poses": (prev or {}).get("in_range_poses", 0) + (0 if over else 1)}
+                if prev is None or rec["volume_mm3"] > prev["volume_mm3"]:
+                    worst[("collisions", key)] = rec
+                return "collision", span
+        return "clear", span
+
+    guard = {"candidates": 0, "broad_culled": 0, "narrow_culled": 0, "fits_flagged": [], "envelopes": 0, "envelope_tris": 0, "pads": [],
+             "envelope_failed": [], "pairs": 0, "turning": 0, "spin": 0, "poses": 0, "pair_poses": 0, "bisected": 0, "at_tol": 0,
+             "unproven": {}, "broad_s": 0.0, "narrow_s": 0.0, "refine_s": 0.0}
+    env_cache, ring_cache = {}, {}
+    for drv, pairs in sorted(groups.items(), key=lambda kv: len(kv[0])):
+        drv, per = pose_axes(drv, QUICK)
+        objs = {o.name: o for p in pairs for o in p[:2]}
+        moving = {n for n, o in objs.items() if drivers(joint_chain(o)) & set(drv)}
+        static_geo = {}     # parts that don't move in this group: their home BVH and box serve every pose
+        set_pose({})
+        # between samples: pairs across a joint with no allow rule (fits only counted, refined never, as before)
+        cand = [(a, b, cls, rule) for a, b, cls, rule in pairs if drv and cls == "moving" and not (rule and rule["kind"] == "allow")]
+        gvals = {(a.name, b.name): {} for a, b, cls, rule in cand if not rule}
+        spent = {k: 0.0 for k in gvals}
+        cyc = [bool(JOINTS[j].get("continuous")) for j in drv]
+        npose = math.prod(len(p) for p in per) if drv else 1
+        res["groups"].append({"joints": drv, "poses": npose, "pairs": len(pairs)})
+        log("interference group %s: %d pairs x %d poses" % (drv or "static", len(pairs), npose))
+
+        def norm(vals):     # sample values are rounded where they are made; a continuous joint's 360 is its 0
+            return tuple(v - 360.0 if c and v >= 360.0 else v for v, c in zip(vals, cyc)) if any(cyc) else vals
+
+        def run_pose(vals, over, todo, guard_pose=False):
+            """Measure each (a, b, cls, rule) of todo at one pose; the guard's pairs keep the result. A sampled pose is
+            set in the scene; a guard pose only computes the parts' matrices."""
+            pose = dict(zip(drv, vals))
+            posed, mats = {}, {}
+            if guard_pose:
+                jv = JT.values(JOINTS, COUPLE, pose)
+            else:
+                set_pose(pose)
+
+            def geo(o):
+                d = posed if o.name in moving else static_geo
+                if o.name not in d:
+                    M = JT.world_at(o.name, JOINTS, jv, mats, O) if guard_pose and o.name in moving else o.matrix_world.copy()
+                    d[o.name] = [None, bbox_world(o, M), M]
+                return d[o.name]
+            for a, b, cls, rule, *need in todo:
+                t0 = tested[0]
+                g = measure(a, b, cls, rule, pose, over, geo, pose if guard_pose else None, *need)
+                if (a.name, b.name) in gvals:
+                    gvals[(a.name, b.name)][norm(vals)] = g
+                if guard_pose:      # a pose that needed the meshes costs 1, one settled by boxes 1/16
+                    spent[(a.name, b.name)] += 1.0 if tested[0] > t0 else 0.0625
+        for combo in (itertools.product(*per) if drv else [()]):
+            run_pose(tuple(v for v, _ in combo), any(ot for _, ot in combo), pairs)
+        if not cand:
+            continue
+        done = {k for (tag, k), r in worst.items() if tag in ("collisions", "contacts") and r["in_range_poses"]}
+        watch, cull = [], {}
+        # 1 broad phase: each side's bounds swept over its joints' ranges (a ring sector about a revolute joint, the box
+        # extruded along a slide) against the other's; only comparisons
+        t1 = time.time()
+        mot = {}
+        set_pose({})
+        for a, b, cls, rule in cand:
+            if (a.name, b.name) in done:
+                continue
+            ma = mot.setdefault((a.name, b.name, 0), motions(a, b, drv, info))
+            mb = mot.setdefault((a.name, b.name, 1), motions(b, a, drv, info))
+            if swept_apart(a, ma, b, mb):
+                cull["broad"] = cull.get("broad", 0) + 1
+            else:
+                watch.append((a, b, cls, rule))
+        guard["broad_s"] += time.time() - t1
+        # 2 narrow phase: geom.swept_envelope of each moving side (one per part and motion chain, cached), tested once
+        # against the other side: no overlap means no collision anywhere in the range, sampled or not
+        t2 = time.time()
+        hits, fit_hits = [], []
+        for a, b, cls, rule in watch:
+            r = envelope_meets(a, mot[(a.name, b.name, 0)], b, mot[(a.name, b.name, 1)], env_cache, guard)
+            if r is False:
+                cull["narrow"] = cull.get("narrow", 0) + 1
+            elif rule:
+                fit_hits.append((a, b, cls, rule))
+            else:
+                hits.append((a, b, cls, rule))
+        guard["narrow_s"] += time.time() - t2
+        # a declared fit inside the envelope pad: refined for collision only (overlap >= vol_tol), so a running fit
+        # isn't flagged but a lug on the same part in the arm's path is (PR #14 review, fit_hide)
+        t3 = time.time()
+        for a, b, cls, rule in fit_hits:
+            out, span = refine_fit(a, b, cls, rule, mot[(a.name, b.name, 0)], mot[(a.name, b.name, 1)], drv, per, cyc, moving)
+            guard["fits_flagged"].append("%s x %s: %s" % (a.name, b.name, out))
+            if out == "unproven":
+                guard["unproven"].setdefault((a.name, b.name), span)
+        guard["refine_s"] += time.time() - t3
+        guard["broad_culled"] += cull.get("broad", 0)
+        guard["narrow_culled"] += cull.get("narrow", 0)
+        guard["candidates"] += len(cand)
+        watch = hits
+        if not watch:
+            continue
+        # 3 refinement, only for envelope hits: find the collision (or prove the pair clear) between the samples
+        t3 = time.time()
+        set_pose({})
+        rates, axis, spin = {}, {}, {}
+        for a, b, _, _ in watch:
+            terms = JT.move_terms(_corners(bbox_world(a)), joint_chain(a), joint_chain(b), JOINTS, COUPLE, info)
+            rel = [j for j in set(joint_chain(a)) ^ set(joint_chain(b)) if JT.ranged(j, JOINTS, COUPLE)]
+            ax = coaxial(a, b, rel, drv, info, ring_cache)
+            if ax:                                  # one turns about one fixed axis against the other
+                axis[(a.name, b.name)] = ax
+            elif len(drv) > 1:
+                for o, other in ((a, b), (b, a)):   # a wheel spinning on its own joint, carried by the others
+                    ch = [j for j in joint_chain(o) if JT.ranged(j, JOINTS, COUPLE)]
+                    if ch and ch[0] in drv and JOINTS[ch[0]].get("continuous") and info[ch[0]][0] == "revolute":
+                        c = ch[0]
+                        up = O[c].parent.name if O[c].parent else None
+                        corners, axes = spin_box(o, *info[c][1:])
+                        # the box's own reach over the other joints (its corners stand out past the wheel's box)
+                        pa, pb = (corners, _corners(bbox_world(b))) if o is a else (_corners(bbox_world(a)), corners)
+                        t2 = JT.move_terms(pa, joint_chain(a), joint_chain(b), JOINTS, COUPLE, info)
+                        r2 = [0.0 if j == c else JT.move_rate(t2.get(j, []), pb) for j in drv]
+                        spin[(a.name, b.name)] = (drv.index(c), corners, axes, up, O[up].matrix_world.inverted() if up else None, other, r2)
+                        break
+            rates[(a.name, b.name)] = [JT.move_rate(terms.get(j, []), _corners(bbox_world(b))) for j in drv]
+        # Refinement of an envelope hit: a cell of the lattice is clear when its corners' clearance beats the most any
+        # point can move to the nearest corner (cadlib.joints.move_rate x the steps, the router's reach bound). Else,
+        # cheapest first: a wheel's spin box against the other part; the oriented boxes at corners known only by their
+        # world box gap; for a pair turning about one axis, the triangles' (h, r, phi) boxes (turning); then the cell is
+        # halved along its longest move and the new poses measured, until clear, a collision found, the move under
+        # sweep_tol, or max_guard_poses spent on the pair (cadsmith mech's between-frame bound, PR #6). Refinement poses
+        # come from the joint chain (joints.world_at), not set in the scene.
+        lims = [(JOINTS[j]["lo"], JOINTS[j]["hi"]) for j in drv]
+        spans = []
+        for p, c in zip(per, cyc):
+            vals = [v for v, _ in p]
+            spans.append(list(zip(vals, vals[1:])) + ([(vals[-1], vals[0] + 360.0)] if c else []))
+        spin_g = {}
+        work = [(k, cell) for k in rates if k not in done for cell in itertools.product(*spans)]
+        byname = {(a.name, b.name): (a, b, cls, rule) for a, b, cls, rule in watch}
+        guard["pairs"] += len({k for k, _ in work})
+        while work:
+            want, nxt = {}, []
+            for k, cell in work:
+                if k in done:
+                    continue
+                corners = list(itertools.product(*cell))
+                gl = [gvals[k][norm(c)] for c in corners]
+                if None in gl or min(g for g, _ in gl) <= 0:
+                    continue        # a corner collides: reported there
+                gs = [g for g, _ in gl]
+                moves = [r * (hi - lo) for r, (lo, hi) in zip(rates[k], cell)]
+                bound = sum(moves)
+                bounded = all(ls != "nb" for _, ls in gl)     # a sampled pose's min_dist is no lower bound
+                if bounded and (sum(gs) / 2 if len(cell) == 1 else min(gs)) > bound:
+                    continue
+                if k in spin:       # the wheel's spin box at each corner, against the other moves only
+                    ci, corners0, axes0, up, inv, other, r2 = spin[k]
+                    sg = []
+                    for c in corners:
+                        key = (k, norm(c)[:ci] + norm(c)[ci + 1:])
+                        if key not in spin_g:
+                            jv, mats = JT.values(JOINTS, COUPLE, dict(zip(drv, c))), {}
+                            T = JT.world_at(up, JOINTS, jv, mats, O) @ inv if up else Matrix.Identity(4)
+                            Mo = JT.world_at(other.name, JOINTS, jv, mats, O) if other.name in moving else other.matrix_world
+                            spin_g[key] = box_gap([T @ x for x in corners0], [T.to_3x3() @ x for x in axes0],
+                                                  [Mo @ Vector(x) for x in other.bound_box], [Mo.to_3x3().col[i] for i in range(3)])
+                        sg.append(spin_g[key])
+                    if min(sg) > sum(r * (hi - lo) for r, (lo, hi) in zip(r2, cell)):
+                        guard["spin"] += 1
                         continue
-                    vol, region, solver = inter_volume(a, b)
-                    if why:
-                        # a bounded allow: a riding detent or a crush rib may overlap up to max_mm3, a deeper clash
-                        # still fails. An unbounded allow across a joint hid any clash in every sweep (V2R5 A5-06)
-                        bound = float(why["max_mm3"])
-                        b_rec = worst.setdefault(("allowed_max", key), {"a": a.name, "b": b.name, "max_mm3": bound, "volume_mm3": 0.0,
-                                                                        "pose": None, "why": why.get("why")})
-                        if vol > b_rec["volume_mm3"]:
-                            b_rec.update(volume_mm3=round(vol, 2), pose=pose_key(pose))
-                        if vol <= bound:
-                            continue
-                    rec = {"a": a.name, "b": b.name, "pose": pose_key(pose), "overtravel": over, "tri_overlaps": len(ov),
-                           "volume_mm3": round(vol, 2), "region": region, "solver": solver}
-                    if cls == "moving":
-                        tag = "collisions" if vol >= CFG["vol_tol"] else ("contacts" if not (fit and fit.get("contact") and not isc) else None)
-                    elif cls == "cable":
-                        tag = "cable_overlaps" if vol >= CFG["vol_tol"] else None
-                    else:
-                        tag = "solid_overlaps" if vol >= CFG["vol_tol"] else None
-                    if why:   # past a bounded allow's max_mm3: a clash, whatever vol_tol says
-                        tag = {"moving": "collisions", "cable": "cable_overlaps"}.get(cls, "solid_overlaps")
-                        rec["allow_max_mm3"] = float(why["max_mm3"])
-                    if tag:
-                        prev = worst.get((tag, key))
-                        if prev is None or rec["volume_mm3"] > prev["volume_mm3"] or (prev["overtravel"] and not over):
-                            rec["n_poses"] = (prev or {}).get("n_poses", 0) + 1
-                            rec["in_range_poses"] = (prev or {}).get("in_range_poses", 0) + (0 if over else 1)
-                            worst[(tag, key)] = rec
-                        else:
-                            prev["n_poses"] += 1
-                            prev["in_range_poses"] += 0 if over else 1
-                elif cls == "moving" and not why and (isc or not (fit and fit.get("contact"))):
-                    d, p = min_dist_off(a, b, ta, tb, isc) if isc else min_dist(a, b, ta, tb)
-                    prev = worst.get(("min_clearance", key))
-                    if prev is None or d < prev["mm"]:
-                        worst[("min_clearance", key)] = {"a": a.name, "b": b.name, "mm": round(d, 3), "pose": pose_key(pose),
-                                                         "overtravel": over, "at": [round(c, 1) for c in p] if p else None,
-                                                         "fit": fit.get("why") if fit else None,
-                                                         "min": fit.get("min_clearance", CFG["moving_min_clearance"]) if fit else CFG["moving_min_clearance"]}
+                if spent[k] >= CFG["max_guard_poses"]:
+                    guard["unproven"].setdefault(k, ", ".join("%s=%g..%g" % (j.replace("PIV_", ""), lo, hi) for j, (lo, hi) in zip(drv, cell)))
+                    continue
+                loose = [c for c, (_, ls) in zip(corners, gl) if ls]
+                if loose:           # world box gaps only: take the oriented boxes' gap there, then look again
+                    for c in loose:
+                        w = want.setdefault(c, {})
+                        w[k] = max(bound, w.get(k, 0.0))
+                    nxt.append((k, cell))
+                    continue
+                if k in axis:       # before halving: turning about one axis, the parts' triangles may never meet
+                    ax = axis[k]
+                    if ax["clear"] is None:
+                        set_pose({})
+                        ax["clear"] = turning(ax["a"], ax["b"], ax["piv"], ax["u"], pad=ax["pad"])
+                    if ax["clear"](*ax["range"](cell)):
+                        # turning proves no collision, not the smallest clearance: measure the cell's middle too, for
+                        # the clearance rows the halving used to give (PR #21 review, cam_gap03: 0.33 mm went unsaid)
+                        guard["turning"] += 1
+                        mid = tuple(round((lo + hi) / 2, 4) for lo, hi in cell)
+                        if norm(mid) not in gvals[k]:
+                            want.setdefault(mid, {}).setdefault(k, 0.0)
+                        continue
+                if bound <= CFG["sweep_tol"]:
+                    guard["at_tol"] += 1
+                    continue
+                i = max(range(len(moves)), key=lambda x: moves[x])
+                lo, hi = cell[i]
+                m = round((lo + hi) / 2, 4)
+                guard["bisected"] += 1
+                for c in itertools.product(*[(m,) if x == i else cl for x, cl in enumerate(cell)]):
+                    if norm(c) not in gvals[k]:
+                        w = want.setdefault(c, {})
+                        w[k] = max(bound, w.get(k, 0.0))
+                nxt += [(k, cell[:i] + (h,) + cell[i + 1:]) for h in ((lo, m), (m, hi))]
+            for vals, ks in want.items():
+                over = any(not c and (v < lo - 1e-9 or v > hi + 1e-9) for v, c, (lo, hi) in zip(vals, cyc, lims))
+                run_pose(vals, over, [byname[k] + (ks[k],) for k in sorted(ks)], guard_pose=True)
+                guard["poses"] += 1
+                guard["pair_poses"] += len(ks)
+                done |= {k for k in ks if gvals[k][norm(vals)] and gvals[k][norm(vals)][0] == 0 and not over}
+            work = nxt
+        guard["refine_s"] += time.time() - t3
     set_pose({})
     for (tag, key), rec in worst.items():
         res[tag].append(rec)
@@ -954,7 +1910,8 @@ def check_interference():
             res[tag].sort(key=lambda r: -r.get("volume_mm3", 0) if "volume_mm3" in r else r.get("mm", 0))
     for r in res["collisions"]:
         if r["in_range_poses"]:
-            finding("interference", "fail", "%s x %s collide on different bodies: %.1f mm3 at %s%s" % (r["a"], r["b"], r["volume_mm3"], r["pose"],
+            finding("interference", "fail", "%s x %s collide on different bodies: %.1f mm3 at %s%s%s" % (r["a"], r["b"], r["volume_mm3"], r["pose"],
+                    " (between the sampled poses)" if r.get("between_samples") else "",
                     " (over the allow's max_mm3 %g)" % r["allow_max_mm3"] if "allow_max_mm3" in r else ""), **r)
         else:
             finding("interference", "warn", "%s x %s collide only %s past the joint limit (%s): no margin" % (r["a"], r["b"], OT_TEXT, r["pose"]), **r)
@@ -977,10 +1934,37 @@ def check_interference():
             finding("clearance", "warn", "%s to %s %.2f mm just past the limit (%s)" % (r["a"], r["b"], r["mm"], r["pose"]), **r)
         elif r["mm"] < CFG["moving_warn_clearance"] and not r["fit"]:
             finding("clearance", "warn", "%s to %s %.2f mm at %s" % (r["a"], r["b"], r["mm"], r["pose"]), **r)
+    for ring in ring_cache.values():
+        me = ring.data
+        bpy.data.objects.remove(ring)
+        bpy.data.meshes.remove(me)
+    for k, e in env_cache.items():          # the envelopes live in the scratch collection: drop them
+        if e is not None and k[0] != "home":
+            me = e[0].data
+            bpy.data.objects.remove(e[0])
+            bpy.data.meshes.remove(me)
+    res["between_samples"] = dict(guard, unproven=["%s x %s (%s)" % (k + (v,)) for k, v in sorted(guard["unproven"].items())],
+                                  **{k: round(guard[k], 1) for k in ("broad_s", "narrow_s", "refine_s")})
+    for (a, b), cell in sorted(guard["unproven"].items()):
+        # its own kind (summary.unproven_pairs): a coverage limit of the check, not a design fact, so the attempt
+        # regressions and the bench count it apart from design warns (daily check 2026-10-28)
+        finding("interference", "warn", "%s x %s %s at %s: the swept envelope meets it and refinement spent max_guard_poses %d; "
+                "give the joint a finer step" % (a, b, UNPROVEN_KIND, cell, CFG["max_guard_poses"]), a=a, b=b, between_cell=cell, kind="unproven")
+        UNPROVEN_PAIRS.append("%s x %s (%s)" % (a, b, cell))
     REPORT["checks"].setdefault("interference", {"findings": []}).update(res)
     swept = sorted({j for g in res["groups"] for j in g["joints"]})
     REPORT["coverage"].append("interference/clearance: %d objects in %s, %d pair-pose tests, joints swept %s with %.1f deg overtravel" % (
-        len(ALL), list(COLL.values()), tested_pairs, swept, CFG["overtravel_deg"]))
+        len(ALL), list(COLL.values()), tested[0], swept, CFG["overtravel_deg"]))
+    pads = [p for _, p in guard["pads"]]
+    REPORT["coverage"].append("interference between samples: %d pairs across a joint; %d apart by their swept bounds, %d clear of "
+                              "the swept envelopes (%d envelopes, oversize by %s mm), %d refined between the samples (%d cells "
+                              "halved, %d extra pair-pose tests); %d declared fits inside the envelopes refined for collision only" % (
+                                  guard["candidates"], guard["broad_culled"], guard["narrow_culled"], guard["envelopes"],
+                                  ("%g-%g" % (min(pads), max(pads))) if pads else "-", guard["pairs"], guard["bisected"],
+                                  guard["pair_poses"], len(guard["fits_flagged"])))
+    if guard["envelope_failed"]:
+        REPORT["not_checked"].append("interference between samples: no swept envelope (grid too large) for %s; their pairs are "
+                                     "refined by bisection only" % sorted(set(guard["envelope_failed"]))[:6])
     unswept = [n for n, s in JOINTS.items() if n not in COUPLE and (s["axis"] is None or (not s.get("continuous") and (s["lo"] is None or s["hi"] is None)))]
     if unswept:
         REPORT["not_checked"].append("joints with no range (home pose only): %s" % unswept)
@@ -1091,28 +2075,42 @@ def exposed(tree, p, maxd=3000.0):
     return sum(1 for d in view if tree.ray_cast(p, d, maxd)[0] is None) >= ex["view_frac"] * len(view)
 
 
-def access(head, out, tree, solids_trees, fc):
-    """Drive a screw from `head` along `out`: a straight bit (ray bundle at driver radius until open space of
-    hand_r is reached), else an L-key (short leg in the socket, long leg swung about the axis), FINDINGS A2-F1."""
+def straight_bit(head, out, tree, fc, reach=None):
+    """(blocked_at, depth) of a straight bit from `head` along `out`: the first hit of a ray bundle at driver radius
+    (1e9: none) and the distance along the axis to open space of hand_r (None: none within `reach`, default
+    max_reach_ext)."""
+    reach = fc["max_reach_ext"] if reach is None else reach
     u, v = perp_basis(out)
-    rays = [Vector((0, 0, 0))] + _ring(u, v, fc["driver_r"])
     start = head + out * 0.3
     hits = []
-    for off in rays:
-        h = tree.ray_cast(start + off, out, fc["max_reach_ext"] + 50)
+    for off in [Vector((0, 0, 0))] + _ring(u, v, fc["driver_r"]):
+        h = tree.ray_cast(start + off, out, reach + 50)
         hits.append(h[3] if h[0] is not None else 1e9)
-    blocked_at = min(hits)
     depth = None
     s = 0.0
-    while s <= fc["max_reach_ext"]:
-        p = start + out * s
-        r = tree.find_nearest(p)
+    while s <= reach:
+        r = tree.find_nearest(start + out * s)
         if r[0] is None or r[3] >= fc["hand_r"]:
             depth = s
             break
         s += 2.0
+    return min(hits), depth
+
+
+def access(head, out, tree, solids_trees, fc):
+    """Drive a screw from `head` along `out`: a straight bit (ray bundle at driver radius until open space of
+    hand_r is reached), else an L-key (short leg in the socket, long leg swung about the axis), FINDINGS A2-F1.
+    A screw a straight bit can't reach, or reaches only past max_reach, keeps what bit_hint() needs under "_hint";
+    the hint is worked out only for the record a finding reports (access_hint), and "_hint" is dropped before the
+    report is written."""
+    u, v = perp_basis(out)
+    start = head + out * 0.3
+    blocked_at, depth = straight_bit(head, out, tree, fc)
     if depth is not None and blocked_at > depth:
-        return {"reach_mm": round(depth, 1), "blocked": False, "tool": "straight"}
+        rec = {"reach_mm": round(depth, 1), "blocked": False, "tool": "straight"}
+        if depth > fc["max_reach"]:
+            rec["_hint"] = (head.copy(), out.copy(), tree, solids_trees, depth, 1e9)
+        return rec
     who = None
     if blocked_at < 1e8:
         p = start + out * blocked_at
@@ -1125,7 +2123,86 @@ def access(head, out, tree, solids_trees, fc):
     rec.update(lkey(head, out, u, v, tree, fc))
     if rec["lkey_ok"]:
         rec.update(blocked=False, tool="L-key", reach_mm=round(fc["lkey_short"] - fc["lkey_insert"], 1))
+    else:
+        rec["_hint"] = (head.copy(), out.copy(), tree, solids_trees, depth, blocked_at)
     return rec
+
+
+def access_hint(rec, fc, screw=None, row=None):
+    """" [bit: ...]" for a finding's access record, worked out now and kept as rec["bit_hint"]. With the fasteners row:
+    a head inside a part with no nut says fix that first; a nut on the bolt and the head closed in within 5 mm (or
+    buried) reads as a captive stud nobody declared (v2 nip stud: the thumbwheel nut turns)."""
+    if "bit_hint" not in rec and "_hint" in rec:
+        row = row or {}
+        nut, buried = (row.get("nut") or {}).get("name"), row.get("head_buried_in") or []
+        if buried and not nut:
+            rec["bit_hint"] = "the head is inside %s: fix that first" % " and ".join(buried)
+        elif nut and rec.get("blocked") and (buried or (rec.get("blocked_at_mm") or 1e9) <= 5.0):
+            rec["bit_hint"] = "the head is closed in %s mm out and %s is on the bolt: if the nut is what turns, declare %s " \
+                              "captive (fasteners.captive)" % (rec.get("blocked_at_mm"), nut, screw.name if screw else "it")
+        else:
+            rec["bit_hint"] = bit_hint(*rec["_hint"], fc=fc, screw=screw)
+    return " [bit: %s]" % rec["bit_hint"] if rec.get("bit_hint") else ""
+
+
+def drop_hints(accs):
+    for a in accs:
+        a.pop("_hint", None)
+
+
+def _toward(w):
+    """A direction in words: "-y" when within ~20 deg of a world axis, else rounded components."""
+    k = max(range(3), key=lambda i: abs(w[i]))
+    if abs(w[k]) > 0.94:
+        return ("+" if w[k] > 0 else "-") + "xyz"[k]
+    return "(%.2f, %.2f, %.2f)" % tuple(w)
+
+
+def bit_hint(head, out, tree, solids_trees, depth, blocked_at, fc, screw=None):
+    """Where a straight bit would clear (push-assist PA-A3-T10: one bolt moved four times, 13.7 min of full checks).
+    Along the axis, the parts the bit passes through before open space: one printed part on the screw's own body gets
+    the bit length through a hole in it, or fitting it after the screw; several, or one that moves relative to the
+    screw, get only the second (a2's flywheel bolts are behind flywheel, hood and launcher body); a purchased one is
+    named. Tilted: the smallest tilt about the head, in 2 deg steps up to hint_tilt_deg at 8 headings, that clears with
+    reach under max_reach (over 3 deg: a ball-end driver), and that reach. The same ray bundle and open-space test as
+    the straight bit."""
+    u, v = perp_basis(out)
+    parts = []
+    if blocked_at < 1e8:
+        start = head + out * 0.3
+        lim = depth if depth is not None else fc["max_reach_ext"]
+        parts = sorted({n for n, t in solids_trees.items()
+                        for off in [Vector((0, 0, 0))] + _ring(u, v, fc["driver_r"]) if t.ray_cast(start + off, out, lim)[0] is not None})
+    tilt = None
+    top = fc["hint_tilt_deg"]
+    a = 2.0
+    while a <= top + 1e-6 and tilt is None:
+        for k in range(8):
+            w = u * math.cos(k * math.pi / 4) + v * math.sin(k * math.pi / 4)
+            d = (out * math.cos(math.radians(a)) + w * math.sin(math.radians(a))).normalized()
+            b, dp = straight_bit(head, d, tree, fc, reach=fc["max_reach"])
+            if dp is not None and b > dp and (tilt is None or dp < tilt[2]):
+                tilt = (a, w, dp)
+        a += 2.0
+    out_s = []
+    sb = body(screw) if screw is not None else None
+    moving = [n for n in parts if n in bpy.data.objects and sb is not None and body(bpy.data.objects[n]) != sb]
+    bought = [n for n in parts if not n.startswith("PRT_")]
+    space = "open space %.0f mm out" % depth if depth is not None else "no open space within %.0f mm" % fc["max_reach_ext"]
+    if bought:      # no hole through a purchased part
+        out_s.append("along the axis %s in the way, not printed" % " and ".join(bought))
+    elif len(parts) == 1 and not moving and depth is not None:
+        out_s.append("along the axis a %.0f mm bit through a Ø%.0f hole in %s (%s), or fit %s after this screw "
+                     "(assembly_order)" % (depth + 10, 2 * fc["driver_r"], parts[0], space, parts[0]))
+    elif parts:
+        out_s.append("along the axis %s in the way (%s): fit %s after this screw (assembly_order)" % (
+            " and ".join(n + (" (moves)" if n in moving else "") for n in parts), space, "it" if len(parts) == 1 else "them"))
+    if tilt:
+        out_s.append(("tilted %g deg toward %s a straight bit clears" if tilt[0] <= 3 else
+                      "a ball-end driver tilted %g deg toward %s clears") % (tilt[0], _toward(tilt[1])) + ", reach %.0f mm" % tilt[2])
+    else:
+        out_s.append("no tilt up to %g deg clears with reach under %.0f mm" % (top, fc["max_reach"]))
+    return "; ".join(out_s)
 
 
 def lkey(head, out, u, v, tree, fc):
@@ -1293,6 +2370,8 @@ def check_fasteners():
     for pose, pk in poses:
         set_pose(pose)
         trees = {o.name: (bvh_world(o), bbox_world(o)) for o in SOLIDS}
+        if not pose:
+            home_trees = trees
         tree_cache = {}
         for o in screws:
             head, tip, d, hr, sr = fastener_axis(o) if pose else geo[o.name]
@@ -1306,6 +2385,7 @@ def check_fasteners():
             acc = access(head, -d, tree_cache[key], {n: t for n, (t, bb) in trees.items() if pres is None or n in pres}, fc)
             per[o.name].setdefault("access", {})[pk] = acc
     set_pose({})
+    scr = {o.name: o for o in screws}
     for n, r in per.items():
         acc = r["access"]
         ok = {pk: a for pk, a in acc.items() if not a["blocked"]}
@@ -1343,15 +2423,19 @@ def check_fasteners():
             finding("fasteners", "warn", "%s thread protrudes %.1f mm past the last part, visible from outside" % (n, r["protrusion_mm"]), object=n)
         if not ok:
             h = acc["home"]
-            finding("fasteners", "fail", "%s cannot be driven: straight bit blocked by %s at %s mm; %s (all %d poses tried)" % (
-                n, h.get("blocked_by"), h.get("blocked_at_mm"), "L-key " + h.get("lkey_why", ""), len(acc)), object=n)
+            finding("fasteners", "fail", "%s cannot be driven: straight bit blocked by %s at %s mm; %s (all %d poses tried)%s" % (
+                n, h.get("blocked_by"), h.get("blocked_at_mm"), "L-key " + h.get("lkey_why", ""), len(acc), access_hint(h, fc, scr[n], r)), object=n)
         elif "home" not in ok:
-            finding("fasteners", "warn", "%s reachable only at %s (blocked at home pose)" % (n, best[0]), object=n)
+            finding("fasteners", "warn", "%s reachable only at %s (blocked at home pose)%s" % (n, best[0], access_hint(acc["home"], fc, scr[n], r)), object=n)
         elif best[1]["reach_mm"] > fc["max_reach_ext"]:
-            finding("fasteners", "fail", "%s sits %.0f mm deep" % (n, best[1]["reach_mm"]), object=n)
+            finding("fasteners", "fail", "%s sits %.0f mm deep%s" % (n, best[1]["reach_mm"], access_hint(best[1], fc, scr[n], r)), object=n)
         elif best[1]["reach_mm"] > fc["max_reach"]:
-            finding("fasteners", "warn", "%s needs a %.0f mm+ bit/extension (head %.0f mm below open space)" % (n, best[1]["reach_mm"] + 10, best[1]["reach_mm"]), object=n)
+            finding("fasteners", "warn", "%s needs a %.0f mm+ bit/extension (head %.0f mm below open space)%s" % (
+                n, best[1]["reach_mm"] + 10, best[1]["reach_mm"], access_hint(best[1], fc, scr[n], r)), object=n)
+    for r in per.values():
+        drop_hints(list(r["access"].values()) + [r.get("access_best") or {}])
     nut_rows = check_nuts(nuts, nut_of, full_tree)
+    check_fastener_overlaps(rows, nut_rows, geo, nut_of, home_trees)
     # lengths you can buy (v2 A3 specified an M3 x 9 self-tap; the reviewer docked it, V2A3-F5)
     stock = {float(k): v for k, v in fc["stock_lengths"].items()}
     odd = {}
@@ -1484,6 +2568,159 @@ def check_nuts(nuts, nut_of, full_tree):
     return rows
 
 
+SEAT_TOL = 0.25     # mm behind a bearing face (or inside a nut face) that may touch its seat: the head-buried probe's depth
+
+
+def fastener_probe(o, at, d, t0, t1, R=None):
+    """World-space temp object: fastener o cut to the slab t0..t1 mm along d from `at` and to radius R about that axis
+    (default: all of it), or None when nothing is left."""
+    if R is None:
+        R = max(((v - at) - d * (v - at).dot(d)).length for v in (o.matrix_world @ x.co for x in o.data.vertices)) + 1.0
+    u, w = perp_basis(d)
+    M = Matrix((u, w, d)).transposed().to_4x4()
+    M.translation = at + d * ((t0 + t1) / 2)
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=16, radius1=R, radius2=R, depth=t1 - t0, matrix=M)
+    clip = bpy.data.objects.new("_clip", bpy.data.meshes.new("_clip"))
+    bm.to_mesh(clip.data)
+    bm.free()
+    bm = world_bm(o)
+    A = bpy.data.objects.new("_probe_src", bpy.data.meshes.new("_probe_src"))
+    bm.to_mesh(A.data)
+    bm.free()
+    for x in (clip, A):
+        tmpcoll().objects.link(x)
+    m = A.modifiers.new("i", 'BOOLEAN')
+    m.operation, m.object = 'INTERSECT', clip
+    m.solver = 'MANIFOLD' if manifold_ok(o) else 'EXACT'
+    me = bpy.data.meshes.new_from_object(A.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+    for x in (A, clip):
+        d_ = x.data
+        bpy.data.objects.remove(x)
+        bpy.data.meshes.remove(d_)
+    if not len(me.vertices):
+        bpy.data.meshes.remove(me)
+        return None
+    P = bpy.data.objects.new("_probe_" + o.name, me)
+    tmpcoll().objects.link(P)
+    return P
+
+
+def check_fastener_overlaps(rows, nut_rows, geo, nut_of, trees):
+    """A screw head or a nut overlapping a solid on its own body. Interference skips same-body FST pairs (a thread
+    bites into the part it holds), so a rib through a head (PR #2 review: tools/prior_art/cadcheck_head_overlap_repro.py)
+    or a nut through a printed part (push-assist A2: 1.5 mm3 of stop nut in the sliding piston, PA-A2-T12) was checked
+    by nothing. Probe: the head behind its bearing face, or the nut between its two faces, less SEAT_TOL at each face
+    (the seat, a nut-trap floor and a spot-faced slope stay out), intersected with every solid on the same body by
+    inter_volume. A correct counterbore or nut trap leaves the probe in air; one too small for it overlaps."""
+    fc = CFG["fasteners"]
+    vt = CFG["vol_tol"]
+    by_nut = {v[0]: (k,) + tuple(v[1:]) for k, v in nut_of.items()}
+    work, skipped = [], []
+    for r in rows:
+        o = O[r["object"]]
+        if r.get("captive"):
+            skipped.append(o.name)
+            continue
+        head, tip, d, hr, sr = geo[o.name]
+        hb = head_height(o, head, d, sr)
+        back = min((o.matrix_world @ v.co - head).dot(d) for v in o.data.vertices)
+        if hb - SEAT_TOL - back < 0.05:     # countersunk (the cone is in the countersink) or headless
+            r["overlaps"] = None
+            skipped.append(o.name)
+            continue
+        work.append((r, o, "%s head" % o.name, head, d, back - 0.5, hb - SEAT_TOL, None))
+    for r in nut_rows:
+        o = O[r["object"]]
+        if any(fnmatch.fnmatch(o.name, g) for g in fc.get("captive", {})):
+            r["captive"] = next(why for g, why in fc["captive"].items() if fnmatch.fnmatch(o.name, g))
+            skipped.append(o.name)
+            continue
+        vs = [o.matrix_world @ v.co for v in o.data.vertices]
+        if o.name in by_nut:
+            bolt, t0, t1 = by_nut[o.name]
+            at, d = geo[bolt][0], geo[bolt][2]
+        else:       # no bolt: the nut's axis is the face normal with the most area (both faces; a triangulated
+            at = sum(vs, Vector()) / len(vs)        # nut's largest single polygon can be a side triangle)
+            dirs = []
+            for p in o.data.polygons:
+                n = (o.matrix_world.to_3x3() @ p.normal).normalized()
+                k = next((i for i, (m, a) in enumerate(dirs) if abs(m.dot(n)) > 0.99), None)
+                if k is None:
+                    dirs.append((n, p.area))
+                else:
+                    dirs[k] = (dirs[k][0], dirs[k][1] + p.area)
+            d = max(dirs, key=lambda x: x[1])[0]
+            t0, t1 = min((v - at).dot(d) for v in vs), max((v - at).dot(d) for v in vs)
+        # its inscribed cylinder (across the flats): a hex nut modelled turned 30 deg from its hex pocket overlaps the
+        # pocket at its corners, though the real nut turns to fit (v2 A1-A3 flywheel and thumbwheel nuts: 1.0 and 2.1 mm3
+        # with the whole hex; fastener_joint's nut_rot_deg turns the trap, not the asm.nut model)
+        # Outward side faces only: a modelled bore's walls face the axis, and as "flats" they made the probe the
+        # bore itself, empty, so a bored nut was never tested (PR #9 review)
+        M3 = o.matrix_world.to_3x3()
+        side = [w.dot(n) for p in o.data.polygons for n in [(M3 @ p.normal).normalized()] if abs(n.dot(d)) < 0.3
+                for w in [(o.matrix_world @ p.center - at) - d * (o.matrix_world @ p.center - at).dot(d)]]
+        side = [x for x in side if x > 0]
+        work.append((r, o, o.name, at, d, t0 + SEAT_TOL, t1 - SEAT_TOL, min(side) if side else None))
+    n_tests, tested, empty = 0, [], []
+    for r, o, what, at, d, t0, t1, rin in work:
+        me, out = body(o), {}
+        r["overlaps"] = out
+        P = fastener_probe(o, at, d, t0, t1, rin) if t1 - t0 >= 0.05 else None
+        if P is None:
+            r["overlaps"] = None
+            empty.append(o.name)
+            continue
+        tested.append(what)
+        pt, pb = bvh_world(P), bbox_world(P)
+        # a point in the probe's material, for the wholly-inside test: on the axis for a solid probe; past the bore
+        # wall for a bored nut (its centroid sits in the bore, which may line up with a hole in the part)
+        u_, _ = perp_basis(d)
+        mid = at + d * ((t0 + t1) / 2)
+        R = rin or max((v.co - mid).length for v in P.data.vertices)
+        pc = next((q for q in (mid + u_ * (R * k / 8) for k in range(8)) if inside(pt, q, pb)), mid)
+        for s in SOLIDS:
+            if body(s) != me or s.name in r.get("inside_purchased", {}):
+                continue
+            rule = rule_for(o.name, s.name)
+            why = rule if rule and rule["kind"] == "allow" else None
+            if why and why.get("max_mm3") is None:
+                continue
+            t, bb = trees[s.name]
+            if bb_gap(pb, bb) > 0.01:
+                continue
+            n_tests += 1
+            if t.overlap(pt):
+                vol, region, solver = inter_volume(P, s)
+            elif inside(t, pc, bb):         # the probe lies wholly inside the solid: no pocket at all
+                vol, region, solver = own_volume(P), [[round(c, 1) for c in pb[0]], [round(c, 1) for c in pb[1]]], "inside"
+            else:
+                continue
+            if vol < 1e-3:
+                continue
+            out[s.name] = round(vol, 2)
+            bound = float(why["max_mm3"]) if why else None
+            rec = dict(object=o.name, part=s.name, volume_mm3=round(vol, 2), region=region, solver=solver)
+            if vol >= (bound if why else vt):
+                finding("fasteners", "fail", "%s overlaps %s by %.1f mm3 on the same body%s" % (
+                    what, s.name, vol, " (over the allow's max_mm3 %g)" % bound if why else
+                    ": a part through the head, or a counterbore too small for it" if what.endswith(" head") else
+                    ": no pocket for the nut, or one too small for it"), **rec)
+            elif not why:
+                finding("fasteners", "warn", "%s grazes %s (%.2f mm3, under vol_tol %g): no clearance around it" % (
+                    what, s.name, vol, vt), **rec)
+        pm = P.data
+        bpy.data.objects.remove(P)
+        bpy.data.meshes.remove(pm)
+    REPORT["coverage"].append("fasteners: head and nut overlap with same-body solids (%d heads behind the bearing face, %d nuts between "
+                              "their faces, %.2f mm in from each seat; %d pair tests; skipped %d countersunk, headless or captive: %s)" % (
+        sum(1 for w in tested if w.endswith(" head")), sum(1 for w in tested if not w.endswith(" head")), SEAT_TOL, n_tests,
+        len(skipped), ", ".join(skipped[:6]) + (" ..." if len(skipped) > 6 else "")))
+    if empty:
+        REPORT["not_checked"].append("fasteners: head or nut overlap for %s (the probe came out empty: no head behind the bearing face, "
+                                     "or no material inside the nut's flats)" % ", ".join(empty))
+
+
 def check_service():
     """Tool access for service operations on the built machine (A2-F6: the right clamp screw could be fitted on the
     bench but not re-adjusted at tilt 0). op = {"op", "fasteners": [globs], "remove": [globs], "pose": {...}}."""
@@ -1524,12 +2761,13 @@ def check_service():
             rows.append({"op": op["op"], "object": n, "access": acc})
             if not ok:
                 a = acc[first]
-                finding("service", "fail", "'%s': %s cannot be reached (straight bit blocked by %s at %s mm; L-key %s) at %s" % (
-                    op["op"], n, a.get("blocked_by"), a.get("blocked_at_mm"), a.get("lkey_why"), ", ".join(acc)), object=n, op=op["op"])
+                finding("service", "fail", "'%s': %s cannot be reached (straight bit blocked by %s at %s mm; L-key %s) at %s%s" % (
+                    op["op"], n, a.get("blocked_by"), a.get("blocked_at_mm"), a.get("lkey_why"), ", ".join(acc), access_hint(a, fc, bpy.data.objects.get(n))), object=n, op=op["op"])
             elif first not in ok:
                 a = acc[first]
                 finding("service", "warn", "'%s': %s reachable only at %s (at %s blocked by %s %s mm out)" % (
                     op["op"], n, ", ".join(ok), first, a.get("blocked_by"), a.get("blocked_at_mm")), object=n, op=op["op"])
+            drop_hints(acc.values())
     REPORT["checks"].setdefault("service", {"findings": []})["rows"] = rows
     REPORT["coverage"].append("service: %d ops, %d screw accesses with the built assembly present" % (len(ops), len(rows)))
 
@@ -1672,6 +2910,13 @@ def check_drop():
         exp = T.get("expect", {})
         want_hit = exp.get("hit")
         ang = exp.get("angle")
+        if ang and ang.get("axis"):
+            # the angle turns about the axis normal to zero and positive; "axis" is read only to check the row says so
+            ks = [str(ang.get(k, d))[-1:].upper() for k, d in (("axis", ""), ("zero", "Z"), ("positive", "-Y"))]
+            if len(set(ks)) < 3:
+                finding("config", "fail", "drop '%s': expect.angle axis %s, zero %s, positive %s: the angle is measured from zero toward "
+                        "positive, about the third axis; make axis that one" % (T["name"], ang["axis"], ang.get("zero", "Z"),
+                                                                               ang.get("positive", "-Y")), test=T["name"])
         rows = []
         on_path = set()      # objects the payload touched or first hit, at any pose
         for pose in poses:
@@ -1816,6 +3061,43 @@ def check_index():
 
 # ------------------------------------------------------------------ slide-out, distances
 
+def _swept_box(bb, v):
+    """The box bb covers moving by v."""
+    return (Vector(tuple(min(bb[0][k], bb[0][k] + v[k]) for k in range(3))), Vector(tuple(max(bb[1][k], bb[1][k] + v[k]) for k in range(3))))
+
+
+def snap_out(j, names):
+    """The direction the movers `names` leave snap j's partner by, or None when they hold both or neither: the catch
+    leaves along insert_dir, the host against it (the record's insert_dir is the way the host goes in)."""
+    a, b = j["host"] in names, j["catch"] in names
+    if a == b:
+        return None
+    d = Vector(j.get("insert_dir") or (0, 0, 1)).normalized()
+    return -d if a else d
+
+
+def snap_bound(j):
+    return round(1.5 * float(j.get("flex_mm3") or 0.0) + CFG["vol_tol"], 2)
+
+
+def snap_flex(names, d):
+    """({partner: mm3}, {partner: snap}) for the snaps with their host or catch (not both) among `names`. Flex: the barb
+    may ride its partner up to 1.5 x its own volume plus vol_tol when `d` is within 30 deg of the way out and the
+    retaining face releases (a 90 deg face self-locks: cadsnap.wedge is None). Locked: a partner a permanent snap holds,
+    named in the blocked message. A slide row passed "comes off" past a self-locking barb (PR #22 review)."""
+    flex, locked = {}, {}
+    for j in SNAPS:
+        out = snap_out(j, names)
+        if out is None or out.dot(Vector(d).normalized()) < math.cos(math.radians(30)):
+            continue
+        partner = j["catch"] if j["host"] in names else j["host"]
+        if CS.wedge(1.0, j.get("retain_deg", 90.0), j.get("mu", 0.5)) is None:
+            locked[partner] = j
+        else:
+            flex[partner] = snap_bound(j)
+    return flex, locked
+
+
 def check_slide():
     """Slide-out sweeps. {"object": name} or {"objects": [globs]} moves as one group (the attempt-2 designer's
     service sweeps: flywheel plus its bolts, cover, encoder cap), with "ignore" for parts already removed."""
@@ -1828,30 +3110,46 @@ def check_slide():
         label = S.get("name") or (grp[0].name if len(grp) == 1 else "+".join(globs))
         d = Vector(S["dir"]).normalized()
         # fasteners too: A3's battery slid through two adapter nuts that a solids-only sweep never saw (FINDINGS A3-F3)
-        # a `flex` part stays in the sweep even when an allow rule covers the pair, so its riding overlap is measured
-        fx = lambda n: any(fnmatch.fnmatch(n, g) for g in (S.get("flex") or {}))
-        others = {o.name: bvh_world(o) for o in SOLIDS + FASTENERS if o.name not in gnames | ign and (fx(o.name) or not any(allowed(o.name, g) for g in gnames))}
-        bm0 = bmesh.new()
+        # a snap's barb rides its catch on the way out (the arm flexes): the partner is flex, bounded by the barb's volume
+        auto, locked = snap_flex(gnames, S["dir"])
+        flex0 = dict(auto, **(S.get("flex") or {}))
+        fx = lambda n: any(fnmatch.fnmatch(n, g) for g in flex0)
+        others = {o.name: bvh_world(o) for o in SOLIDS + FASTENERS if o.name not in gnames | ign}
+        # an allowed pair stays an obstacle, bounded: dropping it let push-assist A7's load cell slide through the cartridge
+        # it was allowed 3 mm3 against, studs and all, and nothing failed (PA-A7-T19a). A `flex` part keeps its own bound
+        rules = {(m, n): r for n in others if not fx(n) for m in gnames for r in [rule_for(m, n)] if r and r["kind"] == "allow"}
+        bm0, span = bmesh.new(), []
         for o in grp:
             t = world_bm(o)
             me = bpy.data.meshes.new("_s")
             t.to_mesh(me)
             t.free()
+            span.append((len(bm0.verts), o.name))
             bm0.from_mesh(me)
             bpy.data.meshes.remove(me)
         free_until, blocker = None, None
         # already overlapping in place (BVH overlap misses a nut wholly inside the part, A2): interference and
         # fasteners report those; the slide reports what the motion adds
-        at_rest = [n for n in others if any(bb_gap(bbox_world(o), bbox_world(O[n])) == 0 for o in grp)
-                   and sum(inter_volume(o, O[n])[0] for o in grp) >= CFG["vol_tol"]]
+        rest = {(o.name, n): inter_volume(o, O[n])[0] for n in others for o in grp if bb_gap(bbox_world(o), bbox_world(O[n])) == 0}
+        # what an allowed pair may overlap along the path: the rule's max_mm3, or with none its overlap at rest plus vol_tol
+        # (0.1% of a large rest overlap: a 30000 mm3 battery-in-adapter envelope moves more than vol_tol in facets alone)
+        bound = {k: float(r["max_mm3"]) if r.get("max_mm3") is not None else rest.get(k, 0.0) + max(CFG["vol_tol"], 0.001 * rest.get(k, 0.0))
+                 for k, r in rules.items()}
+        for k, r in rules.items():
+            u = ALLOW_USE.setdefault(r["index"], {"mm3": 0.0, "rows": 0})
+            u["mm3"] = max(u["mm3"], rest.get(k, 0.0))
+        at_rest = [n for n in others if sum(v for (m, n2), v in rest.items() if n2 == n and (m, n) not in rules) >= CFG["vol_tol"]
+                   or any(rest.get(k, 0.0) > bound[k] for k in bound if k[1] == n)]
         minclr = (1e9, None)
-        flex, flexed = S.get("flex") or {}, {}
+        flex, flexed, rode, over = flex0, {}, {}, {}
         M0 = {o.name: o.matrix_world.copy() for o in grp}
+        step = max(1, len(bm0.verts) // 1500)
+        owner = [next(m for k, m in reversed(span) if i >= k) for i in range(0, len(bm0.verts), step)]
         for s in frange(0, S["dist"], S.get("step", 5)):
             bm = bm0.copy()
             bmesh.ops.translate(bm, verts=bm.verts, vec=d * s)
             t = BVHTree.FromBMesh(bm)
-            pts = [v.co.copy() for v in bm.verts][:: max(1, len(bm.verts) // 1500)]
+            pts = [v.co.copy() for v in bm.verts][::step]
             bm.free()
             hit = []
             for n, ot in others.items():
@@ -1861,10 +3159,11 @@ def check_slide():
                     for o in grp:
                         o.matrix_world = Matrix.Translation(d * s) @ M0[o.name]
                     bpy.context.view_layer.update()
-                    vol = sum(inter_volume(o, O[n])[0] for o in grp)
+                    vols = {o.name: inter_volume(o, O[n])[0] for o in grp}
                     for o in grp:
                         o.matrix_world = M0[o.name]
                     bpy.context.view_layer.update()
+                    vol = sum(vols.values())
                     lim = next((v for g, v in flex.items() if fnmatch.fnmatch(n, g)), None)
                     if lim is not None and 0 < vol <= lim:
                         # a declared spring riding the moving part (a detent bump over its track), not a stop
@@ -1872,25 +3171,60 @@ def check_slide():
                         # vol_tol too: A5's 0.43 mm3 ride left `flexed` empty, so the row proved nothing (V2A5-T3)
                         if vol > flexed.get(n, (0, 0))[0]:
                             flexed[n] = (round(vol, 2), s)
-                    elif vol >= CFG["vol_tol"]:
-                        hit.append(n)
+                    elif lim is not None:
+                        if vol >= CFG["vol_tol"]:
+                            hit.append(n)
+                    else:
+                        past = {m: v for m, v in vols.items() if (m, n) in bound and v > bound[(m, n)]}
+                        for m, v in vols.items():
+                            k = rules.get((m, n), {}).get("index")
+                            if k is not None and v > ALLOW_USE.setdefault(k, {"mm3": 0.0, "rows": 0})["mm3"]:
+                                ALLOW_USE[k]["mm3"] = v
+                            if (m, n) in bound and not past and v > rode.get(n, {}).get("max_mm3", 0):
+                                rode[n] = {"max_mm3": round(v, 2), "at_mm": s, "bound_mm3": round(bound[(m, n)], 2), "mover": m}
+                        if past or sum(v for m, v in vols.items() if (m, n) not in bound) >= CFG["vol_tol"]:
+                            hit.append(n)
+                            if past:
+                                m = max(past, key=past.get)
+                                over[n] = {"volume_mm3": round(past[m], 2), "bound_mm3": round(bound[(m, n)], 2), "mover": m,
+                                           "rest_mm3": None if rules[(m, n)].get("max_mm3") is not None else round(rest.get((m, n), 0.0), 2)}
             if hit:
                 free_until, blocker = s, hit
                 break
             for n, ot in others.items():
                 if n in at_rest:
                     continue
-                for p in pts:
+                for p, m in zip(pts, owner):
+                    if (m, n) in rules or n in auto:     # an allowed pair, or a snap's partner, may touch: not measured
+                        continue
                     r = ot.find_nearest(p, 3.0)
                     if r[0] is not None and r[3] < minclr[0]:
                         minclr = (r[3], n)
         bm0.free()
+        # a row counts for an allow only when its path brings a covered pair within 3 mm (the clearance search radius)
+        went = d * (free_until if free_until is not None else S["dist"])
+        for k in {r["index"] for (m, n), r in rules.items() if bb_gap(_swept_box(bbox_world(O[m]), went), bbox_world(O[n])) <= 3.0}:
+            ALLOW_USE.setdefault(k, {"mm3": 0.0, "rows": 0})["rows"] += 1
         rec = {"object": label, "members": sorted(gnames), "dir": list(d), "dist": S["dist"], "blocked_at_mm": free_until, "blocked_by": blocker,
                "min_clearance_mm": round(minclr[0], 2) if minclr[1] else None, "closest": minclr[1], "pose": pose_key(S.get("pose", {})),
                "overlapping_at_rest": at_rest}
+        if rules:
+            rec["allowed"] = rode       # allowed pairs that overlapped within their bound: the largest overlap and where
+        if over:
+            rec["over_allow"] = over    # blockers past their allow's bound
         if flex:
             rec["flexed"] = {n: {"max_mm3": v, "at_mm": a} for n, (v, a) in flexed.items()}
+        if auto:
+            rec["snap_flex"] = auto      # generated from the snap records, not the row
+        if locked:
+            rec["snap_locked"] = {n: j["name"] for n, j in locked.items()}
         REPORT["checks"].setdefault("slide", {"findings": []}).setdefault("rows", []).append(rec)
+        why = "".join(" (%s overlaps %.1f mm3, past %s; if it is a snap or spring riding the mover, name it in the row's `flex`%s)" % (
+            n, o["volume_mm3"], "the %g mm3 its allow covers" % o["bound_mm3"] if o["rest_mm3"] is None else
+            "its %g mm3 at rest plus vol_tol (or 0.1%%), the bound of an allow with no max_mm3" % o["rest_mm3"],
+            "" if o["rest_mm3"] is None else "; a press fit pushed deeper needs max_mm3 on the allow") for n, o in over.items())
+        why += "".join(" (%s holds it with permanent snap %s: its %g deg retaining face self-locks; give it retain_deg <= 45 to "
+                       "make it separable)" % (n, j["name"], j.get("retain_deg", 90)) for n, j in locked.items() if n in (blocker or []))
         if S.get("expect") == "blocked":
             # an end stop: the motion must be stopped, by the named part, within at_mm (v2 A2 gate open stop, V2A2-T4)
             rng = S.get("at_mm")
@@ -1898,9 +3232,9 @@ def check_slide():
             if not blocker:
                 finding("slide", "fail", "%s: expected a stop, but it slides the full %g mm" % (label, S["dist"]), **rec)
             elif not by_ok or (rng and not rng[0] - 1e-6 <= free_until <= rng[1] + 1e-6):
-                finding("slide", "fail", "%s: stopped by %s at %g mm, wanted %s at %s mm" % (label, blocker, free_until, S.get("blocked_by", "any part"), rng or "any"), **rec)
+                finding("slide", "fail", "%s: stopped by %s at %g mm, wanted %s at %s mm%s" % (label, blocker, free_until, S.get("blocked_by", "any part"), rng or "any", why), **rec)
         elif blocker:
-            finding("slide", "fail", "%s slide-out blocked by %s at %g mm" % (label, blocker, free_until), **rec)
+            finding("slide", "fail", "%s slide-out blocked by %s at %g mm%s" % (label, blocker, free_until, why), **rec)
         elif minclr[1] and minclr[0] < S.get("min_clearance", 1.5):
             finding("slide", "warn", "%s slides out but with only %.2f mm to %s" % (label, minclr[0], minclr[1]), **rec)
     set_pose({})
@@ -1968,7 +3302,11 @@ def check_distances():
         poses = D.get("poses", [D.get("pose", {})])
         if not present("distances", "%s to %s" % (D["a"], D["b"]), [D["a"], D["b"], (D.get("ray") or {}).get("frame")]):
             continue
-        stations = ray_stations(D["ray"]) if D.get("ray") else []
+        try:
+            stations = ray_stations(D["ray"]) if D.get("ray") else []
+        except KeyError as ex:   # ray.sweep without from/to/center/axis (a typo'd key is also a config warn)
+            finding("config", "fail", "distances %s to %s: ray.sweep has no %s; row skipped" % (D["a"], D["b"], ex), a=D["a"], b=D["b"])
+            continue
         home_hits = {}
         if D.get("ray") and any(poses):
             set_pose({})
@@ -2350,6 +3688,13 @@ def check_held_poses(steps):
 
 
 _AXES6 = [("+Z", (0, 0, 1)), ("-Z", (0, 0, -1)), ("+X", (1, 0, 0)), ("-X", (-1, 0, 0)), ("+Y", (0, 1, 0)), ("-Y", (0, -1, 0))]
+# tried when every stated direction is blocked (insertion): the 12 edge and 8 corner diagonals of a cube, then 30 and
+# 60 deg off each axis in the principal planes (a 30 deg slot, PR #19 review case C3)
+_DIAG20 = [tuple(Vector(v).normalized()) for v in [(a, b, 0) for a in (1, -1) for b in (1, -1)] + [(a, 0, b) for a in (1, -1) for b in (1, -1)]
+           + [(0, a, b) for a in (1, -1) for b in (1, -1)] + [(a, b, c) for a in (1, -1) for b in (1, -1) for c in (1, -1)]]
+_PLANE24 = [tuple(v) for k in range(3) for c, sn in ((0.5, 0.866), (0.866, 0.5)) for a in (1, -1) for b in (1, -1)
+            for v in [[a * c if j == (k + 1) % 3 else b * sn if j == (k + 2) % 3 else 0.0 for j in range(3)]]]
+_PROBES = _DIAG20 + _PLANE24
 
 
 def _entry_hit(tree, p, d, maxd=3000.0):
@@ -2408,23 +3753,29 @@ def _blocked(movers, obst, d, cache, first_only):
     B, ext = _lane([bbox_world(o) for o in movers], d)
     ahead = [n for n in obst if _box_ahead(bbox_world(O[n]), B, ext)]
     out = []
+
+    def got(kind, name, make):
+        # dict.setdefault(k, make()) built every BVH and sample list again on each call: 30 of 65 s on v2a7
+        if name not in cache[kind]:
+            cache[kind][name] = make()
+        return cache[kind][name]
     for n in ahead:
-        tn = cache["bvh"].setdefault(n, bvh_world(O[n]))
+        tn = got("bvh", n, lambda: bvh_world(O[n]))
         nb = bbox_world(O[n])
         for m in movers:
             Bm, em = _lane([bbox_world(m)], d)
             if not _box_ahead(nb, Bm, em):
                 continue
             best = None
-            for p in cache["pts"].setdefault(m.name, _edge_samples(m, 2.0, 600)):
+            for p in got("pts", m.name, lambda: _insert_samples(m, 600)):
                 h = _entry_hit(tn, p, d)
                 if h is not None and (best is None or h < best):
                     best = h
                     if quick:
                         break
             if best is None:
-                tm = cache["bvh"].setdefault(m.name, bvh_world(m))
-                for p in cache["pts"].setdefault(n, _edge_samples(O[n], 2.0, 3000)):
+                tm = got("bvh", m.name, lambda: bvh_world(m))
+                for p in got("pts", n, lambda: _insert_samples(O[n], 3000)):
                     if _ahead(Bm, em, (p,)):
                         h = _entry_hit(tm, p, -d)
                         if h is not None and (best is None or h < best):
@@ -2438,17 +3789,50 @@ def _blocked(movers, obst, d, cache, first_only):
     return sorted(out, key=lambda x: x[2])
 
 
+def _insert_samples(o, cap):
+    """Edge samples plus the centroid of each face of 4 mm2 or more (capped at half as many): rays from edges alone
+    graze between two flat faces, so a stack of identical discs in a cup read free (PR #19 review case C5)."""
+    mw = o.matrix_world
+    o.data.calc_loop_triangles()
+    cs = [mw @ t.center for t in o.data.loop_triangles if t.area >= 4.0]
+    return _edge_samples(o, 2.0, cap) + cs[:: max(1, 2 * len(cs) // cap)]
+
+
+def insertion_allow_use(mv, pool, obst, dirs, cache):
+    """Mark an allow used when insertion dropped a part it covers that would block the way in along dirs (the free
+    direction, or all when none is free): a snap lid allowed under its lip (PR #18 review case H)."""
+    names = {o.name for o in mv}
+    for n in pool:
+        if n in names or n in obst or KIND[n] == "CAB":
+            continue
+        r = next((r for m in names for r in [rule_for(n, m)] if r and r["kind"] == "allow"), None)
+        if r and any(_blocked(mv, [n], d, cache, True) for d in dirs):
+            ALLOW_USE.setdefault(r["index"], {"mm3": 0.0, "rows": 0})["insertion"] = True
+
+
 def check_insertion():
     """Can each part, and each bench group at its merge, go in along a straight line with the parts of the earlier
     steps in place? v2 A6 put a bus splice in a hub bore at step 10d: the groove cap (2c) closes the bore above and the
     base floor (3) below, and nothing in the config said so; V2R6 found it with a hand slide row (FINDINGS V2A6-F1).
 
     Tested: each PRT/BUY object against the solids and fasteners of earlier steps that are in its assembly (bench or
-    main), and each merge step's group against the assembly it joins, along +-X, +-Y, +-Z and the step's
-    "insert_dirs" ([[x, y, z], ...]: the direction the part moves to come out), at the step's "pose" (default home).
-    A step with "insert_ok": "<reason>" is listed, not tested (bayonets, snap arms, parts tilted in). Cables bend, and
-    parts of the same step are placed in any order, so neither is an obstacle. Also warns on a bench part with no part
-    of its group within 2 mm (by bounding box): it is not in that sub-assembly (the A6 splice sat in bench 'feeder')."""
+    main) and those of its own step that go in before it, and each merge step's group against the assembly it joins,
+    along +-X, +-Y, +-Z and the step's "insert_dirs" ([[x, y, z], ...]: the direction the part moves to come out), at
+    the step's "pose" (default home). Parts of one step go in in an order that works, found by taking them out, last
+    listed first, while any can come out (removing a part never blocks another, so this finds an order when one exists);
+    a step with "order" ([globs]) goes in rank by rank, its fasteners included, with an order found within each rank
+    (parts on one glob, and parts no glob names). push-assist A6/A7 listed the cartridge, its load cell and the cell's
+    nuts in one bench step, and "parts of one step go in in any order, so neither is an obstacle" meant the cell was
+    never tested against the cartridge it could not be fitted into (PA-A7-T7, T19b). On the 10 archived designs 20 of
+    146 multi-part steps fit only in another order than listed (the listing taken as the order gave 57 warns), so the
+    listing is a preference; a step whose listing doesn't fit gets a note (summary.notes), not a warn. When every
+    stated direction is blocked, a single part tries the cube diagonals and 30/60 deg in the principal planes
+    (_PROBES), so the warn says whether the way in is off-axis and unstated (the A8 cell slides in at 45 deg along its
+    stud slots) or not straight at all. Allowed pairs: drop(). A step with "insert_ok": "<reason>" is listed, not
+    tested (bayonets, snap arms, parts tilted in, a fill poured in). Cables bend, so they are no obstacle; neither are a
+    merge step's own objects and the group it merges, to each other. Also warns on a bench part with no part of its
+    group within 2 mm (by bounding box): it is not in that sub-assembly (the A6 splice sat in bench 'feeder'). Bought
+    parts sharing a step with the printed part they seat in are listed (buy_seat_same_step)."""
     steps = CFG.get("assembly_order") or []
     if not steps:
         return
@@ -2473,8 +3857,15 @@ def check_insertion():
 
     def placed(grp, i):
         """Solids and fasteners in group grp (None = main) before step i. A group merged at step i itself is left out:
-        parts of one step go in in any order (A6 step 2d: the thrust ring goes on the hub before the turntable)."""
+        a merge step's own objects and the group go in in either order (A6 step 2d: the thrust ring on the hub, then
+        the turntable)."""
         return [n for n, j in step_of.items() if j < i and lands_in(steps[j].get("bench"), grp, i - 1)]
+
+    def rank(st, n):
+        """Where n goes in within its step: the index of the first glob of the step's "order" (else "objects") that
+        matches it; objects no "order" glob matches go in last."""
+        globs = st.get("order") or st["objects"]
+        return next((k for k, g in enumerate(globs) if fnmatch.fnmatch(n, g)), len(globs))
 
     fst_axes = []
     for f in FASTENERS:
@@ -2493,17 +3884,106 @@ def check_insertion():
                 out += [("along %s" % fn, tuple(ax)), ("against %s" % fn, tuple(-ax))]
             if len(out) >= 14:
                 break
+        names = {o.name for o in mv}
+        for j in SNAPS:       # a snapped part goes in along its snap (the record's insert_dir)
+            d = snap_out(j, names)
+            if d is not None and all(abs(d.dot(Vector(v))) < 0.9995 for _, v in out):
+                out.append(("snap %s" % j["name"], tuple(d)))
         return out
 
-    rows, skipped, loose = [], [], []
+    def snap_ride(mv, d):
+        """{partner: bound} for the snaps whose barb may ride its partner while mv goes along d (within 30 deg of the
+        snap's way in, either retaining face: the lead-in deflects the arm on the way in)."""
+        names = {o.name for o in mv}
+        out = {}
+        for j in SNAPS:
+            w = snap_out(j, names)
+            if w is not None and w.dot(Vector(d)) >= math.cos(math.radians(30)):
+                p = j["catch"] if j["host"] in names else j["host"]
+                out[p] = out.get(p, 0.0) + snap_bound(j)
+        return out
+
+    def ride_ok(mv, partners, d):
+        """Sweep mv along d (1 mm steps) until its box clears each partner's; the overlap with that partner must stay
+        within the snap's bound (1.5 x the barb's volume + vol_tol), as the slide check's flex. A hooked part sealed in
+        a box read free +Z when insertion dropped the pair in every direction (PR #22 review)."""
+        dv = Vector(d).normalized()
+        M0 = {o.name: o.matrix_world.copy() for o in mv}
+        ok = True
+        try:
+            for p, bound in partners.items():
+                bp, s = bbox_world(O[p]), 0.0
+                while ok and s < 2000:
+                    for o in mv:
+                        o.matrix_world = Matrix.Translation(dv * s) @ M0[o.name]
+                    bpy.context.view_layer.update()
+                    if s > 0 and all(bb_gap(bbox_world(o), bp) > 0 for o in mv):
+                        break
+                    if sum(inter_volume(o, O[p])[0] for o in mv if bb_gap(bbox_world(o), bp) == 0) > bound:
+                        ok = False
+                    s += 1.0
+        finally:
+            for o in mv:
+                o.matrix_world = M0[o.name]
+            bpy.context.view_layer.update()
+        return ok
+
+    def way_in(mv, obst, dirs):
+        """First free direction, or None. The first blocker found per (mover, direction) is remembered: while it is
+        still an obstacle the direction stays blocked, so the order search costs O(n), not O(n^2) (60 stacked discs
+        listed top first: 29 s before)."""
+        memo, ob = cache.setdefault("first", {}), set(obst)
+        key = tuple(sorted(o.name for o in mv))
+        for dn, d in dirs:
+            b = memo.get((key, d))
+            if b in ob:
+                continue
+            ride = {p: v for p, v in snap_ride(mv, d).items() if p in ob}
+            hit = _blocked(mv, [n for n in obst if n not in ride], d, cache, True) if ride else _blocked(mv, obst, d, cache, True)
+            if not hit and ride:
+                rk = ("ride", key, d)
+                if rk not in memo:
+                    memo[rk] = ride_ok(mv, ride, d)
+                if not memo[rk]:
+                    hit = [(sorted(ride)[0], None, 0.0)]
+            if not hit:
+                return dn
+            memo[key, d] = hit[0][0]
+        return None
+
+    def off_axis(mv, obst, dirs):
+        """A free probe direction that no stated direction covers, as "[x, y, z]" (the out-direction), or None."""
+        for d in _PROBES:
+            if all(abs(Vector(d).dot(Vector(e))) < 0.9995 for _, e in dirs) and not _blocked(mv, obst, d, cache, True):
+                return "[%s]" % ", ".join("%g" % round(c, 2) for c in d)
+        return None
+
+    def drop(n, names):
+        """Is n no obstacle to the movers `names`? The ray test measures no volume, so an allow either drops the pair
+        or doesn't. Dropped: an allow without max_mm3 (a spline in a horn, a battery on its rails), and a bounded one
+        whose pair overlaps more than vol_tol where it sits (a designed press fit: crush ribs, PR #19 review case C4).
+        Kept: a bounded allow on a pair that only touches: push-assist A7's cartridge x cell allow (max_mm3 3, 0.0 mm3
+        at rest) hid the cell that could not be fitted (PA-A7-T19a, A8-T6). This is PR #18's at-rest rule."""
+        memo = cache.setdefault("drop", {})
+        for m in names:
+            if (n, m) not in memo:
+                r = rule_for(n, m)
+                memo[n, m] = bool(r and r["kind"] == "allow" and (
+                    r.get("max_mm3") is None or (bb_gap(bbox_world(O[n]), bbox_world(O[m])) == 0
+                                                 and inter_volume(O[n], O[m])[0] > CFG["vol_tol"])))
+            if memo[n, m]:
+                return True
+        return False
+
+    rows, skipped, loose, orders, seats = [], [], [], [], []
     set_pose({})
     cache = {"bvh": {}, "pts": {}, "pose": pose_key({})}
     for i, st in enumerate(steps):
-        tests = []
         grp = st.get("bench")
-        for n, j in step_of.items():
-            if j == i and KIND[n] in ("PRT", "BUY"):
-                tests.append(([O[n]], n))
+        own = [n for n, j in step_of.items() if j == i]
+        rk = {n: rank(st, n) for n in own}
+        parts = sorted((n for n in own if KIND[n] in ("PRT", "BUY")), key=lambda n: (rk[n], n))
+        tests = [([O[n]], n) for n in parts]
         if st.get("merge"):
             g = st["merge"]
             mem = [n for n, j in step_of.items() if j < i and lands_in(steps[j].get("bench"), g, i)]
@@ -2514,6 +3994,12 @@ def check_insertion():
         if st.get("insert_ok"):
             skipped.append({"step": st["step"], "why": st["insert_ok"], "objects": [t[1] for t in tests]})
             continue
+        for g in st.get("order") or []:
+            if not any(fnmatch.fnmatch(n, g) for n in own):
+                finding("insertion", "warn", "step '%s': \"order\" glob %s matches none of the step's objects" % (st["step"][:50], g),
+                        step=st["step"], glob=g)
+        strict = bool(st.get("order"))
+        ties = [sorted(v) for v in {r: [n for n in parts if rk[n] == r] for r in set(rk[n] for n in parts)}.values() if len(v) > 1]
         if grp:
             # a bench part far from the rest of its sub-assembly is in the wrong group (A6: the splice in 'feeder')
             mates = [n for n, j in step_of.items() if KIND[n] in ("PRT", "BUY") and lands_in(steps[j].get("bench"), grp, merged_at.get(grp, len(steps)))]
@@ -2528,30 +4014,101 @@ def check_insertion():
         if pose_key(st.get("pose", {})) != cache.get("pose"):
             set_pose(st.get("pose", {}))
             cache = {"bvh": {}, "pts": {}, "pose": pose_key(st.get("pose", {}))}
-        for mv, label in tests:
-            dirs = axes_for(mv) + [("dir %s" % list(v), tuple(Vector(v).normalized())) for v in st.get("insert_dirs", [])]
-            names = {o.name for o in mv}
-            obst = [n for n in placed(grp, i) + unordered if n not in names and KIND[n] != "CAB"
-                    and not any(allowed(n, m) for m in names)]
-            free = None
-            for dn, d in dirs:
-                if not _blocked(mv, obst, d, cache, True):
-                    free = dn
+        # bought parts sharing a step with the printed part they seat in (surfaces within 0.2 mm), at the step's pose:
+        # the order between them is the one found below unless the step's "order" says it
+        bvh = lambda n: cache["bvh"][n] if n in cache["bvh"] else cache["bvh"].setdefault(n, bvh_world(O[n]))
+        for b in (n for n in parts if KIND[n] == "BUY"):
+            for p in (n for n in parts if KIND[n] == "PRT" and bb_gap(bbox_world(O[b]), bbox_world(O[n])) < 0.2):
+                if min_dist(O[b], O[p], bvh(b), bvh(p))[0] < 0.2:
+                    seats.append({"buy": b, "seat": p, "step": st["step"], "by": "order" if strict else "found"})
+        base = [n for n in placed(grp, i) + unordered if KIND[n] != "CAB"]
+        xdirs = [("dir %s" % list(v), tuple(Vector(v).normalized())) for v in st.get("insert_dirs", [])]
+
+        def find_order(group, pre):
+            """-> (an order the parts of `group` go in after `pre`, {part: its way in}, the parts no order gets in). Takes
+            parts out, last listed first, while one has a straight way out past the earlier steps' parts, `pre` and the
+            rest of the group; removing a part never blocks another, so this finds an order whenever one exists, and
+            the listed one when that works."""
+            rem, out, way = list(group), [], {}
+            while rem:
+                for n in reversed(rem):
+                    w = way_in([O[n]], [m for m in base + pre + rem if m != n and not drop(m, {n})], axes_for([O[n]]) + xdirs)
+                    if w is not None:
+                        rem.remove(n)
+                        out.append(n)
+                        way[n] = w
+                        break
+                else:
                     break
-            rec = {"object": label, "step": st["step"], "free_dir": free, "obstacles": len(obst)}
+            return rem + out[::-1], way, set(rem)
+
+        # without "order" the whole step is one group and its fasteners are no obstacle (screws go in after the parts
+        # they join); with "order" each rank is a group, after every object (fasteners too) of the ranks before it, so
+        # parts on one glob and parts no glob names are still tested against each other (review case C6)
+        groups = [[n for n in parts if rk[n] == r] for r in sorted({rk[n] for n in parts})] if strict else [parts]
+        seq, way, stuck, before = [], {}, set(), {}
+        for g in groups:
+            pre = [m for m in own if rk[m] < rk[g[0]]] if strict else []
+            gs, gw, gk = find_order(g, pre)
+            for k, n in enumerate(gs):
+                before[n] = pre + ([m for m in gs[:k] if m in gk] if n in gk else gs[:k])
+            seq, stuck = seq + gs, stuck | gk
+            way.update(gw)
+        if len(parts) > 1:
+            differs = seq != parts and not stuck
+            orders.append({"step": st["step"], "by": "order" if strict else "found", "order": seq, "listed_differs": differs,
+                           "same_glob": ties if strict else [], "no_order": sorted(stuck)})
+            if differs:
+                NOTES.append("insertion: step '%s': the %s order doesn't fit; it fits as %s" % (
+                    st["step"][:50], "\"order\"" if strict else "listed", ", ".join(seq)))
+        for mv, label in tests:
+            dirs = axes_for(mv) + xdirs
+            names = {o.name for o in mv}
+            same = before.get(label, [])     # a merged group: none, the step's own objects go in either side of it
+            obst = [n for n in base + same if n not in names and not drop(n, names)]
+            free = way.get(label) or way_in(mv, obst, dirs)
+            insertion_allow_use(mv, base + same, obst, [d for dn, d in dirs if free in (None, dn)], cache)
+            rec = {"object": label, "step": st["step"], "free_dir": free, "obstacles": len(obst), "same_step_before": len(same)}
             if free is None:
-                rec["blocked"] = {dn: [{"by": b, "mover": m, "at_mm": a} for b, m, a in _blocked(mv, obst, d, cache, False)[:3]] for dn, d in dirs}
+                full = {dn: _blocked(mv, obst, d, cache, False) for dn, d in dirs}
+                rec["blocked"] = {dn: [{"by": b, "mover": m, "at_mm": a} for b, m, a in bl[:3]] for dn, bl in full.items()}
                 why = "; ".join("%s %s" % (dn, ", ".join("%s%s at %g" % (x["by"], "" if len(mv) == 1 else " (%s)" % x["mover"], x["at_mm"]) for x in bl[:2]))
                                 for dn, bl in rec["blocked"].items())
-                finding("insertion", "warn", "%s (step '%s') has no straight way in with the earlier steps' parts in place: %s. Reorder the "
-                        "steps, remove the blocker first (a service row), or give the step its \"insert_dirs\" / \"pose\" (\"insert_ok\" with a "
-                        "reason for a twist or snap)" % (label, st["step"][:50], why), **rec)
+                off = off_axis(mv, obst, dirs) if len(mv) == 1 else None   # a group's probe cost 14 s of v2a7's 43
+                tail = (" It is free along %s (off-axis, out-direction): if that is how it goes in, give the step \"insert_dirs\": [%s]." % (off, off)
+                        if off else " It is not free along +-X/Y/Z, the 20 cube diagonals or 30/60 deg in the principal planes either: another "
+                        "angle or a rotation needs \"insert_dirs\" or \"insert_ok\"." if len(mv) == 1 else "")
+                rec["free_off_axis"] = off
+                by_own = sorted({b for bl in full.values() for b, _m, _a in bl} & set(same))
+                if by_own and way_in(mv, [n for n in base if n not in names and not drop(n, names)], dirs) is not None:
+                    rec["same_step_blockers"] = by_own
+                    if strict and not any(rk[b] == rk[label] for b in by_own):     # only by earlier "order" ranks
+                        seq2, _w, stuck2 = find_order(parts, [])
+                        hint = (" The step's parts do go in in the order %s: change its \"order\"" % ", ".join(seq2) if not stuck2 else
+                                " No order of the step's parts works either: split the step or change the part (a slot, a split seat)")
+                        msg = "%s (step '%s') has no straight way in past %s, which the step's \"order\" puts before it: %s.%s%s" % (
+                            label, st["step"][:50], ", ".join(by_own), why, tail, hint)
+                    else:
+                        msg = ("%s (step '%s') has no straight way in past %s of the same step, in any order of %s: %s.%s "
+                               "Split the step, change the part (a slot, a split seat), or give the step its \"insert_dirs\" / \"pose\"" % (
+                                   label, st["step"][:50], ", ".join(by_own), "its \"order\" glob's parts" if strict else "the step's parts", why, tail))
+                else:
+                    msg = ("%s (step '%s') has no straight way in with the earlier steps' parts in place: %s.%s Reorder the "
+                           "steps, remove the blocker first (a service row), or give the step its \"insert_dirs\" / \"pose\" (\"insert_ok\" with a "
+                           "reason for a twist or snap)" % (label, st["step"][:50], why, tail))
+                finding("insertion", "warn", msg, **rec)
             rows.append(rec)
     set_pose({})
-    REPORT["checks"].setdefault("insertion", {"findings": []}).update(rows=rows, not_tested=skipped, loose_bench_parts=loose)
-    REPORT["coverage"].append("insertion: %d parts and merged groups, straight along +-X/Y/Z (and insert_dirs) against earlier steps; %d steps insert_ok" % (
-        len(rows), len(skipped)))
-    REPORT["not_checked"].append("insertion: paths that are not one straight line, parts of the same step against each other, cables")
+    REPORT["checks"].setdefault("insertion", {"findings": []}).update(rows=rows, not_tested=skipped, loose_bench_parts=loose, step_orders=orders,
+                                                                      buy_seat_same_step=seats)
+    REPORT["coverage"].append("insertion: %d parts and merged groups, straight along +-X/Y/Z (and insert_dirs) against earlier steps and the "
+                              "parts of their own step that go in before them (%d steps with several parts: %d in their \"order\", %d in an "
+                              "order found, %d of those not as listed; %d bought parts share a step with their seat); %d steps insert_ok" % (
+                                  len(rows), len(orders), sum(o["by"] == "order" for o in orders), sum(o["by"] == "found" for o in orders),
+                                  sum(o["listed_differs"] for o in orders), len(seats), len(skipped)))
+    REPORT["not_checked"].append("insertion: paths that are not one straight line, a step's own fasteners unless its \"order\" places them, "
+                                 "a merge step's own objects against the group it merges, features thinner than the 2 mm sample spacing "
+                                 "crossing between samples, cables")
 
 
 def check_stacks():
@@ -2617,7 +4174,12 @@ def check_flexures():
     """Printed springs, flexures and snap arms against the layer direction (A3-F2: the nip leaf spring printed
     standing up, so its 21-44 MPa bending stress ran across layer bonds). Each entry: {"part", "dir": [x,y,z] or
     "from"/"to" points (world, home pose) along the beam's length, optional "stress_mpa", "why"}. The beam should
-    lie in the layer plane: its angle to the bed is from the part's print_rot, the same matrix the STL export uses."""
+    lie in the layer plane: its angle to the bed is from the part's print_rot, the same matrix the STL export uses.
+    A row with "l", "b", "h" (beam length, width, thickness along the deflection, mm) and "deflection" (mm at the end)
+    gets its stress computed from the part's material: cadsnap.beam_stress, "end" "free" (cantilever, default) or
+    "guided" (a parallel-leaf flexure), times "kt" (default 1, nominal), against the part's in_mpa in the layer plane or
+    the interlayer limit across it. A typed stress_mpa is then only compared: push-assist A3's designer typed 7.6 MPa
+    and the reviewer's script found 9-22 MPa with Kt (PA-A3-T22). Without dimensions the typed value is "declared"."""
     fl = CFG["flexures"]
     # a distances row that names a yielding part claims a spring; that spring needs a flexures row (v2 A2: the nip
     # leaf carried every squeeze claim and had none, FINDINGS V2A2-F5)
@@ -2628,6 +4190,8 @@ def check_flexures():
             declared.add(m.group(1))
             finding("flexures", "warn", "%s is named compliant in distances (%s to %s) but has no flexures row: its print orientation is unchecked" % (
                 m.group(1), D["a"], D["b"]), part=m.group(1))
+    # a snap's host and catch are checked by `snaps`: a slide flex on them is that snap (a compliant distances row is not)
+    declared |= {j[k] for j in SNAPS for k in ("host", "catch")}
     for S in CFG["slide_out"]:
         # a slide that lets a part flex over it (a detent) claims a spring too
         for g in (S.get("flex") or {}):
@@ -2651,9 +4215,34 @@ def check_flexures():
         ang = math.degrees(math.asin(min(1.0, abs(pd.z))))
         st = F.get("stress_mpa")
         rec = {"part": F["part"], "beam_print_dir": [round(c, 3) for c in pd], "angle_to_bed_deg": round(ang, 1), "stress_mpa": st,
-               "interlayer_mpa": lim, "why": F.get("why")}
-        rows.append(rec)
+               "stress_src": "declared" if st is not None else None, "interlayer_mpa": lim, "why": F.get("why")}
         tag = "%s%s" % (F["part"], " (%s)" % F["name"] if F.get("name") else "")
+        dims = [k for k in ("l", "b", "h", "deflection") if F.get(k) is not None]
+        if dims and len(dims) < 4:
+            finding("flexures", "warn", "%s: the row gives %s but not %s, so its stress is not computed" % (
+                tag, "/".join(dims), "/".join(k for k in ("l", "b", "h", "deflection") if k not in dims)), part=F["part"])
+        elif dims:
+            mat = o.get("material") or CM.PRINT_DEFAULTS["material"]
+            M_ = CM.MATERIALS.get(mat, CM.MATERIALS["PLA"])
+            try:
+                cs = CS.beam_stress(float(F["l"]), float(F["h"]), float(F["deflection"]), M_["E_mpa"], F.get("end", "free"), float(F.get("kt", 1.0)))
+            except (ValueError, ZeroDivisionError) as e:
+                finding("flexures", "warn", "%s: stress not computed (%s)" % (tag, e), part=F["part"])
+                cs = None
+            if cs is not None:
+                allow_in = M_["in_mpa"]
+                rec.update(stress_mpa=round(cs, 2), stress_src="computed", declared_mpa=st, material=mat, E_mpa=M_["E_mpa"],
+                           end=F.get("end", "free"), kt=float(F.get("kt", 1.0)), in_mpa=allow_in,
+                           strain=round(cs / M_["E_mpa"], 5), formula="cadsnap.beam_stress (Roark Table 8.1)")
+                if st is not None and abs(st - cs) > 0.2 * cs:
+                    finding("flexures", "warn", "%s: stress_mpa %g typed, %.1f MPa computed from l, h and deflection%s: the "
+                            "computed value is checked" % (tag, st, cs, " (kt %g)" % float(F["kt"]) if F.get("kt") else
+                                                          ", nominal: give kt for the root's stress concentration"), **rec)
+                st = cs
+                if ang <= 45 and cs > allow_in:
+                    finding("flexures", "fail", "%s: computed bending stress %.1f MPa > %s in_mpa %g (in the layer plane): "
+                            "lengthen or thin the beam, or deflect it less" % (tag, cs, mat, allow_in), **rec)
+        rows.append(rec)
         if ang > 45 and (st is None or st > lim):
             finding("flexures", "fail", "%s: the beam stands %.0f deg off the bed, so bending stress%s crosses layer bonds (limit %g MPa): "
                     "print it with the beam in the layer plane" % (tag, ang, " of %g MPa" % st if st else "", lim), **rec)
@@ -2661,6 +4250,147 @@ def check_flexures():
             finding("flexures", "warn", "%s: beam %.0f deg off the bed; part of the bending stress crosses layers" % (tag, ang), **rec)
     REPORT["checks"].setdefault("flexures", {"findings": []})["rows"] = rows
     REPORT["coverage"].append("flexures: %d declared springs or snap arms against print orientation" % len(rows))
+
+
+def check_snaps():
+    """Snap fits and print-in-place hinges from their cadlib records (features.snap_hook, annular_snap, torsion_snap,
+    pip_hinge: the scene's cad_joins or the manifest's "joins"), so the agent writes no config for them.
+    Snaps: the strain (a torsion bar's shear strain against (1 + nu) x) recomputed by cadsnap for the flexing part's
+    material as built, against its allowable for the record's `uses`, and across layers (the layer-bond allowable as a
+    strain) when the beam stands > 45 deg off the bed in its print_rot (a ring snap: when its axis lies < 45 deg off it);
+    20-45 deg warns, as flexures. A permanent snap (retain >= 80 deg) on a part a service op removes warns.
+    Hinges: radial and axial clearance >= print_in_place.min_clearance, the axis within axis_flat_deg of the bed, both
+    parts printed together (the same print_rot), the moving part on the hinge's joint. The swept clearance is the
+    interference check's, under a fits rule generated from the record (it holds the whole pair, leaves too, to 0.28).
+    Along a snap's way out (insert_dir), the slide check lets a separable snap's barb ride its catch (flex, bounded by
+    1.5 x the barb's volume + vol_tol; a self-locking one blocks and is named), and insertion sweeps the same ride."""
+    if not JOINS:
+        REPORT["not_checked"].append("snaps: no snap or print-in-place records (features.snap_hook, annular_snap, torsion_snap, pip_hinge)")
+        return
+    set_pose({})
+    rows, pip = [], CFG["print_in_place"]
+    removed_by = {}
+    for op in CFG.get("service") or []:
+        for o in SOLIDS:
+            if any(fnmatch.fnmatch(o.name, g) for g in op.get("remove", [])):
+                removed_by.setdefault(o.name, []).append(op.get("op"))
+    rot = lambda o: [list(r) for r in o["print_rot"]] if "print_rot" in o.keys() else None
+    for j in SNAPS:
+        tag = "%s %s" % (j["kind"], j["name"])
+        miss = [n for n in (j["host"], j["catch"]) if n not in O]
+        if miss:
+            finding("snaps", "fail", "%s: %s not in the model (renamed after the call? name the solids with their final PRT_ "
+                    "names)" % (tag, ", ".join(miss)), name=j["name"])
+            continue
+        fp = O[j["flex_part"]]
+        mat = fp.get("material") or CM.PRINT_DEFAULTS["material"]
+        if mat not in CM.MATERIALS:
+            finding("snaps", "fail", "%s: %s's material %r is not in cadmat.MATERIALS" % (tag, fp.name, mat), name=j["name"])
+            continue
+        R = rot(fp)
+        r = CS.recheck(j, mat, R)
+        shear = j["kind"] == "torsion_snap"
+        rec = {"kind": j["kind"], "name": j["name"], "flex_part": fp.name, "host": j["host"], "catch": j["catch"],
+               "material": mat, "uses": j.get("uses"), "value": round(r["value"], 5), "limit": round(r["limit"], 5),
+               "quantity": "shear strain" if shear else "strain", "allow_source": r["allow_source"], "across_layers": r["across"],
+               "angle_to_bed_deg": None if r["angle_deg"] is None else round(r["angle_deg"], 1),
+               "P_n": round(r["P_n"], 2), "W_insert_n": None if r["W_insert_n"] is None else round(r["W_insert_n"], 2),
+               "W_release_n": None if r["W_release_n"] is None else round(r["W_release_n"], 2), "retain_deg": j.get("retain_deg"),
+               "result": r["result"]}
+        rows.append(rec)
+        if r["result"] == "fail":
+            finding("snaps", "fail", "%s: %s %.4f > %.4f allowed for %s (%s use; %s)%s" % (
+                tag, rec["quantity"], r["value"], r["limit"], fp.name, j.get("uses"), r["allow_source"],
+                ": a twisted bar's principal stress crosses layers however it lies: lengthen the bar or the lever, or "
+                "thin the bar" if shear else
+                ": the flexing member's tension crosses layer bonds, print it with the %s %s" % (
+                    "arm" if j["kind"] == "snap_hook" else "ring's axis",
+                    "upright" if j.get("beam_kind") == "normal" else "in the layer plane") if r["across"] else
+                ": re-size it (thickness=None) or change length, undercut or material"), **rec)
+        elif R is None:
+            finding("snaps", "warn", "%s: %s has no print_rot, so the layer direction is unchecked" % (tag, fp.name), **rec)
+        elif shear:
+            pass                     # always taken across layers (cadsnap.layer_stress_dir)
+        elif (20 < r["angle_deg"] <= 45) if j.get("beam_kind", "along") == "along" else (45 <= r["angle_deg"] < 70):
+            finding("snaps", "warn", "%s: the flexing member is %.0f deg off the layer plane; part of its strain crosses layers" % (
+                tag, r["angle_deg"] if j.get("beam_kind", "along") == "along" else 90 - r["angle_deg"]), **rec)
+        ops = sorted({op for n in (j["host"], j["catch"]) for op in removed_by.get(n, [])})
+        if (j.get("retain_deg") or 0) >= 80 and ops:
+            finding("snaps", "warn", "%s is permanent (retain %g deg) but service op%s %s remove%s %s: give it retain_deg <= 45 "
+                    "(separable) or a release tab" % (tag, j["retain_deg"], "" if len(ops) == 1 else "s", ", ".join(map(str, ops)),
+                                                       "s" if len(ops) == 1 else "", " / ".join(n for n in (j["host"], j["catch"]) if n in removed_by)),
+                    **rec)
+    for h in HINGES:
+        tag = "pip_hinge %s" % h["name"]
+        miss = [n for n in h["parts"] if n not in O]
+        if miss:
+            finding("snaps", "fail", "%s: %s not in the model" % (tag, ", ".join(miss)), name=h["name"])
+            continue
+        A, B = (O[n] for n in h["parts"])
+        RA, RB = rot(A), rot(B)
+        ang = CS.beam_angle(RA, h["axis"]) if RA else None
+        same = RA is not None and RB is not None and all(abs(RA[i][k] - RB[i][k]) < 1e-6 for i in range(3) for k in range(3))
+        rec = {"kind": "pip_hinge", "name": h["name"], "parts": h["parts"], "joint": h["joint"], "radial_mm": h["clearance"],
+               "axial_mm": h["gap"], "min_mm": pip["min_clearance"], "axis_to_bed_deg": None if ang is None else round(ang, 1),
+               "same_print": same, "moving_body": body(B)}
+        rows.append(rec)
+        for what, v in (("radial clearance", h["clearance"]), ("axial gap", h["gap"])):
+            if v < pip["min_clearance"] - 1e-9:
+                finding("snaps", "fail", "%s: %s %.2f mm < %.2f: the knuckles fuse in print; use the 0.4 default" % (
+                    tag, what, v, pip["min_clearance"]), **rec)
+        if ang is not None and ang > pip["axis_flat_deg"]:
+            finding("snaps", "fail", "%s: the hinge axis stands %.0f deg off the bed in %s's print orientation: print it with "
+                    "the axis flat (knuckle gaps print as vertical slots, the pin needs no support)" % (tag, ang, A.name), **rec)
+        if not same:
+            finding("snaps", "fail", "%s: %s and %s have different print_rot, so they can't print together in place: give both "
+                    "the same print_rot (the export writes pip_%s.stl with both)" % (tag, A.name, B.name, h["name"]), **rec)
+        if body(B) != h["joint"]:
+            finding("snaps", "fail", "%s: %s is on %s, not the hinge's joint %s: asm.part(..., joint=%r)" % (
+                tag, B.name, body(B), h["joint"], h["joint"]), **rec)
+    REPORT["checks"].setdefault("snaps", {"findings": []})["rows"] = rows
+    REPORT["coverage"].append("snaps: %d snaps (strain vs allowable, layer direction) and %d print-in-place hinges (clearances, axis, "
+                              "one print) from cadlib records (%s)" % (len(SNAPS), len(HINGES), JOINS_SRC))
+
+
+def check_calcs():
+    """Calculations as rows (push-assist: hand calcs with no row, PA-A1-T10 / A3-T23, then calcs folded into stacks rows
+    that reported a stress as "worst case / RSS" and took abs() of it, PA-A6-T9). Each {"name", "value": "=expr", "min",
+    "max", "unit", "why"} is evaluated in order over the params, earlier calcs (by name), mat() allowables and the
+    printed section of a part (i_eff, z_eff, section: cadmat), and fails outside min/max. A part whose walls, infill or
+    material a calc read from the defaults warns: the 3MF carries no setting for it (PA-A8-T13)."""
+    if not CFG.get("calcs"):
+        return
+    try:
+        _check_calcs()
+    except Exception as e:     # a calc bug is a finding, not a run with no report
+        finding("calcs", "fail", "the calcs check crashed (%s: %s); rows after the crash are unchecked" % (type(e).__name__, e))
+
+
+def _check_calcs():
+    parts = {o.name: {k: o[k] for k in CM.PRINT_KEYS if k in o.keys()} for o in PRINTED}
+    rows, defaulted = [], {}
+    for r in CM.run_calcs(CFG["calcs"], PARAMS, parts):
+        i = r["index"]
+        if "error" in r:
+            finding("config", "fail", "calcs[%d] '%s': expression '%s' failed (%s; params from %s); row skipped" % (
+                i, r["name"], r["expr"], r["error"], PARAMS_SRC), at="calcs[%d]" % i, expr=r["expr"], error=r["error"])
+            continue
+        rows.append(r)
+        u = " %s" % r["unit"] if r.get("unit") else ""
+        if r["result"] == "fail":
+            lo = r["min"] is not None and r["value"] < r["min"]
+            finding("calcs", "fail", "%s: %.4g%s %s %s %.4g" % (r["name"], r["value"], u, "<" if lo else ">", "min" if lo else "max",
+                                                              r["min"] if lo else r["max"]), **r)
+        for p, d in r["parts"].items():
+            if d:
+                defaulted.setdefault(p, (d, r["name"]))
+    for p, (d, n) in sorted(defaulted.items()):
+        finding("calcs", "warn", "%s: calc '%s' uses its section or material, but %s %s not declared, so it assumes the slicer "
+                "default (%s); give asm.part(%s) so the manifest and 3MF carry it" % (
+                    p, n, "/".join(d), "is" if len(d) == 1 else "are", ", ".join("%s %s" % (k, CM.PRINT_DEFAULTS[k]) for k in d),
+                    ", ".join("%s=" % k for k in d)), part=p, defaulted=d)
+    REPORT["checks"].setdefault("calcs", {"findings": []})["rows"] = rows
+    REPORT["coverage"].append("calcs: %d calculations, %d with a min or max" % (len(rows), sum(1 for r in rows if r["result"] != "info")))
 
 
 def centroid_vol(o):
@@ -3059,7 +4789,10 @@ def check_pose_values():
                 PAST_LIMITS.append({"at": at, "joint": jn, "value": val, "lo": sp["lo"], "hi": sp["hi"]})
 
     for key, v in CFG.items():
-        if key not in ("accepted_warns", "joints", "couplings", "carry"):
+        if key in ROW_INDEX:     # label rows by their index in the config file, skipped rows included
+            for i, r in zip(ROW_INDEX[key], v):
+                walk(r, "%s[%d]" % (key, i))
+        elif key not in ("accepted_warns", "joints", "couplings", "carry"):
             walk(v, key)
 
 
@@ -3077,6 +4810,81 @@ def stale_model():
                   for x in srcs if os.path.getmtime(x) > t + 2.0)
 
 
+CHECKS = (("parts", check_parts), ("interference", check_interference), ("fasteners", check_fasteners),
+          ("service", check_service), ("drop", check_drop), ("index", check_index), ("slide", check_slide),
+          ("distances", check_distances), ("payload", check_payload), ("sightlines", check_sightlines),
+          ("assembly", check_assembly), ("insertion", check_insertion), ("stacks", check_stacks), ("flexures", check_flexures),
+          ("snaps", check_snaps), ("calcs", check_calcs), ("stability", check_stability), ("cables", check_cables))
+# flexures is not here: it also checks compliant distances rows and slide flexes, and says so in not_checked itself
+ROWS_OF = {"service": "service", "drop": "drop_tests", "index": "index_tests", "slide": "slide_out", "distances": "distances",
+           "payload": "payload_fit", "sightlines": "sightlines", "assembly": "assembly_order", "insertion": "assembly_order",
+           "stacks": "stacks", "calcs": "calcs"}
+
+
+def unused_allows():
+    """{"a x b": what was measured} for each allow rule with no overlap on any pair it covers, wherever the checks
+    evaluate the pair: home for a pair on one body, the interference pose grid across a joint (where a touch, or a gap
+    under moving_warn_clearance, also counts as use: the allow hides that fail or warn), the slide rows that bring it
+    within reach, and insertion obstacles it drops that would block the way in (insertion_allow_use). Possibly stale. Push-assist A3 to A7 allowed PRT_cartridge_* x BUY_load_cell_* (3 mm3) for zero-gap seats: it
+    measured 0.0 mm3 and protected nothing, and it hid the cartridge from the load cell's slide row (PA-A8-T6)."""
+    def inside_of(t, bb, o):     # wholly inside: a nut in a solid has no triangle overlap (A2)
+        return o.type == 'MESH' and len(o.data.vertices) > 0 and inside(t, o.matrix_world @ o.data.vertices[0].co, bb)
+    pairs = {}
+    for a, b in itertools.combinations(ALL, 2):
+        r = rule_for(a.name, b.name)
+        if r and r["kind"] == "allow":
+            pairs.setdefault(r["index"], []).append((a, b))
+    out = {}
+    for i, r in enumerate(CFG.get("allow") or []):
+        u = ALLOW_USE.get(i, {})
+        vol, hides, poses = u.get("mm3", 0.0), False, set()
+        for a, b in pairs.get(i, []):
+            drv = relevant_joints(a, b)
+            gap = CFG["moving_warn_clearance"] if drv else 0.01
+            for pose, _ in pose_grid(drv, QUICK):
+                if vol >= 0.01 or hides:
+                    break
+                set_pose(pose)
+                poses.add(pose_key(pose))
+                ba, bb = bbox_world(a), bbox_world(b)
+                if bb_gap(ba, bb) > gap:
+                    continue
+                ta, tb = bvh_world(a), bvh_world(b)
+                if ta.overlap(tb) or inside_of(tb, bb, a) or inside_of(ta, ba, b):
+                    vol = max(vol, inter_volume(a, b)[0])
+                    hides = bool(drv)        # across a joint a touch is a contact fail without the allow
+                elif drv:
+                    hides = min_dist(a, b, ta, tb)[0] < gap
+        set_pose({})
+        if vol < 0.01 and not hides and not u.get("insertion"):
+            n = len(pairs.get(i, []))
+            out["%s x %s" % (r.get("a", "*"), r.get("b", "*"))] = (
+                "0 mm3 on its %d pair%s at %s%s" % (n, "" if n == 1 else "s", "home" if poses == {"home"} else "%d poses" % len(poses),
+                                                    " and in %d slide row%s" % (u["rows"], "" if u["rows"] == 1 else "s") if u.get("rows") else "")
+                if n else "covers no pair of objects (none match, or an earlier allow covers them)")
+    return out
+
+
+def config_warns(acc, tri, unused=None):
+    """Config hygiene, listed apart from the design warns: keys cadcheck never reads (each file on its own, with the
+    closest known key), stacks rows that are calcs (PA-A6-T9), --only names that are no check, malformed accepts, the
+    old substring accepts and allows that measured no overlap (unused_allows)."""
+    pc = CC.literal(os.path.join(os.path.dirname(os.path.abspath(__file__)), "printcheck.py"), "DEFAULTS")
+    out = []
+    for path, raw in CFG_FILES:
+        out += CC.unknown_msgs(os.path.basename(path), raw, dict(DEFAULTS, printcheck=pc), CONFIG_ROWS, CONFIG_NAMED)
+        out += ["%s stacks[%d]%s: one term from an =expr and no \"between\" is a calculation, reported as a tolerance stack "
+                "(worst case, RSS, abs() of the value); write it as a \"calcs\" row" % (
+                    os.path.basename(path), i, " (%.60s)" % raw["stacks"][i]["name"] if raw["stacks"][i].get("name") else "")
+                for i in CM.stack_calcs(raw.get("stacks") if isinstance(raw.get("stacks"), list) else [])]
+    names = [n for n, _ in CHECKS] + ["clearance"]
+    out += CC.only_problems(ONLY, names)
+    out += CC.accept_problems(acc, names + ["config"]) + tri["unpinned"]
+    m = CC.legacy_msg(tri["legacy"], len(acc), WARNS, CC.templates(os.path.abspath(__file__)) if tri["legacy"] else None)
+    out += ["allow %s: %s; possibly stale: check what it was for, and remove it if no check needs it" % kv for kv in sorted((unused or {}).items())]
+    return out + ([m] if m else [])
+
+
 def main():
     set_pose({})
     HOME_MW.update({o.name: o.matrix_world.copy() for o in ALL})
@@ -3084,8 +4892,13 @@ def main():
         REPORT["params"] = {"source": PARAMS_SRC, "expressions": EXPRS}
         for e in EXPRS:
             if "error" in e:
-                finding("config", "fail", "%s: expression '=%s' failed (%s; params from %s)" % (e["at"], e["expr"], e["error"], PARAMS_SRC), **e)
+                finding("config", "fail", "%s: expression '=%s' failed (%s; params from %s)%s" % (
+                    e["at"], e["expr"], e["error"], PARAMS_SRC, "; %s skipped" % e["skipped"] if "skipped" in e else
+                    "; using the default %s" % json.dumps(e["default"]) if "default" in e else
+                    "; %s dropped" % e["dropped"] if "dropped" in e else ""), **e)
     check_pose_values()
+    if ONLY and not ONLY & ({n for n, _ in CHECKS} | {"clearance"}):
+        finding("config", "fail", "--only %s names no check, so nothing ran" % ",".join(sorted(ONLY)), only=sorted(ONLY))
     old_srcs = stale_model()
     if old_srcs:
         REPORT["stale_model"] = old_srcs
@@ -3095,42 +4908,68 @@ def main():
     log("objects: %d printed, %d purchased, %d fasteners, %d cables; joints %s" % (
         len(PRINTED), len(PURCHASED), len(FASTENERS), len(CABLES),
         {n: (s["axis"], s["lo"], s["hi"]) for n, s in JOINTS.items()}))
-    for name, fn in (("parts", check_parts), ("interference", check_interference), ("fasteners", check_fasteners),
-                     ("service", check_service), ("drop", check_drop), ("index", check_index), ("slide", check_slide),
-                     ("distances", check_distances), ("payload", check_payload), ("sightlines", check_sightlines),
-                     ("assembly", check_assembly), ("insertion", check_insertion), ("stacks", check_stacks), ("flexures", check_flexures), ("stability", check_stability), ("cables", check_cables)):
+    ran, empty = {"config", "build"}, []
+    for name, fn in CHECKS:
         if want(name) or (name == "interference" and want("clearance")):
             t = time.time()
             fn()
             REPORT["checks"].setdefault(name, {"findings": []})["runtime_s"] = round(time.time() - t, 1)
             log("%s done" % name)
+            ran |= {name, "clearance"} if name == "interference" else {name}
+            # a check named in --only with no rows checked nothing and said nothing (push-assist PA-A2-T11: 5 of 11)
+            sec = ROWS_OF.get(name)
+            if sec and not CFG.get(sec):
+                empty.append(name)
+                if not any(x.startswith(name + ":") for x in REPORT["not_checked"]):
+                    REPORT["not_checked"].append("%s: no %s rows in the config, nothing checked" % (name, sec))
     if not CABLES:
         REPORT["not_checked"].append("cables: Cables collection empty")
     REPORT["not_checked"].append("not geometric: teardown step count, alignment-jig datums (declare stacks), aesthetics, BOM correctness")
     acc = CFG.get("accepted_warns") or []
-    accepted = {w: next(a.get("why", "") for a in acc if a["match"] in w) for w in WARNS
-                if any(a["match"] in w for a in acc) and not w.startswith("build: ")}   # a stale model is never accepted
-    untriaged = [w for w in WARNS if w not in accepted]
-    # under --only most warns never get a chance to fire, so "matched nothing" would list nearly every accept
-    stale = [] if ONLY else [a["match"] for a in acc if not any(a["match"] in w for w in WARNS)]
+    # an accept names a check and the kind of warn; under --only one whose check did not run is "not evaluated", one
+    # whose check ran and matched nothing is stale (it never was under --only: PA-A4-T10a). The old substring accepts
+    # name no check, so under --only an unmatched one is not evaluated either
+    tri = CC.triage(acc, WARNS, ran if ONLY else None)
+    accepted, untriaged, stale = tri["accepted"], tri["untriaged"], tri["stale"]
+    # only when every check that can use an allow here ran: an --only interference run counted no slide or insertion use
+    unused = unused_allows() if "interference" in ran and all(k in ran or not CFG.get(sec) for k, sec in (
+        ("slide", "slide_out"), ("insertion", "assembly_order"))) else None
+    cfg_warns = config_warns(acc, tri, unused)
     REPORT["summary"] = {"pass": not FAILS, "fails": len(FAILS), "warns": len(WARNS), "untriaged_warns": len(untriaged),
                          "fail_list": FAILS, "warn_list": untriaged, "accepted_warns": accepted, "stale_accepts": stale,
+                         "accepts_not_evaluated": tri["not_evaluated"], "config_warns": cfg_warns,
+                         "accept_suggestions": [x for x in tri["legacy"] if x["use"]],
+                         "only_without_rows": empty if ONLY else [],
                          "coverage": REPORT["coverage"], "not_checked": REPORT["not_checked"], "poses_past_limits": PAST_LIMITS,
-                         "unbounded_allows": UNBOUNDED_ALLOWS,
+                         "unbounded_allows": UNBOUNDED_ALLOWS, "unused_allows": unused, "unproven_pairs": UNPROVEN_PAIRS, "notes": NOTES,
                          "runtime_s": round(time.time() - T0, 1)}
     os.makedirs(os.path.dirname(os.path.abspath(OUT)), exist_ok=True)
     with open(OUT, "w") as f:
         json.dump(REPORT, f, indent=1, default=str)
-    print("CADCHECK %s: %d fail, %d warn (%d untriaged, %d accepted) -> %s" % (
-        "PASS" if not FAILS else "FAIL", len(FAILS), len(WARNS), len(untriaged), len(accepted), OUT))
+    print("CADCHECK %s: %d fail, %d warn (%d untriaged, %d accepted), %d config warn%s -> %s" % (
+        "PASS" if not FAILS else "FAIL", len(FAILS), len(WARNS), len(untriaged), len(accepted), len(cfg_warns),
+        "" if len(cfg_warns) == 1 else "s", OUT))
     for s in FAILS[:40]:
         print("  FAIL", s)
     for s in untriaged[:25]:
         print("  warn", s)
     if len(untriaged) > 25:
         print("  ... %d more untriaged warnings in the report" % (len(untriaged) - 25))
+    for s in NOTES[:12]:
+        print("  note", s)
     if stale:
         print("  accepted_warns that matched nothing (fixed? remove them):", stale)
+    if tri["not_evaluated"]:
+        print("  accepted_warns not evaluated (their check did not run, or old substring form under --only): %d" % len(tri["not_evaluated"]))
+    if ONLY and empty:
+        print("  --only checks with no rows in the config (nothing checked):", ", ".join(empty))
+    if cfg_warns:
+        # config hygiene, apart from the design warns: not in warns / warn_list, so they never count as design noise
+        print("  config (%d):" % len(cfg_warns))
+        for x in cfg_warns[:25]:
+            print("    " + x)
+        for x in REPORT["summary"]["accept_suggestions"][:8]:
+            print("    accept %s -> %s" % (json.dumps(x["match"]), " ".join(json.dumps({k: v for k, v in u.items() if k != "why"}) for u in x["use"])))
     if PAST_LIMITS:
         # the parts are posed through their stops: a hard stop beyond a firmware limit is fine, a joint limit the model
         # has not caught up with is not (V2A4-T2). Mark intended rows "past_limit_ok": true to drop them from this list

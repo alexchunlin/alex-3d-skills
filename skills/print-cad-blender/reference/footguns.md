@@ -55,9 +55,10 @@ IDs point into `<repo>/docs/FINDINGS.md`. "Caught" means cadcheck or cadq flags 
 | V2A4-F1, V2A5-F2 | Passage gap checked at a few stations (BDC in A4; psi 50..80 in A5, real minimum at psi 90) | `distances` ray `sweep` | yes: A4 3 fails at psi 80; A5 one row gives V2R5's 8.099 at psi 90 |
 | V2A5-F1 | Detent tab 0.322 from the jar band (row `min` 0.3; the band stack typed "designed clearance 3.0") | `stacks` with `between` | yes: the designer's own terms, RSS 1.31 > 0.322, names the detent |
 | V2A5-F6 | Open `allow` on a riding detent hides any deeper clash in the gate sweep | `allow` `max_mm3`; `summary.unbounded_allows` | yes: listed; bounded at 0.1 it fails at 0.43 mm³ |
+| PA-A7-T19 | An `allow` hid a part from a slide row | allowed pairs stay in the path; a snap or detent riding the row needs `flex` | yes (rebuilt a7) |
 
 **Rule from v2 A1:** 0 fails is not done. Read every warn on your objects: fix it, or list it under `accepted_warns`
-with a reason. Three of the first v2 reviewer's twelve issues were warns in the designer's own hand-off.
+(check, kind, object) with a reason. Three of the first v2 reviewer's twelve issues were warns in the designer's own hand-off.
 
 **Rule from A2:** every sentence in the BOM or design log that states a motion, timing or service claim ("park at 0, fire
 at +60", "change the gap without disassembly", "the flywheel comes off at tilt 45") gets a `checks.json` entry

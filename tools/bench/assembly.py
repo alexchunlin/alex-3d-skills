@@ -10,7 +10,9 @@ manifest where one was archived (fastener specs, the cadlib feature log for heat
   python3 -I tools/bench/assembly.py --from-run /tmp/alex3d-bench/run-<pid> [--json out.json]
 
 Columns: printed parts; purchased parts (BUY_, not fasteners); screws; distinct screw SKUs (size x length x head,
-self-tap apart); nuts; heat-set inserts (from the manifest's feature log; n/a without one); screws threading into a
+self-tap apart); snaps and print-in-place joints (cadlib features.snap_hook / annular_snap / torsion_snap and
+pip_hinge records: the blend's cad_joins, else the manifest's "joins"; 0 for designs built before them); joins (screws +
+snaps + print-in-place: the user's v2 print had about 103 screws in 18 types across 36 parts); nuts; heat-set inserts (from the manifest's feature log; n/a without one); screws threading into a
 printed part; assembly steps (assembly_order rows); screws per printed part; rigid bodies carrying printed parts
 (parts on different joint bodies must stay separate: Boothroyd-Dewhurst's relative-motion criterion).
 
@@ -74,10 +76,14 @@ def report(att: str, spec: dict, rdir: Path) -> dict:
     nuts = [f for f in s["fasteners"] if f["nut"]]
     skus = Counter(sku(f) for f in screws)
     inserts = None
+    joins = s.get("joins") or []
     man = src / "manifest.json"
     if man.exists():
         m = json.load(open(man))
         inserts = sum(1 for x in m.get("features", []) if x.get("feature") == "screw_hole" and x.get("kind") == "insert")
+        joins = joins or m.get("joins") or []
+    pip = sum(1 for j in joins if j.get("kind") == "pip_hinge")
+    snaps = len(joins) - pip
     into_prt = None
     rep = rdir / att / "designer.json"
     if rep.exists():
@@ -86,7 +92,7 @@ def report(att: str, spec: dict, rdir: Path) -> dict:
     bodies = Counter(p["body"] for p in s["printed"])
     n = len(s["printed"])
     return {"attempt": att, "printed": n, "purchased": len(s["purchased"]), "screws": len(screws), "skus": len(skus),
-            "nuts": len(nuts), "inserts": inserts, "screws_into_printed": into_prt, "steps": len(s["assembly_order"]),
+            "snaps": snaps, "print_in_place": pip, "joins": len(screws) + snaps + pip, "nuts": len(nuts), "inserts": inserts, "screws_into_printed": into_prt, "steps": len(s["assembly_order"]),
             "screws_per_printed": round(len(screws) / n, 2) if n else None, "bodies": len(bodies),
             "printed_per_body": round(n / len(bodies), 1) if bodies else None,
             "head_unknown": sum(1 for f in screws if f.get("source") == "geometry"), "sku_counts": dict(skus.most_common()),
@@ -94,12 +100,13 @@ def report(att: str, spec: dict, rdir: Path) -> dict:
 
 
 def markdown(rows: list[dict]) -> str:
-    L = ["| design | printed | purchased | screws | screw SKUs | nuts | inserts | screws into PLA | steps | screws / printed | bodies w/ printed | printed / body |",
-         "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    L = ["| design | printed | purchased | screws | screw SKUs | snaps | print-in-place | joins | nuts | inserts | screws into PLA | steps | screws / printed | bodies w/ printed | printed / body |",
+         "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         na = lambda v: "n/a" if v is None else str(v)
-        L.append("| %s | %d | %d | %d | %d%s | %d | %s | %s | %d | %.2f | %d | %.1f |" % (
-            r["attempt"], r["printed"], r["purchased"], r["screws"], r["skus"], " (head ?)" if r["head_unknown"] else "", r["nuts"],
+        L.append("| %s | %d | %d | %d | %d%s | %d | %d | %d | %d | %s | %s | %d | %.2f | %d | %.1f |" % (
+            r["attempt"], r["printed"], r["purchased"], r["screws"], r["skus"], " (head ?)" if r["head_unknown"] else "",
+            r["snaps"], r["print_in_place"], r["joins"], r["nuts"],
             na(r["inserts"]), na(r["screws_into_printed"]), r["steps"], r["screws_per_printed"] or 0, r["bodies"], r["printed_per_body"] or 0))
     return "\n".join(L)
 

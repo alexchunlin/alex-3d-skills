@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>alex-3d-skills · status</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Condensed:wght@500;700&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="@style/tokens.css">
+<script src="@style/ax-charts.js"></script>
+<script src="@style/ax-fx.js"></script>
+<style>
+  body { margin: 0; }
+  .ax-page { max-width: 1240px; }
+  .ax-tiles { grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); }
+  .two { grid-template-columns: 1.5fr 1fr; }
+  .half { grid-template-columns: 1fr 1fr; }
+  .three { grid-template-columns: repeat(3, 1fr); }
+  .four { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 900px) { .two, .half, .three, .four { grid-template-columns: 1fr; } }
+  .ax .lede { color: var(--ax-muted); max-width: 88ch; margin: -8px 0 22px; }
+  .ax .lede b { color: var(--ax-ink); font-weight: 500; }
+  .sec { font: 500 11px var(--ax-font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ax-muted);
+         margin: 30px 0 10px; display: flex; align-items: center; gap: 10px; }
+  .sec::after { content: ""; flex: 1; border-top: 1px solid var(--ax-rule); }
+  .find { display: flex; flex-direction: column; gap: 6px; transition: border-color 0.15s; }
+  .find:hover { border-color: var(--ax-border-strong); }
+  .find h2 { text-transform: none; letter-spacing: 0.02em; font-size: 16px; }
+  .find p { margin: 0; font-size: 13px; color: var(--ax-ink); }
+  .find .ref { margin-top: auto; padding-top: 6px; font: 11px var(--ax-font-mono); color: var(--ax-muted); }
+  .find .big { font: 500 22px/1 var(--ax-font-mono); color: var(--ax-accent); }
+  .find .big small { font-size: 0.5em; color: var(--ax-muted); margin-left: 3px; }
+  .ev figure { background: #fff; border: 1px solid var(--ax-border); }
+  .ev img { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; }
+  .ev figcaption { background: var(--ax-panel); margin: 0; padding: 8px 10px; border-top: 1px solid var(--ax-border); }
+  .ax td { font-size: 13px; vertical-align: top; }
+  tr.hero td { color: var(--ax-accent); }
+  td.pr a, .ref a, .lede a { color: var(--ax-ink); text-decoration: none; border-bottom: 1px dotted var(--ax-muted); }
+  td.pr a:hover { color: var(--ax-accent); border-color: var(--ax-accent); }
+  .scroll { max-height: 520px; overflow: auto; }
+  .notes { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 8px; padding-top: 20px; border-top: 1px solid var(--ax-border); }
+  .notes ul { margin: 6px 0 0; padding-left: 18px; color: var(--ax-ink); font-size: 13px; }
+  .notes li { margin-bottom: 6px; }
+  .notes li::marker { color: var(--ax-accent); }
+  footer { margin-top: 28px; font: 11px var(--ax-font-mono); color: var(--ax-muted); }
+  @media print {
+    .ax-mast button { display: none; }
+    .scroll { max-height: none; overflow: visible; }
+    .ax-panel, .find, figure { break-inside: avoid; }
+  }
+</style>
+</head>
+<body class="ax">
+<main class="ax-page">
+  <header class="ax-mast">
+    <div>
+      <h1>alex-3d-skills</h1>
+      <div class="ax-meta">
+        <span>v0.1</span><span>190 commits</span><span>22 PRs</span><span>2026-10-24 to 10-29</span>
+        <span class="ax-status good">Public</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="ax-btn" id="mode">Light mode</button>
+      <button class="ax-btn primary" id="pdf" data-fx="ripple">Export PDF</button>
+    </div>
+  </header>
+
+  <p class="lede">Skills and tools that let Claude agents design <b>3D-printable assemblies in headless Blender</b>, then check
+    them like a reviewer would: joint sweeps, fastener access, insertion order, cable bends, print supports. Every rule
+    traces back to a finding from a real design loop. Two projects ran through it: the <b>M&amp;M launcher</b> (v1 with no
+    tools, v2 with them) and a <b>chair push-assist</b> unit.</p>
+
+  <section class="ax-tiles">
+    <div class="ax-tile"><div class="ax-label">Best v2 score</div><div class="ax-value" data-to="26">0<small>/ 30</small></div><div class="ax-sub">9/8/9 F/M/A · v1 best 18</div></div>
+    <div class="ax-tile"><div class="ax-label">Fastest attempt</div><div class="ax-value" data-to="50.5" data-d="1">0<small>min</small></div><div class="ax-sub">v2 A7 · v1 best 66.1</div></div>
+    <div class="ax-tile"><div class="ax-label">Output tokens</div><div class="ax-value" data-to="173">0<small>k</small></div><div class="ax-sub">v2 A7 · v1 best 352k</div></div>
+    <div class="ax-tile"><div class="ax-label">PRs merged</div><div class="ax-value" data-to="22">0</div><div class="ax-sub">#1-#22, Oct 26-29</div></div>
+    <div class="ax-tile"><div class="ax-label">Push-assist gaps closed</div><div class="ax-value" data-to="13">0<small>/ 14</small></div><div class="ax-sub"><span class="ax-status warning">1 partial</span></div></div>
+    <div class="ax-tile"><div class="ax-label">False fails on replay</div><div class="ax-value" data-to="0">0</div><div class="ax-sub">10 archived designs, 77 labels</div></div>
+  </section>
+
+  <section class="ax-grid two">
+    <div class="ax-panel">
+      <h2>Review score per attempt</h2>
+      <div class="ax-cap">Functionality + manufacturability + aesthetics, each scored 0-10 by an independent reviewer agent</div>
+      <div class="ax-legend" id="lg1"></div>
+      <svg id="score"></svg>
+    </div>
+    <div class="ax-panel">
+      <h2>Commits per day</h2>
+      <div class="ax-cap">Red marks Oct 27: the push-assist harvest and 10 merges</div>
+      <svg id="commits"></svg>
+    </div>
+  </section>
+
+  <section class="ax-grid half">
+    <div class="ax-panel">
+      <h2>Wall time per attempt</h2>
+      <div class="ax-cap">Designer plus reviewer, end to end. v2 A1 ran its builders in series.</div>
+      <div class="ax-legend" id="lg2"></div>
+      <svg id="wall"></svg>
+    </div>
+    <div class="ax-panel">
+      <h2>Output tokens per attempt</h2>
+      <div class="ax-cap">Designer plus reviewer, thinking included</div>
+      <div class="ax-legend" id="lg3"></div>
+      <svg id="tok"></svg>
+    </div>
+  </section>
+
+  <div class="sec">Findings</div>
+  <section class="ax-grid three">
+    <div class="ax-panel find">
+      <div class="ax-label">mm-launcher v1 vs v2</div>
+      <h2>Tools halved the cost of an attempt</h2>
+      <div class="big">50.5<small>min</small> · 173<small>k tok</small></div>
+      <p>v2 A7 scored 9/8/9. The best no-tools attempt (v1 A3) took 66.1 min and 352k tokens for 6/6/6. Wall time fell from 187.5 min (A1) to 50.5 (A7) as the checks absorbed what reviewers kept finding.</p>
+      <div class="ref">STATUS.md · v1 baseline vs v2</div>
+    </div>
+    <div class="ax-panel find">
+      <div class="ax-label">Harvest loop</div>
+      <h2>Reviewer findings become checks</h2>
+      <div class="big">3<small>of 4</small></div>
+      <p>After each attempt I turned the reviewer's issues into cadcheck rules: swept rays (A4), insertion paths (A6), held servo poses and cable kinks (A7). Replayed on the A7 design, 3 of the reviewer's 4 issues now come up as warnings before review.</p>
+      <div class="ref">FINDINGS.md · V2A4-F1, V2A6-F1, V2A7-F1/F2</div>
+    </div>
+    <div class="ax-panel find">
+      <div class="ax-label">Printability</div>
+      <h2>The v2 design shipped 4 parts that need supports</h2>
+      <div class="big">4<small>missed</small> · 0<small>false</small></div>
+      <p>jar_valve, feeder_cover, base_shell and post_R said "supports: no". The old check measured their overhangs as short bridges. The new layer check slices every 0.2 mm and finds the cantilevers. jar_valve was printed on Oct 26 and drooped.</p>
+      <div class="ref">FINDINGS.md · V2PF-1 · cad printcheck</div>
+    </div>
+    <div class="ax-panel find">
+      <div class="ax-label">Adoption</div>
+      <h2>Agents skip tools unless the structure forces them</h2>
+      <div class="big">0<small>calls</small></div>
+      <p>Push-assist had fastener_joint, route and blend, and SKILL.md pointed to all three. Designers read those lines and never called them: the coordinator judged migrating the old build "a large undertaking" and wrote a converter instead.</p>
+      <div class="ref">FINDINGS.md · PA-A0-T1</div>
+    </div>
+    <div class="ax-panel find">
+      <div class="ax-label">Push-assist loop</div>
+      <h2>Each fix brought the next blocker</h2>
+      <div class="big">8<small>attempts</small> · 9.9<small>h</small></div>
+      <p>Best 8/8/9, no pass. A7 fell to 4/4/9 on a load-cell slot 0.2 mm short, a part two cadcheck defaults kept invisible for two rounds. Both defaults are fixed (PR #18, #19), and 11 more of the loop's 14 tool gaps are closed.</p>
+      <div class="ref">FINDINGS.md · PA-A7-T19</div>
+    </div>
+    <div class="ax-panel find">
+      <div class="ax-label">CADGenBench, 10 drawings</div>
+      <h2>Drawing tools add 0.07</h2>
+      <div class="big">0.643<small>to</small> 0.711</div>
+      <p>OCR, measuring, hole finding and a render-and-diff overlay lifted the Blender arm on 8 of 10 test drawings (paired t about 2.5, p about 0.03). Most of the gain is interface match. build123d without tools scored 0.699.</p>
+      <div class="ref">feat/drawing-tools</div>
+    </div>
+    <div class="ax-panel find">
+      <div class="ax-label">Model routing</div>
+      <h2>Sonnet builds as well as Opus at half the cost</h2>
+      <div class="big">24<small>/ 24</small></div>
+      <p>On the pan-tilt mates task, Opus and Sonnet scored 24/24 on every run. Haiku fell to 14-21 on mates by floating parts on a gap. Builders now run on Sonnet; plan, finish and review stay on the session model.</p>
+      <div class="ref">PR #13 · cad-loop CONFIG.models</div>
+    </div>
+    <div class="ax-panel find">
+      <div class="ax-label">Slicing</div>
+      <h2>Headless Bambu Studio crashes; printcheck decides</h2>
+      <div class="big">0.2<small>s to crash</small></div>
+      <p>Bambu Studio 02.05.00.66 crashed in its smoke test and in 10 unguarded agent runs. cad slice now runs any slicer sandboxed (no network, temp dir only) and crash-guarded, so the crash never reaches the user.</p>
+      <div class="ref">FINDINGS.md · V2PF-2 · slicers/known.json</div>
+    </div>
+    <div class="ax-panel find">
+      <div class="ax-label">Prior art, measured</div>
+      <h2>Nothing off the shelf replaces cadcheck</h2>
+      <div class="big">0.274<small>vs</small> 0.373<small>mm</small></div>
+      <p>I ran dfam-check, Blender's 3D-Print Toolbox and cadsmith's mech on the same designs. None checks fasteners, insertion or slide-out. mech's exact distance did beat cadcheck's sampled one on A1-F5, so that goes on the follow-up list.</p>
+      <div class="ref">tools/prior_art/README.md</div>
+    </div>
+  </section>
+
+  <div class="sec">What the layer check caught</div>
+  <section class="ax-grid four ev">
+    <figure><img src="@img/jar_valve" alt="jar_valve render with three red cantilever tabs"><figcaption><b>jar_valve.</b> 3 tabs, 5.5 mm cantilevers at z 2. Printed without supports: drooped.</figcaption></figure>
+    <figure><img src="@img/jar_valve_map" alt="printcheck layer map of a jar_valve tab"><figcaption><b>Layer map, z 2.0.</b> Red is unsupported; green is the edge it hangs from.</figcaption></figure>
+    <figure><img src="@img/feeder_cover" alt="feeder_cover render"><figcaption><b>feeder_cover.</b> 2 ears, 10.5 mm out at z 32. The old check called them bridges.</figcaption></figure>
+    <figure><img src="@img/nacelle" alt="nacelle render"><figcaption><b>nacelle.</b> Negative control: real bridges, passes. So do beam, crown and the flywheel ring.</figcaption></figure>
+  </section>
+
+  <div class="sec">Attempts</div>
+  <section class="ax-panel">
+    <h2>mm-launcher: v1 baseline vs v2</h2>
+    <div class="ax-cap">v1 had no tools. v2 used this repo, pinned to main at each attempt. Issues are the reviewer's blockers / majors / minors.</div>
+    <table>
+      <thead><tr><th>Loop</th><th>Attempt</th><th class="num">Wall, min</th><th class="num">Output tok</th><th class="num">F/M/A</th><th class="num">Issues B/M/m</th><th class="num">Peak ctx</th><th>Caught before review</th></tr></thead>
+      <tbody id="attempts"></tbody>
+    </table>
+  </section>
+
+  <div class="sec">Tool gaps from the push-assist loop</div>
+  <section class="ax-panel">
+    <h2>14 ranked candidates, status on next</h2>
+    <div class="ax-cap">Ranked by evidence in the loop log. On Oct 27, 2 were planned and 12 open.</div>
+    <table>
+      <thead><tr><th class="num">#</th><th>Candidate</th><th>Evidence</th><th>Status</th><th>PR</th></tr></thead>
+      <tbody id="cands"></tbody>
+    </table>
+  </section>
+
+  <div class="sec">Now</div>
+  <section class="ax-grid two">
+    <div class="ax-panel">
+      <h2>In flight</h2>
+      <div class="ax-cap">Work after v0.1</div>
+      <table>
+        <thead><tr><th>Item</th><th>State</th><th>Next step</th></tr></thead>
+        <tbody>
+                    <tr><td>feat/mate-connectors</td><td><span class="ax-status warning">No PR</span></td><td>7 commits. Fix 7 selector self-test fails, then blind review.</td></tr>
+          <tr><td>feat/drawing-tools</td><td><span class="ax-status warning">No PR</span></td><td>4 commits. Pose-aware overlay, faster renders, small and faint holes.</td></tr>
+          <tr><td>v2 attempt 8</td><td><span class="ax-status">Pending</span></td><td>Ran on fb54dbb. Harvest: count insertion and drift warns and the time spent triaging them.</td></tr>
+          <tr><td>PrusaSlicer</td><td><span class="ax-status">Pending</span></td><td>Install to give cad slice a usable slicer.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="ax-panel">
+      <h2>How work lands</h2>
+      <div class="ax-cap">The rules every change follows</div>
+      <table>
+        <tbody>
+          <tr><td class="time">feat/*</td><td>PR into next after a blind review and the PR's own verify.d tests</td></tr>
+          <tr><td class="time">next</td><td>One full verify_all plus the replay bench per day</td></tr>
+          <tr><td class="time">main</td><td>Promoted by PR after a full pass; the v2 loop pins it</td></tr>
+          <tr><td class="time">evidence</td><td>Every rule or tool points at a finding ID in FINDINGS.md</td></tr>
+          <tr><td class="time">new code</td><td>Each PR says why the existing code wasn't enough, with a measurement</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="sec" id="prlist">Pull requests</div>
+  <section class="ax-panel">
+    <h2>Merged</h2>
+    <div class="ax-cap">Most recent first. All went to next except #7, the one promotion to main.</div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th class="num">#</th><th>Title</th><th>Into</th><th>Merged</th></tr></thead>
+        <tbody id="prs"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="notes">
+    <div>
+      <h2>Known gaps</h2>
+      <ul>
+        <li>A slide_out removal row that stops short of clear still passes (V2R7 A7-03).</li>
+        <li>Insertion is straight-line only. Parts made in place, like a soldered splice, need insert_ok.</li>
+        <li>Rows whose limit follows the geometry pass by construction (V2A5-F1).</li>
+        <li>cad slice's G-code parsing has only met stand-in output; no real slicer is installed.</li>
+        <li>Creep and fatigue are out of scope. Gear tooth tips read as thin walls.</li>
+      </ul>
+    </div>
+    <div>
+      <h2>What's in the repo</h2>
+      <ul>
+        <li><code>print-cad-blender</code>: cadlib (geometry, print features, assembly, export), cadcheck, cadq and the <code>cad</code> wrapper.</li>
+        <li><code>cad-design-review</code>: the reviewer's check-first protocol and scoring anchors.</li>
+        <li><code>cad-loop.workflow.js</code>: plan, parallel builders, finish, review. Resumable, model per role.</li>
+        <li><code>verify_all.sh</code>: re-proves every claim against 10 archived designs in about 28 min.</li>
+        <li><code>tools/bench</code>: replay recall and noise; <code>cc_transcript.py</code>: agent time and token cost.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>v0.1 snapshot, data through 2026-10-29 · sources: docs/STATUS.md, docs/FINDINGS.md, tools/bench/results/replay.jsonl, gh pr list</footer>
+</main>
+
+<script>
+const v1 = { name: 'v1 no tools', score: [16, 17, 18], wall: [82.6, 97.0, 66.1], tok: [481, 520, 352] };
+const v2 = { name: 'v2 tools', score: [20, 25, 24, 26, 26, 26, 26], wall: [187.5, 150.0, 145.8, 91.5, 93.3, 76.9, 50.5], tok: [902, 524, 474, 266, 314, 213, 173] };
+const pa = { name: 'push-assist', score: [17, 17, 22, 23, 23, 25, 17, 25], wall: [26.1, 37.9, 105.4, 81.7, 100.7, 44.3, 108.9, 87.2], tok: [93, 141, 395, 350, 425, 154, 466, 301] };
+const loops = [v1, v2, pa];
+
+const attempts = [
+  ['v1', 1, '82.6', '481k', '5/6/5', '18 total', '522k', 'counterfactual 7'],
+  ['v1', 2, '97.0', '520k', '6/5/6', '1/3/6', '698k', 'counterfactual 8 of 10'],
+  ['v1', 3, '66.1', '352k', '6/6/6', '0/4/4', '488k', 'counterfactual 6 of 8'],
+  ['v2', 1, '187.5', '902k', '7/7/6', '0/5/7', '348k', '3 of 12, as unread warns; now 4'],
+  ['v2', 2, '150.0', '524k', '8/8/9', '0/2/6', '340k', '2 of 6; now 5'],
+  ['v2', 3, '145.8', '474k', '8/8/8', '0/1/5', '257k', '0 of 6; now 5 of 6'],
+  ['v2', 4, '91.5', '266k', '8/9/9', '0/1/2', '200k', '0 of 1; now 1 of 1'],
+  ['v2', 5, '93.3', '314k', '9/8/9', '0/1/5', '240k', '1 of 4 (waived); now 3 of 4'],
+  ['v2', 6, '76.9', '213k', '9/8/9', '0/1/2', '193k', '0 of 3; now 3 of 3'],
+  ['v2', 7, '50.5', '173k', '9/8/9', '0/1/3', '164k', '0 of 4; now 3 of 4'],
+];
+
+const cands = [
+  [1, 'slide_out keeps allowed pairs as obstacles', 'PA-A7-T19a', 1, 18],
+  [2, 'insertion tests same-step parts; off-axis probe', 'PA-A7-T19b/c', 1, 19],
+  [3, 'First-class calcs block', 'PA-A6-T9', 1, 20],
+  [4, 'Per-part print settings in manifest and 3MF', 'PA-A8-T13', 1, 20],
+  [5, 'Report allows that never overlap as unused', 'PA-A8-T6', 1, 18],
+  [6, 'Locate overhangs per part, per-layer sections', 'PA-A2-T7, PA-A8-T15', 1, 11],
+  [7, 'Config hygiene: unknown keys, --only gaps, accept matching', 'PA-A4-T6/T10', 1, 10],
+  [8, 'A failed =expr is a config fail, not a crash', 'PA-A5-T26', 1, 10],
+  [9, 'csg cut faces keep the part\'s material', 'PA-A4-T14', 1, 17],
+  [10, 'Flexure stress computed; moving sub-bodies', 'PA-A3-T21/T22', 0, 22],
+  [11, 'Material allowables table', 'PA-A6-T10', 1, 20],
+  [12, 'Screw heads and nuts vs their own body', 'PA-A2-T12', 1, 9],
+  [13, 'One STL reader, ASCII or binary', 'PA-A3-T9, PA-A5-T13', 1, 17],
+  [14, 'Fastener access hint: where a bit clears', 'PA-A3-T10', 1, 17],
+];
+
+const prs = [
+  [22, 'Snap fits and print-in-place hinges: sized by features, checked from their records', 'next', '10-29'],
+  [21, 'cadcheck: prove coaxial turns between samples; unproven pairs counted apart', 'next', '10-28'],
+  [20, 'calcs block, material allowables, per-part print settings in manifest/3MF/STL, printed-section I_eff', 'next', '10-28'],
+  [19, 'insertion: test a step\'s parts against each other; bounded allows stay obstacles; off-axis probe', 'next', '10-28'],
+  [18, 'cadcheck: slide_out keeps allowed pairs as obstacles; unused allows are config warns', 'next', '10-28'],
+  [17, 'Small fixes: csg cut faces keep the part\'s material, one ASCII/binary STL reader, fastener bit-access hints', 'next', '10-28'],
+  [16, 'cadcfg.sh: self-contained, so verify_all --changed selects it narrowly', 'next', '10-28'],
+  [15, 'docs: push-assist skill and checklist items and the cadlib adoption gap', 'next', '10-28'],
+  [14, 'cadcheck: interference between samples with swept envelopes', 'next', '10-28'],
+  [13, 'cad-loop: choose the model per role; builders on Sonnet', 'next', '10-27'],
+  [12, 'verify_all --changed: run only the tests a change affects', 'next', '10-27'],
+  [11, 'printcheck: sloped overhangs, where they are, STL edges in >2 faces', 'next', '10-28'],
+  [10, 'cadcheck: config hygiene (unknown keys warn, --only gaps, accepts by check + kind)', 'next', '10-27'],
+  [9, 'cadcheck: fail a screw head or nut that overlaps a solid on its own body', 'next', '10-27'],
+  [8, 'docs: harvest the push-assist review loop into FINDINGS and STATUS', 'next', '10-27'],
+  [7, 'Promote next to main: reviewed PRs #1-#5', 'main', '10-27'],
+  [6, 'prior_art: measure agent-CAD prior art (dfam-check, 3D-Print Toolbox, cadsmith mech)', 'next', '10-27'],
+  [5, 'Bench: replay recall, false fails and warn load on the 10 archived designs', 'next', '10-26'],
+  [4, 'cadlib: grown connectors (blend.grow) and swept-envelope keep-outs', 'next', '10-26'],
+  [3, 'cadlib.route: automatic cable router (grid + A* + bend-radius fillets, slack across joints)', 'next', '10-26'],
+  [2, 'cadlib: features.fastener_joint, one call that measures, sizes, cuts and places a fastened joint', 'next', '10-26'],
+  [1, 'Design principles: an on-demand form-language reference', 'next', '10-26'],
+];
+
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const repo = 'https://github.com/alexchunlin/alex-3d-skills/pull/';
+document.getElementById('attempts').innerHTML = attempts.map(r =>
+  `<tr class="${r[0] === 'v2' && r[1] === 7 ? 'hero' : ''}"><td>${r[0]}</td><td class="num">${r[1]}</td>` +
+  r.slice(2, 7).map(c => `<td class="num">${c}</td>`).join('') + `<td>${esc(r[7])}</td></tr>`).join('');
+document.getElementById('cands').innerHTML = cands.map(([n, c, ev, done, pr]) =>
+  `<tr><td class="num">${n}</td><td>${esc(c)}</td><td class="time">${ev}</td>` +
+  `<td>${done ? '<span class="ax-status good">Fixed</span>' : '<span class="ax-status warning">Partial</span>'}</td>` +
+  `<td class="pr"><a href="${repo}${pr}">#${pr}</a></td></tr>`).join('');
+document.getElementById('prs').innerHTML = prs.map(([n, t, into, d]) =>
+  `<tr><td class="num pr"><a href="${repo}${n}">#${n}</a></td><td>${esc(t)}</td><td class="time">${into}</td><td class="time">2026-${d}</td></tr>`).join('');
+
+function legend(id) {
+  const lg = document.getElementById(id); lg.innerHTML = '';
+  loops.forEach((s, k) => { const e = document.createElement('span'); e.style.setProperty('--c', `var(--ax-s${k + 1})`); e.textContent = s.name; lg.appendChild(e); });
+}
+const att = i => `A${i + 1}`;
+function draw() {
+  ['lg1', 'lg2', 'lg3'].forEach(legend);
+  const ser = key => loops.map(s => ({ name: s.name, values: s[key] }));
+  axLine(document.getElementById('score'), { series: ser('score'), yTicks: [10, 15, 20, 25, 30], digits: 0, unit: '/ 30',
+    x: att, xTicks: [0, 1, 2, 3, 4, 5, 6, 7], refLine: { value: 27, label: 'pass: 9/9/9', status: 'good' },
+    xLabel: 'Attempt', yLabel: 'Score F+M+A, points', width: 700, padR: 92 });
+  axBars(document.getElementById('commits'), { rows: [['Oct 24', 23], ['Oct 25', 19], ['Oct 26', 40], ['Oct 27', 78], ['Oct 28', 22], ['Oct 29', 8]],
+    max: 80, ticks: [0, 20, 40, 60, 80], highlight: 'Oct 27', unit: 'commits', xLabel: 'Commits, count', yLabel: 'Day, 2026' });
+  axLine(document.getElementById('wall'), { series: ser('wall'), yTicks: [0, 50, 100, 150, 200], digits: 1, unit: 'min',
+    x: att, xTicks: [0, 1, 2, 3, 4, 5, 6, 7], xLabel: 'Attempt', yLabel: 'Wall time, min', width: 560, padR: 92 });
+  axLine(document.getElementById('tok'), { series: ser('tok'), yTicks: [0, 250, 500, 750, 1000], digits: 0, unit: 'k',
+    x: att, xTicks: [0, 1, 2, 3, 4, 5, 6, 7], xLabel: 'Attempt', yLabel: 'Output tokens, thousands', width: 560, padR: 92 });
+}
+
+// Tiles count up once on load
+function countUp() { document.querySelectorAll('.ax-value[data-to]').forEach((el, i) =>
+  setTimeout(() => axSet(el, +el.dataset.to, { digits: +(el.dataset.d || 0), ms: 900 }), 120 * i)); }
+
+document.getElementById('mode').onclick = e => {
+  const light = document.documentElement.dataset.mode !== 'light';
+  document.documentElement.dataset.mode = light ? 'light' : '';
+  e.target.textContent = light ? 'Dark mode' : 'Light mode';
+  draw();
+};
+// PDF goes out in light mode, the print palette
+document.getElementById('pdf').onclick = e => {
+  const b = e.currentTarget, wasLight = document.documentElement.dataset.mode === 'light';
+  axBusy(b, true, 'Preparing');
+  document.documentElement.dataset.mode = 'light'; draw();
+  setTimeout(() => {
+    window.print();
+    if (!wasLight) { document.documentElement.dataset.mode = ''; draw(); }
+    axBusy(b, false);
+  }, 300);
+};
+if (location.hash === '#light') document.getElementById('mode').click(); else draw();
+document.fonts.ready.then(() => { draw(); countUp(); });
+</script>
+</body>
+</html>

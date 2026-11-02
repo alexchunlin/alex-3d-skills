@@ -19,11 +19,11 @@ Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X
 | `prism(name, poly, w0, w1, axis)`, `loft(name, p0, p1, w0, w1, axis)` | extrusions; loft rings need equal point counts |
 | `cyl(name, c, r, w0, w1, axis)`, `cone(name, c, r0, r1, w0, w1, axis)`, `box(name, x0, x1, y0, y1, z0, z1)` | |
 | `revolve(name, [(r, z), ...], center, n=96, a0=0, a1=None)` | about Z; partial when `a1` is given |
-| `csg(base, add=[], sub=[], inter=[])` | Manifold solver, applies the result and deletes the tools; raises `CSGError` if the result isn't a closed solid |
+| `csg(base, add=[], sub=[], inter=[])` | Manifold solver, applies the result and deletes the tools; new faces take the base's material; raises `CSGError` if the result isn't a closed solid |
 | `bevel(ob, w, seg=1, angle=40)` | edge break; apply before booleans that cut fine detail |
 | `xform(ob, M4)`, `frame(origin, u, v, w)` | bake a transform; build a placement matrix |
 | `join(name, obs)` | merge shells without booleans (purchased placeholders only) |
-| `import_stl(path, name)` | e.g. `reference/mg_axis.stl` as a placeholder |
+| `import_stl(path, name)` | e.g. `reference/mg_axis.stl` as a placeholder. Plain Python (no Blender): `printcheck.read_stl(path)`, ASCII or binary |
 | `swept_envelope(...)`, `cadlib.blend` | keep-outs for moving parts; organic connectors grown around tubes and parts: `reference/blend.md` (`Tube` clearance is radial) |
 
 ## features: print features
@@ -33,6 +33,7 @@ Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X
 | Call | Notes |
 |---|---|
 | `fastener_joint(name, size, at, into, parts, style="selftap", head="cap", sink=0, cuts=None, ...)` | **Use this when a screw is the right join.** Measures the stack of `parts` (uncut solids with their final `PRT_`/`BUY_` names; a part already holed on the axis, like a purchased board, is clamped, not cut), picks a stock length that meets the rule (reusing one already in the build when it fits), cuts each part and places the FST plus nut or insert. `style`: `selftap`, `nut` (trap in the last part; `trap=False` for a nut on its face), `insert`, `tapped` (purchased part, `depth=` of its tapped hole). Self-tap and insert holes are blind unless `through_ok=True`. Returns `{part name: [cutters]}`; pass `cuts=` to accumulate. Raises `FastenerError` with the fix: reversed screw, buried head or sloped seat, air gap, self-tap into a purchased part, too little thread, host too shallow, countersink knife edge. M2 to M5 is the `size` argument. |
+| `snap_hook`, `annular_snap`, `torsion_snap`, `pip_hinge` | snaps and printed hinges: [snaps.md](snaps.md) |
 | `screw_hole(at, into, length, kind, head="cap", sink=0, clamp=0, print_up=None, size="M3")` | `kind`: `selftap` (Ø2.5), `clearance` (Ø3.4), `clamp` (Ø3.4 for `clamp` mm then Ø2.5), `tap` (Ø3.4 then the PLA-tap hole), `insert` (Ø3.4, a heat-set pocket, then Ø3.4 past it). Diameters are M3; `size` picks another row of `SIZES`. `sink` gives a counterbore depth. `head="csk"` cuts a countersink. `print_up` turns horizontal holes into teardrops. |
 | `nut_trap(at, into, depth=None, af=5.7, rot_deg=0, slot_dir=None, slot_len=0, size="M3")` | hex pocket, optional side-entry slot |
 | `boss(at, into, od, height)` | cylinder grown back from `at` (against `into`); union it, then cut the hole |
@@ -51,7 +52,7 @@ Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X
 | `new_scene(params=dict)` | mm units, clears registries; `params` go into the manifest |
 | `joint("PIV_x", loc, axis, lo, hi, parent=None, home=0, step=None, continuous=False, couple_to=None, couple_ratio=1, prismatic=False)` | create joints before parts that hang under them; `prismatic=True` slides along +axis, values in mm (gates, drawers) |
 | `set_pose(PIV_pan=30, PIV_tilt=45)` | unlisted joints go home; coupled joints follow |
-| `part(ob, name, kind, color, joint=None, **info)` | `PRT` needs `stl, print_rot, orient, supports` (plus `infill`); `BUY` should give `mass_g, src`. Colours: `"pla_a"`, `"pla_b"`, `"buy"`, `"buy_metal"`, `"pcb"`, or an RGBA tuple. |
+| `part(ob, name, kind, color, joint=None, **info)` | `PRT` needs `stl, print_rot, orient, supports` (plus `infill`); print settings: [materials.md](materials.md); `BUY` should give `mass_g, src`. Colours: `"pla_a"`, `"pla_b"`, `"buy"`, `"buy_metal"`, `"pcb"`, or an RGBA tuple. |
 | `R_ID, R_FLIP, R_PX_DOWN, R_NX_DOWN, R_PY_DOWN, R_NY_DOWN` | common `print_rot` values |
 | `fastener(name, at, into, length, spec="M3_cap", joint=None, host=None, step=None)` | `spec`: `<size>_cap`, `_pan`, `_csk` for every size in `SIZES` (M2 to M5), plus `M3_selftap_pan` and `M3_hex`; use stocked lengths (cadcheck warns otherwise) |
 | `nut(name, at, into, joint=None, af=None, h=None, step=None, size="M3")` | hex nut, bearing face at `at`; cadcheck checks the bolt on its axis reaches through it |
@@ -114,7 +115,7 @@ Four v2 A1 agents read cadq.py to get this right.
 
 | Call | Notes |
 |---|---|
-| `E.export_stls(dir)` | one STL per unique `stl` name, in print orientation; deletes stale STLs; returns `{name: qty}` |
+| `E.export_stls(dir)` | one STL and 3MF per unique `stl` name, in print orientation; deletes stale STLs; returns `{name: qty}` |
 | `E.save_blend(path)` | removes scratch objects, goes to the home pose, saves, deletes the `.blend1` backup |
 | `R.view_set(outdir, poses={name: {joint: deg}})` | iso, iso_front_left, front, side, top, rear, plus one iso per pose. 960 px by default; `CAD_RENDER_FINAL=1` gives 1800 px. |
 | `R.section(outdir, fname, axis, val, cam_loc, cam_tgt, ortho, keep_side="-", scope={joints})` | cut faces in yellow; closed solids are cut with Manifold |
