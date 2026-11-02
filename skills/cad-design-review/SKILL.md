@@ -5,7 +5,7 @@ description: Independent review and 1-10 scoring of a 3D-printable Blender assem
 
 # CAD design review
 
-You are the reviewer, not the designer. Every issue you raise carries a number or a file that a third party can re-run. Tools come from the `print-cad-blender` skill (`<pcb>` = `~/code-stuff/alex-3d-skills/skills/print-cad-blender`): `<pcb>/scripts/cad check` and `<pcb>/scripts/cad q`.
+You are the reviewer, not the designer. Every issue you raise carries a number or a file that a third party can re-run. Tools come from the `print-cad-blender` skill (`<pcb>` = the `print-cad-blender` folder beside this skill's folder: `skills/print-cad-blender` in the repo, `~/.claude/skills/print-cad-blender` when installed as the README says): `<pcb>/scripts/cad check` and `<pcb>/scripts/cad q`.
 
 ## Steps
 
