@@ -3,7 +3,8 @@
 # The turret cases are cad_diff.sh (issue #30).
 # watch: skills/print-cad-blender/scripts/cad skills/print-cad-blender/scripts/caddiff.py skills/print-cad-blender/scripts/cadcfg.py
 # needs: 4i 4k
-# Sourced by tools/verify_all.sh (uses $V, calls ok/bad). Plain python3 on 4i's and 4k's reports, under a second.
+# Sourced by tools/verify_all.sh (uses $CAD $V, calls ok/bad, nochecks without 4i's and 4k's reports). Plain python3
+# on their reports, under a second.
 CD="$V/cad-diff"; mkdir -p "$CD"
 if [ -f "$V/v2a6/cadcheck.json" ] && [ -f "$V/v2a7/cadcheck.json" ]; then
   agree=0

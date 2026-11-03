@@ -33,7 +33,14 @@ ALWAYS = {"config", "build"}          # pseudo-checks every run reports
 # clearance floor); removing one of these tightens. Any other section's removed row is a requirement gone.
 LOOSEN_ON_ADD = {"allow", "accepted_warns", "fits", "cable_junctions_ok", "exposure.cables_ok", "exposure.nuts_ok",
                  "fasteners.stock_ok", "unordered_ok"}
-HIGHER_LOOSER = {"overhang_deg", "min_escape", "sweep_tol", "vol_tol", "dist_tol"}
+HIGHER_LOOSER = {"overhang_deg", "min_escape", "sweep_tol", "vol_tol", "dist_tol", "envelope_voxel"}
+# fewer poses sampled, less overtravel swept: the check looks at less (review of PR #53: max_poses_per_group lowered
+# read as "tightened" by the max* rule)
+LOWER_LOOSER = {"max_poses_per_group", "max_guard_poses", "envelope_max_poses", "overtravel_deg", "overtravel_mm"}
+# a list field whose added members skip something (slide_out / drop ignore lists, *_ok lists)
+LIST_LOOSE = {"ignore"}
+# fields that say which objects a row is about: a row whose objects change is another requirement, not a rename
+ROW_OBJ = ("a", "b", "object", "objects", "part", "test", "check", "kind", "op", "step")
 MANIFEST_PART_KEYS = ("part", "spec", "length", "host", "joint", "step", "stl", "supports", "mass_g", "lead_len")
 NUM = re.compile(r"(?<![\w.])[-+]?\d+(?:\.\d+)?")
 _TMPL = None
@@ -180,8 +187,12 @@ def looser(path, x, y):
         if name.endswith("_ok") or name in ("any", "home_only_ok", "past_limit_ok", "insert_ok"):
             return "loosened" if y else "tightened"
         return "changed"
+    if isinstance(x, list) and isinstance(y, list) and (name in LIST_LOOSE or name.endswith("_ok")):
+        return "loosened" if [v for v in y if v not in x] else "tightened"
     if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
         return "changed"
+    if name in LOWER_LOOSER:
+        return "loosened" if y < x else "tightened"
     if name in HIGHER_LOOSER or name.startswith("max") or name.endswith(("_max", "max_mm3", "tol")) or name == "max":
         return "loosened" if y > x else "tightened"
     if name.startswith("min") or name.endswith(("_min", "_clearance", "min_mm")) or name == "min" or "min_" in name:
@@ -228,7 +239,8 @@ def _fields(sec, label, a, b, out, renamed=None):
             continue
         path = "%s.%s" % (sec, k)
         if x is None:
-            v = "loosened" if (isinstance(y, bool) and y and str(k).endswith("_ok")) or k == "any" else "added"
+            v = "loosened" if (isinstance(y, bool) and y and str(k).endswith("_ok")) or k == "any" or \
+                (isinstance(y, list) and y and (k in LIST_LOOSE or str(k).endswith("_ok"))) else "added"
         elif y is None:
             v = "removed" if not str(k).endswith("_ok") else "tightened"
         else:
@@ -260,7 +272,12 @@ def _rows(sec, old, new, out):
     def close(g, c):     # 0.6 of the label in common, or the same step number ("2c ...", "10d ...")
         t, u = g.split()[:1], c.split()[:1]
         return difflib.SequenceMatcher(None, g, c).ratio() + (1 if t and t == u and re.search(r"\d", t[0]) else 0)
-    cand = sorted(((close(g[0], c[0]), i, j) for i, g in enumerate(gone) for j, c in enumerate(came)), reverse=True)
+    # only rows about the same objects pair (review of PR #53: 'barrel above base' -> 'barrel above pan' read as a
+    # rename, so the PRT_base requirement disappeared with exit 0). assembly_order steps pair on their number alone:
+    # their objects are what a step edit changes, and _fields lists each one
+    same = lambda g, c: sec == "assembly_order" or all(g.get(k) == c.get(k) for k in ROW_OBJ if k not in ("step", "op"))
+    cand = sorted(((close(g[0], c[0]), i, j) for i, g in enumerate(gone) for j, c in enumerate(came)
+                   if same(g[1], c[1])), reverse=True)
     ug, uc = set(), set()
     for r, i, j in cand:
         if r >= 0.6 and i not in ug and j not in uc:
@@ -388,8 +405,7 @@ def counts(fd, cd):
     return c
 
 
-def regressed(fd, cd):
-    c = counts(fd, cd)
+def regressed(c):
     return bool(c["new_untriaged"] or c["worse"] or c["req_weaker"])
 
 
@@ -426,8 +442,7 @@ def lines(fd, cd, md=None, short=False):
     return out
 
 
-def headline(fd, cd, md=None):
-    c = counts(fd, cd)
+def headline(fd, cd, c, md=None):
     s = "%d new (%d untriaged), %d fixed, %d worse, %d better, %d changed, %d same" % (
         c["new"], c["new_untriaged"], c["fixed"], c["worse"], c["better"], c["changed"], len(fd["same"]))
     rem = sum(1 for v, _ in cd if v == "removed")
@@ -441,25 +456,29 @@ def headline(fd, cd, md=None):
     return s
 
 
-def short_report(old_rep, new_rep, prev_path, new_path, cap=20):
-    """The delta `cad check` prints at the end when it overwrote a report: one headline, then up to `cap` lines."""
+def short_report(old_rep, new_rep, prev_path, new_path, cap=20, req_cap=10):
+    """The delta `cad check` prints at the end when it overwrote a report: one headline, the requirements that weakened
+    (up to req_cap), then up to `cap` lines of findings."""
     fd, cd = diff_findings(old_rep, new_rep), diff_config(old_rep, new_rep)
     c = counts(fd, cd)
     if not any((c["new"], c["fixed"], c["worse"], c["better"], c["changed"], cd, fd["now_accepted"], fd["now_untriaged"])):
         return ["delta vs the previous report (%s): no change in findings or requirements%s" % (
             old_rep.get("generated", "?"), "; not compared: %s" % ", ".join(fd["not_compared"]) if fd["not_compared"] else "")]
-    out = ["delta vs the previous report (%s): %s" % (old_rep.get("generated", "?"), headline(fd, cd))]
+    out = ["delta vs the previous report (%s): %s" % (old_rep.get("generated", "?"), headline(fd, cd, c))]
     if old_rep.get("blend") and new_rep.get("blend") and old_rep["blend"] != new_rep["blend"]:
         out.append("  (the previous report was of %s)" % old_rep["blend"])
-    body = lines(fd, cd, short=True)
-    out += ["  " + x for x in body[:cap]]
-    more = max(0, len(body) - cap) + c["better"] + c["changed"] + sum(1 for v, _ in cd if v not in ("removed", "loosened"))
+    # requirements that weakened go first and have their own cap, so findings never push one out
+    req = lines({k: [] for k in fd}, cd, short=True)
+    body = lines(fd, [], short=True)
+    out += ["  " + x for x in req[:req_cap] + body[:cap]]
+    more = max(0, len(req) - req_cap) + max(0, len(body) - cap) + c["better"] + c["changed"] + sum(1 for v, _ in cd if v not in ("removed", "loosened"))
     if more > 0:
         out.append("  ... %d more (past the first %d, better, changed, other config): cad diff %s %s" % (more, cap, prev_path, new_path))
     return out
 
 
 def prev_path(out):
+    """Where cad check keeps the report it overwrote (cadcheck.py computes the same name without importing this)."""
     return (out[:-5] if out.endswith(".json") else out) + ".prev.json"
 
 
@@ -469,6 +488,14 @@ def load(p):
 
 
 def main(argv):
+    try:
+        return _main(argv)
+    except Exception as e:      # a crash is not "something got worse" (exit 1): one line, exit 2
+        print("caddiff: error: %s: %s" % (type(e).__name__, e))
+        return 2
+
+
+def _main(argv):
     if not argv or any(a in ("-h", "--help") for a in argv):
         print(__doc__)
         return 0 if argv else 2
@@ -477,13 +504,18 @@ def main(argv):
         if a == "--manifest":
             man = (next(it, ""), next(it, ""))
         elif a == "--max":
-            cap = int(next(it, "0") or 0)
+            v = next(it, "")
+            if not v.isdigit():
+                print("caddiff: --max needs a number of lines, not '%s'" % v)
+                return 2
+            cap = int(v)
         elif a.startswith("--"):
             print("caddiff: unknown flag %s" % a)
             return 2
         else:
             pos.append(a)
-    if len(pos) == 1:
+    one = len(pos) == 1
+    if one:
         pos.insert(0, prev_path(pos[0]))
     if len(pos) != 2:
         print("caddiff: give OLD.json NEW.json (or NEW.json with a .prev.json next to it)")
@@ -495,6 +527,10 @@ def main(argv):
         return 2
     if "checks" not in old or "checks" not in new:
         print("caddiff: %s is not a cadcheck report" % (pos[0] if "checks" not in old else pos[1]))
+        return 2
+    if one and str(old.get("generated", "")) > str(new.get("generated", "~")):
+        print("caddiff: %s (%s) is newer than %s (%s): not the run before it; give OLD and NEW" % (
+            pos[0], old.get("generated"), pos[1], new.get("generated")))
         return 2
     if man is None:
         cand = tuple(os.path.join(os.path.dirname(os.path.abspath(p)), "manifest.json") for p in pos)
@@ -508,13 +544,14 @@ def main(argv):
             return 2
     fd, cd = diff_findings(old, new), diff_config(old, new)
     print("CADDIFF %s (%s) -> %s (%s)" % (pos[0], old.get("generated", "?"), pos[1], new.get("generated", "?")))
-    print("  " + headline(fd, cd, md))
+    c = counts(fd, cd)
+    print("  " + headline(fd, cd, c, md))
     body = lines(fd, cd, md)
     for x in body[:cap or len(body)]:
         print("  " + x)
     if cap and len(body) > cap:
         print("  ... %d more lines (raise --max)" % (len(body) - cap))
-    return 1 if regressed(fd, cd) else 0
+    return 1 if regressed(c) else 0
 
 
 if __name__ == "__main__":

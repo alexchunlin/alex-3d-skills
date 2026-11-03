@@ -59,7 +59,6 @@ from cadlib import joints as JT   # noqa: E402  (joint specs and posing, shared 
 import cadcfg as CC               # noqa: E402  (checks.json hygiene: unknown keys, accepted_warns; no Blender)
 import cadmat as CM               # noqa: E402  (materials, print settings, printed sections, calcs; no Blender)
 import cadsnap as CS              # noqa: E402  (snap-fit and print-in-place hinge math; no Blender)
-import caddiff as CD              # noqa: E402  (new / fixed / worse / better against the previous report; no Blender)
 
 ARGV = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 
@@ -4951,16 +4950,28 @@ def main():
     os.makedirs(os.path.dirname(os.path.abspath(OUT)), exist_ok=True)
     # the report this run overwrites: read it first, keep it as <out>.prev.json and print the delta at the end, unasked
     # (agentcad's logs: agents ran an explicit diff 0 times; the reviewer worked out FIXED / NOT FIXED by hand, issue #30)
-    prev = None
-    if os.path.isfile(OUT) and "--no-diff" not in ARGV:
-        try:
+    # .prev.json always names the run before this one: refreshed when OUT held a report, removed when it did not, so
+    # `cad diff OUT` never compares against an older run (review of PR #53). caddiff.prev_path gives the same name.
+    prev, prev_path = None, (OUT[:-5] if OUT.endswith(".json") else OUT) + ".prev.json"
+    try:
+        raw = None
+        if os.path.isfile(OUT):
             with open(OUT, "rb") as f:
                 raw = f.read()
             prev = json.loads(raw)
-            with open(CD.prev_path(OUT), "wb") as f:
+        if isinstance(prev, dict) and "checks" in prev:
+            with open(prev_path, "wb") as f:
                 f.write(raw)
-        except (OSError, ValueError):
+        else:
             prev = None
+            if os.path.isfile(prev_path):
+                os.remove(prev_path)
+    except (OSError, ValueError):
+        prev = None
+        try:
+            os.remove(prev_path)
+        except OSError:
+            pass
     with open(OUT, "w") as f:
         json.dump(REPORT, f, indent=1, default=str)
     partial = bool(ONLY or QUICK)
@@ -5009,9 +5020,10 @@ def main():
         # pair "max_mm3" (V2R5 A5-06: the gate detent allow, 0.43 mm3 by its own reason, hid the whole gate sweep)
         print("  allows that skip a pair across a joint with no max_mm3 (any clash there is hidden):", "; ".join(sorted(UNBOUNDED_ALLOWS)))
     print("  not checked:", "; ".join(REPORT["not_checked"]))
-    if isinstance(prev, dict) and "checks" in prev:
-        try:
-            for x in CD.short_report(prev, json.loads(json.dumps(REPORT, default=str)), CD.prev_path(OUT), OUT):
+    if prev is not None and "--no-diff" not in ARGV:
+        try:     # imported here: a broken caddiff costs the delta, never the check (review of PR #53)
+            import caddiff as CD
+            for x in CD.short_report(prev, json.loads(json.dumps(REPORT, default=str)), prev_path, OUT):
                 print("  " + x)
         except Exception as e:      # the delta is a convenience: it never costs the check its report
             print("  delta: could not compare with the previous report (%s: %s)" % (type(e).__name__, e))
