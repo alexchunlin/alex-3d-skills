@@ -36,11 +36,10 @@ for s, w in want.items():
     nut = nb.get("nut") or {}
     through = nut and nb["nut_gap_mm"] == 0 and nb["engagement_mm"] >= nut["len_mm"] and nb["length_mm"] > nut["to_mm"]
     ffails = [x for x in c["summary"]["fail_list"] if x.startswith("fasteners")]
-    nw = sum(1 for x in c["summary"]["warn_list"] if not x.startswith("exposure: "))   # proud heads are the exposure unit's
-    print(("PASS" if through and not ffails and c["summary"]["fails"] == 0 and nw == 0 else "FAIL") +
+    print(("PASS" if through and not ffails and c["summary"]["fails"] == 0 and c["summary"]["warns"] == 0 else "FAIL") +
           " fastener_joint %s cadcheck: bolt %.1f passes its nut (%.1f-%.1f) by %.1f, %d fasteners fails, %d fails, %d warns" % (
               s, nb.get("length_mm", 0), nut.get("from_mm", 0), nut.get("to_mm", 0), nb.get("length_mm", 0) - nut.get("to_mm", 0),
-              len(ffails), c["summary"]["fails"], nw))
+              len(ffails), c["summary"]["fails"], c["summary"]["warns"]))
 EOF
 while read -r st msg; do [ "$st" = PASS ] && ok "$msg" || bad "$msg"; done < "$V/fj/asserts.txt"
 for pat in "FJ_ERR reversed: .*flip \`into\`" "FJ_ERR thin_host: .*only 4.7 mm of thread" "FJ_ERR short_bolt: .*stops 1.00 mm short of its nut" \

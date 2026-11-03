@@ -115,11 +115,14 @@ DEFAULTS = {
     # at 10% of the viewer directions it is 8.3 mm long (R3: "about 8 mm"), FINDINGS A3-F7
     # The exposure check applies the same rule to purchased boards and plugs and to screw heads (V2A1-F11: a servo
     # controller PCB seen through a base notch; #40: the render-only findings were a plug in the hero view and dark
-    # heads on a cover). A BUY_ part is a PCB or a plug by its buy_kind prop ("pcb" / "plug"), else by these name globs
+    # heads on a cover). A BUY_ part is a PCB or a plug by its buy_kind prop ("pcb" / "plug"), else by these name globs.
+    # A PCB warns from pcb_min_share of its surface samples (A1-11 on v2a1: 13 of 138, 9.4 %; the v2a3-a7 controller
+    # behind its slot: 2 of 222, 0.9 %, never raised). Plugs and heads are opt-in: an outward USB-C socket is by design
+    # and no v2 reviewer raised one, and the v2 attempts have 18-21 proud heads each, raised only as an appearance point
     "exposure": {"max_cable_mm": 5.0, "cables_ok": [], "min_escape": 8, "view_frac": 0.10, "view_z": -0.2, "nuts_ok": [],
-                 "pcbs": ["*pcb*", "*board*", "*controller*", "*motorgo*", "*esp32*", "*encoder*", "*buck*"],
-                 "plugs": ["*plug*", "*connector*", "*jack*", "*socket*", "*usb*", "*poe*", "*rj45*", "*jst*"],
-                 "pcbs_ok": [], "plugs_ok": [], "heads_ok": []},
+                 "pcb_names": ["*pcb*", "*board*", "*controller*", "*motorgo*", "*esp32*", "*encoder*", "*buck*"],
+                 "plug_names": ["*plug*", "*connector*", "*jack*", "*socket*", "*usb*", "*poe*", "*rj45*", "*jst*"],
+                 "pcb_min_share": 0.05, "plugs": False, "heads": False, "pcbs_ok": [], "plugs_ok": [], "heads_ok": []},
     "carry": {},
     "flexures": [],
     "drop_tests": [],
@@ -4760,21 +4763,21 @@ def check_cables():
 
 def buy_kind(o):
     """'pcb', 'plug' or None for a purchased part: its buy_kind prop (cadlib part(..., buy_kind="pcb")), else the
-    exposure.pcbs / exposure.plugs name globs."""
+    exposure.pcb_names / exposure.plug_names globs."""
     k = str(o.get("buy_kind") or "").lower()
     if k in ("pcb", "plug"):
         return k
     n = o.name.lower()
-    for kind, sec in (("plug", "plugs"), ("pcb", "pcbs")):
+    for kind, sec in (("plug", "plug_names"), ("pcb", "pcb_names")):
         if any(fnmatch.fnmatch(n, g.lower()) for g in CFG["exposure"][sec]):
             return kind
     return None
 
 
 def check_exposure():
-    """Purchased PCBs and plugs, and screw heads, visible from outside at home: the cables' exposed() rule on points
+    """Purchased PCBs (and, opted in, plugs and screw heads) visible from outside at home: the cables' exposed() rule on points
     0.3 mm off the part's surface, against the solids and fasteners (so a head shades its own rim and a part its own
-    back). A board or plug warns at 2 or more exposed surface samples (dense_pts, thinned to about 400); a head when 2 of 8
+    back). A board warns from pcb_min_share (and 2) of its surface samples exposed, a plug from 2 (dense_pts, thinned to about 400); a head when 2 of 8
     points 1 mm outside its rim, a quarter of the head height below its top, are exposed: in a counterbore
     (features: head + 1 mm across) or countersink they are in the part, beside a proud head in the open. Closer in,
     a counterbored head's 0.5 mm gap let tangential rays out over the lip (8 of 8 exposed)."""
@@ -4784,7 +4787,7 @@ def check_exposure():
     rows = []
     for o in PURCHASED:
         k = buy_kind(o)
-        if not k or not len(o.data.vertices):
+        if not k or (k == "plug" and not ex["plugs"]) or not len(o.data.vertices):
             continue
         P, _ = dense_pts(o, 300)
         P = P[:: max(1, len(P) // 400)]     # dense_pts keeps every vertex: the MotorGo STL gave 129003 points (40 s)
@@ -4798,11 +4801,11 @@ def check_exposure():
         c = [round(x, 1) for x in sum(exp, Vector()) / len(exp)] if exp else None
         ok = any(fnmatch.fnmatch(o.name, g) for g in ex[k + "s_ok"])
         rows.append({"object": o.name, "kind": k, "exposed_samples": len(exp), "samples": len(P), "center": c, "ok": ok})
-        if len(exp) >= 2 and not ok:
+        if len(exp) >= max(2, (ex["pcb_min_share"] if k == "pcb" else 0) * len(P)) and not ok:
             finding("exposure", "warn", "%s (%s) is visible from outside around %s (%d of %d surface samples): hide it or list it under "
                     "exposure.%ss_ok" % (o.name, "PCB" if k == "pcb" else "plug", c, len(exp), len(P), k), object=o.name, center=c)
     heads = []
-    for o in FASTENERS:
+    for o in (FASTENERS if ex["heads"] else []):
         if is_nut(o) or not len(o.data.vertices):
             continue
         head, tip, d, hr, sr = fastener_axis(o)
@@ -4827,8 +4830,12 @@ def check_exposure():
                     "%s at %s" % (h["object"], h["at"]) for h in proud), "it" if len(proud) == 1 else "them",
                     "it" if len(proud) == 1 else "them"), objects=[h["object"] for h in proud])
     REPORT["checks"].setdefault("exposure", {"findings": []}).update(rows=rows, heads=heads)
-    REPORT["coverage"].append("exposure: %d purchased PCBs/plugs (buy_kind or exposure.pcbs/plugs globs) and %d screw heads, "
-                              "same rule as cables at home pose" % (len(rows), len(heads)))
+    REPORT["coverage"].append("exposure: %d purchased PCBs%s (buy_kind or exposure.pcb_names/plug_names globs; a PCB from %d%% of its "
+                              "samples) and %d screw heads, same rule as cables at home pose" % (
+                                  len(rows), "/plugs" if ex["plugs"] else "", 100 * ex["pcb_min_share"], len(heads)))
+    if not ex["plugs"] or not ex["heads"]:
+        REPORT["not_checked"].append("exposure: %s (opt-in: exposure.plugs / exposure.heads true)" % " and ".join(
+            x for x, on in (("plugs", ex["plugs"]), ("screw heads", ex["heads"])) if not on))
     REPORT["not_checked"].append("exposure: seams, colour and other looks (review the standard renders)")
 
 

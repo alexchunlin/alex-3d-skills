@@ -1295,18 +1295,10 @@
      ],
      "kind": "is not a stock length",
      "partial": true
-    },
-    {
-     "check": "exposure",
-     "objects": [
-      "FST_detent_*"
-     ],
-     "kind": "proud and visible from outside",
-     "partial": true
     }
    ],
    "source": "docs/FINDINGS.md:1075",
-   "judgment": "only the M3 x 9 and proud-head sub-points are tool-catchable; counted as caught when it is; locators marked partial credit 'partial', not caught: the line covers part of the issue (a coverage warn or a sub-point)"
+   "judgment": "only the M3 x 9 sub-point is tool-catchable; counted as caught when it is; locators marked partial credit 'partial', not caught: the line covers part of the issue (a coverage warn or a sub-point)"
   },
   {
    "attempt": "v2a3",
@@ -1386,18 +1378,8 @@
    "metric": "aesthetics",
    "summary": "detent tab band relief leaves a square step; pan head 1.4 proud (aesthetics)",
    "tool_catchable": false,
-   "locators": [
-    {
-     "check": "exposure",
-     "objects": [
-      "FST_detent_*"
-     ],
-     "kind": "proud and visible from outside",
-     "partial": true
-    }
-   ],
-   "source": "docs/FINDINGS.md:1232",
-   "judgment": "the exposure check's head rule covers the proud pan head sub-point; the square step is a look no check measures"
+   "locators": null,
+   "source": "docs/FINDINGS.md:1232"
   },
   {
    "attempt": "v2a4",
