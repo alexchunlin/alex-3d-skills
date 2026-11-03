@@ -75,6 +75,7 @@ const CHECK_SUMMARY = {
     fail_list: { type: 'array', items: { type: 'string' } },
     coverage: { type: 'array', items: { type: 'string' } },
     not_checked: { type: 'array', items: { type: 'string' } },
+    run_only: { type: 'array', items: { type: 'string' }, description: "the report's run.only, plus 'quick' when run.quick is true; [] for a full run" },
   },
   required: ['fails', 'warns', 'fail_list', 'coverage', 'not_checked'],
 }
@@ -234,7 +235,7 @@ ${CONFIG.parallel_builds ? `0. Merge ${HW}/blender/checks.d/*.json into checks.j
    one or add it to accepted_warns with a reason (V2A1-F5: 3 of R1's issues were warns left in a 34-warn list).
 2. Final renders: CAD_RENDER_FINAL=1 ${CAD} build ${HW}/blender/build_assembly.py -- --render --out-renders ${dir(n)}
    plus the sections the brief asks for (${CAD} q ... section), and ${CAD} sheet ${HW}/stl ${dir(n)}/stl_sheet.png.
-3. Copy the final cadcheck.json to ${dir(n)}/cadcheck.json. Then prove "supports: no" on the exported STLs:
+3. Copy the final FULL cadcheck.json to ${dir(n)}/cadcheck.json (a report with run.only or run.quick is partial: re-run without --only/--quick, never hand off on it). Then prove "supports: no" on the exported STLs:
    ${CAD} printcheck ${HW}/stl --manifest ${HW}/blender/manifest.json --out ${dir(n)}/printcheck.json --render ${dir(n)}/printcheck
    must show 0 fails (re-orient, chamfer or split the part, or mark it supports: "yes" and say where), and
    ${CAD} slice ${HW}/stl --out ${dir(n)} (the only way a slicer may run) reports time, filament and where the slicer adds
@@ -248,6 +249,7 @@ ${CONFIG.parallel_builds ? `0. Merge ${HW}/blender/checks.d/*.json into checks.j
    service claim (index positions, "adjust without disassembly", "comes off at tilt 45"), add the matching
    index_tests / service / slide_out entry to checks.json and re-run cad check (FINDINGS A2-F2, A2-F6). "Removable" is a
    slide_out over the whole path, until the part is clear of the machine (A3-F3; v2 A7's cap row stopped at 40, V2R7 A7-03). Every printed spring or snap arm gets a flexures entry (A3-F2).
+Fill check.run_only from the report run (${CAD} rows cadcheck.json --summary prints it); it must be [].
 Return the evidence summary from ${dir(n)}/cadcheck.json, not your opinion of it.`
 
 const reviewPrompt = (n, prevReviewPath) => `
@@ -289,6 +291,11 @@ for (let n = CONFIG.start_attempt; n <= CONFIG.max_attempts && !passed; n++) {
   const design = await agent(finishPrompt(n, plan, builds), withModel('finish', { label: `finish #${n}`, phase: 'Finish', schema: FINISH_SCHEMA }))
   if (!design) { log(`attempt ${n}: finisher returned nothing; stopping`); break }
   log(`attempt ${n} designed: ${design.printed_parts.length} printed parts, cadcheck ${design.check.fails}F/${design.check.warns}W`)
+
+  if ((design.check.run_only || []).length) {   // a partial check is not a hand-off (issue #28): no review, not passed
+    log(`attempt ${n}: finisher handed off a partial check (only=${design.check.run_only.join(',')}); not reviewed`)
+    attempts.push({ n, plan, design, review: null }); passed = false; break
+  }
 
   phase('Review')
   const review = await agent(reviewPrompt(n, prevReview), withModel('review', { label: `review #${n}`, phase: 'Review', schema: REVIEW_SCHEMA }))

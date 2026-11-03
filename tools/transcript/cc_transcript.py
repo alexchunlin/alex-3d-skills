@@ -16,6 +16,7 @@ Never read a 10 MB transcript whole. Run this instead:
     python3 -I cc_transcript.py grep     agent-XXXX.jsonl PATTERN    # regex over thinking/text/tool io
     python3 -I cc_transcript.py workflow <wf_dir>                    # one row per agent + journal results
     python3 -I cc_transcript.py bench [--attempt v2a7] [--json]      # tools/bench tier 2 telemetry (tools/bench/agents.json)
+    python3 -I cc_transcript.py handoffs agent-*.jsonl               # agents whose last cad check was --only/--quick
     python3 -I cc_transcript.py calibrate [--write]                  # chars/token of doc reads from the usage numbers
 
 Standard library only. Works on transcripts that are still being written (a
@@ -658,13 +659,13 @@ def _command_words(toks: list[str], env: dict) -> list[str]:
     return toks[i:]
 
 
-def cad_calls(cmd: str) -> tuple[list[str], list[str], list[str]]:
-    """(cad subcommands, cad q commands, --only sections) the Bash command actually runs: the cad word must stand in
-    command position (`cad`, `.../scripts/cad`, `$CAD`, `sh .../cad`, or any variable the command sets to a cad path,
-    as v2 builders wrote `Q=.../scripts/cad; $Q q model.blend list ...`). Heredoc bodies written to files, comments and
-    prose in quoted strings don't count. `cad q` with no command (its help) counts as a `q` run, not a q command."""
+def _cad_runs(cmd: str):
+    """(subcommand, words, via the cad wrapper) for each cad call the Bash command actually runs: the cad word must stand in command position
+    (`cad`, `.../scripts/cad`, `$CAD`, `sh .../cad`, or any variable the command sets to a cad path, as v2 builders wrote
+    `Q=.../scripts/cad; $Q q model.blend list ...`), or a script run by hand under Blender (`--python .../cadcheck.py`,
+    words = the command). Heredoc bodies written to files, comments and prose in quoted strings don't count."""
     names = {"CAD"} | set(CAD_VAR_RE.findall(cmd))
-    subs, qs, only, env = [], [], [], {}
+    env = {}
     for toks in _segments(cmd):
         w = _command_words(toks, env)
         if w and w[0] in ("sh", "bash") and len(w) > 1:
@@ -678,19 +679,48 @@ def cad_calls(cmd: str) -> tuple[list[str], list[str], list[str]]:
         head = w[0]
         is_cad = head == "cad" or head.endswith("/scripts/cad") or bool(var and var.group(1) in names)
         if is_cad and len(w) > 1 and w[1] in CAD_SUBS:
-            subs.append(w[1])
-            if w[1] == "q" and len(w) > 3 and re.match(r"^[a-z]+$", w[3]):
-                qs.append(w[3])
-            only += [x for i, t in enumerate(w) for x in ((w[i + 1] if t == "--only" and i + 1 < len(w) else
-                                                            t[7:] if t.startswith("--only=") else "").split(",")) if x]
+            yield w[1], w, True
         elif not is_cad:
-            # a script run by hand under Blender: `Blender -b x.blend --python .../cadcheck.py -- ...`
             for i, t in enumerate(w):
                 if t == "--python" and i + 1 < len(w):
                     m = CAD_SCRIPT_RE.search(w[i + 1])
                     if m:
-                        subs.append(CAD_SCRIPT_SUB[m.group(1)])
+                        yield CAD_SCRIPT_SUB[m.group(1)], w, False
+
+
+def _only_of(w: list[str]) -> list[str]:
+    return [x for i, t in enumerate(w) for x in ((w[i + 1] if t == "--only" and i + 1 < len(w) else
+                                                  t[7:] if t.startswith("--only=") else "").split(",")) if x]
+
+
+def cad_calls(cmd: str) -> tuple[list[str], list[str], list[str]]:
+    """(cad subcommands, cad q commands, --only sections) the Bash command runs. `cad q` with no command (its help)
+    counts as a `q` run, not a q command; --only is read from wrapper calls only."""
+    subs, qs, only = [], [], []
+    for sc, w, wrapper in _cad_runs(cmd):
+        subs.append(sc)
+        if wrapper:
+            if sc == "q" and len(w) > 3 and re.match(r"^[a-z]+$", w[3]):
+                qs.append(w[3])
+            only += _only_of(w)
     return subs, qs, only
+
+
+def check_runs(cmd: str) -> list[bool]:
+    """One bool per `cad check` the command runs: True when it carried a non-empty --only or --quick."""
+    return [bool(_only_of(w)) or "--quick" in w for sc, w, _ in _cad_runs(cmd) if sc == "check"]
+
+
+def cmd_handoffs(_tr, a) -> None:
+    """For each agent file: was its LAST cad check an --only/--quick run (a hand-off on a partial check, issue #28)?"""
+    n = p = 0
+    for f in a.transcript:
+        tr = load(f)
+        runs = [r for tc in tr.tools if tc.name == "Bash" for r in check_runs(tc.input.get("command", ""))]
+        if runs:
+            n, p = n + 1, p + runs[-1]
+            print("%-7s %-45s %s" % ("PARTIAL" if runs[-1] else "full", (digest(tr)["label"] or "?")[:45], Path(f).name))
+    print("%d agents ran cad check; %d of them last on an --only/--quick run" % (n, p))
 
 
 def _expand(tok: str, env: dict) -> str:
@@ -1122,6 +1152,8 @@ def main(argv=None) -> None:
     c.add_argument("--attempt", help="comma list of attempts from --agents")
     c.add_argument("--json", action="store_true", help="also print every sample")
     c.add_argument("--write", action="store_true", help="save the ratio to tools/bench/tokens.json (doccost, bench and features use it)")
+    h = sub.add_parser("handoffs", help="agents whose last cad check was --only/--quick (issue #28)")
+    h.add_argument("transcript", nargs="+", help="agent-*.jsonl files")
     for name in ("summary", "timeline", "bash", "files", "images", "renders", "usage", "json", "show", "thinking", "grep",
                  "workflow"):
         s = sub.add_parser(name)
@@ -1138,7 +1170,7 @@ def main(argv=None) -> None:
             s.add_argument("which", help="tool_use id or index (#N in other views)")
             s.add_argument("--max", type=int, default=6000)
     a = p.parse_args(argv)
-    tr = None if a.cmd in ("workflow", "bench", "calibrate") else load(a.transcript)
+    tr = None if a.cmd in ("workflow", "bench", "calibrate", "handoffs") else load(a.transcript)
     globals()["cmd_" + a.cmd](tr, a)
 
 

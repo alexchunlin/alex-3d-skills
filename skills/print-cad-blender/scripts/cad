@@ -1,7 +1,7 @@
 #!/bin/sh
 # cad: thin wrapper around headless Blender for the print-cad-blender skill.
 #   cad build  build_assembly.py [-- script args]     run a cadlib build script
-#   cad check  model.blend [checks.json] [out.json] [--only a,b] [--quick]  run cadcheck (short summary, writes JSON)
+#   cad check  model.blend [checks.json] [out.json] [--only a,b] [--quick]  run cadcheck (short summary, writes JSON; --only/--quick with no OUT write cadcheck.partial.json)
 #   cad q      model.blend <cadq command ...>        one-shot measurement (`cad q` alone lists the commands)
 #   cad py     -c "import params as P; print(P.X)" | script.py [args]   Python with bpy + cadlib + ./ and ./parts on the path
 #   cad rows   [cadcheck.json|manifest.json|checks.json] [REGEX] [--check a,b] [--findings]   one line per row; grep, don't json.load
@@ -34,7 +34,9 @@ case "$cmd" in
          # CONFIG and OUT are optional positionals; a flag in their place is not swallowed as a file name
          # (v2 A1: `cad check m.blend c.json --only ...` wrote a file called --only, FINDINGS V2A1-T4)
          c=""; case "${1:-}" in ""|--*) ;; *) c="$1"; shift ;; esac
-         o="$(dirname "$b")/cadcheck.json"; case "${1:-}" in ""|--*) ;; *) o="$1"; shift ;; esac
+         # a partial run (--only/--quick) with no OUT goes to cadcheck.partial.json, never over the full report (issue #28)
+         o="$(dirname "$b")/cadcheck.json"; pv=""; for a in "$@"; do { [ "$a" = --quick ] || { [ "$pv" = --only ] && [ -n "$a" ]; }; } && o="$(dirname "$b")/cadcheck.partial.json"; pv="$a"; done   # an empty --only is a full run, as in cadcheck.py
+         case "${1:-}" in ""|--*) ;; *) o="$1"; shift ;; esac
          # an explicit `--out X` among the flags wins over the default (v2 A5 precheck overwrote cadcheck.json, V2A5-T1)
          for a in "$@"; do [ "$a" = "--out" ] && o=""; done
          [ -n "$o" ] && set -- --out "$o" "$@"
@@ -49,7 +51,7 @@ case "$cmd" in
       # (v2 A2: the launcher and feeder builders hand-stubbed bpy/cadlib to import params.py from plain python3)
       run --python-expr "import sys, os, runpy; sys.path[:0] = [os.getcwd(), os.path.join(os.getcwd(), 'parts'), '$HERE']; a = sys.argv[sys.argv.index('--') + 1:]; sys.argv = a; exec(a[1]) if a[0] == '-c' else runpy.run_path(a[0], run_name='__main__')" -- "$@" ;;
   rows) exec python3 "$HERE/cadrows.py" "$@" ;;   # plain python3, no Blender (v2 A3: 67 hand dump scripts, V2A3-T1)
-  bom) exec python3 "$HERE/cadbom.py" "$@" ;;       # plain python3 (v2 A3: stud M3 x 20 in the BOM, x 16 in the model, V2A3-F6)
+  bom) exec python3 -I "$HERE/cadbom.py" "$@" ;;       # plain python3 (v2 A3: stud M3 x 20 in the BOM, x 16 in the model, V2A3-F6)
   sheet) run --python-expr "import sys; sys.path.insert(0, '$HERE'); from cadlib import render; render.contact_sheet('$1', '$2')" ;;
   printcheck) # layer-by-layer support analysis on the exported STLs; exit 1 on a fail (FINDINGS "v2 post-freeze")
       run --python "$HERE/printcheck.py" -- "$@" ;;
