@@ -218,7 +218,7 @@ CASES = [   # the selector test always runs under --changed (review); it is adde
     ("cadslice.py", [S + "cadslice.py"], {"4m-slice"}),
     ("slicers/known.json", ["skills/print-cad-blender/slicers/known.json"], {"4m-slice"}),
     ("cadrows.py + cadbom.py", [S + "cadrows.py", S + "cadbom.py"], {"4f", "bom_m5.sh", "calcs_materials.sh"}),   # it asserts cad rows on calcs
-    ("template params.py", ["skills/print-cad-blender/templates/project/params.py"], {"3", "3b", "3c", "design_principles.sh"}),
+    ("template params.py", ["skills/print-cad-blender/templates/project/params.py"], {"3", "3b", "3c", "design_principles.sh", "glb_export.sh"}),
     ("FINDINGS.md (design_principles reads it)", ["docs/FINDINGS.md"], {"design_principles.sh"}),
     ("components/ (review: blend-bracket imports placeholders)", ["components/placeholders.py"], {"5", "blend_bracket.sh"}),
     ("components.json (review)", ["components/components.json"], {"5", "blend_bracket.sh"}),
@@ -234,7 +234,7 @@ CASES = [   # the selector test always runs under --changed (review); it is adde
     ("the v2a3 blend (cadcfg's suggestion check runs on its report)", ["examples/mm-launcher-v2a3/mm_launcher_v2a3.blend.gz"],
      {"4f", "4g", "4n", "cadcfg.sh"} | BENCH),
     ("the template's checks.json", ["skills/print-cad-blender/templates/project/checks.json"],
-     {"3", "3b", "3c", "design_principles.sh", "cadcfg.sh"}),
+     {"3", "3b", "3c", "design_principles.sh", "cadcfg.sh", "glb_export.sh"}),
     ("v2a7 STLs", ["examples/mm-launcher-v2a7/stl.tar.gz"], BENCH | PCO | STL | DIFF2),
     ("demo-turret (cad_view.sh reads 2's demo-bug; cad_diff.sh builds it)", ["examples/demo-turret/build.py"], {"1", "2", "cad_view.sh", "glb_export.sh", "only_partial.sh", "cad_diff.sh"}),
     ("cadview.py (2 builds its input)", [S + "cadview.py"], {"2", "cad_view.sh"}),

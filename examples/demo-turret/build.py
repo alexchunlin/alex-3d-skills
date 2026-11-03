@@ -1,6 +1,6 @@
 """Demo: a tiny pan/tilt turret built with cadlib, used to prove the library and cadcheck.
 
-    Blender -b --python build.py -- [--out /tmp/alex3d-demo] [--bug] [--render] [--glb [--no-draco]]
+    Blender -b --python build.py -- [--out /tmp/alex3d-demo] [--bug] [--render] [--glb [--no-draco] [--glb-report cadcheck.json]]
 
 Screws go in with features.fastener_joint, which measures each stack and picks the stock length.
 --bug plants the attempt-1 foot-guns on purpose: a reversed screw, a screw head under the moving
@@ -121,6 +121,6 @@ if "--render" in argv:
     R.exploded(os.path.join(OUT, "renders"))
 if "--glb" in argv:   # model.glb: a node per part, a clip per joint and one for checks.json's assembly_order
     E.write_glb(os.path.join(OUT, "model.glb"), checks=os.path.join(HERE, "checks.json"),
-                report=os.path.join(OUT, "cadcheck.json"), draco="--no-draco" not in argv)
+                report=argv[argv.index("--glb-report") + 1] if "--glb-report" in argv else None, draco="--no-draco" not in argv)
 E.save_blend(os.path.join(OUT, "demo.blend"))
 print("BUILD_DONE stls=%s" % qty)

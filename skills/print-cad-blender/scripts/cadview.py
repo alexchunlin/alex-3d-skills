@@ -15,7 +15,7 @@ import bpy, base64, datetime, fnmatch, gzip, json, os, re, shutil, sys, tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from cadlib import joints as JT  # noqa: E402  (the pose maths cadcheck and cadq use)
-from cadlib import export as EX  # noqa: E402  (the glTF exporter call, shared with export.write_glb)
+from cadlib import gltf as GL  # noqa: E402  (the glTF exporter call, shared with model.glb)
 
 VIEWER = os.path.join(HERE, "viewer")
 VENDOR = os.path.join(VIEWER, "vendor")
@@ -245,11 +245,11 @@ def main():
     for w in warn:
         print("cadview: warning: " + w)
 
-    # glTF + Draco: the view objects, every joint, and their ancestors, in Blender's Z-up frame (cadlib.export.gltf,
+    # glTF + Draco: the view objects, every joint, and their ancestors, in Blender's Z-up frame (cadlib.gltf.export,
     # the exporter settings model.glb uses too)
     tmp = tempfile.mkdtemp(prefix="cadview")
     try:
-        glb_bytes = open(EX.gltf(os.path.join(tmp, "model.glb"), [o.name for o in view] + list(J), draco=True), "rb").read()
+        glb_bytes = open(GL.export(os.path.join(tmp, "model.glb"), [o.name for o in view] + list(J), draco=True), "rb").read()
     except RuntimeError as e:
         die(str(e), 1)
     finally:

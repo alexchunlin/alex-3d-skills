@@ -45,11 +45,12 @@ and npm. Their licences sit next to them.
 ```sh
 cad build blender/build_assembly.py -- --glb               # <out>/model.glb next to stl/ (Draco)
 cad build blender/build_assembly.py -- --glb --no-draco    # raw meshes
+cad build blender/build_assembly.py -- --glb --glb-report blender/cadcheck.json   # parts fly in along insertion
 ```
 
-From a script: `export.write_glb(path, checks="checks.json", report="cadcheck.json", draco=True)`. For a blend with no
-build script, open it first: `cad py -c "import bpy; bpy.ops.wm.open_mainfile(filepath='m.blend'); from cadlib import
-export; export.write_glb('model.glb', checks='checks.json')"`.
+From a script: `export.write_glb(path, checks="checks.json", report=None, draco=True)` (it lives in `cadlib/gltf.py`).
+For a blend with no build script, open it first: `cad py -c "import bpy; bpy.ops.wm.open_mainfile(filepath='m.blend');
+from cadlib import export; export.write_glb('model.glb', checks='checks.json')"`.
 
 - Every PRT_/BUY_/FST_/CAB_ mesh and PIV_ empty is a node with its own name, in the blend's hierarchy, under one root
   node `ROOT_zup_mm` (rotation -90 deg about X, scale 0.001): the scene is Z-up mm, glTF is Y-up m. Without the root a
@@ -59,8 +60,9 @@ export; export.write_glb('model.glb', checks='checks.json')"`.
   (`values`, `world_at`) at 10 deg or less apart, so a viewer's interpolation stays on the joint's path. Each clip's
   `extras` lists the driver value per key. The checks.json `joints`/`couplings` overrides apply; `carry` does not.
 - An `assembly` clip, 1 s per `assembly_order` step: a step's objects appear (scale 0 before) and fly home. The
-  direction is the one the insertion check found free for that object (in `report`, a cadcheck.json), else away from
+  direction is the one the insertion check found free for that object (its `free_dir_vec` in a report given with
+  `--glb-report`; it prints the report's path and time, and no report is ever picked up on its own), else away from
   the assembly centre as `render.exploded` draws it (fasteners, cables, merged groups, objects with no report row).
   Bench sub-assemblies are built in place, in listed order. Objects in no step are there throughout.
-- Geometry is the exporter call cad view uses (`export.gltf`), with the blend's material colours. v2a7 (178 objects):
+- Geometry is the exporter call cad view uses (`gltf.export`), with the blend's material colours. v2a7 (178 objects):
   0.88 MB with Draco, 7.0 MB raw, written in 0.6 s. As with the page, measure with `cad q`, not from the GLB.
