@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cad view</title>
+<!-- Made by `cad view` (alex-3d-skills, skills/print-cad-blender/scripts/cadview.py). One file, no network: three.js
+     0.170.0 (MIT), the Draco decoder (Apache-2.0) and Roboto (OFL) are inlined below; their licences are in
+     scripts/viewer/vendor/. Look and viewport adapted from the alex-style guide (MIT): web/tokens.css, web/ax-three.js. -->
+<!--@FONTS-->
+<!--@TOKENS-->
+<style>
+  html, body { height: 100%; margin: 0; }
+  [hidden] { display: none !important; }
+  .cv { display: grid; grid-template: "h" auto "b" auto "m" minmax(0, 1fr) "f" auto / minmax(0, 1fr); height: 100vh; padding: 14px 18px 8px; gap: 8px; }
+  .cv > header { grid-area: h; } #cv-banner { grid-area: b; display: grid; gap: 4px; } .cv-main { grid-area: m; } .cv-foot { grid-area: f; }
+  .cv .ax-mast { margin-bottom: 0; padding-bottom: 10px; }
+  .cv .ax-meta { flex-wrap: wrap; row-gap: 2px; }
+  .cv .ax-meta span { white-space: nowrap; }
+  .cv-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  .cv-tools label { display: inline-flex; align-items: center; gap: 6px; }
+  .cv-tools .ax-range { width: 110px; }
+  .ax-btn.on { border-color: var(--ax-accent); color: var(--ax-accent); }
+  .cv-banner { border: 1px solid var(--ax-critical); color: var(--ax-ink); padding: 8px 12px; font: 12px var(--ax-font-mono); }
+  .cv-banner::before { content: "■ "; color: var(--ax-critical); }
+  .cv-main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: var(--ax-gap); min-height: 0; }
+  #view { padding: 0; min-height: 0; }
+  .cv-side { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--ax-gap); min-height: 0; }
+  .cv-side .ax-panel { min-height: 0; display: flex; flex-direction: column; }
+  #joints { overflow-y: auto; max-height: 38vh; }
+  .joint { padding: 8px 0 9px; border-bottom: 1px solid var(--ax-rule); transition: background 0.2s; }
+  .joint.focus { background: rgba(var(--ax-accent-rgb), 0.08); box-shadow: inset 2px 0 0 var(--ax-accent); padding-left: 8px; }
+  .joint .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+  .joint b { font: 500 16px var(--ax-font-mono); color: var(--ax-accent); white-space: nowrap; }
+  .joint b small { font-size: 11px; color: var(--ax-muted); font-weight: 400; margin-left: 2px; }
+  .joint b.past { color: var(--ax-warning); }
+  .joint .lim { display: flex; justify-content: space-between; font: 10px var(--ax-font-mono); color: var(--ax-muted); }
+  .joint.follow b { color: var(--ax-ink); }
+  .cv-filter { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .cv-filter .ax-btn { padding: 5px 8px; }
+  .cv-filter .ax-input { flex: 1; min-width: 80px; padding: 4px 6px; }
+  #findings { overflow-y: auto; flex: 1; min-height: 0; }
+  .cv-f { padding: 7px 8px; border-bottom: 1px solid var(--ax-rule); cursor: pointer; transition: background 0.12s; }
+  .cv-f:hover { background: rgba(var(--ax-accent-rgb), 0.06); }
+  .cv-f.on { background: rgba(var(--ax-accent-rgb), 0.1); box-shadow: inset 2px 0 0 var(--ax-accent); }
+  .cv-f .hd { display: flex; gap: 10px; align-items: baseline; font: 11px var(--ax-font-mono); color: var(--ax-muted); }
+  .cv-f .hd .pose { margin-left: auto; color: var(--ax-ink); }
+  .cv-f .msg { font-size: 12px; line-height: 1.4; margin-top: 3px; overflow-wrap: anywhere; }
+  .cv-f.accepted .msg { color: var(--ax-muted); }
+  .cv-f .miss { color: var(--ax-critical); font: 11px var(--ax-font-mono); }
+  .cv-empty { color: var(--ax-muted); font-size: 12px; padding: 8px 0; }
+  .cv-foot { display: flex; justify-content: space-between; gap: 12px; font: 10px var(--ax-font-mono); color: var(--ax-muted); letter-spacing: 0.04em; }
+  .ax-tip { max-width: 440px; }
+  .cv-legend { position: absolute; left: 12px; top: 10px; z-index: 1; background: rgba(14, 15, 16, 0.75); padding: 3px 6px; display: flex; gap: 12px; font: 10px var(--ax-font-mono); color: var(--ax-muted); text-transform: uppercase; letter-spacing: 0.08em; pointer-events: none; }
+  .cv-legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; background: var(--c); margin-right: 5px; vertical-align: -1px; }
+  @media (max-width: 900px) { .cv { height: auto; } .cv-main { grid-template-columns: 1fr; } #view { height: 70vh; } }
+</style>
+</head>
+<body class="ax">
+<main class="cv">
+  <header class="ax-mast">
+    <div>
+      <h1 id="cv-title">cad view</h1>
+      <div class="ax-meta" id="cv-meta"></div>
+    </div>
+    <div class="cv-tools">
+      <button class="ax-btn" id="cv-home" title="Every joint at home (H)">Home pose</button>
+      <button class="ax-btn" id="cv-fit" title="Frame the whole model (F)">Fit</button>
+      <label class="ax-label">Explode <input class="ax-range" id="cv-explode" type="range" min="0" max="1" step="0.01" value="0"></label>
+      <button class="ax-btn" id="cv-xray" title="See through every part (X)">X-ray</button>
+      <button class="ax-btn" id="cv-section" title="Cut the model with a plane (S cycles X, Y, Z, off)">Section off</button>
+      <input class="ax-range" id="cv-cut" type="range" min="0" max="1" step="0.002" value="0.5" hidden>
+      <button class="ax-btn on" id="cv-fails" title="Outline every object named in a fail">Fails</button>
+    </div>
+  </header>
+  <div id="cv-banner" hidden></div>
+  <section class="cv-main">
+    <div class="ax-panel" id="view">
+      <div class="cv-legend" id="cv-legend"></div>
+      <div class="ax-viewport-hint">Drag to orbit · right-drag to pan · scroll to zoom · click a part</div>
+    </div>
+    <aside class="cv-side">
+      <div class="ax-panel">
+        <h2>Joints</h2>
+        <div class="ax-cap">Same pose maths as cadcheck. Click a part to jump to its joint.</div>
+        <div id="joints"></div>
+      </div>
+      <div class="ax-panel">
+        <h2>Findings</h2>
+        <div class="ax-cap" id="cv-fcap">No report. Run cad check, then cad view model.blend cadcheck.json.</div>
+        <div class="cv-filter" id="cv-filter" hidden>
+          <button class="ax-btn on" data-f="all">All</button><button class="ax-btn" data-f="fail">Fail</button><button class="ax-btn" data-f="warn">Warn</button>
+          <input class="ax-input" id="cv-q" placeholder="Filter" aria-label="Filter findings">
+        </div>
+        <div id="findings"></div>
+      </div>
+    </aside>
+  </section>
+  <footer class="cv-foot"><span id="cv-made"></span><span>three.js MIT · Draco Apache-2.0 · Roboto OFL · alex-style MIT</span></footer>
+</main>
+<!--@DATA-->
+<!--@BLOBS-->
+<!--@VIEW-->
+<!--@LICENCES-->
+</body>
+</html>

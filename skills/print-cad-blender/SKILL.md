@@ -17,6 +17,7 @@ description: Parametric, 3D-printable assemblies in headless Blender with cadlib
 | `cad rows cadcheck.json [REGEX]` | one line per check row (or `manifest.json` part), no Blender: grep the report instead of writing a `json.load` snippet (V2A3-T1: 67 bash calls) |
 | `cad bom BOM.md manifest.json` | the BOM's fastener table against the model: size, length, head, count, stock lengths |
 | `cad sheet stl_dir out.png` | all STLs in print orientation on one image |
+| `cad view model.blend cadcheck.json -o out.html` | one offline HTML page to turn, pose and take apart, findings clickable: for anyone without Blender (`reference/view.md`) |
 | `cad printcheck stl_dir [--manifest manifest.json] [--render DIR]` | layer-by-layer support check on the **exported STLs**: every unsupported region per 0.2 mm layer as a bridge (span), cantilever (overhang) or island, plus sloped overhangs and tangent bed contacts, in print and world coordinates; `--where --section auto --only PART` lists them with layer sections as text, `--render` writes maps. `cad check`'s `parts` runs the same check, and `cad q m.blend printcheck PRT_x` runs it on one part |
 | `cad slice stl_dir \| --detect` | a real slicer, sandboxed (no network, no printer, never your slicer settings) and crash-guarded (no crash dialogs): time, filament, warnings, and whether the slicer puts support under each part. It says plainly when no installed slicer is usable; then `cad printcheck` is the authority. The only way a slicer may be run |
 
