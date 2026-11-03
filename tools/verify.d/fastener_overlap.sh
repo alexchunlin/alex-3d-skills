@@ -25,7 +25,7 @@ r = load("repro/cadcheck.json")
 say(r["fails"] == 1 and "FST_m4 head overlaps PRT_rib by" in r["fail_list"][0],
     "repro (rib 3.2 mm off an M4 head, 0.5 mm above the bearing face) fails: %s" % r["fail_list"])
 s = load("cadcheck.json")
-F, W = s["fail_list"], s["warn_list"]
+F, W = s["fail_list"], [x for x in s["warn_list"] if not x.startswith("exposure: ")]   # proud heads: the exposure unit
 for pat in ("FST_fo_nut_nut overlaps PRT_fo_piston by", "FST_fo_buried overlaps PRT_fo_solid by",
             "FST_fo_bburied_nut overlaps PRT_fo_bburied_block by", "FST_fo_tri_nut overlaps PRT_fo_tri_block by"):
     say(any(pat in x for x in F), "fails: %s" % (next((x for x in F if pat in x), pat + " NOT FOUND")))
