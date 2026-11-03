@@ -60,7 +60,7 @@ CAUGHT_FW = ("fail", "warn", "accepted")
 SEV_W = {"blocker": 3, "major": 2, "minor": 1}
 # every check a report line can start with: cadcheck's checks (and its stale-model "build" warn), printcheck, cad bom
 CHECKS = ("parts", "interference", "clearance", "fasteners", "service", "drop", "index", "slide", "distances", "payload",
-          "sightlines", "assembly", "insertion", "stacks", "flexures", "stability", "cables", "build", "printcheck", "bom")
+          "sightlines", "assembly", "insertion", "stacks", "flexures", "stability", "cables", "exposure", "build", "printcheck", "bom")
 UNPROVEN = "not proven clear between the sampled poses"   # cadcheck UNPROVEN_KIND: the interference coverage-limit warn
 GROUPS = (("ALL-v1", lambda a: not a.startswith("v2")), ("ALL-v2", lambda a: a.startswith("v2")), ("ALL", lambda a: True))
 

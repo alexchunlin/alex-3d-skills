@@ -113,7 +113,16 @@ DEFAULTS = {
     # exposed = >= min_escape of 26 rays leave the assembly (R2's bare bus run scored 10-12), or >= view_frac of 240
     # directions toward a viewer above or level (z > view_z) do. A3's bonnet-foot notch scores 6/26 and was missed;
     # at 10% of the viewer directions it is 8.3 mm long (R3: "about 8 mm"), FINDINGS A3-F7
-    "exposure": {"max_cable_mm": 5.0, "cables_ok": [], "min_escape": 8, "view_frac": 0.10, "view_z": -0.2, "nuts_ok": []},
+    # The exposure check applies the same rule to purchased boards and plugs and to screw heads (V2A1-F11: a servo
+    # controller PCB seen through a base notch; #40: the render-only findings were a plug in the hero view and dark
+    # heads on a cover). A BUY_ part is a PCB or a plug by its buy_kind prop ("pcb" / "plug"), else by these name globs.
+    # A PCB warns from pcb_min_share of its surface samples (A1-11 on v2a1: 13 of 138, 9.4 %; the v2a2-a7 controller
+    # behind its slot: 2 of 222, 0.9 %, never raised). Plugs and heads are opt-in: an outward USB-C socket is by design
+    # and no v2 reviewer raised one, and the v2 attempts have 18-21 proud heads each, raised only as an appearance point
+    "exposure": {"max_cable_mm": 5.0, "cables_ok": [], "min_escape": 8, "view_frac": 0.10, "view_z": -0.2, "nuts_ok": [],
+                 "pcb_names": ["*pcb*", "*board*", "*controller*", "*motorgo*", "*esp32*", "*encoder*", "*buck*"],
+                 "plug_names": ["*plug*", "*connector*", "*jack*", "*socket*", "*usb*", "*poe*", "*rj45*", "*jst*"],
+                 "pcb_min_share": 0.05, "plugs": False, "heads": False, "pcbs_ok": [], "plugs_ok": [], "heads_ok": []},
     "carry": {},
     "flexures": [],
     "drop_tests": [],
@@ -2326,13 +2335,18 @@ def head_height(o, head, d, sr):
     fasteners the head end is the top of the head, so measure how far the wider-than-shank section runs."""
     if "fst_head" in o.keys():
         return 0.0
-    hh = 0.0
+    return max([0.0] + head_ts(o, head, d, sr))
+
+
+def head_ts(o, head, d, sr):
+    """Positions along d, from `head`, of the vertices wider than 1.25 x the shank radius: the head."""
+    out = []
     for v in o.data.vertices:
         w = o.matrix_world @ v.co - head
         t = w.dot(d)
-        if (w - d * t).length > sr * 1.25 and t > hh:
-            hh = t
-    return hh
+        if (w - d * t).length > sr * 1.25:
+            out.append(t)
+    return out
 
 
 def pair_nuts(geo, nuts):
@@ -4752,6 +4766,92 @@ def check_cables():
     REPORT["not_checked"].append("cables: bend radius of a lead that is not modelled as a route, slack across joints, connector positions (review by section render)")
 
 
+def buy_kind(o):
+    """'pcb', 'plug' or None for a purchased part: its buy_kind prop (cadlib part(..., buy_kind="pcb")), else the
+    exposure.pcb_names / exposure.plug_names globs, PCB first (the kind checked by default wins a name matching both)."""
+    k = str(o.get("buy_kind") or "").lower()
+    if k in ("pcb", "plug"):
+        return k
+    n = o.name.lower()
+    for kind, sec in (("pcb", "pcb_names"), ("plug", "plug_names")):
+        if any(fnmatch.fnmatch(n, g.lower()) for g in CFG["exposure"][sec]):
+            return kind
+    return None
+
+
+def head_rim_exposed(o, tree):
+    """(exposed of 8, probe centre) for a screw head: 8 points 1 mm outside its rim, a quarter of the head height
+    below its top. In a counterbore (features: head + 1 mm across) or countersink they are in the part, beside a
+    proud head in the open. Closer in, a counterbored head's 0.5 mm gap let tangential rays out over the lip (8 of 8).
+    None when no part of the mesh is wider than the shank."""
+    head, tip, d, hr, sr = fastener_axis(o)
+    ts = head_ts(o, head, d, sr)     # from the cadlib bearing face (head behind it) or the inferred head end
+    if not ts:
+        return None
+    t0, t1 = min(ts), max(ts)
+    u, v = perp_basis(d)
+    at = head + d * (t0 + 0.25 * (t1 - t0))
+    return sum(1 for r in _ring(u, v, hr + 1.0, 8) if exposed(tree, at + r)), at
+
+
+def check_exposure():
+    """Purchased PCBs (and, opted in, plugs and screw heads) visible from outside at home: the cables' exposed() rule
+    on points 0.3 mm off the part's surface, against the solids and fasteners (so a head shades its own rim and a part
+    its own back). A board warns from pcb_min_share (and 2) of its surface samples exposed, a plug from 2 (dense_pts,
+    thinned to at most about 800); a head as head_rim_exposed() says. Cables and nuts report under cables and
+    fasteners."""
+    ex = CFG["exposure"]
+    allow = {"pcb": ex["pcbs_ok"], "plug": ex["plugs_ok"]}
+    set_pose({})
+    tree = scene_bvh(SOLIDS + FASTENERS)
+    rows = []
+    for o in PURCHASED:
+        k = buy_kind(o)
+        if not k or (k == "plug" and not ex["plugs"]) or not len(o.data.vertices):
+            continue
+        P, _ = dense_pts(o, 300)
+        P = P[:: max(1, len(P) // 400)]     # dense_pts keeps every vertex: the MotorGo STL gave 129003 points (40 s)
+        own = bvh_world(o)
+        mw = o.matrix_world
+        exp = []
+        for p in P:
+            loc, nrm, _, _ = own.find_nearest(mw @ Vector(p))
+            if loc is not None and exposed(tree, loc + nrm * 0.3):
+                exp.append(loc)
+        c = [round(x, 1) for x in sum(exp, Vector()) / len(exp)] if exp else None
+        ok = any(fnmatch.fnmatch(o.name, g) for g in allow[k])
+        rows.append({"object": o.name, "kind": k, "exposed_samples": len(exp), "samples": len(P), "center": c, "ok": ok})
+        if len(exp) >= max(2, (ex["pcb_min_share"] if k == "pcb" else 0) * len(P)) and not ok:
+            finding("exposure", "warn", "%s (%s) is visible from outside around %s (%d of %d surface samples): hide it or list it under "
+                    "exposure.%s" % (o.name, "PCB" if k == "pcb" else "plug", c, len(exp), len(P), "pcbs_ok" if k == "pcb" else "plugs_ok"),
+                    object=o.name, center=c)
+    heads = []
+    for o in (FASTENERS if ex["heads"] else []):
+        if is_nut(o) or not len(o.data.vertices):
+            continue
+        r = head_rim_exposed(o, tree)
+        if r is None:
+            continue
+        ok = any(fnmatch.fnmatch(o.name, g) for g in ex["heads_ok"])
+        heads.append({"object": o.name, "exposed_rim": r[0], "at": [round(x, 1) for x in r[1]], "ok": ok})
+    # one warn for all of them, as non-stock lengths: the v2 attempts have 18-21 proud heads each, and a reviewer
+    # names the one that matters (A3-01, A4-01: the detent screw)
+    proud = [h for h in heads if h["exposed_rim"] >= 2 and not h["ok"]]
+    if proud:
+        finding("exposure", "warn", "%d screw head%s proud and visible from outside: %s. Counterbore or cover %s, or list %s under "
+                "exposure.heads_ok" % (len(proud), " is" if len(proud) == 1 else "s are", "; ".join(
+                    "%s at %s" % (h["object"], h["at"]) for h in proud), "it" if len(proud) == 1 else "them",
+                    "it" if len(proud) == 1 else "them"), objects=[h["object"] for h in proud])
+    REPORT["checks"].setdefault("exposure", {"findings": []}).update(rows=rows, heads=heads)
+    REPORT["coverage"].append("exposure: %d purchased PCBs%s (buy_kind or exposure.pcb_names/plug_names globs; a PCB from %d%% of its "
+                              "samples) and %d screw heads, same rule as cables at home pose" % (
+                                  len(rows), "/plugs" if ex["plugs"] else "", 100 * ex["pcb_min_share"], len(heads)))
+    if not ex["plugs"] or not ex["heads"]:
+        REPORT["not_checked"].append("exposure: %s (opt-in: exposure.plugs / exposure.heads true)" % " and ".join(
+            x for x, on in (("plugs", ex["plugs"]), ("screw heads", ex["heads"])) if not on))
+    REPORT["not_checked"].append("exposure: seams, colour and other looks (review the standard renders)")
+
+
 # ------------------------------------------------------------------ main
 
 def check_pose_values():
@@ -4816,7 +4916,8 @@ CHECKS = (("parts", check_parts), ("interference", check_interference), ("fasten
           ("service", check_service), ("drop", check_drop), ("index", check_index), ("slide", check_slide),
           ("distances", check_distances), ("payload", check_payload), ("sightlines", check_sightlines),
           ("assembly", check_assembly), ("insertion", check_insertion), ("stacks", check_stacks), ("flexures", check_flexures),
-          ("snaps", check_snaps), ("calcs", check_calcs), ("stability", check_stability), ("cables", check_cables))
+          ("snaps", check_snaps), ("calcs", check_calcs), ("stability", check_stability), ("cables", check_cables),
+          ("exposure", check_exposure))
 # flexures is not here: it also checks compliant distances rows and slide flexes, and says so in not_checked itself
 ROWS_OF = {"service": "service", "drop": "drop_tests", "index": "index_tests", "slide": "slide_out", "distances": "distances",
            "payload": "payload_fit", "sightlines": "sightlines", "assembly": "assembly_order", "insertion": "assembly_order",

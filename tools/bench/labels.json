@@ -1001,9 +1001,18 @@
    "metric": "aesthetics",
    "summary": "servo-controller PCB visible through a 52 x 24 base notch",
    "tool_catchable": true,
-   "locators": null,
+   "locators": [
+    {
+     "check": "exposure",
+     "objects": [
+      "BUY_servo_controller"
+     ],
+     "kind": "\\(PCB\\) is visible from outside",
+     "region": "around \\[11\\d\\."
+    }
+   ],
    "source": "docs/FINDINGS.md:699",
-   "judgment": "no check reports a visible PCB (exposure covers cables and nuts); a PR that adds one adds this locator"
+   "judgment": "the exposure check's PCB rule (2026-11-03) warns 13 of 138 samples around x 113, inside the reviewer's ray hit at x 111-116.5"
   },
   {
    "attempt": "v2a1",

@@ -52,7 +52,7 @@ Units are mm and degrees. 2D profiles are lists of `(u, v)`. Extrusion `axis` 'X
 | `new_scene(params=dict)` | mm units, clears registries; `params` go into the manifest |
 | `joint("PIV_x", loc, axis, lo, hi, parent=None, home=0, step=None, continuous=False, couple_to=None, couple_ratio=1, prismatic=False)` | create joints before parts that hang under them; `prismatic=True` slides along +axis, values in mm (gates, drawers) |
 | `set_pose(PIV_pan=30, PIV_tilt=45)` | unlisted joints go home; coupled joints follow |
-| `part(ob, name, kind, color, joint=None, **info)` | `PRT` needs `stl, print_rot, orient, supports` (plus `infill`); print settings: [materials.md](materials.md); `BUY` should give `mass_g, src`. Colours: `"pla_a"`, `"pla_b"`, `"buy"`, `"buy_metal"`, `"pcb"`, or an RGBA tuple. |
+| `part(ob, name, kind, color, joint=None, **info)` | `PRT` needs `stl, print_rot, orient, supports` (plus `infill`); print settings: [materials.md](materials.md); `BUY` should give `mass_g, src`; `buy_kind="pcb"`/`"plug"` types it for the exposure check. Colours: `"pla_a"`, `"pla_b"`, `"buy"`, `"buy_metal"`, `"pcb"`, or an RGBA tuple. |
 | `R_ID, R_FLIP, R_PX_DOWN, R_NX_DOWN, R_PY_DOWN, R_NY_DOWN` | common `print_rot` values |
 | `fastener(name, at, into, length, spec="M3_cap", joint=None, host=None, step=None)` | `spec`: `<size>_cap`, `_pan`, `_csk` for every size in `SIZES` (M2 to M5), plus `M3_selftap_pan` and `M3_hex`; use stocked lengths (cadcheck warns otherwise) |
 | `nut(name, at, into, joint=None, af=None, h=None, step=None, size="M3")` | hex nut, bearing face at `at`; cadcheck checks the bolt on its axis reaches through it |
