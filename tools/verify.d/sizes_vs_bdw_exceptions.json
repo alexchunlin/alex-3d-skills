@@ -1,0 +1,128 @@
+[
+ {
+  "id": "M2 cap_d",
+  "ours": "3.8",
+  "theirs": "3.98",
+  "verdict": "ours (plain-head max)",
+  "reason": "ISO 4762 dk max is the plain head; bd_warehouse lists the knurled-head max (+0.18 mm M2-M3, +0.22 mm M4-M5). Our counterbore_d is dk + 1.0, so the knurled max still clears with 0.82 mm diametral margin. Counterbore fit itself: pending coupon."
+ },
+ {
+  "id": "M2.5 cap_d",
+  "ours": "4.5",
+  "theirs": "4.68",
+  "verdict": "ours (plain-head max)",
+  "reason": "ISO 4762 dk max is the plain head; bd_warehouse lists the knurled-head max (+0.18 mm M2-M3, +0.22 mm M4-M5). Our counterbore_d is dk + 1.0, so the knurled max still clears with 0.82 mm diametral margin. Counterbore fit itself: pending coupon."
+ },
+ {
+  "id": "M3 cap_d",
+  "ours": "5.5",
+  "theirs": "5.68",
+  "verdict": "ours (plain-head max)",
+  "reason": "ISO 4762 dk max is the plain head; bd_warehouse lists the knurled-head max (+0.18 mm M2-M3, +0.22 mm M4-M5). Our counterbore_d is dk + 1.0, so the knurled max still clears with 0.82 mm diametral margin. Counterbore fit itself: pending coupon."
+ },
+ {
+  "id": "M4 cap_d",
+  "ours": "7",
+  "theirs": "7.22",
+  "verdict": "ours (plain-head max)",
+  "reason": "ISO 4762 dk max is the plain head; bd_warehouse lists the knurled-head max (+0.18 mm M2-M3, +0.22 mm M4-M5). Our counterbore_d is dk + 1.0, so the knurled max still clears with 0.78 mm diametral margin. Counterbore fit itself: pending coupon."
+ },
+ {
+  "id": "M5 cap_d",
+  "ours": "8.5",
+  "theirs": "8.72",
+  "verdict": "ours (plain-head max)",
+  "reason": "ISO 4762 dk max is the plain head; bd_warehouse lists the knurled-head max (+0.18 mm M2-M3, +0.22 mm M4-M5). Our counterbore_d is dk + 1.0, so the knurled max still clears with 0.78 mm diametral margin. Counterbore fit itself: pending coupon."
+ },
+ {
+  "id": "M2 pilot_d",
+  "ours": "1.7",
+  "theirs": "1.6",
+  "verdict": "pending coupon",
+  "reason": "bd 'Soft' is a tap-drill table value, not an ISO dimension; ours is deliberately 0.1 above it for a PLA self-tap (features.py header: M2 holes are table values to confirm by coupon). Left alone."
+ },
+ {
+  "id": "M2.5 insert_d",
+  "ours": "3.6",
+  "theirs": "4",
+  "verdict": "pending coupon",
+  "reason": "bd/vendors (CNC Kitchen M2.5x4 dc 4.0; Ruthex M2.5x5.7 dc 3.9) say 3.9-4.0; ours 3.6 is 0.3-0.4 mm under the vendor figure. Vendor data supports theirs, but a print decides; coupon 3.6/3.8/3.9/4.0 pending, SIZES not changed here."
+ },
+ {
+  "id": "M3 pan_d",
+  "ours": "6",
+  "theirs": "5.6",
+  "verdict": "ours (ISO 7045)",
+  "reason": "features.py:52 cites ISO 7045 (cross-recess pan head, dk max 6.0). bd has no ISO 7045 table: its pan data is ISO 14583 (Torx) and ISO 1580 (slotted), both 5.6 at M3. A different standard, not a contradiction. M2/M2.5/M4/M5 agree with 14583 because the standards coincide there. Cutter-side, a larger dk only widens the counterbore."
+ },
+ {
+  "id": "M3 csk_d",
+  "ours": "6",
+  "theirs": "5.6",
+  "verdict": "theirs (change in a follow-up)",
+  "reason": "ISO 7046 actual dk max at M3 is about 5.5 (issue #37), bd lists 5.6; ours 6.0 is above both and has no citation (RULES overlay comment: '90 deg countersunk'). Standard supports theirs. SIZES not changed in this PR; follow-up decides whether the 0.4 mm margin is wanted."
+ },
+ {
+  "id": "M4 csk_d",
+  "ours": "8.4",
+  "theirs": "7.5",
+  "verdict": "bd table unreliable; pending standard",
+  "reason": "bd's iso7046 M4 dk 7.5 and k 2.2 are identical to its iso2009 M4 dk and k, so the row is not independent evidence. Ours cites ISO 7046 (features.py header). Not settled from the tables; left alone. Larger dk is the safe side for a countersink cutter."
+ },
+ {
+  "id": "M4 csk_h",
+  "ours": "2.7",
+  "theirs": "2.2",
+  "verdict": "bd table unreliable; pending standard",
+  "reason": "Same bd error as M4 csk_d: iso7046 M4 k 2.2 equals iso2009 M4 k. Left alone."
+ },
+ {
+  "id": "M5 csk_d",
+  "ours": "9.3",
+  "theirs": "9.2",
+  "verdict": "bd table unreliable; pending standard",
+  "reason": "Same bd error as M4: iso7046 M5 (dk 9.2, k 2.5) equals iso2009 M5. 0.1 mm difference, left alone."
+ },
+ {
+  "id": "M5 csk_h",
+  "ours": "2.7",
+  "theirs": "2.5",
+  "verdict": "bd table unreliable; pending standard",
+  "reason": "Same bd error as M4: iso7046 M5 k 2.5 equals iso2009 M5 k. Left alone."
+ },
+ {
+  "id": "M4 insert_wall",
+  "ours": "1.6 (axial only)",
+  "theirs": "2.1",
+  "verdict": "pending coupon",
+  "reason": "bd material_thickness for the Ruthex/CNC Kitchen M4x8.1 insert is 2.1 mm of material around the insert; our min_wall 1.6 is only applied along the axis, no radial wall is enforced for inserts. Vendor guidance supports theirs; follow-up: a radial-wall check in cadcheck, sized from a coupon."
+ },
+ {
+  "id": "M5 insert_wall",
+  "ours": "1.6 (axial only)",
+  "theirs": "2.6",
+  "verdict": "pending coupon",
+  "reason": "As M4: vendor material_thickness 2.6 mm for M5x9.5 against 1.6 axial-only. Follow-up with the M4 check."
+ },
+ {
+  "id": "M3 stock_length 18",
+  "ours": "18",
+  "theirs": "not a nominal length of ISO 4762/7046/14583",
+  "verdict": "ours (stock list)",
+  "reason": "cadcheck DEFAULTS fasteners.stock_lengths is the set the project buys; the ISO lists are preferred lengths and 18 / 22 mm are non-preferred but sold. No dimensional conflict; a project's checks.json can override the list."
+ },
+ {
+  "id": "M3 stock_length 22",
+  "ours": "22",
+  "theirs": "not a nominal length of ISO 4762/7046/14583",
+  "verdict": "ours (stock list)",
+  "reason": "cadcheck DEFAULTS fasteners.stock_lengths is the set the project buys; the ISO lists are preferred lengths and 18 / 22 mm are non-preferred but sold. No dimensional conflict; a project's checks.json can override the list."
+ },
+ {
+  "id": "M4 stock_length 18",
+  "ours": "18",
+  "theirs": "not a nominal length of ISO 4762/7046/14583",
+  "verdict": "ours (stock list)",
+  "reason": "cadcheck DEFAULTS fasteners.stock_lengths is the set the project buys; the ISO lists are preferred lengths and 18 / 22 mm are non-preferred but sold. No dimensional conflict; a project's checks.json can override the list."
+ }
+]
