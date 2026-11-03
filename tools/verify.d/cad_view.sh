@@ -34,11 +34,28 @@ $CAD view "$CV/v2a7/model.blend" -o "$CV/v2a7_st.html" --selftest --pose feeder=
 rm -f "$CV/wrong.html"
 $CAD view "$CV/v2a7/model.blend" "$DB/cadcheck.json" -o "$CV/wrong.html" > "$CV/wrong.log" 2>&1; rc=$?
 [ $rc = 2 ] && [ ! -f "$CV/wrong.html" ] && grep -q 'not in the blend: .*PRT_barrel' "$CV/wrong.log" \
-  && ok "cad view: the demo report on the v2a7 blend is refused (exit 2, no page): $(grep -o '[0-9]* name(s) in the report are not in the blend' "$CV/wrong.log")" \
+  && ok "cad view: the demo report on the v2a7 blend is refused (exit 2, no page): $(grep -o '[0-9]* of the [0-9]* name(s) in the report are not in the blend' "$CV/wrong.log")" \
   || bad "cad view: a report from another model was not refused (exit $rc): $(tail -2 "$CV/wrong.log")"
 $CAD view "$CV/v2a7/model.blend" "$DB/cadcheck.json" -o "$CV/forced.html" --force > "$CV/forced.log" 2>&1; rc=$?
 [ $rc = 0 ] && grep -q 'MISMATCH flagged' "$CV/forced.log" && grep -q 'name(s) in the report are not in this blend' "$CV/forced.html" \
   && ok "cad view: --force builds the mismatched page with the mismatch in its banner" || bad "cad view: --force (exit $rc): $(tail -2 "$CV/forced.log")"
+# the model's own report with what cadcheck itself writes (review): a config glob that matches nothing, a stale config
+# name, and text that would end or swallow the page's data block. Builds (exit 0), flags only PRT_clip, page loads
+python3 -I - "$DB/cadcheck.json" "$CV/odd.json" <<'PY'
+import json, sys
+r = json.load(open(sys.argv[1]))
+f = r["checks"]["fasteners"]["findings"]
+f.append({"status": "warn", "msg": "assembly_order step 'lid': \"order\" glob PRT_lid* matches none"})
+f.append({"status": "warn", "msg": "PRT_clip: not found or has no print_rot", "part": "PRT_clip"})
+f.append({"status": "fail", "msg": "PRT_base note <!--<script> </script><img src=x onerror=alert(1)>", "object": "PRT_base"})
+json.dump(r, open(sys.argv[2], "w"))
+PY
+$CAD view "$DB/demo.blend" "$CV/odd.json" -o "$CV/odd.html" > "$CV/odd.log" 2>&1; rc=$?
+[ $rc = 0 ] && grep -q '1 of the [0-9]* name(s) in the report are not in this blend: PRT_clip$' "$CV/odd.log" && grep -q '24 findings' "$CV/odd.log" \
+  && ok "cad view: the model's own report with a no-match glob and a stale config name builds, flagging only PRT_clip" \
+  || bad "cad view: a report with a glob / stale name (exit $rc): $(tail -3 "$CV/odd.log")"
+grep -q 'Apache License' "$CV/demo.html" && grep -q 'SIL OPEN FONT LICENSE' "$CV/demo.html" && grep -q 'three.js authors' "$CV/demo.html" \
+  && ok "cad view: the page carries the three.js, Draco and Roboto licence texts" || bad "cad view: licence texts missing from the page"
 $CAD view "$DB/demo.blend" "$ROOT/examples/mm-launcher-v2a7/manifest.json" -o "$CV/manifest.html" > "$CV/manifest.log" 2>&1; rc=$?
 [ $rc = 2 ] && grep -q 'is not a cadcheck report' "$CV/manifest.log" && ok "cad view: a manifest.json given as the report is refused (exit 2)" \
   || bad "cad view: a manifest.json as the report (exit $rc): $(tail -2 "$CV/manifest.log")"
@@ -48,6 +65,9 @@ $CAD view "$DB/demo.blend" -o "$CV/pose.html" --pose PIV_nope=3 > "$CV/pose.log"
 # in a browser: Blender's matrix_world at every joint's limits against the page's pose maths, a slider, a finding click
 CHROME_BIN="${CHROME:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
 if [ -x "$CHROME_BIN" ] && node -e 'process.exit(typeof WebSocket === "function" ? 0 : 1)' 2>/dev/null; then
+  node "$ROOT/tools/verify.d/cad_view_browser.mjs" "$CV/odd.html" --eval "cadview.FINDS.length + ' ' + document.querySelectorAll('.cv-f').length" > "$CV/odd_browser.txt" 2>&1 \
+    && grep -q '^EVAL "24 24"' "$CV/odd_browser.txt" && ok "cad view (Chrome): '<!--<script' and markup in a finding stay text: the page loads, 24 findings listed" \
+    || bad "cad view (Chrome): the page with markup in a finding: $(tr '\n' ' ' < "$CV/odd_browser.txt" | cut -c1-300)"
   for p in demo v2a7; do
     node "$ROOT/tools/verify.d/cad_view_browser.mjs" "$CV/${p}_st.html" --selftest --shot "$CV/$p.png" > "$CV/${p}_browser.txt" 2>&1; rc=$?
     python3 -I - "$CV/${p}_browser.txt" "$p" "$rc" <<'PY' > "$CV/${p}_browser_asserts.txt"
@@ -66,6 +86,7 @@ say(r["poses"] >= 5 and r["max_err_mm"] < 0.01, "pose maths match Blender's matr
     r["poses"], r["max_err_mm"], r["worst"]))
 s = r["ui"].get("slider") or {}
 say(s.get("moved_mm", 0) > 1, "moving the %s slider to %s moves %s by %s mm" % (s.get("joint"), s.get("to"), s.get("part"), s.get("moved_mm")))
+say("reach" in r["ui"] and not r["ui"]["reach"], "every slider reaches its limits and home exactly (v2a7 hood: 0.327; misses: %s)" % r["ui"].get("reach"))
 if page == "demo":
     f = r["ui"].get("finding") or {}
     say(f.get("pose") == {"PIV_tilt": -50} and f.get("page_pose") == {"PIV_tilt": -50} and f.get("sliders") == {"PIV_tilt": -50}

@@ -23,7 +23,7 @@ const meta = [`<span>${esc(DATA.blend)}</span>`, `<span>saved ${esc(DATA.saved)}
 if (REP) {
   const nf = FINDS.filter(f => f.status === 'fail').length, nw = FINDS.length - nf;
   meta.push(`<span>${esc(REP.file)} ${esc(REP.generated || '')}</span>`,
-    `<span class="ax-status ${nf ? 'critical' : 'good'}">${nf} fail</span>`, `<span class="ax-status ${nw ? 'warning' : 'good'}">${nw} warn</span>`);
+    `<span class="ax-status ${nf ? 'critical' : 'good'}">${nf} fail</span>`, `<span class="ax-status ${nw ? 'warning' : 'good'}">${nw} warn${REP.untriaged != null && REP.untriaged !== nw ? `, ${REP.untriaged} untriaged` : ''}</span>`);
 }
 $('#cv-meta').innerHTML = meta.join('');
 $('#cv-made').textContent = `Made by cad view from ${DATA.blend}. Display mesh (Draco, 14-bit): measure with cad q.`;
@@ -280,7 +280,7 @@ for (const j of DATA.joints) {
   else if (!j.axis) note = 'no axis: fixed';
   else if (lo == null) note = 'no range: cadcheck holds it at home';
   row.innerHTML = `<div class="row"><span class="ax-label">${esc(label)} · ${j.kind === 'prismatic' ? 'slide' : 'turn'} ${j.axis || ''}</span><b><span>0</span><small>${unit(j)}</small></b></div>` +
-    (ranged ? `<input class="ax-range" type="range" min="${lo}" max="${hi}" step="${j.kind === 'prismatic' ? 0.05 : 0.25}" aria-label="${esc(label)}">` +
+    (ranged ? `<input class="ax-range" type="range" min="${lo}" max="${hi}" step="any" aria-label="${esc(label)}">` +
       `<div class="lim"><span>${+(+lo).toFixed(2)}</span><span>${note}</span><span>${+(+hi).toFixed(2)}</span></div>` : `<div class="lim"><span>${esc(note)}</span></div>`);
   if (!ranged) row.classList.add('follow');
   rowsEl.appendChild(row);
@@ -440,7 +440,7 @@ $('#cv-explode').addEventListener('input', e => { S.explode = +e.target.value; a
 const xb = $('#cv-xray');
 xb.onclick = () => { S.xray = !S.xray; xb.classList.toggle('on', S.xray); restyle(); };
 const fb = $('#cv-fails');
-fb.onclick = () => { S.failTint = !S.failTint; fb.classList.toggle('on', S.failTint); fb.textContent = S.failTint ? 'Fails tinted' : 'Fails plain'; restyle(); };
+fb.onclick = () => { S.failTint = !S.failTint; fb.classList.toggle('on', S.failTint); fb.textContent = S.failTint ? 'Fails' : 'Fails off'; restyle(); };
 if (!failNames.size) fb.hidden = true;
 const sb = $('#cv-section'), cut = $('#cv-cut');
 function setSection(ax) {
@@ -526,6 +526,15 @@ if (TEST) {
       jr.input.value = jr.hi; jr.input.dispatchEvent(new Event('input'));
       const moved = Math.max(...cs.map(c => c.clone().applyMatrix4(p.node.matrixWorld).distanceTo(c.clone().applyMatrix4(w0))));
       out.ui.slider = { joint: jr.j.name, to: jr.hi, part: p.name, moved_mm: +moved.toFixed(3) };
+      // every slider reaches its limits and home exactly (a fixed step missed hood's 0.327 limit: review)
+      out.ui.reach = [];
+      for (const r of Object.values(rows)) {
+        if (!r.input) continue;
+        for (const x of r.j.continuous ? [0, 359.5] : [r.lo, r.hi, r.j.home || 0]) {
+          r.input.value = x; r.input.dispatchEvent(new Event('input'));
+          if (Math.abs(values(S.pose)[r.j.name] - x) > 1e-9) out.ui.reach.push([r.j.name, x, values(S.pose)[r.j.name]]);
+        }
+      }
     }
     // clicking the first finding with a pose (a fail if there is one) poses the model there and lights its objects
     const posed = f => f.pose && Object.keys(f.pose).length && f.names.length;
@@ -543,7 +552,7 @@ if (TEST) {
       $('#cv-explode').value = 0; $('#cv-explode').dispatchEvent(new Event('input')); return +d.toFixed(2); })();
     sb.click(); xb.click(); restyle(); renderer.render(scene, camera); sb.click(); sb.click(); sb.click(); xb.click();
     out.pass = !errors.length && out.objects === out.expected_objects && out.poses > 0 && out.max_err_mm < 0.01 &&
-      (!out.ui.slider || out.ui.slider.moved_mm > 0.01) &&
+      (!out.ui.slider || out.ui.slider.moved_mm > 0.01) && !(out.ui.reach || []).length &&
       (!out.ui.finding || (Object.keys(out.ui.finding.pose).every(k => Math.abs(out.ui.finding.pose[k] - out.ui.finding.page_pose[k]) < 1e-6) && out.ui.finding.lit.length > 0));
   } catch (err) { errors.push(String(err.stack || err)); }
   const pre = document.createElement('pre');

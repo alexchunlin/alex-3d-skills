@@ -7,7 +7,7 @@ cad view model.blend -o out.html --pose tilt=30,pan=45  # open at a pose (joint 
 
 The page is one file with no network: three.js, the Draco decoder and the fonts are inlined. Anyone can open it from
 a mail attachment or a chat and turn the model in a browser. It holds about 1 MB for the 178-object v2 launcher and
-0.5 MB for the demo turret. Nearly all of the turret's page is the viewer (three.js, the decoder, the fonts); the
+0.5 MB for the demo turret. The licence texts of what it inlines travel in the file. Nearly all of the turret's page is the viewer (three.js, the decoder, the fonts); the
 launcher's geometry adds 0.5 MB.
 
 What it shows:
@@ -27,9 +27,10 @@ What it shows:
 - Explode (radial, about the assembly centre), x-ray, and a section plane on X, Y or Z.
   Keys: H home, F fit, X x-ray, S section, Esc clears the selection.
 
-It refuses (exit 2) a report that names objects or joints the blend doesn't have, because that report is from
-another model. `--force` builds the page anyway and puts the mismatch in a red banner. A blend saved after its
-report gets a banner too.
+It refuses (exit 2) a report from another model: one where every name it uses is missing from the blend, or at least
+3 names and 20 % are (the demo report on the v2 launcher misses 11 of 17). `--force` builds the page anyway with the
+mismatch in a red banner. A few missing names (a stale config name cadcheck warns about) are flagged in the banner
+and on each finding. So are a blend saved after its report and a report made from another blend path.
 
 The geometry is Blender's glTF exporter with Draco at 14-bit positions (about 0.02 mm on a 300 mm part), so measure
 with `cad q`, never from the page. To test a page: `node tools/verify.d/cad_view_browser.mjs out.html --shot s.png`

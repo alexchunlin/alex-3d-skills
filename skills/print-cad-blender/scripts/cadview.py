@@ -23,7 +23,7 @@ ROLE_COLL = {"PRT": "printed", "BUY": "purchased", "FST": "fasteners", "CAB": "c
 DEFAULT_COLL = {"printed": "Printed", "purchased": "Purchased", "fasteners": "Fasteners", "cables": "Cables"}
 ROLE_RGBA = {"PRT": (0.82, 0.80, 0.76, 1.0), "BUY": (0.22, 0.23, 0.25, 1.0), "FST": (0.55, 0.56, 0.58, 1.0),
              "CAB": (0.08, 0.08, 0.08, 1.0)}    # cadlib asm.PALETTE, for an object with no material
-NAME_RE = re.compile(r"\b(?:PRT|BUY|FST|CAB|PIV)_[A-Za-z0-9_.]*[A-Za-z0-9]")
+NAME_RE = re.compile(r"\b(?:PRT|BUY|FST|CAB|PIV)_[A-Za-z0-9_.\-]*[A-Za-z0-9]")   # a3 has FST_cap_L-1
 NAME_KEYS = ("object", "a", "b", "part", "objects", "obstacles", "joint")
 PROPS = ("orient", "supports", "infill", "material", "stl", "fst_kind")
 
@@ -80,7 +80,9 @@ def names_in(f):
         for x in (v if isinstance(v, list) else list(v) if isinstance(v, dict) else [v]):
             if isinstance(x, str) and NAME_RE.fullmatch(x):
                 out.append(x)
-    out += NAME_RE.findall(f.get("msg", ""))
+    msg = str(f.get("msg", ""))
+    # not a glob from the config ("order" glob PRT_lid* matches none): cadcheck quotes those in its own warns
+    out += [m[0] for m in NAME_RE.finditer(msg) if msg[m.end():m.end() + 1] not in ("*", "?", "[")]
     return list(dict.fromkeys(out))
 
 
@@ -120,7 +122,12 @@ def findings(rep, objs, joints):
             if pose_s is None:
                 m = re.search(r"\bat ((?:[A-Za-z0-9_]+=-?[\d.]+(?:, )?)+)", msg)
                 pose_s = m[1].rstrip(", ") if m else None
-            pose = parse_pose(pose_s) if isinstance(pose_s, str) else None
+            if isinstance(pose_s, dict):   # {"PIV_x": deg} or {"x": deg}
+                pose = {(k if str(k).startswith("PIV_") else "PIV_" + str(k)): float(v) for k, v in pose_s.items()
+                        if isinstance(v, (int, float))}
+                pose_s = ", ".join("%s=%g" % (k.replace("PIV_", ""), v) for k, v in sorted(pose.items())) or "home"
+            else:
+                pose = parse_pose(pose_s) if isinstance(pose_s, str) else None
             names = names_in(f)
             miss = [n for n in names if n not in objs] + [j for j in (pose or {}) if j not in joints]
             for n in miss:
@@ -189,8 +196,13 @@ def main():
             die("%s is not a cadcheck report (cad check writes one)" % a["report"])
         cfg = dict(rep.get("config") or {})
     if a["config"]:
-        with open(a["config"]) as f:
-            c2 = json.load(f)
+        try:
+            with open(a["config"]) as f:
+                c2 = json.load(f)
+        except (OSError, ValueError) as e:
+            die("cannot read --config %s: %s" % (a["config"], e))
+        if not isinstance(c2, dict):
+            die("--config %s is not a checks.json object" % a["config"])
         for k in ("joints", "couplings", "carry", "collections"):
             if k in c2:
                 cfg[k] = c2[k]
@@ -225,24 +237,30 @@ def main():
     vl.update()
 
     recs, missing = findings(rep, objs, J) if rep else ([], {})
-    for n in sorted(report_names(rep) - objs) if rep else []:
+    rnames = report_names(rep) if rep else set()
+    for n in sorted(rnames - objs):
         missing.setdefault(n, []).append("check rows")
-    if missing and not a["force"]:
-        die("%s does not match %s: %d name(s) in the report are not in the blend: %s. Wrong report? Re-run cad check, "
-            "or --force to build the page with the mismatch flagged" % (a["report"], os.path.basename(blend), len(missing),
-                                                                        ", ".join(sorted(missing)[:10])))
+    named = rnames | {n for r in recs for n in r["names"] + r["missing"]}
+    # Another model's report misses most names (demo on v2a7: 11 of 15, v2a7 on demo: 178). A model's own report can
+    # name a few that aren't objects: a stale config name cadcheck warns about ("PRT_clip: not found"). Refuse the
+    # first; flag the second in the banner and on each finding.
+    wrong = missing and (len(missing) == len(named) or (len(missing) >= 3 and len(missing) >= 0.2 * len(named)))
+    if wrong and not a["force"]:
+        die("%s does not match %s: %d of the %d name(s) in the report are not in the blend: %s. Wrong report? Re-run cad "
+            "check, or --force to build the page with the mismatch flagged" % (a["report"], os.path.basename(blend),
+                                                                               len(missing), len(named), ", ".join(sorted(missing)[:10])))
     warn = []
     if missing:
-        warn.append("%d name(s) in the report are not in this blend: %s" % (len(missing), ", ".join(sorted(missing)[:8])))
+        warn.append("%d of the %d name(s) in the report are not in this blend: %s" % (len(missing), len(named), ", ".join(sorted(missing)[:8])))
     if rep:
         try:
-            t_rep = datetime.datetime.strptime(rep.get("generated", ""), "%Y-%m-%d %H:%M:%S").timestamp()
+            t_rep = datetime.datetime.strptime(str(rep.get("generated") or ""), "%Y-%m-%d %H:%M:%S").timestamp()
             if os.path.getmtime(blend) > t_rep + 1:
                 warn.append("the blend was saved after this report (%s): re-run cad check" % rep["generated"])
         except ValueError:
-            pass
-        if rep.get("blend") and os.path.basename(rep["blend"]) != os.path.basename(blend):
-            print("cadview: note: the report was made from %s, the page shows %s" % (rep["blend"], blend))
+            warn.append("the report has no readable 'generated' time, so it can't be dated against the blend")
+        if rep.get("blend") and os.path.basename(str(rep["blend"])) != os.path.basename(blend):
+            warn.append("the report was made from %s; this page shows %s" % (rep["blend"], os.path.basename(blend)))
     for w in warn:
         print("cadview: warning: " + w)
 
@@ -322,8 +340,12 @@ def main():
         "<!--@FONTS-->": "<style>\n" + fonts + "</style>",
         # comments out: tokens.css's header shows a Google Fonts <link>, and the fonts are inlined above
         "<!--@TOKENS-->": "<style>\n" + re.sub(r"/\*.*?\*/", "", read("vendor/tokens.css"), flags=re.S) + "\n</style>",
-        "<!--@DATA-->": '<script type="application/json" id="cv-data">' + json.dumps(data, separators=(",", ":")).replace("</", "<\\/") + "</script>",
+        "<!--@DATA-->": '<script type="application/json" id="cv-data">' + json.dumps(data, separators=(",", ":")).replace("<", "\\u003c") + "</script>",
         "<!--@BLOBS-->": "\n".join('<script type="application/octet-stream" id="%s">%s</script>' % (k, b64gz(v)) for k, v in blobs.items()),
+        # the licences travel with the page, which is the copy people pass around (MIT / Apache-2.0 / OFL ask for it)
+        "<!--@LICENCES-->": "<!--\n" + "\n\n".join("==== %s\n%s" % (n, read("vendor/" + f).replace("--", "- -")) for n, f in (
+            ("three.js 0.170.0", "LICENSE-three.txt"), ("Draco decoder (three.js glTF build)", "LICENSE-draco.txt"),
+            ("Roboto, Roboto Condensed, Roboto Mono", "fonts/OFL.txt"), ("alex-style guide (tokens.css, ax-three.js)", "LICENSE-alex-style.txt"))) + "\n-->",
         "<!--@VIEW-->": "<script>\n" + read("view.js").replace("</script", "<\\/script") + "\n</script>",
     }
     for tag in parts:
@@ -336,7 +358,7 @@ def main():
     kb = os.path.getsize(out) / 1024
     print("CADVIEW %s %.0f KB: %d objects, %d joints, %d findings (%d fail), geometry %.0f KB%s" % (
         out, kb, len(view), len(J), len(recs), sum(r["status"] == "fail" for r in recs), len(glb_bytes) / 1024,
-        "; MISMATCH flagged (--force)" if missing else ""))
+        "; MISMATCH flagged (--force)" if wrong else "; %d name(s) not in the blend, flagged" % len(missing) if missing else ""))
 
 
 def selftest_poses(J, CP, view, recs):
