@@ -9,11 +9,14 @@ reader can list, and Metadata/model_settings.config with Bambu Studio / OrcaSlic
 sparse_infill_density, ...), so the slicer starts from them instead of its defaults. Push-assist's hand-written 3MFs
 had neither, so the parts would print at 2 walls and 15 % (PA-A8-T13). An STL has only its 80-byte header: the
 settings go there as text ("alex-3d-skills cadlib PETG walls=3 infill=40%"), which slicers ignore.
+
+write_glb (cadlib/gltf.py, re-exported here) writes model.glb next to the STLs for any glTF viewer (issue #31).
 """
 import bpy, os, struct, zipfile
 from xml.sax.saxutils import quoteattr, escape
 from mathutils import Vector, Matrix
 from . import asm, features
+from .gltf import write_glb  # noqa: F401  (model.glb: cadlib/gltf.py; build scripts call export.write_glb)
 import cadmat
 
 CAD_NS = "https://github.com/alexchunlin/alex-3d-skills/print-settings"

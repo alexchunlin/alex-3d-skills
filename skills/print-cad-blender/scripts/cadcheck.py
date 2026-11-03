@@ -4085,6 +4085,8 @@ def check_insertion():
             free = way.get(label) or way_in(mv, obst, dirs)
             insertion_allow_use(mv, base + same, obst, [d for dn, d in dirs if free in (None, dn)], cache)
             rec = {"object": label, "step": st["step"], "free_dir": free, "obstacles": len(obst), "same_step_before": len(same)}
+            # the way out as a world unit vector, so a reader (gltf.write_glb's assembly clip) needn't parse the label
+            rec["free_dir_vec"] = [round(c, 6) for c in dict(dirs)[free]] if free in dict(dirs) else None
             if free is None:
                 full = {dn: _blocked(mv, obst, d, cache, False) for dn, d in dirs}
                 rec["blocked"] = {dn: [{"by": b, "mover": m, "at_mm": a} for b, m, a in bl[:3]] for dn, bl in full.items()}

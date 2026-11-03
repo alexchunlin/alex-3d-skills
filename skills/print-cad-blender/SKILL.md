@@ -9,7 +9,7 @@ description: Parametric, 3D-printable assemblies in headless Blender with cadlib
 
 | Tool | Does |
 |---|---|
-| `cadlib/` | geometry + Manifold booleans (`geom`), print features (`features`), assembly conventions (`asm`), STL export (`export`), renders (`render`) |
+| `cadlib/` | geometry + Manifold booleans (`geom`), print features (`features`), assembly conventions (`asm`), STL/3MF export (`export`; `--glb`: animated model.glb, `reference/view.md`), renders (`render`) |
 | `cad build build.py -- args` | run a build script headless. A script that raises exits non-zero and prints `cad: BUILD FAILED`; `cad check` warns when sources are newer than the blend |
 | `cad check model.blend checks.json` | every check below, JSON evidence plus a 40-line summary, about 2-40 s |
 | `cad q model.blend <cmd>` | one measurement: `dist`, `sweep`, `ray`, `inside`, `list`, `section`, `render`. `cad q` alone prints the commands |
