@@ -11,10 +11,11 @@ three.js, the Draco decoder and the fonts are inlined from viewer/vendor (viewer
 network when building or viewing. Prints `CADVIEW out.html <KB> ...` on success.
 --selftest embeds Blender's matrix_world at a set of poses; open the page with #selftest to compare (tools/verify.d).
 """
-import bpy, base64, contextlib, ctypes, datetime, fnmatch, gzip, json, os, re, shutil, sys, tempfile
+import bpy, base64, datetime, fnmatch, gzip, json, os, re, shutil, sys, tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from cadlib import joints as JT  # noqa: E402  (the pose maths cadcheck and cadq use)
+from cadlib import export as EX  # noqa: E402  (the glTF exporter call, shared with export.write_glb)
 
 VIEWER = os.path.join(HERE, "viewer")
 VENDOR = os.path.join(VIEWER, "vendor")
@@ -146,26 +147,6 @@ def findings(rep, objs, joints):
     return out, missing
 
 
-@contextlib.contextmanager
-def quiet(path):
-    """stdout and stderr (the file descriptors, so C++ output too) into `path` for the block."""
-    sys.stdout.flush(); sys.stderr.flush()
-    saved = [os.dup(1), os.dup(2)]
-    with open(path, "w") as f:
-        os.dup2(f.fileno(), 1); os.dup2(f.fileno(), 2)
-        try:
-            yield
-        finally:
-            sys.stdout.flush(); sys.stderr.flush()
-            try:
-                ctypes.CDLL(None).fflush(None)   # Draco prints through C stdio, which would flush after the restore
-            except (OSError, AttributeError):
-                pass
-            os.dup2(saved[0], 1); os.dup2(saved[1], 2)
-            for d in saved:
-                os.close(d)
-
-
 def flat(M):
     return [round(float(M[i][j]), 7) for i in range(4) for j in range(4)]
 
@@ -264,29 +245,15 @@ def main():
     for w in warn:
         print("cadview: warning: " + w)
 
-    # glTF + Draco: the view objects, every joint, and their ancestors, in Blender's Z-up frame
-    sel = set(o.name for o in view) | set(J)
-    for n in list(sel):
-        p = O[n].parent
-        while p is not None:
-            sel.add(p.name)
-            p = p.parent
-    for o in vl.objects:
-        o.select_set(o.name in sel)
+    # glTF + Draco: the view objects, every joint, and their ancestors, in Blender's Z-up frame (cadlib.export.gltf,
+    # the exporter settings model.glb uses too)
     tmp = tempfile.mkdtemp(prefix="cadview")
-    glb = os.path.join(tmp, "model.glb")
-    log = os.path.join(tmp, "export.log")
-    with quiet(log):   # the exporter and Draco's C++ print a line per object
-        bpy.ops.export_scene.gltf(filepath=glb, export_format='GLB', use_selection=True, export_yup=False, export_apply=False,
-                                  export_normals=False, export_texcoords=False, export_materials='NONE', export_extras=False,
-                                  export_cameras=False, export_lights=False, export_animations=False,
-                                  export_draco_mesh_compression_enable=True, export_draco_mesh_compression_level=10,
-                                  export_draco_position_quantization=14)
-    if not os.path.isfile(glb):
-        die("the glTF export wrote nothing; its log:\n" + open(log).read()[-3000:], 1)
-    with open(glb, "rb") as f:
-        glb_bytes = f.read()
-    shutil.rmtree(tmp, ignore_errors=True)
+    try:
+        glb_bytes = open(EX.gltf(os.path.join(tmp, "model.glb"), [o.name for o in view] + list(J), draco=True), "rb").read()
+    except RuntimeError as e:
+        die(str(e), 1)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
     def rgba(o):
         m = next((s.material for s in o.material_slots if s.material), None)

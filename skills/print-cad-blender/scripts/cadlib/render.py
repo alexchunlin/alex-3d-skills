@@ -176,12 +176,25 @@ def section(outdir, fname, axis, val, cam_loc, cam_tgt, ortho, keep_side="-", sc
     return path
 
 
+def explode_offsets(obs, scale=1.0):
+    """{name: (dx, dy, dz)}: each object moved away from the assembly centre (scene_bounds) by 0.6 x scale of its box
+    centre's distance from it. exploded() draws these; export.write_glb's assembly clip flies parts in along them."""
+    lo, hi = scene_bounds()
+    c = (lo + hi) / 2
+    out = {}
+    for ob in obs:
+        b = [ob.matrix_world @ Vector(x) for x in ob.bound_box]
+        out[ob.name] = tuple((sum(b, Vector()) / 8 - c) * 0.6 * scale)
+    return out
+
+
 def exploded(outdir, offsets=None, fname="exploded.png", scale=1.0, cam=None):
     """Exploded view. offsets: {object name: (dx, dy, dz)}; by default every object moves away from
     the assembly centre along its body's direction, scaled by `scale`. Fasteners and cables hidden."""
     asm.set_pose()
     lo, hi = scene_bounds()
     c = (lo + hi) / 2
+    radial = explode_offsets([o for o in bpy.data.objects if o.type == 'MESH'], scale) if offsets is None else {}
     saved = {}
     for ob in bpy.data.objects:
         if ob.type != 'MESH':
@@ -191,12 +204,7 @@ def exploded(outdir, offsets=None, fname="exploded.png", scale=1.0, cam=None):
             saved[ob.name] = None
             ob.hide_render = True
             continue
-        if offsets is not None:
-            off = offsets.get(ob.name)
-        else:
-            b = [ob.matrix_world @ Vector(x) for x in ob.bound_box]
-            oc = sum(b, Vector()) / 8
-            off = tuple((oc - c) * 0.6 * scale)
+        off = (offsets or radial).get(ob.name)
         if off is None:
             continue
         saved[ob.name] = ob.matrix_world.copy()

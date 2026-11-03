@@ -2,6 +2,7 @@
 
     cad build blender/build_assembly.py                 # build, STLs, manifest, .blend
     cad build blender/build_assembly.py -- --render     # + preview renders (960 px)
+    cad build blender/build_assembly.py -- --glb        # + model.glb next to stl/ (Draco; --no-draco for raw meshes)
     CAD_RENDER_FINAL=1 cad build blender/build_assembly.py -- --render --out-renders renders/attempt-N
     cad check blender/model.blend blender/checks.json
     cad build blender/build_assembly.py -- --out /tmp/proj-feeder   # model.blend, manifest.json, stl/ go there instead
@@ -48,5 +49,8 @@ if "--render" in argv:
     out = arg("--out-renders", os.path.join(ROOT, "renders", "preview"))
     render.view_set(out, poses=P.RENDER_POSES)
     render.exploded(out)
+if "--glb" in argv:   # <out>/model.glb next to stl/: a node per part, a clip per joint, one for assembly_order
+    export.write_glb(os.path.join(OUT or ROOT, "model.glb"), checks=os.path.join(HERE, "checks.json"),
+                     report=os.path.join(OUT or HERE, "cadcheck.json"), draco="--no-draco" not in argv)
 export.save_blend(os.path.join(OUT or HERE, "model.blend"))
 print("BUILD_DONE %.1f s, stls %s" % (time.time() - t0, qty))
