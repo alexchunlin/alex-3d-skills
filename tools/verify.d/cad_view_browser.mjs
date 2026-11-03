@@ -1,5 +1,5 @@
 // Drive headless Chrome over the DevTools protocol to test a `cad view` page: no npm packages (Node 22+ WebSocket).
-//   node cad_view_browser.mjs PAGE.html [--shot OUT.png] [--selftest] [--eval JS] [--size 1440x900] [--timeout 90]
+//   node cad_view_browser.mjs PAGE.html [--shot OUT.png] [--selftest] [--mouse X,Y[,click]] [--eval JS] [--size 1440x900] [--timeout 90]
 // --selftest opens PAGE#selftest and prints the page's CVTEST line; every console error and uncaught exception is
 // printed as CONSOLE ... and fails the run, and so does any request that leaves the file (NET ...): the page is offline. --eval runs JS once the viewer is up (then waits 1 s) before the shot.
 // Exit 0 when the page loaded, had no errors and (with --selftest) passed. CHROME overrides the browser binary.
@@ -65,6 +65,13 @@ try {
   if (selftest) {
     console.log(res);
     ok = JSON.parse(res.replace(/^CVTEST /, '')).pass === true;
+  }
+  if (opt('--mouse')) {   // a real pointer move (hover tooltip); 'click' after the point clicks there too
+    const [x, y, c] = opt('--mouse').split(',');
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: +x, y: +y });
+    await sleep(400);
+    if (c === 'click') for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x: +x, y: +y, button: 'left', clickCount: 1 });
+    console.log('TIP ' + JSON.stringify(await ev("(document.querySelector('.ax-tip') || {}).innerText || ''")));
   }
   if (opt('--eval')) { const r = await ev(opt('--eval')); if (r !== undefined) console.log('EVAL ' + JSON.stringify(r)); await sleep(1000); }
   if (opt('--shot')) {

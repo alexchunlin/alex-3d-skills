@@ -386,7 +386,9 @@ const ray = new T.Raycaster(), mouse = new T.Vector2();
 let mouseEv = null, down = null;
 let tip = document.querySelector('.ax-tip');
 if (!tip) { tip = document.createElement('div'); tip.className = 'ax-tip'; document.body.appendChild(tip); }
-renderer.domElement.addEventListener('pointermove', e => (mouseEv = e));
+let pickDirty = false;   // raycast only when the mouse or the camera moved: v2a7 has 424k triangles
+renderer.domElement.addEventListener('pointermove', e => { mouseEv = e; pickDirty = true; });
+controls.addEventListener('change', () => (pickDirty = true));
 renderer.domElement.addEventListener('pointerleave', () => { mouseEv = null; setHover(null); });
 renderer.domElement.addEventListener('pointerdown', e => (down = [e.clientX, e.clientY]));
 renderer.domElement.addEventListener('click', e => {
@@ -484,8 +486,8 @@ renderer.setAnimationLoop(() => {
     if (fly.t >= 1) fly = null;
   }
   controls.update();
-  const n = pick();
-  setHover(n);
+  if (pickDirty) { pickDirty = false; setHover(pick()); }
+  const n = S.hover;
   if (n && mouseEv) {
     if (lastHover !== n) tip.innerHTML = tipHtml(n);
     tip.style.display = 'block'; tip.style.left = mouseEv.clientX + 14 + 'px'; tip.style.top = mouseEv.clientY + 14 + 'px';
