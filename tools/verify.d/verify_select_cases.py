@@ -82,7 +82,8 @@ def body_needs(u):
     for c in sub:
         want += [(f, "$CAD " + c) for f in ([S + "cad"] + ({"rows": [S + "cadrows.py"], "bom": [S + "cadbom.py"],
                                                           "slice": [S + "cadslice.py", S + "guarded_run.py"],
-                                                          "printcheck": core + [S + "printcheck.py"]}.get(c) or core))]
+                                                          "printcheck": core + [S + "printcheck.py"],
+                                                          "view": core + [S + "cadview.py"] + [f for f in FILES if f.startswith(S + "viewer/")]}.get(c) or core))]
     if "q" in sub:
         want.append((S + "cadq.py", "$CAD q"))
     if "CAD_LAYER_CHECK=1" in body or "best_orientation" in body:
@@ -234,7 +235,9 @@ CASES = [   # the selector test always runs under --changed (review); it is adde
     ("the template's checks.json", ["skills/print-cad-blender/templates/project/checks.json"],
      {"3", "3b", "3c", "design_principles.sh", "cadcfg.sh"}),
     ("v2a7 STLs", ["examples/mm-launcher-v2a7/stl.tar.gz"], BENCH | PCO | STL),
-    ("demo-turret", ["examples/demo-turret/build.py"], {"1", "2"}),
+    ("demo-turret (cad_view.sh reads 2's demo-bug)", ["examples/demo-turret/build.py"], {"1", "2", "cad_view.sh"}),
+    ("cadview.py (2 builds its input)", [S + "cadview.py"], {"2", "cad_view.sh"}),
+    ("the viewer page and its vendored three.js", [S + "viewer/view.js", S + "viewer/vendor/ax3.min.js"], {"2", "cad_view.sh"}),
     ("slide-gate config (cadcfg too)", ["examples/slide-gate/checks.json"], {"slide-gate", "cadcfg.sh"}),
     ("slide-gate build", ["examples/slide-gate/build.py"], {"slide-gate"}),
     ("a verify.d helper", ["tools/verify.d/fastener_joint_build.py"], {"fastener_joint.sh"}),
