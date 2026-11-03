@@ -419,7 +419,7 @@ checks in `--only`, 5 with no rows, and read PASS (PA-A2-T11). An `--only` name 
   channel has to hold both. v2 A7 laid the tilt and feeder bus leads in one tube for 16 mm and turned both 90 deg onto
   the splice face 1.5 mm below (V2R7 A7-02). Model a real bundle as one route with a chain row per conductor.
 - **`--out`.** `cad check m.blend c.json OUT.json --only x` or `... --only x --out OUT.json`: both write OUT.json. Before
-  v2 A6 the flag form was ignored and the default `cadcheck.json` was overwritten (V2A5-T1).
+  v2 A6 the flag form was ignored and the default `cadcheck.json` was overwritten (V2A5-T1). With no OUT, an `--only`/`--quick` run writes `cadcheck.partial.json`, never `cadcheck.json` (#28).
 - **Stock lengths.** Screws whose length isn't in `fasteners.stock_lengths` for their diameter warn, unless listed in
   `fasteners.stock_ok`. `cad bom BOM.md manifest.json` checks the BOM's fastener table against the model (size, length,
   head, count) with the same table.

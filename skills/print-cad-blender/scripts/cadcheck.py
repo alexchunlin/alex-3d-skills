@@ -4959,6 +4959,8 @@ def main():
         print("  PARTIAL run (%s): not a full check, do not hand off on it%s" % (
             " ".join(x for x in ("--only " + ",".join(sorted(ONLY)) if ONLY else "", "--quick" if QUICK else "") if x),
             "; skipped checks: " + ", ".join(skipped) if skipped else ""))
+        if QUICK:
+            print("  --quick: reduced pose grid, no checks skipped" + ("" if not ONLY else " (the --only list above is what was skipped)"))
     for s in FAILS[:40]:
         print("  FAIL", s)
     for s in untriaged[:25]:

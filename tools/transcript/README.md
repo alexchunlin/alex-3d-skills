@@ -14,6 +14,7 @@ python3 -I tools/transcript/cc_transcript.py bash     $WF/agent-ID.jsonl --error
 python3 -I tools/transcript/cc_transcript.py images|renders|files $WF/agent-ID.jsonl
 python3 -I tools/transcript/cc_transcript.py grep     $WF/agent-ID.jsonl 'tilt sweep'
 python3 -I tools/transcript/cc_transcript.py show     $WF/agent-ID.jsonl 43           # full input/output of tool call #43
+python3 -I tools/transcript/cc_transcript.py handoffs agent-*.jsonl           # agents whose LAST `cad check` was --only/--quick (cadcheck issue #28)
 python3 -I tools/transcript/cc_transcript.py bench    [--attempt v2a7] [--json]       # tools/bench tier 2: doc/source reads, feature use
 python3 -I tools/transcript/cc_transcript.py calibrate [--write] [--json]             # chars/token of doc reads, from the usage numbers
 ```

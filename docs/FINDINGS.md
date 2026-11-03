@@ -2172,12 +2172,14 @@ tools").
     (PA-A7-T8, PA-R7 #8). PA-R8 #10 also lists purchased parts as unverified.
   - The firmware was only syntax-checked, never compiled for a board (PA-A5-T19, PA-A6-T6).
 
+**PA-A0-T2: the designers' last `cad check` was an `--only` run, 3 of 3** (added after the loop from the transcripts). The designers of attempts 3, 6 and 7 are the only designers that ran `cad check`, and each ended on a partial one, so each handed off on a report that said PASS for the checks it ran. Count: `python3 -I tools/transcript/cc_transcript.py handoffs ~/.claude/projects/-Users-alxchunlin-code-stuff-space-bar-push-assist/*/subagents/agent-*.jsonl` (the Designer rows). Reviewers also ended on `--only` runs (5 of 5) by their instructions, which is expected. Fixed by cadcheck issue #28: `CADCHECK PARTIAL`, `run` in the report, `cadcheck.partial.json`.
+
 ### Verification of this harvest
 - PALOG is byte-identical to the untracked source (`sha256 0a5f90f3...`).
 - Scores and cad check / printcheck cells match `PA/cad/review/attempts.md`. Issue counts were taken from PALOG's
   ranked lists.
 - Every cost number comes from `cc_transcript.py workflow PASESS/subagents`, or from `usage` / `timeline` on
   `PASESS.jsonl` for the two inline windows. No transcript was read whole.
-- Every PA ID in this section exists in PALOG, except PA-A0-T1, which was added after the loop from the transcripts. Each status was checked against `2e6717d`: `cadcheck.py` line refs,
+- Every PA ID in this section exists in PALOG, except PA-A0-T1 and PA-A0-T2, which were added after the loop from the transcripts. Each status was checked against `2e6717d`: `cadcheck.py` line refs,
   SKILL.md, checklist.md, rubric.md, the workflow template, the feature docs, and PR #6 and #7 bodies.
 - `tools/verify_all.sh` was not run: this change is docs only.
