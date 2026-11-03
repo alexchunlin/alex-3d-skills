@@ -168,6 +168,9 @@
  "exposure": {
   "cables_ok": [
    "CAB_*"
+  ],
+  "pcbs_ok": [
+   "BUY_board"
   ]
  }
 }

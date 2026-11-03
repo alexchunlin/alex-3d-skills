@@ -36,10 +36,12 @@ case "$cmd" in
   check) b="$1"; shift
          # CONFIG and OUT are optional positionals; a flag in their place is not swallowed as a file name
          # (v2 A1: `cad check m.blend c.json --only ...` wrote a file called --only, FINDINGS V2A1-T4)
-         c=""; case "${1:-}" in ""|--*) ;; *) c="$1"; shift ;; esac
+         # an empty string in the CONFIG or OUT slot means "none" and is consumed, so `cad check m.blend "" out.json --only x`
+         # still writes out.json (daily 2026-11-03: read_stl and sweep_guard pass "" and lost their OUT to the partial default)
+         c=""; case "${1:-}" in "") [ $# -gt 0 ] && shift ;; --*) ;; *) c="$1"; shift ;; esac
          # a partial run (--only/--quick) with no OUT goes to cadcheck.partial.json, never over the full report (issue #28)
          o="$(dirname "$b")/cadcheck.json"; pv=""; for a in "$@"; do { [ "$a" = --quick ] || { [ "$pv" = --only ] && [ -n "$a" ]; }; } && o="$(dirname "$b")/cadcheck.partial.json"; pv="$a"; done   # an empty --only is a full run, as in cadcheck.py
-         case "${1:-}" in ""|--*) ;; *) o="$1"; shift ;; esac
+         case "${1:-}" in "") [ $# -gt 0 ] && shift ;; --*) ;; *) o="$1"; shift ;; esac
          # an explicit `--out X` among the flags wins over the default (v2 A5 precheck overwrote cadcheck.json, V2A5-T1)
          for a in "$@"; do [ "$a" = "--out" ] && o=""; done
          [ -n "$o" ] && set -- --out "$o" "$@"

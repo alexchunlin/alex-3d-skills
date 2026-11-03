@@ -38,3 +38,8 @@ sys.exit(0 if r == {'only': [], 'quick': True} else 1)" "$OP/cadcheck.partial.js
 rm -f "$OP/cadcheck.partial.json"
 $CADW check "$OP/demo.blend" "$ROOT/examples/demo-turret/checks.json" --only "" > "$OP/empty.txt" 2>&1
 grep -Eq '^CADCHECK FAIL: 9 fail' "$OP/empty.txt" && [ ! -e "$OP/cadcheck.partial.json" ] && ok "--only \"\" is a full run and writes cadcheck.json" || bad "--only \"\" handling (see $OP/empty.txt)"
+# an empty string in the CONFIG slot is "no config" and the OUT after it still wins over the partial default
+# (daily 2026-11-03: stl_read.sh and sweep_guard.sh pass "" and their reports landed in cadcheck.partial.json)
+rm -f "$OP/cadcheck.partial.json" "$OP/empty_cfg.json"
+$CADW check "$OP/demo.blend" "" "$OP/empty_cfg.json" --only stability > "$OP/empty_cfg.txt" 2>&1
+[ -f "$OP/empty_cfg.json" ] && [ ! -e "$OP/cadcheck.partial.json" ] && ok "cad check: an empty CONFIG slot keeps the OUT after it" || bad "cad check: empty CONFIG slot lost the OUT (see $OP/empty_cfg.txt)"
