@@ -15,6 +15,7 @@ description: Parametric, 3D-printable assemblies in headless Blender with cadlib
 | `cad q model.blend <cmd>` | one measurement: `dist`, `sweep`, `ray`, `inside`, `list`, `section`, `render`. `cad q` alone prints the commands |
 | `cad py -c "import params as P; print(P.X)"` | Python with bpy and cadlib, run from `blender/`: evaluate params or geometry helpers without stubbing bpy |
 | `cad rows cadcheck.json [REGEX]` | one line per check row (or `manifest.json` part), no Blender: grep the report instead of writing a `json.load` snippet (V2A3-T1: 67 bash calls) |
+| `cad diff OLD.json NEW.json` | new / fixed / worse / better findings, requirements removed or loosened, manifest changes; `cad check` prints the short form by itself when it overwrites a report (`reference/diff.md`) |
 | `cad bom BOM.md manifest.json` | the BOM's fastener table against the model: size, length, head, count, stock lengths |
 | `cad sheet stl_dir out.png` | all STLs in print orientation on one image |
 | `cad view model.blend cadcheck.json -o out.html` | one offline HTML page to turn, pose and take apart, findings clickable: for anyone without Blender (`reference/view.md`) |

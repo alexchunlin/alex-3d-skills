@@ -1,7 +1,10 @@
 #!/bin/sh
 # cad: thin wrapper around headless Blender for the print-cad-blender skill.
 #   cad build  build_assembly.py [-- script args]     run a cadlib build script
-#   cad check  model.blend [checks.json] [out.json] [--only a,b] [--quick]  run cadcheck (short summary, writes JSON; --only/--quick with no OUT write cadcheck.partial.json)
+#   cad check  model.blend [checks.json] [out.json] [--only a,b] [--quick] [--no-diff]  run cadcheck (short summary,
+#                                                    writes JSON; --only/--quick with no OUT write cadcheck.partial.json;
+#                                                    prints the delta against the report it overwrote)
+#   cad diff   [OLD.json] NEW.json [--manifest OLD NEW]   new / fixed / worse / better findings, requirements, manifest
 #   cad q      model.blend <cadq command ...>        one-shot measurement (`cad q` alone lists the commands)
 #   cad py     -c "import params as P; print(P.X)" | script.py [args]   Python with bpy + cadlib + ./ and ./parts on the path
 #   cad rows   [cadcheck.json|manifest.json|checks.json] [REGEX] [--check a,b] [--findings]   one line per row; grep, don't json.load
@@ -50,6 +53,7 @@ case "$cmd" in
   py) # Python with bpy, cadlib and the project on sys.path: evaluate params or pure-geometry helpers without a build
       # (v2 A2: the launcher and feeder builders hand-stubbed bpy/cadlib to import params.py from plain python3)
       run --python-expr "import sys, os, runpy; sys.path[:0] = [os.getcwd(), os.path.join(os.getcwd(), 'parts'), '$HERE']; a = sys.argv[sys.argv.index('--') + 1:]; sys.argv = a; exec(a[1]) if a[0] == '-c' else runpy.run_path(a[0], run_name='__main__')" -- "$@" ;;
+  diff) exec python3 -I "$HERE/caddiff.py" "$@" ;;  # plain python3: two reports of one design (issue #30, V2A5-T2)
   rows) exec python3 "$HERE/cadrows.py" "$@" ;;   # plain python3, no Blender (v2 A3: 67 hand dump scripts, V2A3-T1)
   bom) exec python3 -I "$HERE/cadbom.py" "$@" ;;       # plain python3 (v2 A3: stud M3 x 20 in the BOM, x 16 in the model, V2A3-F6)
   sheet) run --python-expr "import sys; sys.path.insert(0, '$HERE'); from cadlib import render; render.contact_sheet('$1', '$2')" ;;
@@ -58,5 +62,5 @@ case "$cmd" in
   slice) exec python3 "$HERE/cadslice.py" "$@" ;;   # the only way a slicer may run (HARVEST_BRIEF "Printer safety, revised")
   view) # one offline HTML page: spin, pose, explode, click cadcheck's findings (cadview.py; exit 2 on a mismatched report)
       b="$1"; shift; run "$b" --python "$HERE/cadview.py" -- "$@" ;;
-  *) sed -n '2,13p' "$0"; exit 2 ;;
+  *) sed -n '2,16p' "$0"; exit 2 ;;
 esac
