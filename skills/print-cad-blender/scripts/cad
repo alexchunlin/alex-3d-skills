@@ -34,7 +34,9 @@ case "$cmd" in
          # CONFIG and OUT are optional positionals; a flag in their place is not swallowed as a file name
          # (v2 A1: `cad check m.blend c.json --only ...` wrote a file called --only, FINDINGS V2A1-T4)
          c=""; case "${1:-}" in ""|--*) ;; *) c="$1"; shift ;; esac
-         o="$(dirname "$b")/cadcheck.json"; case "${1:-}" in ""|--*) ;; *) o="$1"; shift ;; esac
+         # a partial run (--only/--quick) with no OUT goes to cadcheck.partial.json, never over the full report (issue #28)
+         o="$(dirname "$b")/cadcheck.json"; for a in "$@"; do case "$a" in --only|--quick) o="$(dirname "$b")/cadcheck.partial.json" ;; esac; done
+         case "${1:-}" in ""|--*) ;; *) o="$1"; shift ;; esac
          # an explicit `--out X` among the flags wins over the default (v2 A5 precheck overwrote cadcheck.json, V2A5-T1)
          for a in "$@"; do [ "$a" = "--out" ] && o=""; done
          [ -n "$o" ] && set -- --out "$o" "$@"

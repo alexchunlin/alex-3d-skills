@@ -10,11 +10,14 @@ v2 A3's BOM listed the nip stud as "M3 x 20 hex head" while the model was M3_cap
 the reviewer found both by hand and they cost a manufacturability point (FINDINGS V2A3-F5, F6). Plain python3.
 Exit status 1 when a row disagrees with the model.
 """
-import fnmatch, json, re, sys
+import fnmatch, json, os, re, sys
 
-STOCK = {2.0: [3, 4, 5, 6, 8, 10, 12, 14, 16, 20], 2.5: [3, 4, 5, 6, 8, 10, 12, 14, 16, 20, 25],
-         3.0: [3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 25, 30, 35, 40, 45, 50],
-         4.0: [4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 35, 40, 45, 50]}   # same table as cadcheck fasteners.stock_lengths
+# the one stock table: cadcheck's DEFAULTS fasteners.stock_lengths, read as a literal (cadcheck imports bpy, this does not);
+# it had its own copy here with no M5 row, so an unstocked M5 length passed (issue #29)
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import cadcfg  # noqa: E402
+STOCK = {float(k): v for k, v in cadcfg.literal(os.path.join(HERE, "cadcheck.py"), "DEFAULTS")["fasteners"]["stock_lengths"].items()}
 HEADS = ("csk", "cap", "pan", "hex", "button")
 SPEC = re.compile(r"M(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)", re.I)
 

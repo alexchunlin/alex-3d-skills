@@ -16,6 +16,7 @@ Never read a 10 MB transcript whole. Run this instead:
     python3 -I cc_transcript.py grep     agent-XXXX.jsonl PATTERN    # regex over thinking/text/tool io
     python3 -I cc_transcript.py workflow <wf_dir>                    # one row per agent + journal results
     python3 -I cc_transcript.py bench [--attempt v2a7] [--json]      # tools/bench tier 2 telemetry (tools/bench/agents.json)
+    python3 -I cc_transcript.py handoffs agent-*.jsonl               # agents whose last cad check was --only/--quick
     python3 -I cc_transcript.py calibrate [--write]                  # chars/token of doc reads from the usage numbers
 
 Standard library only. Works on transcripts that are still being written (a
@@ -693,6 +694,35 @@ def cad_calls(cmd: str) -> tuple[list[str], list[str], list[str]]:
     return subs, qs, only
 
 
+def check_runs(cmd: str) -> list[bool]:
+    """One bool per `cad check` the command runs (wrapper or cadcheck.py by hand): True when it was --only/--quick."""
+    out, env = [], {}
+    names = {"CAD"} | set(CAD_VAR_RE.findall(cmd))
+    for toks in _segments(cmd):
+        w = _command_words(toks, env)
+        if w and w[0] in ("sh", "bash") and len(w) > 1:
+            w = w[1:]
+        if not w:
+            continue
+        var = re.match(r"^\$\{?(\w+)\}?$", w[0])
+        is_cad = w[0] == "cad" or w[0].endswith("/scripts/cad") or bool(var and var.group(1) in names)
+        by_hand = not is_cad and any(t == "--python" and i + 1 < len(w) and "cadcheck.py" in w[i + 1] for i, t in enumerate(w))
+        if (is_cad and len(w) > 1 and w[1] == "check") or by_hand:
+            out.append(any(t in ("--quick", "--only") or t.startswith("--only=") for t in w))
+    return out
+
+
+def cmd_handoffs(_tr, a) -> None:
+    """For each agent file: was its LAST cad check an --only/--quick run (a hand-off on a partial check, issue #28)?"""
+    n = p = 0
+    for f in a.transcript:
+        runs = [r for tc in load(f).tools if tc.name == "Bash" for r in check_runs(tc.input.get("command", ""))]
+        if runs:
+            n, p = n + 1, p + runs[-1]
+            print("%-7s %-45s %s" % ("PARTIAL" if runs[-1] else "full", (digest(load(f))["label"] or "?")[:45], Path(f).name))
+    print("%d agents ran cad check; %d of them last on an --only/--quick run" % (n, p))
+
+
 def _expand(tok: str, env: dict) -> str:
     return re.sub(r"\$\{?(\w+)\}?", lambda m: env.get(m.group(1), m.group(0)), tok)
 
@@ -1122,6 +1152,8 @@ def main(argv=None) -> None:
     c.add_argument("--attempt", help="comma list of attempts from --agents")
     c.add_argument("--json", action="store_true", help="also print every sample")
     c.add_argument("--write", action="store_true", help="save the ratio to tools/bench/tokens.json (doccost, bench and features use it)")
+    h = sub.add_parser("handoffs", help="agents whose last cad check was --only/--quick (issue #28)")
+    h.add_argument("transcript", nargs="+", help="agent-*.jsonl files")
     for name in ("summary", "timeline", "bash", "files", "images", "renders", "usage", "json", "show", "thinking", "grep",
                  "workflow"):
         s = sub.add_parser(name)
@@ -1138,7 +1170,7 @@ def main(argv=None) -> None:
             s.add_argument("which", help="tool_use id or index (#N in other views)")
             s.add_argument("--max", type=int, default=6000)
     a = p.parse_args(argv)
-    tr = None if a.cmd in ("workflow", "bench", "calibrate") else load(a.transcript)
+    tr = None if a.cmd in ("workflow", "bench", "calibrate", "handoffs") else load(a.transcript)
     globals()["cmd_" + a.cmd](tr, a)
 
 

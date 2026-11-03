@@ -318,7 +318,9 @@ for _h in HINGES:
                         "why": "pip_hinge %s (generated from the manifest record)" % _h["name"], "generated": True})
 QUICK = "--quick" in ARGV
 ONLY = set(_arg("--only", "").split(",")) - {""}
-OUT = _arg("--out") or os.path.join(os.path.dirname(bpy.data.filepath) or ".", "cadcheck.json")
+# a partial run (--only/--quick) never defaults to the full report's path (the cad wrapper does the same; issue #28)
+OUT = _arg("--out") or os.path.join(os.path.dirname(bpy.data.filepath) or ".",
+                                    "cadcheck.partial.json" if ONLY or QUICK else "cadcheck.json")
 O = bpy.data.objects
 COLL = CFG["collections"]
 
@@ -4943,12 +4945,20 @@ def main():
                          "coverage": REPORT["coverage"], "not_checked": REPORT["not_checked"], "poses_past_limits": PAST_LIMITS,
                          "unbounded_allows": UNBOUNDED_ALLOWS, "unused_allows": unused, "unproven_pairs": UNPROVEN_PAIRS, "notes": NOTES,
                          "runtime_s": round(time.time() - T0, 1)}
+    # always present: a hand-off is rejected when only is non-empty or quick is true (issue #28)
+    REPORT["run"] = {"only": sorted(ONLY), "quick": QUICK}
     os.makedirs(os.path.dirname(os.path.abspath(OUT)), exist_ok=True)
     with open(OUT, "w") as f:
         json.dump(REPORT, f, indent=1, default=str)
-    print("CADCHECK %s: %d fail, %d warn (%d untriaged, %d accepted), %d config warn%s -> %s" % (
-        "PASS" if not FAILS else "FAIL", len(FAILS), len(WARNS), len(untriaged), len(accepted), len(cfg_warns),
+    partial = bool(ONLY or QUICK)
+    skipped = sorted({n for n, _ in CHECKS} - ran) if ONLY else []
+    print("CADCHECK %s%s: %d fail, %d warn (%d untriaged, %d accepted), %d config warn%s -> %s" % (
+        "PARTIAL " if partial else "", "PASS" if not FAILS else "FAIL", len(FAILS), len(WARNS), len(untriaged), len(accepted), len(cfg_warns),
         "" if len(cfg_warns) == 1 else "s", OUT))
+    if partial:
+        print("  PARTIAL run (%s): not a full check, do not hand off on it%s" % (
+            " ".join(x for x in ("--only " + ",".join(sorted(ONLY)) if ONLY else "", "--quick" if QUICK else "") if x),
+            "; skipped checks: " + ", ".join(skipped) if skipped else ""))
     for s in FAILS[:40]:
         print("  FAIL", s)
     for s in untriaged[:25]:

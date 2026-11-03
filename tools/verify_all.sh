@@ -90,7 +90,8 @@ if want 3b; then  #@ needs: 3  watch: @core skills/print-cad-blender/templates/p
 $CAD build "$V/tplroot/blender/build_assembly.py" -- --out "$V/tplout" >/dev/null
 [ -f "$V/tplout/model.blend" ] && [ -f "$V/tplout/manifest.json" ] && ok "template: --out writes model.blend + manifest there" || bad "template --out"
 (cd "$V" && $CAD check "$V/tplout/model.blend" --only parts >/dev/null)
-[ -f "$V/tplout/cadcheck.json" ] && [ ! -e "$V/--only" ] && ok "cad check: a flag in the CONFIG slot is not a file name" || bad "cad check arg parsing"
+# a partial run (--only) with no OUT lands in cadcheck.partial.json, not over the full cadcheck.json (issue #28)
+[ -f "$V/tplout/cadcheck.partial.json" ] && [ ! -e "$V/--only" ] && ok "cad check: a flag in the CONFIG slot is not a file name; --only writes cadcheck.partial.json" || bad "cad check arg parsing"
 fi  #@ end 3b
 
 if want 3c; then  #@ needs: 3  watch: @core skills/print-cad-blender/templates/project/**
