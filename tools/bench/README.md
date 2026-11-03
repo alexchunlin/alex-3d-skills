@@ -120,29 +120,50 @@ checks/review_rows/overlay file; transcripts live outside the repo, so tier 2 re
 
 ## Perturbation audit (`perturb.py`, issue #45)
 
-Nudges each top-level number in `params.py` (or a build script's own constants, `--params-file build.py`) by a print
-tolerance (0.2 mm, 1 deg for angles, or `--range NAME=LO:HI`), rebuilds and re-checks a scratch copy, and lists the
-findings that flip against one nominal build (`cad diff`'s key), plus a control rebuild. Classes: `pinned row` (a
-`wanted` window no wider than the nudge band: fails by construction, never brittle), `label` (a labels.json locator of
-any attempt), `printability`, `noise candidate`. `--from DIR` rescores. Re-run: `tools/verify.d/perturb_audit.sh`.
+Nudges each top-level float in `params.py` (or a build script's own constants, `--params-file build.py`) to -d and +d,
+with d = 0.2 mm (1 deg for angles), or to an adjuster's own `--range NAME=LO:HI`. Each nudge is rebuilt and re-checked
+in a scratch copy and diffed against one nominal build with `cad diff`'s key. A control rebuild (no change) is diffed
+the same way. Scratch: `/tmp/alex3d-bench/run-<pid>/perturb/<tag>/`. Each run's project copy is deleted once its
+report is saved; `build.log`, `check.log`, `cadcheck.json`, `manifest.json` and `diff.txt` stay. `perturb.json`
+records the rules and each parameter's d and band.
+
+- **Classes**, in this order:
+  - `fixed`: a finding is gone, or a fail became a warn.
+  - `coverage`: a "not proven clear" or "swept ray missed" warn. This is the sampler's budget, not the design.
+  - `pinned`: the row declares a bound within d of the nudged parameter's nominal, one- or two-sided. Examples: a
+    `wanted 6.0..6.4` row against HOOD_GAP 6.5, or a `(min 0.30;` row against DISC_CLR 0.30. The band is 2d: 0.4 mm,
+    or 2 deg for angles. The row restates the parameter, so any nudge past its bound fails it by construction.
+  - `label`: a labels.json locator of `--attempt`'s own labels matches.
+  - `printability`: a printability locator of that attempt matches, or the check is parts/printcheck.
+  - `control`: the control run flipped the same key.
+  - `design`: anything else.
+- **Brittle**: one sign of a parameter brings either a new fail, a new untriaged warn, or a warn -> fail in the design,
+  label or printability class, or a build error (a `params.py` assert). `brittle_with_pinned` also counts pinned flips.
+  Both counts are reported. `--from DIR [--attempt A]` rescores a stored run without Blender.
 
 ```sh
 python3 -I tools/bench/perturb.py examples/demo-turret --params-file build.py --build-args "--out {out}" -j 2
-python3 -I tools/bench/perturb.py V2_COPY --params '^(PSI_C|MM_T\[1\]|HOOD_GAP_MIN|TAPE_T|...)$' --quick -j 2
+mkdir -p /tmp/campaign/45w/v2 && cd ~/code-stuff/mmlauncher/mm-launcher/mm-launch-hw/v2/blender && \
+  cp -R build_assembly.py params.py parts checks.json tools /tmp/campaign/45w/v2/ && cd -
+python3 -I tools/bench/perturb.py /tmp/campaign/45w/v2 --attempt v2a7 --quick -j 2 \
+  --params '^(PSI_C|MM_T\[1\]|HOOD_GAP_MIN|TAPE_T|CLR|HOOD_GAP|BORE_CLR|DISC_CLR|SERVO_POCKET_CLR|GATE_STOP_CLR|LEAF_T|DISC_T|LIFT_FLOOR)$'
 ```
 
-Measured 2026-11-03 (H45: findings flip within tolerance; null rejected):
-- Demo turret, all 10 parameters, full check: 3.7 s per rebuild+check, 46 s total at -j 2. 0 brittle; 4 flips, all
-  findings fixed (CLR +0.2 and SINK +0.2 clear the 0.90 mm screw-head warns; SINK +0.2 also drops the arm screws from
-  M3 x 10 to x 8). Control: 0 flips.
-- v2 launcher (live copy = attempt 7 params plus one post-review `checks.json` service row), 12 of 407 parameters,
-  `--quick`: 264 s per rebuild+check (a full check alone is 244 s), 56 min at -j 2; all 407 would take about 30 h.
-  7 brittle: MM_T[1] and TAPE_T +0.2 break `params.py`'s own assert (entry arc 8.105 < NIP_PASS 8.20 + 0.1: a 0.005 mm
-  margin, the V2A3-F1 mechanism); HOOD_GAP, HOOD_GAP_MIN (hood-to-body 0.31-0.38 against 0.5); DISC_CLR, GATE_STOP_CLR
-  (a fit whose min equals the nominal: 0.10-0.15 against 0.30); BORE_CLR -0.2 (motor overlaps the nacelle, 3.3 mm3).
-  32 flips: 3 match labels (A6-03 x2, A1-F2), 6 pinned rows, 23 noise candidates (4 of them "not proven clear"
-  coverage warns). PSI_C (the V2A5-T2 parameter) and CLR change no STL at +-1 deg / 0.2 mm: attempt 7 no longer uses
-  them. Control: 0 flips, so no flip is check randomness.
+Measured 2026-11-03 (H45: findings flip within tolerance; the null is rejected):
+- **Demo turret**, all 10 parameters, full check: 3.7 s per rebuild+check, 46 s total at -j 2. 0 brittle. 4 flips, all
+  `fixed`: CLR +0.2 and SINK +0.2 clear the 0.90 mm screw-head warns, and SINK +0.2 also drops the arm screws from
+  M3 x 10 to x 8. The control flipped nothing.
+- **v2 launcher**: the live copy is attempt 7's params plus one post-review `checks.json` service row. 13 of 407
+  parameters were sampled with `--quick`.
+  - Cost: 264 s per rebuild+check; a full check alone is 244 s. All 407 parameters would take about 30 h at -j 2.
+  - Brittle: **7 of 13**, or 9 counting pinned rows.
+  - 3 build errors from `params.py`'s own V2A3-F1 assert. At nominal, the entry arc has 0.005 mm above the assert's
+    floor (8.105 against NIP_PASS 8.0 + 0.1). MM_T[1] +0.2 and TAPE_T +0.2 raise that floor to 8.3; LIFT_FLOOR -0.2
+    lowers the arc to 7.905.
+  - Flips: 20 design, 6 fixed, 5 coverage, 5 pinned. **0 match a v2a7 label** (A7-01, A7-02, A6-02, A7-03 checked),
+    and 0 are printability.
+  - PSI_C (the V2A5-T2 parameter) and CLR change no STL: attempt 7 no longer uses them.
+  - The control flipped nothing.
 
 ## Smoke test
 
