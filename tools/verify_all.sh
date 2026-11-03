@@ -14,7 +14,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CAD="$ROOT/skills/print-cad-blender/scripts/cad"
 HW="${HW:-$HOME/code-stuff/mmlauncher/mm-launcher/mm-launch-hw}"
 #@ plumbing
-#@ group @core = skills/print-cad-blender/scripts/cad skills/print-cad-blender/scripts/cadcheck.py skills/print-cad-blender/scripts/cadcfg.py skills/print-cad-blender/scripts/cadmat.py skills/print-cad-blender/scripts/cadsnap.py skills/print-cad-blender/scripts/cadq.py skills/print-cad-blender/scripts/cadlib/**
+#@ group @core = skills/print-cad-blender/scripts/cad skills/print-cad-blender/scripts/cadcheck.py skills/print-cad-blender/scripts/cadcfg.py skills/print-cad-blender/scripts/cadmat.py skills/print-cad-blender/scripts/cadsnap.py skills/print-cad-blender/scripts/caddiff.py skills/print-cad-blender/scripts/cadq.py skills/print-cad-blender/scripts/cadlib/**
 #@ group @layer = skills/print-cad-blender/scripts/printcheck.py
 # none: docs (but a watch wins: design_principles.sh reads FINDINGS.md, 4f a BOM .md), and tools no test here runs
 #@ none: docs/** **/*.md LICENSE !skills/*/scripts/** skills/cad-design-review/** tools/verify.d/README .gitignore tools/revision_watcher.py

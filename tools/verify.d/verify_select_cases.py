@@ -80,7 +80,7 @@ def body_needs(u):
     sub = set(re.findall(r'\$CAD (\w+)', body))
     core = [S + "cad"] + [f for f in FILES if f.startswith(S + "cadlib/")] + [S + "cadcheck.py"]
     for c in sub:
-        want += [(f, "$CAD " + c) for f in ([S + "cad"] + ({"rows": [S + "cadrows.py"], "bom": [S + "cadbom.py"],
+        want += [(f, "$CAD " + c) for f in ([S + "cad"] + ({"rows": [S + "cadrows.py"], "bom": [S + "cadbom.py"], "diff": [S + "caddiff.py", S + "cadcfg.py"],
                                                           "slice": [S + "cadslice.py", S + "guarded_run.py"],
                                                           "printcheck": core + [S + "printcheck.py"],
                                                           "view": core + [S + "cadview.py"] + [f for f in FILES if f.startswith(S + "viewer/")]}.get(c) or core))]
@@ -205,6 +205,7 @@ CORE = ALLIDS - {"6", "7", "4m-slice", "design_principles.sh", "verify_select.sh
 BENCH = {"bench.sh", "4k", "4m", "4n"}   # bench reads 4k's, 4m's and 4n's reports
 PCO = {"printcheck_overhangs.sh"}        # watches printcheck.py and the v2a7 STLs, reads 4m's model
 STL = {"stl_read.sh"}                    # watches printcheck.py (read_stl), the prior_art readers and the v2a7 STLs
+DIFF2 = {"cad_diff_v2.sh", "4i"}         # cad diff v2a6 -> v2a7: runs when 4k runs for its own change, reads 4i's report too
 CASES = [   # the selector test always runs under --changed (review); it is added to every set here
     ("docs only", ["docs/STATUS.md", "README.md", "skills/print-cad-blender/reference/api.md", "skills/cad-design-review/SKILL.md",
                    "tools/verify.d/README", "tools/bench/README.md", "docs/tasks/x.md"], set()),
@@ -229,13 +230,13 @@ CASES = [   # the selector test always runs under --changed (review); it is adde
     ("a3 example", ["examples/mm-launcher-a3/mm_launcher_a3.blend.gz"], {"4c", "4n", "blend_bracket.sh", "cable_router.sh"} | BENCH),
     ("a2 example (a config: cadcfg too; fastener_access_hint.sh reads 4a's report)", ["examples/mm-launcher-a2/checks.json"],
      {"4a", "4b", "4n", "cadcfg.sh", "fastener_access_hint.sh"} | BENCH),
-    ("a v2a7 review_rows config", ["examples/mm-launcher-v2a7/review_rows_v2a7.json"], {"4n", "cadcfg.sh"} | BENCH | PCO),
+    ("a v2a7 review_rows config", ["examples/mm-launcher-v2a7/review_rows_v2a7.json"], {"4n", "cadcfg.sh"} | BENCH | PCO | DIFF2),
     ("the v2a3 blend (cadcfg's suggestion check runs on its report)", ["examples/mm-launcher-v2a3/mm_launcher_v2a3.blend.gz"],
      {"4f", "4g", "4n", "cadcfg.sh"} | BENCH),
     ("the template's checks.json", ["skills/print-cad-blender/templates/project/checks.json"],
      {"3", "3b", "3c", "design_principles.sh", "cadcfg.sh"}),
-    ("v2a7 STLs", ["examples/mm-launcher-v2a7/stl.tar.gz"], BENCH | PCO | STL),
-    ("demo-turret (cad_view.sh reads 2's demo-bug)", ["examples/demo-turret/build.py"], {"1", "2", "cad_view.sh", "only_partial.sh"}),
+    ("v2a7 STLs", ["examples/mm-launcher-v2a7/stl.tar.gz"], BENCH | PCO | STL | DIFF2),
+    ("demo-turret (cad_view.sh reads 2's demo-bug; cad_diff.sh builds it)", ["examples/demo-turret/build.py"], {"1", "2", "cad_view.sh", "only_partial.sh", "cad_diff.sh"}),
     ("cadview.py (2 builds its input)", [S + "cadview.py"], {"2", "cad_view.sh"}),
     ("the viewer page and its vendored three.js", [S + "viewer/view.js", S + "viewer/vendor/ax3.min.js"], {"2", "cad_view.sh"}),
     ("slide-gate config (cadcfg too)", ["examples/slide-gate/checks.json"], {"slide-gate", "cadcfg.sh"}),
@@ -284,7 +285,7 @@ L = [("verify_all.sh: a 4f body line", [("+", [n], VA_LINES[n - 1] + " # edited"
      ("verify_all.sh: a 3b body line pulls in 3 (needs)", [("-", [line_of(VA_TEXT, lambda l: "--out writes model.blend" in l)], "x=1")],
       {"3b", "3"}),
      ("verify_all.sh: a section-3 body line runs 3b and 3c, which read its output (review)", [("+", [code_in("3")], "x=1")], {"3", "3b", "3c"}),
-     ("verify_all.sh: a 4k body line runs bench.sh, which reads its reports (review)", [("+", [code_in("4k")], "x=1")], BENCH),
+     ("verify_all.sh: a 4k body line runs bench.sh, which reads its reports (review)", [("+", [code_in("4k")], "x=1")], BENCH | DIFF2),
      ("verify_all.sh: a comment line", [("+", [n - 1], "  # a new remark")], set()),
      ("verify_all.sh: a #@ watch line", [("+", [U["4f"]["start"]], VA_LINES[U["4f"]["start"] - 1])], set()),
      ("verify_all.sh: plumbing want() (review: `return 1` ran nothing and passed)",
