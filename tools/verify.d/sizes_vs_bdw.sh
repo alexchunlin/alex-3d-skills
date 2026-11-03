@@ -22,3 +22,12 @@ python3 -I "$SB" "$ROOT" --data "$V/sizes_bdw/data" > "$V/sizes_bdw/neg_hash.txt
 [ $? -eq 1 ] && grep -q "^HASH hex_nut_parameters.csv" "$V/sizes_bdw/neg_hash.txt" \
   && ok "negative control: a changed CSV fails its sha256" \
   || bad "negative control: changed CSV not caught (see $V/sizes_bdw/neg_hash.txt)"
+# overlay control: a size_rules() overlay expression the helper cannot evaluate must stop it with a message, not be skipped
+FD="skills/print-cad-blender/scripts"
+rm -rf "$V/sizes_bdw/root"; mkdir -p "$V/sizes_bdw/root/$FD/cadlib"
+cp "$ROOT/$FD/cadcheck.py" "$V/sizes_bdw/root/$FD/cadcheck.py"
+sed 's/nut_af=R\["m3_nut_af"\]/nut_af=R["m3_nut_af"] + 0/' "$ROOT/$FD/cadlib/features.py" > "$V/sizes_bdw/root/$FD/cadlib/features.py"
+python3 -I "$SB" "$V/sizes_bdw/root" --data "$ROOT/tools/prior_art/bd_warehouse_data" > "$V/sizes_bdw/neg_overlay.txt" 2>&1
+[ $? -ne 0 ] && grep -q "overlay uses .*cannot evaluate" "$V/sizes_bdw/neg_overlay.txt" \
+  && ok "negative control: a changed size_rules() overlay form stops the check with a message" \
+  || bad "negative control: changed overlay form not caught (see $V/sizes_bdw/neg_overlay.txt)"
