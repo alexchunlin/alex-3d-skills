@@ -2174,12 +2174,14 @@ tools").
 
 **PA-A0-T2: the designers' last `cad check` was an `--only` run, 3 of 3** (added after the loop from the transcripts). The designers of attempts 3, 6 and 7 are the only designers that ran `cad check`, and each ended on a partial one, so each handed off on a report that said PASS for the checks it ran. Count: `python3 -I tools/transcript/cc_transcript.py handoffs ~/.claude/projects/-Users-alxchunlin-code-stuff-space-bar-push-assist/*/subagents/agent-*.jsonl` (the Designer rows). Reviewers also ended on `--only` runs (5 of 5) by their instructions, which is expected. Fixed by cadcheck issue #28: `CADCHECK PARTIAL`, `run` in the report, `cadcheck.partial.json`.
 
+**PA-A0-T3: issues recur because the fix is tested only at the case the last review measured, and the loop keeps the last attempt** (added after the loop from the reviews; the #42 "Measured 2026-11-03" comment). v2 A1-A7: 2 of 34 ids were PARTIAL/NOT FIXED in two reviews in a row (A1-03, A2-01). Push-assist A1-A8: 4 chains recurred twice or more (2 of them three times). Only 3 of the 6 chains in that comment's table repeated the same approach; the rest fixed only the nominal or last-measured case (V2R3 above: "the designer fixed the nominal case each time"). Both loops hand off the last attempt and cannot restore an earlier one; push-assist went A6 8/8/9 -> A7 4/4/9, and A6's best score hid a cell that could not be fitted (PA-A7-T7). Template change: PR #52 (escalations[] after two misses, per-attempt snapshots, a reported `best`).
+
 ### Verification of this harvest
 - PALOG is byte-identical to the untracked source (`sha256 0a5f90f3...`).
 - Scores and cad check / printcheck cells match `PA/cad/review/attempts.md`. Issue counts were taken from PALOG's
   ranked lists.
 - Every cost number comes from `cc_transcript.py workflow PASESS/subagents`, or from `usage` / `timeline` on
   `PASESS.jsonl` for the two inline windows. No transcript was read whole.
-- Every PA ID in this section exists in PALOG, except PA-A0-T1 and PA-A0-T2, which were added after the loop from the transcripts. Each status was checked against `2e6717d`: `cadcheck.py` line refs,
+- Every PA ID in this section exists in PALOG, except PA-A0-T1, PA-A0-T2 and PA-A0-T3, which were added after the loop from the transcripts. Each status was checked against `2e6717d`: `cadcheck.py` line refs,
   SKILL.md, checklist.md, rubric.md, the workflow template, the feature docs, and PR #6 and #7 bodies.
 - `tools/verify_all.sh` was not run: this change is docs only.
