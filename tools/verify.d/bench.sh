@@ -1,5 +1,5 @@
 # tools/bench smoke test (sourced by verify_all.sh; uses $ROOT, $V and ok/bad).
-# watch: tools/bench/** !tools/bench/**/*.md @core @layer examples/mm-launcher-v2a6/** examples/mm-launcher-v2a7/**
+# watch: tools/bench/** !tools/bench/**/*.md !tools/bench/perturb.py @core @layer examples/mm-launcher-v2a6/** examples/mm-launcher-v2a7/**
 # needs: 4k 4m 4n
 # 1. The locator lint on labels.json: no top-level |, no check '*', every locator names an object, no pinned numbers.
 # 2. The scoring rules on JSON fixtures (no Blender), and two mutants of replay.py that must fail them.
