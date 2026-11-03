@@ -3,10 +3,10 @@
 **Claude designs 3D-printable assemblies in headless Blender. These tools check the design the way a mechanical
 reviewer would, before anything gets printed.**
 
-![Assemblies built by agents with cadlib: the M&M launcher, the demo turret, a grown servo bracket, a 6-way tube node](docs/img/hero.png)
+<p align="center"><img src="docs/img/sweep.gif" alt="The M&M launcher designed by agents, panning, tilting and feeding"></p>
 
-<sub>Built by agents with `cadlib`: the M&M launcher (v2, 36 printed parts), the demo turret, a servo bracket with grown
-connectors, a 6-way tube node.</sub>
+<p align="center"><sub>The M&M launcher (v2, 36 printed parts), designed by agents, swept through the full pan, tilt and feeder
+ranges that <code>cadcheck</code> checks for collisions.</sub></p>
 
 ## Why
 
@@ -90,6 +90,11 @@ Add `--render` to the build for iso, exploded, posed and section views in `/tmp/
 4. **Or run the whole loop.** [`templates/cad-loop.workflow.js`](templates/cad-loop.workflow.js) plans, builds each
    subsystem in parallel, finishes, reviews and repeats until the score target. Set `CONFIG.hw` (the folder with `DESIGN_BRIEF.md`
    and `blender/`), `CONFIG.skills` (your clone) and `CONFIG.subsystems` (your `parts/` module names). Builders run on Sonnet by default; planning and review on the session model.
+
+![Assemblies built by agents with cadlib: the M&M launcher, the demo turret, a grown servo bracket, a 6-way tube node](docs/img/hero.png)
+
+<sub>Built by agents with `cadlib`: the M&M launcher, the demo turret, a servo bracket with grown connectors,
+a 6-way tube node.</sub>
 
 ## Guidelines
 
