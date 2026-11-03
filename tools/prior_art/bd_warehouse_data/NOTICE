@@ -1,0 +1,4 @@
+from gumyr/bd_warehouse c88b9a4, unchanged, Apache-2.0
+upstream: https://github.com/gumyr/bd_warehouse, files src/bd_warehouse/data/<name>.csv (license: LICENSE at the repo root, copied here)
+tools/verify.d/sizes_vs_bdw.py checks only that OUR copy still matches SHA256SUMS. To check the copy against upstream:
+  git clone https://github.com/gumyr/bd_warehouse /tmp/bdw && git -C /tmp/bdw checkout c88b9a4 && (cd /tmp/bdw/src/bd_warehouse/data && sha256sum -c <path to>/SHA256SUMS)

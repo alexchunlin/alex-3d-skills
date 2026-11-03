@@ -1,0 +1,150 @@
+{
+ "verdicts": "ours = standard or deliberate choice supports our value; theirs = standard supports bd, change ours in a follow-up; pending-coupon = a test print decides; pending-standard = needs the standard text or datasheet",
+ "shared": {
+  "cap_dk": "ISO 4762 dk max for a plain head is ours; bd_warehouse lists the knurled-head max (+0.18 mm M2 to M3, +0.22 mm M4 to M5). Our counterbore_d is dk + 1.0, so the knurled max still clears by 0.78 to 0.82 mm diametral. The counterbore fit itself is untested: coupon open in #37.",
+  "csk_bd_identity": "bd's iso7046 rows equal its iso2009 rows (M3 5.6/1.65, M4 7.5/2.2, M5 9.2/2.5), so they are not independent evidence for ISO 7046; ours (features.py header: 'ISO 7046 actual dk (csk)') equal bd's iso10642 M3 row (6.0/1.7) at M3. Not settled from these tables; needs the standard text or a datasheet. SIZES left alone; a larger dk only widens the countersink cutter.",
+  "stock_18_22": "Assumed, not sourced: 18 and 22 mm are not in the ISO preferred-length lists, and no vendor listing was checked for this PR. cadcheck's list is the project's stock list and a project checks.json can override it. No dimensional conflict."
+ },
+ "exceptions": [
+  {
+   "id": "M2 cap_d",
+   "ours": "3.8",
+   "theirs": "3.98",
+   "verdict": "ours",
+   "why_ref": "cap_dk"
+  },
+  {
+   "id": "M2.5 cap_d",
+   "ours": "4.5",
+   "theirs": "4.68",
+   "verdict": "ours",
+   "why_ref": "cap_dk"
+  },
+  {
+   "id": "M3 cap_d",
+   "ours": "5.5",
+   "theirs": "5.68",
+   "verdict": "ours",
+   "why_ref": "cap_dk"
+  },
+  {
+   "id": "M4 cap_d",
+   "ours": "7",
+   "theirs": "7.22",
+   "verdict": "ours",
+   "why_ref": "cap_dk"
+  },
+  {
+   "id": "M5 cap_d",
+   "ours": "8.5",
+   "theirs": "8.72",
+   "verdict": "ours",
+   "why_ref": "cap_dk"
+  },
+  {
+   "id": "M2 pilot_d",
+   "ours": "1.7",
+   "theirs": "1.6",
+   "verdict": "pending-coupon",
+   "why": "bd 'Soft' is a tap-drill table value, not an ISO dimension; ours is 0.1 above it for a PLA self-tap (features.py header: the M2 holes are table values to confirm by coupon)."
+  },
+  {
+   "id": "M2.5 pilot_d",
+   "ours": "2.1",
+   "theirs": "2.05",
+   "verdict": "pending-coupon",
+   "why": "Differs by exactly 0.05 (tolerance 0.04). Same bd 'Soft' tap-drill table; ours sits above the thread's minor diameter (features.py comment: M2.5 2.1 vs 1.95). Table value, coupon open in #37."
+  },
+  {
+   "id": "M2.5 insert_d",
+   "ours": "3.6",
+   "theirs": "4",
+   "verdict": "pending-coupon",
+   "why": "Vendors (CNC Kitchen M2.5x4 dc 4.0; Ruthex M2.5x5.7 dc 3.9) say 3.9 to 4.0; ours is 0.3 to 0.4 mm under. Vendor data favours theirs, but a print decides: coupon 3.6/3.8/3.9/4.0 open in #37."
+  },
+  {
+   "id": "M3 pan_d",
+   "ours": "6",
+   "theirs": "5.6",
+   "verdict": "ours",
+   "why": "ours follows the standard named in the features.py header comment ('ISO 7045 (pan)', cross recess, dk max 6.0 per that citation; not checkable here). bd has no ISO 7045 table: its pan data is ISO 14583 (Torx) and ISO 1580 (slotted), both 5.6 at M3, so this is a different standard rather than a contradiction."
+  },
+  {
+   "id": "M3 csk_d",
+   "ours": "6",
+   "theirs": "5.6",
+   "verdict": "pending-standard",
+   "why_ref": "csk_bd_identity"
+  },
+  {
+   "id": "M3 csk_h",
+   "ours": "1.7",
+   "theirs": "1.65",
+   "verdict": "pending-standard",
+   "why_ref": "csk_bd_identity"
+  },
+  {
+   "id": "M4 csk_d",
+   "ours": "8.4",
+   "theirs": "7.5",
+   "verdict": "pending-standard",
+   "why_ref": "csk_bd_identity"
+  },
+  {
+   "id": "M4 csk_h",
+   "ours": "2.7",
+   "theirs": "2.2",
+   "verdict": "pending-standard",
+   "why_ref": "csk_bd_identity"
+  },
+  {
+   "id": "M5 csk_d",
+   "ours": "9.3",
+   "theirs": "9.2",
+   "verdict": "pending-standard",
+   "why_ref": "csk_bd_identity"
+  },
+  {
+   "id": "M5 csk_h",
+   "ours": "2.7",
+   "theirs": "2.5",
+   "verdict": "pending-standard",
+   "why_ref": "csk_bd_identity"
+  },
+  {
+   "id": "M4 insert_wall",
+   "ours": "1.6 (axial only)",
+   "theirs": "2.1",
+   "verdict": "pending-coupon",
+   "why": "bd material_thickness for the Ruthex / CNC Kitchen M4x8.1 insert is 2.1 mm around the insert; our min_wall 1.6 is only applied along the axis, no radial wall is enforced for inserts. Vendor guidance favours theirs; follow-up: a radial-wall check in cadcheck sized from a coupon."
+  },
+  {
+   "id": "M5 insert_wall",
+   "ours": "1.6 (axial only)",
+   "theirs": "2.6",
+   "verdict": "pending-coupon",
+   "why": "As M4: vendor material_thickness 2.6 mm for M5x9.5 against 1.6 axial-only. Same follow-up."
+  },
+  {
+   "id": "M3 stock_length 18",
+   "ours": "18",
+   "theirs": "not a nominal length of ISO 4762/7046/14583",
+   "verdict": "ours",
+   "why_ref": "stock_18_22"
+  },
+  {
+   "id": "M3 stock_length 22",
+   "ours": "22",
+   "theirs": "not a nominal length of ISO 4762/7046/14583",
+   "verdict": "ours",
+   "why_ref": "stock_18_22"
+  },
+  {
+   "id": "M4 stock_length 18",
+   "ours": "18",
+   "theirs": "not a nominal length of ISO 4762/7046/14583",
+   "verdict": "ours",
+   "why_ref": "stock_18_22"
+  }
+ ]
+}
