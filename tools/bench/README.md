@@ -118,6 +118,32 @@ Limits: one measured chars/token ratio for all text (IQR 2.08-2.54); reads are c
 when the agent read another checkout; config-key use is detected from written JSON and from Bash commands that name a
 checks/review_rows/overlay file; transcripts live outside the repo, so tier 2 reports them missing on another machine.
 
+## Perturbation audit (`perturb.py`, issue #45)
+
+Nudges each top-level number in `params.py` (or a build script's own constants, `--params-file build.py`) by a print
+tolerance (0.2 mm, 1 deg for angles, or `--range NAME=LO:HI`), rebuilds and re-checks a scratch copy, and lists the
+findings that flip against one nominal build (`cad diff`'s key), plus a control rebuild. Classes: `pinned row` (a
+`wanted` window no wider than the nudge band: fails by construction, never brittle), `label` (a labels.json locator of
+any attempt), `printability`, `noise candidate`. `--from DIR` rescores. Re-run: `tools/verify.d/perturb_audit.sh`.
+
+```sh
+python3 -I tools/bench/perturb.py examples/demo-turret --params-file build.py --build-args "--out {out}" -j 2
+python3 -I tools/bench/perturb.py V2_COPY --params '^(PSI_C|MM_T\[1\]|HOOD_GAP_MIN|TAPE_T|...)$' --quick -j 2
+```
+
+Measured 2026-11-03 (H45: findings flip within tolerance; null rejected):
+- Demo turret, all 10 parameters, full check: 3.7 s per rebuild+check, 46 s total at -j 2. 0 brittle; 4 flips, all
+  findings fixed (CLR +0.2 and SINK +0.2 clear the 0.90 mm screw-head warns; SINK +0.2 also drops the arm screws from
+  M3 x 10 to x 8). Control: 0 flips.
+- v2 launcher (live copy = attempt 7 params plus one post-review `checks.json` service row), 12 of 407 parameters,
+  `--quick`: 264 s per rebuild+check (a full check alone is 244 s), 56 min at -j 2; all 407 would take about 30 h.
+  7 brittle: MM_T[1] and TAPE_T +0.2 break `params.py`'s own assert (entry arc 8.105 < NIP_PASS 8.20 + 0.1: a 0.005 mm
+  margin, the V2A3-F1 mechanism); HOOD_GAP, HOOD_GAP_MIN (hood-to-body 0.31-0.38 against 0.5); DISC_CLR, GATE_STOP_CLR
+  (a fit whose min equals the nominal: 0.10-0.15 against 0.30); BORE_CLR -0.2 (motor overlaps the nacelle, 3.3 mm3).
+  32 flips: 3 match labels (A6-03 x2, A1-F2), 6 pinned rows, 23 noise candidates (4 of them "not proven clear"
+  coverage warns). PSI_C (the V2A5-T2 parameter) and CLR change no STL at +-1 deg / 0.2 mm: attempt 7 no longer uses
+  them. Control: 0 flips, so no flip is check randomness.
+
 ## Smoke test
 
 `tools/verify.d/bench.sh` (sourced by verify_all): the locator lint; the scoring rules on JSON fixtures
