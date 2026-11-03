@@ -37,37 +37,39 @@ parts, slide-out, or a `coverage` list in its output.
 
 ## Repo survey 2026-11-02, not measured
 
-Each repo was cloned and read, not run; the full tables are in #47 (index) and each work item has its own issue. The few numbers came from our own models.
+Each repo was cloned and read, not run, on 2026-11-02; the few numbers came from our own models. Which repo became
+which issue, and everything dropped with its reason, is in the index issue #47 (not repeated here). Clone form:
+`git clone <url> && git -C <dir> checkout <sha>`.
 
-| Repo | SHA | Licence | Became |
-|---|---|---|---|
-| earthtojake/text-to-cad | 244eecd | MIT; telemetry on by default (`CAD_TELEMETRY=0 DO_NOT_TRACK=1 CAD_UPDATE_CHECK=0`) | #31, #33, #39, #43 |
-| Pan-Chera/Multi-Agent-CAD | 487f94b | MIT | #33, #35, #40, #41, #42 |
-| jabarkle/CADSmith | a856517 | none: ideas only | #40, #42 |
-| jdilla1277/agentcad | c420577 | Apache-2.0 | #28, #30 |
-| pzfreo/build123d-mcp | 59b2561 | Apache-2.0 | #30, #45 |
-| pzfreo/cadgenbench-build123d | db724aa | Apache-2.0 (uses draftwright, AGPL-3.0) | #43 |
-| bernhard-42/three-cad-viewer | b4c6a7b | MIT | #32 |
-| bernhard-42/vscode-ocp-cad-viewer | 6847ae5 | Apache-2.0 | none (needs OCP) |
-| yeicor-3d/yet-another-cad-viewer | 6e090dd | MIT | #31 |
-| kovacsv/Online3DViewer | d025663 | MIT | none (no explode or section) |
-| gumyr/build123d | 6e22d65 | Apache-2.0 | #33 |
-| gumyr/bd_warehouse | c88b9a4 | Apache-2.0 | #29, #37, #38 |
-| Rhoban/onshape-to-robot | 80e7107 | MIT | #33 |
-| partcad/partcad | 1e9df97 | Apache-2.0 | #33, #38 |
-| rammp-org/flatbot, alexchunlin/harnessy | HEAD | none (team / own) | #34; #32, #36 |
+| Repo | SHA | Licence |
+|---|---|---|
+| [earthtojake/text-to-cad](https://github.com/earthtojake/text-to-cad) | 244eecd | MIT; telemetry on by default (`CAD_TELEMETRY=0 DO_NOT_TRACK=1 CAD_UPDATE_CHECK=0`) |
+| [Pan-Chera/Multi-Agent-CAD](https://github.com/Pan-Chera/Multi-Agent-CAD) | 487f94b | MIT |
+| [jabarkle/CADSmith](https://github.com/jabarkle/CADSmith) (not JonFermin/cadsmith, which is MIT and measured above) | a856517 | none: ideas only |
+| [jdilla1277/agentcad](https://github.com/jdilla1277/agentcad) | c420577 | Apache-2.0 |
+| [pzfreo/build123d-mcp](https://github.com/pzfreo/build123d-mcp) | 59b2561 | Apache-2.0 |
+| [pzfreo/cadgenbench-build123d](https://github.com/pzfreo/cadgenbench-build123d) | db724aa | Apache-2.0 (uses draftwright, AGPL-3.0) |
+| [bernhard-42/three-cad-viewer](https://github.com/bernhard-42/three-cad-viewer) | b4c6a7b | MIT |
+| [bernhard-42/vscode-ocp-cad-viewer](https://github.com/bernhard-42/vscode-ocp-cad-viewer) | 6847ae5 | Apache-2.0 |
+| [yeicor-3d/yet-another-cad-viewer](https://github.com/yeicor-3d/yet-another-cad-viewer) | 6e090dd | MIT |
+| [kovacsv/Online3DViewer](https://github.com/kovacsv/Online3DViewer) | d025663 | MIT |
+| [gumyr/build123d](https://github.com/gumyr/build123d) | 6e22d65 | Apache-2.0 |
+| [gumyr/bd_warehouse](https://github.com/gumyr/bd_warehouse) | c88b9a4 | Apache-2.0 |
+| [Rhoban/onshape-to-robot](https://github.com/Rhoban/onshape-to-robot) | 80e7107 | MIT |
+| [partcad/partcad](https://github.com/partcad/partcad) | 1e9df97 | Apache-2.0 |
+| rammp-org/flatbot (our team's) | local, no pin | none |
+| alexchunlin/harnessy (ours) | local, no pin | none |
 
-Issues: bugs #28 (`--only` prints PASS), #29 (`cad bom` M5); checks #30 `cad diff`, #45 perturbation; exports #31-#34; parts #37-#39; mates and cables #35, #36; loop and review #40-#42; benchmarks #43, #44; docs #46.
+Corrections to the team's notes (details in #47): text-to-cad is build123d/OCC behind a resident server (Python 3.14+),
+with no sweep, fastener, insertion or order checks. Multi-Agent-CAD's "$1-$13 per assembly" is 4 gallery assemblies on
+Qwen pricing, input and output tokens combined. agentcad's "2.5x valid outputs" (67/81 vs 27/81, one run per arm) came
+from generation plumbing, not diff or validate. Our 0.711 vs build123d's 0.699 on CADGenBench is within scorer noise
+(re-scoring moved fixtures by up to 0.034, #43).
 
-Corrections to the team's notes: text-to-cad is build123d/OCC behind a resident server (Python 3.14+), with no sweep, fastener, insertion or order checks. Multi-Agent-CAD's "$1-$13 per assembly" is 4 gallery assemblies on Qwen pricing, input and output tokens combined. agentcad's "2.5x valid outputs" (67/81 vs 27/81, one run per arm) came from generation plumbing, not diff or validate. Our 0.711 vs build123d's 0.699 on CADGenBench is within scorer noise (re-scoring moved fixtures by up to 0.034, #43).
-
-Dropped, and why:
-- text-to-cad rebuild engine (no speed case; Blender was 2.3 of 64 min), live viewer (needs their server; #31 and #32 cover it), DFM, gcode and Bambu (not FDM, or against `cad slice` policy), four-bar couplings (no finding needs them yet), `made_by` / Quick Edit (needs B-rep naming), `orientations` (the same summed-area measure PR #6 showed can't separate fails).
-- Multi-Agent-CAD bore/shaft, three-state interference, coverage and cycle checks, auto-accept and parametric builders: already covered here or weaker (its interference check samples ~300 points).
-- CADSmith's independent Opus judge (we already review on a stronger model); build123d-mcp `repair_hints` (34 of 698 `cad` runs failed, and the hints are for the build123d API); `check-spec` / `verify_spec` (`checks.json` covers more); MCP tool-list trimming (one `cad` CLI); build123d labelled compounds and mates solver (measured on `feat/mate-connectors`, and mates were made optional); bd_warehouse gears, flanges and threads (need OCC); onshape-to-robot mesh simplification (needs pymeshlab/coacd); vscode-ocp-cad-viewer (an OCP shim around three-cad-viewer).
-- Not found: any code-CAD wheelchair repo, or public code for AADvark or CADCodeVerify. MUSE does publish data and judge code (see below).
-
-PR #6's dfam numbers still hold: text-to-cad's `dfam_tool.py` is the same blob (`522ef78f`) at the PR #6 measurement (2f793659f) and at HEAD 244eecd.
+PR #6's dfam numbers still hold: text-to-cad's `dfam_tool.py` is the same blob (`522ef78f`) at the PR #6 measurement
+(2f793659f) and at HEAD 244eecd. Re-check in a clone of text-to-cad with
+`for c in 2f793659f 244eecd; do git rev-parse $c:$(git ls-tree -r --name-only $c | grep 'dfam_tool\.py$'); done`
+(both should print 522ef78f...; the blob id comes from #47 and I did not re-run it, as no clone was on hand).
 
 ### Assembly benchmarks (2026-11-03)
 
@@ -75,22 +77,22 @@ Researched 2026-11-03 (web pages read, nothing run). Sources: [cadbench.ai](http
 
 **1. Parametric CAD Bench (cadbench.ai)**
 - **Task set:** not confirmed downloadable. The submission README says the tasks are on Harbor Hub (`harbor run -d gnucleus-ai/cad-bench@v2`) and source data and references on Hugging Face, and never says the set can be bulk-downloaded ([README](https://github.com/gNucleus-AI/cad-bench-submission)). cadbench.ai says only that "cad-gen-freecad" (native FreeCAD parts with feature history) was open-sourced on Hugging Face in May 2026 ([cadbench.ai](https://cadbench.ai)). I could not open `huggingface.co/datasets/gnucleus-ai/cad-bench` (HTTP 401). The site gives no assembly-task count, so no assembly slice is public.
-- **STEP arm:** not stated anywhere I could read. The validator takes FCStd for candidate and reference plus a spec JSON; its README describes no standalone STEP scoring (STEP appears only as the FEM source file) ([freecad-validator](https://github.com/gNucleus-AI/freecad-validator)). A submission is a PR with a manifest YAML pointing at a public Harbor Hub job, so the arm must run inside Harbor ([README](https://github.com/gNucleus-AI/cad-bench-submission)). Our Blender-mesh arm has no FCStd output; assume it cannot submit without a FreeCAD export step.
-- **Cost:** no submission fee is mentioned, and none is documented either way. The cost on the leaderboard is the submitter's own token spend, reported per entry in USD, from $170 up to $1,056.04 for the V3 top entry ([cadbench.ai](https://cadbench.ai)). The issue's $574 is not on the page I read. Scoring is 0-100, the mean reward over all 100 tasks, failures count as zero, and it is deterministic ([cadbench.ai](https://cadbench.ai)). The README gives no per-task price.
+- **STEP arm:** not stated anywhere I could read. What each source says: the submission README asks for a manifest YAML pointing at a public Harbor Hub job plus a trajectory file (ATIF `trajectory.json`) ([README](https://github.com/gNucleus-AI/cad-bench-submission)); the validator README says it scores FCStd candidate and reference files plus a spec JSON, and describes no standalone STEP scoring (STEP appears only as the FEM source file) ([freecad-validator](https://github.com/gNucleus-AI/freecad-validator)). That an arm must therefore produce FCStd inside Harbor is my inference from the two, not a stated rule. Our Blender-mesh arm has no FCStd output.
+- **Cost:** no submission fee is mentioned, and none is documented either way. The leaderboard's cost is the submitter's own run spend in USD. The V3 top-13 table runs from $196.74 (rank 10, Gemini 3.8 Flash via Antigravity) to $1,056.04 (rank 4, Claude Fable 5.1 via Claude Code). Rank 1, Claude Opus 5.5 (max) via Claude Code, scores 61.03 at $573.94, which is the issue's $574 ([cadbench.ai](https://cadbench.ai)). Scoring is 0-100, the mean reward over all 100 tasks, failures count as zero, and it is deterministic (same page). The README gives no per-task price.
 - **Validator vs cadcheck:** the validator's README describes geometry similarity (volume, area, bounding box, principal moments, surface-type areas, face-centre ICP), spec-parameter consistency, and FEM checks (FreeCAD 1.1.0, CalculiX). It does not describe any mate or constraint check; hierarchy appears only as treating a one-child Compound as the bare shape ([freecad-validator](https://github.com/gNucleus-AI/freecad-validator)). The "mates, constraints, hierarchy" claim is on the cadbench.ai task-type list, not in the validator README. The validator scores similarity to a reference, which cadcheck does not (we have no reference). cadcheck's interference sweep, insertion, fasteners, drop, slide and cables have no counterpart in the validator README. FEM contact and restraint agreement is the one assembly-like check, and cadcheck has nothing like it.
 
 **2. MUSE (arXiv 2605.28579)**
 - **Released:** yes, partly. The 106 cases are public on Hugging Face under CC BY 4.0 ([data](https://huggingface.co/datasets/dongxiaoyu/MUSE)), and the judge code is public under MIT ([dong7313/muse](https://github.com/dong7313/muse)). Each case has `design_description.md` (the prompt), a four-view drawing PNG, a 3D render PNG and `evaluation_rubric.md`. The listing shows no reference STEP files, so the "designs" are prompts, drawings and renders, not geometry we can load. 9 vase cases are render-only (code README).
 - **Scorer:** a three-stage funnel on generated CadQuery code: sandbox execution, geometric validity (OCCT checks, watertight manifold solid), then design intent judged by Gemini-3.1-Pro against the rubric. Failing stage 1 or 2 zeroes every stage-3 score ([code README](https://github.com/dong7313/muse)). The paper says its geometry, structure and interface checks are programmatic on the STEP output, but function is a VLM reading SVG views and is "visual assessments rather than physical validation" ([paper](https://arxiv.org/html/2605.28579)). To submit, an arm must emit executable CadQuery code, which ours does not. The paper and README do not list the Stage 2 error types.
-- **Failure classes (paper Table 2, Overlap Free / Functional):** claude-opus-4.7 60.38% / 43.40%, gemini-3.1-pro 62.26% / 47.17%, gpt-5.5 70.75% / 51.89%, gpt-6-astra 97.17% / 86.79%, gpt-4o 13.21% / 1.89% ([paper](https://arxiv.org/html/2605.28579)). The issue's "19-21% for functional, manufacturable and assemblable" and "best 52.4" did not appear in the part of the paper I read (first 100k of 148k characters). Manufacturable and assemblable are rubric criteria; the paper does not report them separately in that table.
-- **What cadcheck would catch:** overlap (the interference sweep; "Overlap Free" is the largest measured failure class). Watertight/manifold is covered by cadcheck's manifold check. Not catchable: functional, manufacturable and assemblable, which are VLM-judged from views. cadcheck's insertion and fastener checks have no MUSE counterpart in the README.
+- **Pass rates (paper Table 2; a higher number is fewer failures), Overlap Free / Functional:** claude-opus-4.7 60.38% / 43.40%, gemini-3.1-pro 62.26% / 47.17%, gpt-5.5 70.75% / 51.89%, gpt-6-astra 97.17% / 86.79%, gpt-4o 13.21% / 1.89% ([paper](https://arxiv.org/html/2605.28579)). Functional passes less often than Overlap Free for every model listed, so functional failure is the larger class. The issue's "19-21% for functional, manufacturable and assemblable" and "best 52.4" did not appear in the part of the paper I read (first 100k of 148k characters). Manufacturable and assemblable are rubric criteria; the paper does not report them separately in that table.
+- **What cadcheck would catch:** overlap (the interference sweep) and watertight/manifold (the manifold check), which are MUSE's programmatic Overlap Free and geometric-validity classes. MUSE's functional, manufacturable and assemblable criteria are scored by a VLM from views, so there is no programmatic counterpart to compare against; cadcheck's insertion and fastener checks measure related things (a part reaches its seat, a fastener has clearance and a hold) by geometry, and nobody has measured how closely they agree with that judge.
 
 **3. Other assembly benchmarks since mid-2025 (one search; details not verified)**
 - AssemBench (in AssemCAD, [arXiv 2607.05123](https://arxiv.org/pdf/2607.05123)): 120 assembly instances built on the Fusion360 Gallery assembly corpus.
 - ArtiCAD ([arXiv 2604.10992](https://www.emergentmind.com/papers/2604.10992)): a multi-agent system for articulated multi-part assemblies, not a benchmark; per the search result, MUSE's paper says it has no public code.
 - BenchCAD-Assembly ([BenchCAD-org](https://github.com/BenchCAD-org)): listed as planned (reserved); nothing released.
 
-**Bottom line:** neither benchmark can score our loop today. cadbench.ai needs an FCStd arm inside Harbor, and its task set and assembly slice are not confirmed public. MUSE publishes prompts and drawings but needs CadQuery code out, and its overlap check is the only part cadcheck duplicates.
+**Bottom line:** neither benchmark can score our loop today. cadbench.ai appears to need an FCStd arm inside Harbor (inferred, see above), and its task set and assembly slice are not confirmed public. MUSE publishes prompts and drawings but needs CadQuery code out. cadcheck duplicates MUSE's programmatic overlap and manifold checks; the VLM-judged criteria are a different measure.
 
 ## Follow-ups from the 2026-10-26/27 measurements
 
@@ -114,13 +116,15 @@ Each is its own PR against `next`.
 Nothing from these repos is copied into this one. The scripts call or import them from clones in `/tmp`.
 
 - text-to-cad: MIT, (c) 2026 Thompson Labs LLC. `dfam_compare.py` runs `dfam_tool.py` from a clone.
-- cadsmith: MIT, (c) 2026 Jonathan Fermin. `mech_compare.py` imports `mech` from a clone.
+- JonFermin/cadsmith: MIT, (c) 2026 Jonathan Fermin. `mech_compare.py` imports `mech` from a clone. (Not jabarkle/CADSmith, which has no licence.)
 - Blender 3D-Print Toolbox: GPL-3.0-or-later. `print3d_toolbox_compare.py` imports a copy of its `source/` from a /tmp
   clone for the run, which is fine for measurement. Don't copy its code into this repo.
 - This repo has had an MIT LICENSE since v0.1 (2026-11-02). Copied MIT code still needs its own copyright and
   permission notice, in a header on the file that carries it or in a `THIRD_PARTY_NOTICES` file at the root. Copied
-  Apache-2.0 code or data (bd_warehouse, build123d-mcp, agentcad) also needs the Apache licence text and a note of
-  what was changed. GPL, AGPL (draftwright) and unlicensed code (CADSmith) is not copied.
+  Apache-2.0 code or data (build123d, bd_warehouse, build123d-mcp, agentcad, partcad, vscode-ocp-cad-viewer,
+  cadgenbench-build123d) also needs the Apache licence text and a note of what was changed. GPL, AGPL (draftwright,
+  used by cadgenbench-build123d) and unlicensed code (jabarkle/CADSmith) is not copied.
+- MUSE (2026-11-03): data CC BY 4.0 (attribution needed), judge code MIT (notice needed); read, not copied.
 
 Clones used (2026-10-27): `git clone https://github.com/earthtojake/text-to-cad` (2f793659f),
 `git clone https://github.com/JonFermin/cadsmith` (00c334d),
