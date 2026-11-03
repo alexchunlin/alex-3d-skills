@@ -201,7 +201,7 @@ SELF = "verify_select.sh"
 
 
 ALLIDS = set(IDS)
-CORE = ALLIDS - {"6", "7", "4m-slice", "design_principles.sh", "verify_select.sh"}
+CORE = ALLIDS - {"6", "7", "4m-slice", "design_principles.sh", "verify_select.sh", "cad_loop_recurrence.sh"}
 BENCH = {"bench.sh", "4k", "4m", "4n"}   # bench reads 4k's, 4m's and 4n's reports
 PCO = {"printcheck_overhangs.sh"}        # watches printcheck.py and the v2a7 STLs, reads 4m's model
 STL = {"stl_read.sh"}                    # watches printcheck.py (read_stl), the prior_art readers and the v2a7 STLs
@@ -221,7 +221,7 @@ CASES = [   # the selector test always runs under --changed (review); it is adde
     ("FINDINGS.md (design_principles reads it)", ["docs/FINDINGS.md"], {"design_principles.sh"}),
     ("components/ (review: blend-bracket imports placeholders)", ["components/placeholders.py"], {"5", "blend_bracket.sh"}),
     ("components.json (review)", ["components/components.json"], {"5", "blend_bracket.sh"}),
-    ("the workflow template", ["templates/cad-loop.workflow.js"], {"6"}),
+    ("the workflow template", ["templates/cad-loop.workflow.js"], {"6", "cad_loop_recurrence.sh"}),
     ("tools/transcript", ["tools/transcript/cc_transcript.py"], {"7"}),
     ("v2a3 example (4n's output feeds bench; cadcfg reads every config)", ["examples/mm-launcher-v2a3/checks.json"],
      {"4f", "4g", "4n", "cadcfg.sh"} | BENCH),

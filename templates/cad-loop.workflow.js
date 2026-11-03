@@ -17,7 +17,8 @@ export const meta = {
 //    before the first build, 522k peak context, 19M cache-read tokens (A1-T1, T4, T5). Here each
 //    subsystem is a fresh agent with a small context and a short generation.
 //  - A killed designer lost 44 min with nothing on disk (A1-T9). Every agent here appends to
-//    renders/attempt-N/progress.md and resumes from it. The loop resumes from args.start_attempt.
+//    renders/attempt-N/progress.md and resumes from it. The loop resumes from args.start_attempt, with args.history
+//    and args.misses copied from the last run's return value and log lines.
 //  - The designer reported checks_passed=true on partial checks (A1-F14). Schemas here ask for the
 //    cadcheck fail/warn counts and coverage, not a boolean.
 //  - v2 A1 (the first loop run with this shape): 4 sequential builders took 136.6 of 187.5 min, and each one re-read
@@ -43,6 +44,7 @@ const CONFIG = Object.assign({
   target: 9,
   start_attempt: 1,                          // resume: set to the next attempt number
   history: [],                               // resume: [{n, f, m, a}] from earlier runs
+  misses: {},                                // resume: the last run's returned misses ({id: reviews in a row PARTIAL/NOT FIXED})
   render_budget: 12,                         // preview renders per build agent
   stop_after: 0,                             // >0: stop after this attempt's review
   parallel_builds: false,                    // true: builders run at once; the planner owns params.py (V2A1-T1)
@@ -50,16 +52,21 @@ const CONFIG = Object.assign({
 }, typeof args === 'object' && args ? args : {})
 // Per-role agent() model; null = the workflow's default (the session model). args.models overrides single roles.
 const MODELS = Object.assign({ plan: null, build: 'sonnet', finish: null, review: null }, CONFIG.models)
+const isPlain = m => typeof m === 'object' && m !== null && !Array.isArray(m) && Object.prototype.toString.call(m) === '[object Object]'   // not a prototype test: args may come from another JS realm
 {
   const m = CONFIG.models, roles = ['plan', 'build', 'finish', 'review']
-  const plain = typeof m === 'object' && m !== null && !Array.isArray(m) && Object.prototype.toString.call(m) === '[object Object]'   // not a prototype test: args may come from another JS realm
-  if (!plain) throw new Error(`cad-loop: args.models must be an object like {build: 'sonnet'}, got ${JSON.stringify(m)} (${Array.isArray(m) ? 'array' : typeof m})`)
+  if (!isPlain(m)) throw new Error(`cad-loop: args.models must be an object like {build: 'sonnet'}, got ${JSON.stringify(m)} (${Array.isArray(m) ? 'array' : typeof m})`)
   for (const [k, v] of Object.entries(m)) {
     if (!roles.includes(k)) throw new Error(`cad-loop: args.models has unknown role "${k}"; roles are ${roles.join(', ')}`)
     if (v !== null && (typeof v !== 'string' || !v.trim())) throw new Error(`cad-loop: args.models.${k} must be null (session model) or a model name like 'sonnet', got ${JSON.stringify(v)}`)
   }
 }
 CONFIG.models = MODELS
+{
+  const m = CONFIG.misses
+  if (!isPlain(m)) throw new Error(`cad-loop: args.misses must be an object like {"A1-03": 2}, got ${JSON.stringify(m)} (${Array.isArray(m) ? 'array' : typeof m})`)
+  for (const [k, v] of Object.entries(m)) if (!Number.isInteger(v) || v < 1) throw new Error(`cad-loop: args.misses.${k} must be a count >= 1, got ${JSON.stringify(v)}`)
+}
 const withModel = (role, opts) => MODELS[role] ? { ...opts, model: MODELS[role] } : opts
 
 const HW = CONFIG.hw
@@ -98,8 +105,21 @@ const PLAN_SCHEMA = {
       },
     },
     deferred: { type: 'array', items: { type: 'string' }, description: 'Review issues not addressed, with the reason' },
+    escalations: {
+      type: 'array', description: 'one per id the prompt names; else []',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          tried: { type: 'array', items: { type: 'string' }, description: 'one line per earlier attempt' },
+          approach: { type: 'string', enum: ['different', 'defer'] },
+          why: { type: 'string', description: 'the new approach, or why defer' },
+        },
+        required: ['id', 'tried', 'approach', 'why'],
+      },
+    },
   },
-  required: ['plan', 'work', 'deferred'],
+  required: ['plan', 'work', 'deferred', 'escalations'],
 }
 
 const BUILD_SCHEMA = {
@@ -141,7 +161,7 @@ const REVIEW_SCHEMA = {
           id: { type: 'string', description: 'stable id, e.g. A2-03; reuse the previous id for a recurring issue' },
           metric: { type: 'string', enum: ['functionality', 'manufacturability', 'aesthetics'] },
           severity: { type: 'string', enum: ['blocker', 'major', 'minor'] },
-          subsystem: { type: 'string' },
+          subsystem: { type: 'string', description: 'a parts/ module, or the layer that must fix it: params.py / interface, checks.json, BOM/assembly order, or a tool' },
           problem: { type: 'string' },
           evidence: { type: 'string', description: 'cadcheck row, cad q JSON line, or render path' },
           fix: { type: 'string' },
@@ -172,11 +192,15 @@ After each build+check, append one line: "<time-free step label> | <what changed
 Keep each generation short: edit one module, rebuild, check, repeat. Use the Edit tool for code changes.
 Don't run git commit.`
 
-const planPrompt = (n, history, reviewPath) => `
+const planPrompt = (n, history, reviewPaths, twice) => `
 You plan design attempt ${n} of up to ${CONFIG.max_attempts}. Scores so far (F/M/A): ${history || 'none'}.
 ${common(n)}
-${reviewPath
-    ? `Latest review: ${reviewPath} (and review.json beside it). Plan fixes for every blocker and major; minors where cheap. Don't regress what it praised.`
+${reviewPaths.length
+    ? `Reviews so far, oldest first (review.json beside each): ${reviewPaths.map((p, i) => i === reviewPaths.length - 1 ? p + ' (latest)' : p).join(', ')}.
+Plan fixes for every blocker and major in the latest; minors where cheap. Don't regress what it praised.${twice.length ? `
+PARTIAL/NOT FIXED in the last two reviews: ${twice.join(', ')}. For each, fill escalations[]: what every earlier attempt tried
+(one line each), then a different approach or a defer with a reason. Its acceptance tests the issue's declared extremes
+(limits, poses, whole passage), not only the case the last review measured (PA-A0-T3).` : ''}`
     : `First attempt: write the architecture plan (world frame, subsystems = parts/ modules, joints with ranges, load path, payload path, assembly order) to ${HW}/DESIGN_LOG.md, then scaffold from ${PCB}/templates/project/ into ${HW}/blender/.`}
 Before returning: update ${HW}/blender/checks.json so every review issue that is geometric has a check that would catch it
 (drop_tests, distances, payload_fit, sightlines, slide_out with expect "blocked", fits, assembly_order; the reviewer's
@@ -220,7 +244,9 @@ until no fail involves this subsystem's objects.`
     : `Edit ${HW}/blender/parts/${w.subsystem}.py (and params.py if needed). Loop: edit, ${CAD} build ${HW}/blender/build_assembly.py,
 ${CAD} check ${HW}/blender/model.blend ${HW}/blender/checks.json, until no fail involves this subsystem's objects.`}
 Fix or accept every warn on this subsystem's objects: an accepted warn goes under accepted_warns with a reason (V2A1-F5).
-Fails that belong to another subsystem: list them in not_done, don't fix them here.
+Fails that belong to another subsystem: list them in not_done, don't fix them here. ${CONFIG.parallel_builds
+    ? 'Fix text-only mismatches (BOM text, why strings, row names) in your files and the BOM; one in params.py/checks.json goes in not_done as "text: ..."'
+    : 'Fix text-only mismatches (BOM text, why strings, row names) in any file yourself'} (V2R7 A7-03).
 Render at most ${CONFIG.render_budget} previews (960 px); prefer cad q measurements over images.
 Return the final cadcheck summary numbers.`
 
@@ -229,9 +255,10 @@ You finish attempt ${n}.
 ${common(n)}
 Plan: ${plan.plan}
 Subsystem results: ${JSON.stringify(builds.map(b => b && { s: b.subsystem, not_done: b.not_done, fails: b.check.fails }))}
-${CONFIG.parallel_builds ? `0. Merge ${HW}/blender/checks.d/*.json into checks.json, apply the params.py requests in the builders' not_done,
+${CONFIG.parallel_builds ? `0. Merge ${HW}/blender/checks.d/*.json into checks.json, apply the params.py requests and "text:" fixes in the builders' not_done,
    and rebuild the shared ${HW}/blender/model.blend.
-` : ''}1. Fix remaining cadcheck fails that span subsystems, or list them in deferred. Finish with 0 untriaged warns: fix each
+` : ''}1. Fix remaining cadcheck fails that span subsystems, or list them in deferred. Fix a text-only mismatch (BOM text, a why
+   string, a row name) in any file yourself; don't defer it (V2R6 A6-03, V2R7 A7-03). Finish with 0 untriaged warns: fix each
    one or add it to accepted_warns with a reason (V2A1-F5: 3 of R1's issues were warns left in a 34-warn list).
 2. Final renders: CAD_RENDER_FINAL=1 ${CAD} build ${HW}/blender/build_assembly.py -- --render --out-renders ${dir(n)}
    plus the sections the brief asks for (${CAD} q ... section), and ${CAD} sheet ${HW}/stl ${dir(n)}/stl_sheet.png.
@@ -250,6 +277,8 @@ ${CONFIG.parallel_builds ? `0. Merge ${HW}/blender/checks.d/*.json into checks.j
    index_tests / service / slide_out entry to checks.json and re-run cad check (FINDINGS A2-F2, A2-F6). "Removable" is a
    slide_out over the whole path, until the part is clear of the machine (A3-F3; v2 A7's cap row stopped at 40, V2R7 A7-03). Every printed spring or snap arm gets a flexures entry (A3-F2).
 Fill check.run_only from the report run (${CAD} rows cadcheck.json --summary prints it); it must be [].
+5. Last: copy (don't move) ${HW}/blender/{params.py,checks.json,build_assembly.py,parts/,checks.d/,model.blend,manifest.json}
+   (those that exist) and ${HW}/BOM_AND_ASSEMBLY.md to ${dir(n)}/snapshot/, so this attempt can be restored later.
 Return the evidence summary from ${dir(n)}/cadcheck.json, not your opinion of it.`
 
 const reviewPrompt = (n, prevReviewPath) => `
@@ -267,15 +296,26 @@ For every motion, timing or service claim in the BOM, check that checks.json has
 entry that matches the documented values. If it is missing, add it to review_rows.json and run it (A2-F2).`
 
 const attempts = []
-let history = CONFIG.history.map(h => `#${h.n}: ${h.f}/${h.m}/${h.a}`).join(', ')
 let prevReview = CONFIG.start_attempt > 1 ? `${dir(CONFIG.start_attempt - 1)}/review.md` : null
 let passed = false
+// #42: ids PARTIAL/NOT FIXED in consecutive reviews. A FIXED or unlisted id drops out (its streak ends).
+const MISSED = ['PARTIAL', 'NOT FIXED']
+const nextMisses = (prev, review) => Object.fromEntries((review.previous_issue_status || [])
+  .filter(s => MISSED.includes(s.status)).map(s => [s.id, (prev[s.id] || 0) + 1]))
+let misses = { ...CONFIG.misses }
+const scored = CONFIG.history.map(h => ({ n: h.n, f: h.f, m: h.m, a: h.a }))   // earlier runs plus this one: history and best
+const history = () => scored.map(h => `#${h.n}: ${h.f}/${h.m}/${h.a}`).join(', ')
+if (CONFIG.start_attempt > 1 && !Object.keys(misses).length) log(`WARNING: resuming at attempt ${CONFIG.start_attempt} with no args.misses; ids missed twice before it are not escalated (copy misses from the last run)`)
 
 for (let n = CONFIG.start_attempt; n <= CONFIG.max_attempts && !passed; n++) {
   phase('Plan')
-  const plan = await agent(planPrompt(n, history, prevReview), withModel('plan', { label: `plan #${n}`, phase: 'Plan', schema: PLAN_SCHEMA }))
+  const reviewPaths = Array.from({ length: n - 1 }, (_, i) => `${dir(i + 1)}/review.md`)
+  const twice = Object.keys(misses).filter(id => misses[id] >= 2)
+  const plan = await agent(planPrompt(n, history(), reviewPaths, twice), withModel('plan', { label: `plan #${n}`, phase: 'Plan', schema: PLAN_SCHEMA }))
   if (!plan) { log(`attempt ${n}: planner returned nothing; stopping`); break }
   log(`attempt ${n}: ${plan.work.length} subsystems to change, ${plan.deferred.length} deferred`)
+  const unescalated = twice.filter(id => !(plan.escalations || []).some(e => e.id === id))
+  if (unescalated.length) log(`attempt ${n}: WARNING no escalation for ${unescalated.join(', ')}`)
 
   phase('Build')
   const runBuild = w => agent(buildPrompt(n, w), withModel('build', { label: `build #${n} ${w.subsystem}`, phase: 'Build', schema: BUILD_SCHEMA }))
@@ -303,16 +343,24 @@ for (let n = CONFIG.start_attempt; n <= CONFIG.max_attempts && !passed; n++) {
   if (!review) { log(`attempt ${n}: reviewer returned nothing; stopping`); break }
   const { functionality: f, manufacturability: m, aesthetics: a } = review
   const catchable = review.issues.filter(i => i.tool_catchable).length
-  log(`attempt ${n}: F${f} M${m} A${a}; ${review.issues.length} issues, ${catchable} tool-catchable; resume with start_attempt=${n + 1}`)
-  history = (history ? history + ', ' : '') + `#${n}: ${f}/${m}/${a}`
+  scored.push({ n, f, m, a })
+  misses = nextMisses(misses, review)
+  log(`attempt ${n}: F${f} M${m} A${a}; ${review.issues.length} issues, ${catchable} tool-catchable; resume with start_attempt=${n + 1} misses=${JSON.stringify(misses)}`)
   passed = f >= CONFIG.target && m >= CONFIG.target && a >= CONFIG.target
   prevReview = `${dir(n)}/review.md`
   if (CONFIG.stop_after && n >= CONFIG.stop_after) { log(`stopping after attempt ${n} (stop_after)`); break }
 }
 
+// Best = highest F+M+A, ties to the latest. Reported, never restored: push-assist A6 had the best score and a cell that
+// could not be fitted (PA-A7-T7), so the user chooses. The tree on disk is the last attempt's.
+const best = scored.reduce((b, x) => (!b || x.f + x.m + x.a >= b.f + b.m + b.a ? x : b), null)
+if (best) log(`best attempt: #${best.n} (${best.f}/${best.m}/${best.a}), snapshot ${dir(best.n)}/snapshot/; not restored, ${HW}/blender holds the last attempt`)
+
 return {
   passed,
-  history,
+  history: history(),
+  best: best ? best.n : null,
+  misses,
   attempts: attempts.map(x => ({
     n: x.n,
     scores: x.review ? { f: x.review.functionality, m: x.review.manufacturability, a: x.review.aesthetics } : null,
